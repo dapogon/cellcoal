@@ -1,0 +1,93 @@
+[
+#Sims2: genotype simulation under an infinite-site model, low number of SNVs  (targeted/exome sequencing)
+#ADO: 0, 0.05, 0.15, 0.5
+#genotype error: 0, 0.01, 0.1, 0.2
+#cells = 40
+#rate variation among lineages (alpha=1)
+#numsites = 5000
+#number of fixed SNVs = 250, 500, 1000
+#growthRate = 10-4
+#model = ISM diploid + collapsed signature 1
+#replicates = 100
+]
+
+	[PARAMETER FILE for CoalTumor] [text in brackets will be ignored]
+	
+	[COALESCENT]
+	[number of replicates] n1
+	[sample size (# tumor cells)] s40
+	[number of sites] l5000
+	[effective population size] e10000
+	[exponential growth rate] g1e-4  [ln2=0.6931 max]
+	[demographics] [h2 1000 100 40000 200 30000 20000]
+
+	[GENEALOGY MODIFIERS]
+	[transforming branch length] k0.01 [k0.0]
+	[healthy tip branch length] [q1e-6] [q0.0]
+	[rate variation among lineages] i1
+
+	[MUTATION MODEL]
+	[alphabet 0:binary 1:DNA] b1
+	[mutation rate] [u1e-6]
+	[deletion rate] [d1e-6]
+	[fixed number of SNVs - ISM] j250
+    [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] [m0]
+     [default mutation model is ISM diploid]	
+	[proportion of alternative model sites] p0
+	[alternative/default model relative mutation rate] [w1]
+	[germline SNP rate] [c0.00001]
+	[base frequencies]	f0.3 0.2 0.2 0.3
+	[transition/transversion ratio] [t2]
+	[rate variation among sites] [a2]
+	[mutation matrix ACGT x ACGT]  [r0 1 1 1
+    							 	1 0 1 1
+    							 	1 1 0 1
+    							 	1 1 1 0]
+    							 	
+    							   [r0 1 2 3
+    							 	1 0 4 5
+    							 	2 4 0 1
+    							 	3 5 1 0]
+    							 	
+    							 	r0	0.026	0.124	0.042
+									0.110	0	0.023	0.675
+									0.675	0.023	0	0.110
+									0.042	0.124	0.026	0
+									[signature 1 - like, with freqs already included]  
+	[NGS PARAMETERS]
+	[genotyping error; no reads] G0
+ 	[sequencing coverage; reads simulated] [C100]
+	[coverage overdispersion] [V5]
+	[amplification error] [A0.1 0.01 0]
+	[sequencing error] [E0.01]
+	[allelic dropout] D0
+	[ADO/DEL read reduction] [R0.5]	
+	[error matrix ACGT x ACGT] 	   [X0 1 1 1
+    							 	1 0 1 1
+    							 	1 1 0 1
+    							 	1 1 1 0]
+	[OUTPUT]
+	[print SNV genotypes] 1
+	[print SNV haplotypes] 2
+	[print full genotypes] 3
+	[print full haplotypes] 4
+	[print ancestors] [5]
+	[print trees] 6
+	[print times] [7]
+	[print CATG] [8]
+	[print replicates in individual folders] v
+	[print consensus/IUPAC haplotypes] x
+	[results folder name] ores2
+	
+	[OTHER]
+	[simulate only trees] [0]
+	[noisy]	y1
+	[number of nodes] z1000
+	[seed] [#1234567] [if no seed is specified, the current time will be used as seed]
+
+	[noisy = 0: does not print anything
+	 noisy = 1: + simulation summary, 
+	 noisy = 2: + replicate information, 
+	 noisy = 3: + calculation status and event information]
+	
+	
