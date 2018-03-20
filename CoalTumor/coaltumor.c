@@ -4991,6 +4991,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					}
 				else
 					{
+					doJC = NO;
 					doHKY = YES;
 					doGTR = NO;
 					doGTnR = NO;
@@ -5041,12 +5042,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					thereIsMij = YES;
 					if (CheckMatrixSymmetry (Mij) == YES)
 						{
+						doJC = NO;
 						doHKY = NO;
 						doGTR = YES;
 						doGTnR = NO;
 						}
 					else
 						{
+						doJC = NO;
 						doHKY = NO;
 						doGTR = NO;
 						doGTnR = YES;

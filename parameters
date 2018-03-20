@@ -1,13 +1,13 @@
 [
-#Sims2: genotype simulation under an infinite-site model, low number of SNVs  (targeted/exome sequencing)
-#ADO: 0, 0.05, 0.15, 0.5
+#Sim3: genotype simulation under a finite, complex model, large number of SNVs (whole-genome sequencing)
 #genotype error: 0, 0.01, 0.1, 0.2
-#cells = 40
+#ADO: 0, 0.05, 0.15, 0.5
+#cells = 100
 #rate variation among lineages (alpha=1)
-#numsites = 5000
-#number of fixed SNVs = 250, 500, 1000
+#sites = 10000
 #growthRate = 10-4
-#model = ISM diploid + collapsed signature 1
+#mutation rate = 10-6
+#model = GTnR (collapsed signature 1) + G (alpha=1),
 #replicates = 100
 ]
 
@@ -15,30 +15,30 @@
 	
 	[COALESCENT]
 	[number of replicates] n1
-	[sample size (# tumor cells)] s40
-	[number of sites] l5000
+	[sample size (# tumor cells)] s100
+	[number of sites] l10000
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 
 	[GENEALOGY MODIFIERS]
-	[transforming branch length] k0.01 [k0.0]
-	[healthy tip branch length] [q1e-6] [q0.0]
+	[transforming branch length] k0.01
+	[healthy tip branch length] [q0.0]
 	[rate variation among lineages] i1
 
 	[MUTATION MODEL]
 	[alphabet 0:binary 1:DNA] b1
-	[mutation rate] [u1e-6]
+	[mutation rate] u1e-6
 	[deletion rate] [d1e-6]
-	[fixed number of SNVs - ISM] j250
-    [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] [m0]
+	[fixed number of SNVs - ISM] [j1]
+    [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m2
      [default mutation model is ISM diploid]	
-	[proportion of alternative model sites] p0
+	[proportion of alternative model sites] p1
 	[alternative/default model relative mutation rate] [w1]
 	[germline SNP rate] [c0.00001]
 	[base frequencies]	f0.3 0.2 0.2 0.3
 	[transition/transversion ratio] [t2]
-	[rate variation among sites] [a2]
+	[rate variation among sites] a1
 	[mutation matrix ACGT x ACGT]  [r0 1 1 1
     							 	1 0 1 1
     							 	1 1 0 1
