@@ -15,8 +15,8 @@
 	
 	[COALESCENT]
 	[number of replicates] n1
-	[sample size (# tumor cells)] s100
-	[number of sites] l10000
+	[sample size (# tumor cells)] s10
+	[number of sites] l1000
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
@@ -55,7 +55,7 @@
 									0.042	0.124	0.026	0
 									[signature 1 - like, with freqs already included]  
 	[NGS PARAMETERS]
-	[genotyping error; no reads] G0
+	[genotyping error; no reads] G0.1
  	[sequencing coverage; reads simulated] [C100]
 	[coverage overdispersion] [V5]
 	[amplification error] [A0.1 0.01 0]
@@ -75,6 +75,7 @@
 	[print trees] 6
 	[print times] [7]
 	[print CATG] [8]
+	[print SNV true haplotypes] 9
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] x
 	[results folder name] ores2

@@ -175,12 +175,12 @@ static double	expNumMU, expVarNumMU;
 static double	theta, healthyTipBranchLength, transformingBranchLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate;
 static double	deletionRate;
-static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
+static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], SNVtrueHaplotypesFile[MAX_NAME],fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
 static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME];;
-static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
+static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], SNVtrueHaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME];
 static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine;
-static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree;
+static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintSNVtrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
 static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts;
 static int		doJC, doHKY, doGTR, doGTnR;
@@ -200,7 +200,7 @@ static double	sumPos, meansumPos;
 #endif
 
 /* File pointers */
-FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpSettings;
+FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpSNVtrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpSettings;
 
 
 
