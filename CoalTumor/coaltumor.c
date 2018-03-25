@@ -126,10 +126,10 @@ int main (int argc, char **argv)
 	Mij[3][0] = Mij[3][1] = Mij[3][2] = 0.33;
 	thereIsEij = NO;			/* error rate matrix*/
 	Eij[0][0] = Eij[1][1] = Eij[2][2] = Eij[3][3] = 0;  /* sequencing error probabilities */
-	Eij[0][1] = Eij[0][2] = Eij[0][3] = 0.33;
-	Eij[1][0] = Eij[1][2] = Eij[1][3] = 0.33;
-	Eij[2][0] = Eij[2][1] = Eij[2][3] = 0.33;
-	Eij[3][0] = Eij[3][1] = Eij[3][2] = 0.33;
+	Eij[0][1] = Eij[0][2] = Eij[0][3] = 1.0/3;
+	Eij[1][0] = Eij[1][2] = Eij[1][3] = 1.0/3;
+	Eij[2][0] = Eij[2][1] = Eij[2][3] = 1.0/3;
+	Eij[3][0] = Eij[3][1] = Eij[3][2] = 1.0/3;
 	doJC = YES;
 	doHKY = NO;
 	doGTR = NO;
@@ -139,6 +139,7 @@ int main (int argc, char **argv)
     alphaBranches = infinity;   /* alpha shape of the gamma distribution for rate variation among lineages */
     alphaCoverage = infinity;   /* alpha shape of the gamma distribution for coverage */
 	doSimulateFixedNumSNVs = NO;	/* whether to simulate a fixed number of SNV sites */
+	doUserTree = NO;			/* whether to assume a user tree instead od making the coalescent */
     doPrintSNVgenotypes = NO;	/* whether to print SNVs */
     doPrintSNVhaplotypes = NO;  /* whether to print haplotypes */
     doPrintSNVtrueHaplotypes = NO;  /* whether to print haplotypes without errors */
@@ -319,7 +320,6 @@ int main (int argc, char **argv)
 			for (j=1; j<4; j++)
 				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
 			}
-		
 		}
 
     for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
@@ -343,19 +343,29 @@ int main (int argc, char **argv)
         numCA = numMU = numDEL = numProposedMU = TMRCA = numSNVmaternal = 0;
 			
         /* Generate coalescence tree */
-        if (noisy > 2)
-            fprintf (stderr, "\n>> Starting coalescent tree ...");
-        MakeCoalescenceTree (numCells, N, &seed);
-        if (noisy > 2)
-            fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
- 
-       /* Make tumor tree non-clock if needed */
-        if (rateVarAmongLineages == YES)
-            MakeTreeNonClock (coalTreeMRCA, &seed);
+		if (doUserTree == NO)
+			{
+			if (noisy > 2)
+				fprintf (stderr, "\n>> Starting coalescent tree ...");
+			MakeCoalescenceTree (numCells, N, &seed);
+			if (noisy > 2)
+				fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
+	 
+		   /* Make tumor tree non-clock if needed */
+			if (rateVarAmongLineages == YES)
+				MakeTreeNonClock (coalTreeMRCA, &seed);
 			
-        cumNumCA += numCA;
-        cumTMRCA += TMRCA;
-        cumTMRCASq += pow(TMRCA,2);
+			cumNumCA += numCA;
+			cumTMRCA += TMRCA;
+			cumTMRCASq += pow(TMRCA,2);
+			}
+		else /* read user treefile  */  //FIXME: working here
+			{
+			if (noisy > 2)
+				fprintf (stderr, "\n>> Reading use tree ...");
+				//ReadTree(fpTrees, (TreeNode *)tree[i].node);
+
+			}
  
         if (doPrintTree == YES)
             PrintTree (healthyRoot);
@@ -452,16 +462,9 @@ int main (int argc, char **argv)
             EvolveSitesOnTree (healthyRoot, PATERNAL, &seed);
             if (noisy > 2)
                 fprintf (stderr, "DONE\n\n");
-				
- 			/* count how many SNVs we have */
-			numSNVs = CountSNVs();
-			if (numSNVs == 0)
-                zeroSNVs++;
-
+	
             cumNumMU += numMU;
             cumNumMUSq += pow(numMU,2);
-            cumNumSNVs += numSNVs;
-            cumNumSNVsSq += pow(numSNVs,2);
 
 			if (deletionRate > 0)
 				{
@@ -482,24 +485,15 @@ int main (int argc, char **argv)
 				cumNumDEL += numDEL;
 				cumNumDELSq += pow(numDEL,2);
 				}
-			
-         if (noisy > 1)
-            {
-            fprintf (stderr, "\nData set %d",dataSetNum+1);
-            fprintf (stderr, "\nNumber of coalescence events   =   %d", numCA);
-            fprintf (stderr, "\nNumber of mutational events    =   %d", numMU);
-            fprintf (stderr, "\nNumber of SNVs                 =   %d\n\n", numSNVs);
-            fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
-            }
-			
+				
 			/* print references sequences without errors */
-			if (doPrintSNVtrueHaplotypes == YES && numSNVs > 0) /* we only print replicates with variation */
+			if (doPrintSNVtrueHaplotypes == YES)
 				{
   				if (doPrintSeparateReplicates == NO)
 					fprintf (fpSNVtrueHaplotypes, "[#%d]\n", dataSetNum+1);
                 PrintSNVHaplotypes(fpSNVtrueHaplotypes);
 				}
-			
+
 			/* do alellic dropout */
 			if (ADOrate > 0)
 				AllelicDropout(&seed);
@@ -509,8 +503,34 @@ int main (int argc, char **argv)
 				GenotypeError(&seed);
 
 			/* count how many alleles are at each site */
+			/* count how many SNVs we observe */
 			if (doSimulateFixedNumSNVs == NO)
-				CountAlleles();
+				{
+				numSNVs = CountSNVs();
+				fprintf(stderr,"\n\nCountSNVs    = %d - ", numSNVs);
+				for (i=0; i<numSNVs; i++)
+				  fprintf (stderr, " %d",SNVsites[i]);
+
+				numSNVs = CountAlleles();
+				fprintf(stderr,"\nCountAlleles = %d - ", numSNVs);
+				for (i=0; i<numSNVs; i++)
+				  fprintf (stderr, " %d",SNVsites[i]);
+				}
+			
+            cumNumSNVs += numSNVs;
+            cumNumSNVsSq += pow(numSNVs,2);
+
+			if (numSNVs == 0)
+                zeroSNVs++;
+
+			if (noisy > 1)
+				{
+				fprintf (stderr, "\nData set %d",dataSetNum+1);
+				fprintf (stderr, "\nNumber of coalescence events   =   %d", numCA);
+				fprintf (stderr, "\nNumber of mutational events    =   %d", numMU);
+				fprintf (stderr, "\nNumber of SNVs                 =   %d\n\n", numSNVs);
+				fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
+				}
 
 			if (doPrintSNVgenotypes == YES && numSNVs > 0) /* we only print replicates with variation */
                 {
@@ -839,7 +859,13 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
         treeNodes[i].label = 0;
         treeNodes[i].isHealthyRoot = NO;
         treeNodes[i].isHealthyTip = NO;
-       }
+		treeNodes[i].name = (char*) calloc (MAX_NAME, sizeof(char));
+		if (!treeNodes[i].name)
+			{
+			fprintf (stderr, "Could not allocate the treeNodes[i].name structure\n");
+			exit (-1);
+			}
+		}
 	
     /* set up initial nodes */
     numActiveNodes = 0;
@@ -1891,10 +1917,21 @@ void GenotypeError (long int *seed)
 			{
 			for (j=0; j<numSites; j++)
 				{
-				if (data[MATERNAL][i][j] != ADO && RandomUniform(seed) < genotypingError)
+				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
 					data[MATERNAL][i][j] = ChooseUniformState (Eij[data[MATERNAL][i][j]], seed);
-				if (data[PATERNAL][i][j] != ADO && RandomUniform(seed) < genotypingError)
+				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
 					data[PATERNAL][i][j] = ChooseUniformState (Eij[data[PATERNAL][i][j]], seed);
+			
+				if (data[MATERNAL][i][j] != A && data[MATERNAL][i][j] != C  &&  data[MATERNAL][i][j] != G  && data[MATERNAL][i][j] != T  && data[MATERNAL][i][j] != ADO  && data[MATERNAL][i][j] != DELETION)
+					{
+					fprintf (stderr, "\nERROR: data[MATERNAL][%d][%d] = %d\n", i,j,data[MATERNAL][i][j]);
+					exit(-1);
+					}
+				if (data[PATERNAL][i][j] != A  && data[PATERNAL][i][j] != C && data[PATERNAL][i][j] != G  && data[PATERNAL][i][j] != T  && data[PATERNAL][i][j] != ADO  && data[PATERNAL][i][j] != DELETION)
+					{
+					fprintf (stderr, "\nERROR: data[PATERNAL][%d][%d] = %d\n", i,j,data[PATERNAL][i][j]);
+					exit(-1);
+					}
 				}
 			}
 		}
@@ -1904,7 +1941,7 @@ void GenotypeError (long int *seed)
 			{
 			for (j=0; j<numSites; j++)
 				{
-				if (data[MATERNAL][i][j] != ADO && RandomUniform(seed) < genotypingError)
+				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
 					{
 					if (data[MATERNAL][i][j] == 0)
 						data[MATERNAL][i][j] = 1;
@@ -1912,7 +1949,7 @@ void GenotypeError (long int *seed)
 						data[MATERNAL][i][j] = 0;
 					}
 
-				if (data[PATERNAL][i][j] != ADO && RandomUniform(seed) < genotypingError)
+				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
 					{
 					if (data[PATERNAL][i][j] == 0)
 						data[PATERNAL][i][j] = 1;
@@ -1923,6 +1960,111 @@ void GenotypeError (long int *seed)
 			}
 		}
 	}
+
+
+
+/************************* CountSNVs  ************************/
+/* Count number of SNVs in a given data set, ignoring ADO or deletions */
+
+int CountSNVs () 
+	{
+    int		i, cell, site;
+    int		nSNVs, firstAllele;
+		
+    nSNVs = 0;
+    i = 0;
+	
+    for (site=0; site<numSites; site++)
+        {
+		firstAllele = data[MATERNAL][0][site]; //FIXME: What happens if this is a ADO, or deletion
+		for (cell=0; cell<numCells+1; cell++)
+			{
+			if ((data[MATERNAL][cell][site] != firstAllele) || (data[PATERNAL][cell][site] != firstAllele))
+                {
+                allSites[site].isSNV = YES;
+                SNVsites[i++] = site;
+				nSNVs++;
+  				break;
+                }
+			}
+		}
+    return nSNVs;
+	}
+
+
+/************************* CountAlleles  ************************/
+/* Identify reference and alternate alleles */
+
+int CountAlleles ()
+	{
+	int		numAltAlleles, cell, site;
+	int		countA, countC, countG, countT, countADO, countDEL, nSNVs;
+	
+	nSNVs = 0;
+	
+	for (site=0; site<numSites; site++)
+		{
+		countA = countC = countG = countT = countADO = countDEL = 0;
+		for (cell=0; cell<numCells+1; cell++)
+			{
+			if (data[MATERNAL][cell][site] == A)
+				countA++;
+			else if (data[MATERNAL][cell][site] == C)
+				countC++;
+			else if (data[MATERNAL][cell][site] == G)
+				countG++;
+			else if (data[MATERNAL][cell][site] == T)
+				countT++;
+			else if (data[MATERNAL][cell][site] == ADO)
+				countADO++;
+			else if (data[MATERNAL][cell][site] == DELETION)
+				countDEL++;
+
+			if (data[PATERNAL][cell][site] == A)
+				countA++;
+			else if (data[PATERNAL][cell][site] == C)
+				countC++;
+			else if (data[PATERNAL][cell][site] == G)
+				countG++;
+			else if (data[PATERNAL][cell][site] == T)
+				countT++;
+			else if (data[PATERNAL][cell][site] == ADO)
+				countADO++;
+			else if (data[MATERNAL][cell][site] == DELETION)
+				countDEL++;
+			}
+		
+		/* assing counts to sites structure */
+		allSites[site].countA = countA;
+		allSites[site].countC = countC;
+		allSites[site].countG = countG;
+		allSites[site].countT = countT;
+		allSites[site].countACGT = countA + countC + countG + countT;
+		allSites[site].countDropped = countADO + countDEL;
+		
+		/* count number of alternate alleles, ignoring ADO or DELETION */
+		numAltAlleles = 0;
+		if (countA > 0 && allSites[site].referenceAllele != A)
+			allSites[site].alternateAlleles[numAltAlleles++] = A;
+		if (countC > 0 && allSites[site].referenceAllele != C)
+			allSites[site].alternateAlleles[numAltAlleles++] = C;
+		if (countG > 0 && allSites[site].referenceAllele != G)
+			allSites[site].alternateAlleles[numAltAlleles++] = G;
+		if (countT > 0 && allSites[site].referenceAllele != T)
+			allSites[site].alternateAlleles[numAltAlleles++] = T;
+		allSites[site].numAltAlleles = numAltAlleles;
+		
+		/* find out whether this site is a SNV */
+		if (numAltAlleles > 0) //FIXME: take a look
+			{
+			allSites[site].isSNV = YES;
+			SNVsites[nSNVs++] = site;
+			}
+		}
+		
+	return nSNVs;
+	}
+
 
 /*************************** SumBranchlengths **********************************/
 /* Returns the sum of the branch lengths for a given tree */
@@ -1942,99 +2084,6 @@ double SumBranches (TreeNode *p)
 		
     return sum;
     }
-
-
-
-/************************* CountSNVs  ************************/
-/* Count number of SNVs in a given data set */
-
-int CountSNVs () 
-	{
-    int		i, cell, site;
-    int		nSNVs, firstAllele;
-		
-    nSNVs = 0;
-    i = 0;
-	
-    for (site=0; site<numSites; site++)
-        {
-		firstAllele = data[MATERNAL][0][site];
-		for (cell=0; cell<numCells+1; cell++)
-			{
-			if ((data[MATERNAL][cell][site] != firstAllele) || (data[PATERNAL][cell][site] != firstAllele))
-                {
-                allSites[site].isSNV = YES;
-                SNVsites[i++] = site;
-				nSNVs++;
-  				break;
-                }
-			}
-		}
-    return nSNVs;
-	}
-
-
-/************************* CountAlleles  ************************/
-/* Identify reference and alternate alleles */
-
-void CountAlleles ()
-	{
-	int		i, cell, site;
-	int		countA, countC, countG, countT, countDropped;
-	
-	for (site=0; site<numSites; site++) //we could do this just for snvs
-		{
-		countA = countC = countG = countT = countDropped = 0;
-		for (cell=0; cell<numCells+1; cell++)
-			{
-			if (data[MATERNAL][cell][site] == A)
-				countA++;
-			else if (data[MATERNAL][cell][site] == C)
-				countC++;
-			else if (data[MATERNAL][cell][site] == G)
-				countG++;
-			else if (data[MATERNAL][cell][site] == T)
-				countT++;
-			else if (data[MATERNAL][cell][site] == ADO)
-				countDropped++;
-			
-			if (data[PATERNAL][cell][site] == A)
-				countA++;
-			else if (data[PATERNAL][cell][site] == C)
-				countC++;
-			else if (data[PATERNAL][cell][site] == G)
-				countG++;
-			else if (data[PATERNAL][cell][site] == T)
-				countT++;
-			else if (data[PATERNAL][cell][site] == ADO)
-				countDropped++;
-			}
-		
-		allSites[site].countA = countA;
-		allSites[site].countC = countC;
-		allSites[site].countG = countG;
-		allSites[site].countT = countT;
-		allSites[site].countACGT = countA + countC + countG + countT;
-		allSites[site].countDropped = countDropped;
-			
-		i=0;
-		if (countA > 0 && allSites[site].referenceAllele != A)
-			allSites[site].alternateAlleles[i++] = A;
-		if (countC > 0 && allSites[site].referenceAllele != C)
-			allSites[site].alternateAlleles[i++] = C;
-		if (countG > 0 && allSites[site].referenceAllele != G)
-			allSites[site].alternateAlleles[i++] = G;
-		if (countT > 0 && allSites[site].referenceAllele != T)
-			allSites[site].alternateAlleles[i++] = T;
-		if (countDropped > 0 && allSites[site].referenceAllele != ADO)
-			allSites[site].alternateAlleles[i++] = ADO;
-		
-		allSites[site].numAltAlleles = i;
-			
-		}
-	}
-
-
 
 
 /********************* GenerateReadCounts  ************************/
@@ -3088,6 +3137,274 @@ void PrepareSeparateFiles(int replicate)
 
 
 
+/***************************** ReadTree  *********************************/
+/*	Reads a tree in Newick format, rooted or unroored, binary or with
+	polytomies (NOTE HERE), and with or without branch lengths */
+
+static void ReadTree (FILE *fp, TreeNode *treeRoot)
+{
+	int			taxonNumber, nextNode, numDigits;
+	int			i, j;
+	int			digit, digit1, digit2, digit3;
+	char		*temp;
+	TreeNode	*p = NULL, *q = NULL;
+	
+	treeString = (char*) calloc (MAX_LINE, sizeof(char));
+	if (!treeString)
+		{
+		fprintf (stderr, "Could not allocate the treeString structure\n");
+		exit (-1);
+		}
+
+	temp = (char*) calloc (MAX_NAME, sizeof(char));
+        if (!temp)
+            {
+            fprintf (stderr, "Could not allocate the temp structure\n");
+            exit (-1);
+            }
+
+	taxonNamesAreChars = NO;
+	//currentTreeRoot = treeRoot;
+	
+	/*fprintf (stderr, "\nReading tree ... ");*/
+	fgets (treeString, MAX_LINE, fp);
+	if (treeString == NULL)
+		{
+		fprintf (stderr,"Could not read tree");
+		PrintUsage();
+		}
+	
+	/*fprintf (stderr, "OK");
+	fprintf (stderr, "\n%s", treeString);*/
+	
+	/*fprintf (stderr, "\nChecking tree ... ");*/
+	CheckTree(treeString);  /* HERE*/
+	/*fprintf (stderr, "OK");*/
+
+	/*InitializeNodes: set everything to null */
+    for (i=0; i<numNodes; i++)
+        {
+        treeNodes[i].left = NULL;
+        treeNodes[i].right = NULL;
+        treeNodes[i].anc = NULL;
+        treeNodes[i].time = 0.0;
+        treeNodes[i].length = 0.0;
+        treeNodes[i].index = 0;
+        treeNodes[i].label = 0;
+        treeNodes[i].isHealthyRoot = NO;
+        treeNodes[i].isHealthyTip = NO;
+		treeNodes[i].name = (char*) calloc (MAX_NAME, sizeof(char));
+		if (!treeNodes[i].name)
+			{
+			fprintf (stderr, "Could not allocate the treeNodes[i].name structure\n");
+			PrintUsage();
+			}
+		}
+
+    numCells = 0;
+    nextNode = 0;
+    i = 0;
+    do
+        {
+        if (treeString[i] == '(')
+            {
+            if (nextNode == 0)
+                {
+                p = treeRoot + nextNode;
+                /*p.isRoot = true;*/
+				nextNode++;
+                }
+            else
+                {
+				q = treeRoot + nextNode;
+				//p->child[p->numChildren++] = q;
+				p->left = q;
+				q->anc = p;
+				p = q;
+				nextNode++;
+                }
+            }
+        else if (treeString[i] == ')')
+            {
+            q = p->anc;
+            p = q;
+            }
+        else if (treeString[i] == ',')
+            {
+            q = p->anc;
+            p = q;
+            }
+		else if (treeString[i] == ':')
+	        {
+	        i++;
+            for (j=0; j<10; j++)
+                temp[j] = ' ';
+            j = 0;
+	        while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':' && treeString[i] != ';' && treeString[i] != '(')
+	        	temp[j++] = treeString[i++];
+	        i--;
+	        sscanf (temp, "%lf", &p->length);
+			}
+        else
+        	/* now read taxon names*/
+        	{
+			if (/* DISABLES CODE */ (0)) /* let's read every name as a word */
+            /* if (isdigit(treeString[i]) == YES)*/ /* taxon names are numbers */
+            	{
+	            numDigits = 0;
+	            digit1 = digit2 = digit3 = 0;
+	            while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':')
+	                    {
+	                    if      (treeString[i] == '0') digit = 0;
+	                    else if (treeString[i] == '1') digit = 1;
+	                    else if (treeString[i] == '2') digit = 2;
+	                    else if (treeString[i] == '3') digit = 3;
+	                    else if (treeString[i] == '4') digit = 4;
+	                    else if (treeString[i] == '5') digit = 5;
+	                    else if (treeString[i] == '6') digit = 6;
+	                    else if (treeString[i] == '7') digit = 7;
+	                    else if (treeString[i] == '8') digit = 8;
+	                    else if (treeString[i] == '9') digit = 9;
+	                    if      (numDigits == 0) digit1 = digit;
+	                    else if (numDigits == 1) digit2 = digit;
+	                    else if (numDigits == 2) digit3 = digit;
+	                    numDigits++;
+	                    i++;
+	                    }
+	            i--;
+	            if (numDigits == 1)
+	            	taxonNumber = digit1;
+	            else if (numDigits == 2)
+					taxonNumber = 10*digit1 + digit2;
+	            else if (numDigits == 3)
+	            	taxonNumber = 100*digit1 + 10*digit2 + digit3;
+				}
+			else /* taxon names are letters */
+	            {
+				taxonName = (char*) calloc (MAX_NAME, sizeof(char));
+				if (!taxonName)
+					{
+					fprintf (stderr, "Could not allocate the taxonName structure\n");
+					exit (-1);
+					}
+	           	taxonNamesAreChars = YES;
+	            j = 0;
+	            while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':')
+	            	taxonName[j++] = treeString[i++];
+	            i--;
+				}
+
+            q = treeRoot + nextNode;
+			//p->child[p->numChildren++] = q;
+			p->right = q;
+			q->anc = p;
+			//q->index = taxonNumber;
+			q->index = nextNode;
+			strcpy(q->name,taxonName);
+            p = q;
+           	nextNode++;
+            numCells++;
+ 			free (taxonName);
+           }
+        i++;
+        } while (treeString[i] != ';');
+
+	numNodes = nextNode;
+
+	/* reallocate tree nodes */
+	treeRoot = (TreeNode *) realloc (treeRoot, numNodes * sizeof (TreeNode));
+	if (treeRoot == NULL)
+		{
+		fprintf (stderr, "Could not reallocate treeRoot (%ld bytes)\n", numNodes * sizeof (TreeNode));
+		PrintUsage();
+		}
+
+	temp = (char*) calloc (MAX_NAME, sizeof(char));
+        if (!temp)
+            {
+            fprintf (stderr, "Could not allocate the temp structure\n");
+            exit (-1);
+            }
+
+	free (temp);
+}
+
+
+/***************** CheckTree *******************/
+/*  Checks for an error in the input tree string
+	Prints message when there is an error in the
+	tree and prints correct part of the tree */
+static void		CheckTree (char *treeStr)
+	{
+	int		i, k;
+	int		thereIsError, numLeftPar, numRightPar;
+	
+	thereIsError = NO;
+    numLeftPar = 1;
+    numRightPar = 0;
+	i = 1;
+
+	do
+		{
+		if (treeStr[i] == '(')
+			{
+			if (treeStr[i-1] != '(' && treeStr[i-1] != ',')
+				thereIsError = YES;
+			if (treeStr[i+1] != '(' && isalnum(treeStr[i+1]) == NO)
+				thereIsError = YES;
+			numLeftPar++;
+			}
+		else if (treeStr[i] == ')')
+			{
+			if (treeStr[i-1] != ')' && isalnum(treeStr[i-1]) == NO)
+				thereIsError = YES;
+			if (treeStr[i+1] != ')' && treeStr[i+1] != ',' && treeStr[i+1] != ':')
+				thereIsError = YES;
+			if (treeStr[i+1] == ';' && i == strlen(treeStr)-3)
+				thereIsError = NO;
+			numRightPar++;
+			}
+		else if (treeStr[i] == ',')
+			{
+			if (treeStr[i-1] != ')' && isalnum(treeStr[i-1]) == NO)
+				thereIsError = YES;
+			if (treeStr[i+1] != '(' && isalnum(treeStr[i+1]) == NO)
+				thereIsError = YES;
+			}
+		else if (treeStr[i] == ':')
+			{
+			if (treeStr[i-1] != ')' && isalnum(treeStr[i-1]) == NO)
+				thereIsError = YES;
+			if (isdigit(treeStr[i+1]) == NO)
+				thereIsError = YES;
+			}
+
+		if (thereIsError == YES)
+			{
+			fprintf (stderr,"\nERROR: There is something wrong in the tree\n");
+			for (k=0; k<=i; k++)
+				fprintf (stderr,"%c", treeStr[k]);
+			fprintf (stderr," <- HERE");
+			PrintUsage();
+			}
+		
+		i++;
+	
+		} while (treeStr[i] != ';');
+
+	if (numLeftPar != numRightPar)
+		{
+		fprintf (stderr, "Tree seems unbalanced (%d left and %d right parentheses)", numLeftPar, numRightPar);
+		PrintUsage();
+		}
+	if (strrchr(treeString, ':') == NULL)
+		{
+		fprintf (stderr, "Tree does not have branch lengths");
+		PrintUsage();
+		}
+	}
+
+
 /**************** Print Trees ***************/
 /*  Print trees to treefile in Newick format */
 
@@ -3124,7 +3441,6 @@ void WriteTree (TreeNode *p)
             }
         }
     }
-
 
 
 /********************* PrintTimes **********************/
@@ -3939,7 +4255,12 @@ char WhichNuc (int nucleotide)
     else if (nucleotide == DELETION)
         return ('-');
     else
-        return ('N');
+        {
+ 		fprintf (stderr, "\nERROR: nucleotide = %d\n",  nucleotide);
+		exit(-1);
+	   return ('N');
+        }
+
     }
 
 
@@ -4371,7 +4692,7 @@ static void PrintUsage(void)
     fprintf (stderr,"\n\nDefaults: ");
     PrintDefaults (stderr);
 	fprintf (stderr, "\n--------------------------------------------------------------------------------------------------------\n");
-
+	fprintf (stderr,"\n...now exiting to system...\n\n");
     exit(-1);
 }
 
@@ -4403,22 +4724,22 @@ int Label (TreeNode *p)
 
 int ChooseUniformState (double *prob, long int *seed)
 	{
-	int			i, chosenState;
+	int			chosenState;
 	double		ran, cumProb;
 	
-	i=0;
-	//fprintf (stderr, "\n\prob[i] = %f\n", prob[i]);
-	cumProb = prob[i];
-	chosenState = i;
+	chosenState = 0;
+	cumProb = prob[chosenState];
 	ran = RandomUniform(seed);
 
 	while (ran > cumProb)
-		{
-		i++;
-		cumProb += prob[i];
-		chosenState = i;
-		}
-		
+		cumProb += prob[++chosenState];
+	
+	if (chosenState > 3)
+	  {
+ 		fprintf (stderr, "\nERROR: chosenState = %d,  ran = %f, cumProb = %f\n",  chosenState, ran, cumProb);
+		exit(-1);
+	}
+
 	return chosenState;
 	}
 
@@ -4763,12 +5084,12 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 v x o 0 y z #
+	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o S 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G                     R       V   X
-	0 1 2 3 4 5 6 7 8 #
+	A   C D E   G                     R S     V   X
+	0 1 2 3 4 5 6 7 8 9 #
 */
 
 static void ReadParametersFromCommandLine (int argc,char **argv)
@@ -4782,7 +5103,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 	if (argc > 0)
 		{
 		cat = (char *) calloc(300, sizeof(char));
-		CommandLine = (char *) calloc(3000, sizeof(char));
+		CommandLine = (char *) calloc(MAX_LINE, sizeof(char));
 
 		for (i=0; i<argc; i++)
 			{
@@ -5267,6 +5588,12 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				if(!isspace(ch))
 					strcpy(resultsDir,argv[i]);
 			break;
+ 			case 'S':
+				ch = *argv[i];
+				if(!isspace(ch))
+					strcpy(userTreeFile,argv[i]);
+				doUserTree = YES;
+			break;
 			case '0':
                 doSimulateData = NO;
                 break;
@@ -5314,12 +5641,12 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 /* Reads parameter values from the parameter file  */
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 v x o 0 y z #
+	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o S 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G                     R       V   X
-	0 1 2 3 4 5 6 7 8 #
+	A   C D E   G                     R S     V   X
+	0 1 2 3 4 5 6 7 8 9 #
 */
 
 void ReadParametersFromFile ()
@@ -5789,6 +6116,22 @@ void ReadParametersFromFile ()
 						}
 					while(!isspace(ch));
 					resultsDir[j]='\0';
+					}
+			break;
+			case 'S':
+				ch=fgetc(stdin);
+				if(!isspace(ch))
+					{
+					j=0;
+					do
+						{
+						userTreeFile[j]=ch;
+						j++;
+						ch=fgetc(stdin);
+						}
+					while(!isspace(ch));
+					userTreeFile[j]='\0';
+					doUserTree = YES;
 					}
 			break;
 			case '0':

@@ -16,7 +16,7 @@
 	[COALESCENT]
 	[number of replicates] n1
 	[sample size (# tumor cells)] s10
-	[number of sites] l1000
+	[number of sites] l100000
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
@@ -28,12 +28,12 @@
 
 	[MUTATION MODEL]
 	[alphabet 0:binary 1:DNA] b1
-	[mutation rate] u1e-6
+	[mutation rate] u0e-6
 	[deletion rate] [d1e-6]
 	[fixed number of SNVs - ISM] [j1]
     [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m2
      [default mutation model is ISM diploid]	
-	[proportion of alternative model sites] p1
+	[proportion of alternative model sites] p0
 	[alternative/default model relative mutation rate] [w1]
 	[germline SNP rate] [c0.00001]
 	[base frequencies]	f0.3 0.2 0.2 0.3
@@ -55,7 +55,7 @@
 									0.042	0.124	0.026	0
 									[signature 1 - like, with freqs already included]  
 	[NGS PARAMETERS]
-	[genotyping error; no reads] G0.1
+	[genotyping error; no reads] G0.5
  	[sequencing coverage; reads simulated] [C100]
 	[coverage overdispersion] [V5]
 	[amplification error] [A0.1 0.01 0]
@@ -79,6 +79,7 @@
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] x
 	[results folder name] ores2
+	[user treefile] [Susertree]
 	
 	[OTHER]
 	[simulate only trees] [0]

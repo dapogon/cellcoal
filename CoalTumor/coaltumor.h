@@ -25,6 +25,7 @@
 #define PROGRAM_NAME_UPPERCASE	"COALTUMOR"
 #define VERSION_NUMBER          "version 0.1"
 #define	MAX_NAME                50
+#define	MAX_LINE                3000
 #define	NO                      0
 #define	YES                     1
 #define	infinity                999999
@@ -58,7 +59,8 @@ typedef struct node
     {
     struct node		*left, *right, *anc;
     int				index, label, isHealthyTip, isHealthyRoot;
-    double			length, time, branchLength;;
+    double			length, time, branchLength;
+    char			*name;
     }
     TreeNode;
 
@@ -89,17 +91,19 @@ typedef struct site
     SiteStr;
 
 /* Prototypes */
-static void 	PrintHeader (FILE *file);
-static void 	PrintDate (FILE *file);
+static void 	PrintHeader (FILE *fp);
+static void 	PrintDate (FILE *fp);
 static void 	PrintUsage (void);
 static void 	PrintDefaults (FILE *fp);
 static void		ReadUntil (FILE *fv, char stopChar, char *what);
-static void		PrintRunInformation (FILE *filep);
+static void		PrintRunInformation (FILE *fp);
 static void		ReadParametersFromFile (void);
 static void		ReadParametersFromCommandLine (int argc, char **argv);
 static void 	PrintCommandLine (FILE *fp, int argc,char **argv);
 static void		PrepareGlobalFiles (int argc, char **argv);
 static void		PrepareSeparateFiles (int replicate);
+static void		ReadTree (FILE *fp, TreeNode *treeRoot);
+static void		CheckTree (char *treeString);
 static void		PrintTree (TreeNode *treeRoot);
 static void		WriteTree (TreeNode *p);
 static void		PrintTimes (int listPosition);
@@ -137,9 +141,9 @@ static void		HKYmodel (double Pij[4][4], double branchLength);
 static void		GTRmodel (double Pij[4][4], double branchLength);
 static void 	EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed);
 static void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed);
-static void		CountAlleles (void);
-static double	SumBranches (TreeNode *p);
 static int 		CountSNVs(void);
+static int		CountAlleles (void);
+static double	SumBranches (TreeNode *p);
 static double 	RandomUniform (long int *seed);
 static int 		RandomUniformTo (int max, long int *seed);
 static int		RandomPoisson (double lambda, long int *seed);
@@ -176,13 +180,13 @@ static double	theta, healthyTipBranchLength, transformingBranchLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate;
 static double	deletionRate;
 static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], SNVtrueHaplotypesFile[MAX_NAME],fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
-static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME];;
+static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME];
 static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], SNVtrueHaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME];
-static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine;
-static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintSNVtrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree;
+static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName;
+static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintSNVtrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
-static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts;
+static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage;
 static double	*periodGrowth, growthRate, sequencingError, ADOrate, singleAlleleCoverageReduction, genotypingError, meanAmplificationError, varAmplificationError;
