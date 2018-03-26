@@ -502,20 +502,9 @@ int main (int argc, char **argv)
 			if (genotypingError > 0)
 				GenotypeError(&seed);
 
-			/* count how many alleles are at each site */
-			/* count how many SNVs we observe */
+			/* count how many alleles are at each site and *ow many SNVs we observe */
 			if (doSimulateFixedNumSNVs == NO)
-				{
-				numSNVs = CountSNVs();
-				fprintf(stderr,"\n\nCountSNVs    = %d - ", numSNVs);
-				for (i=0; i<numSNVs; i++)
-				  fprintf (stderr, " %d",SNVsites[i]);
-
 				numSNVs = CountAlleles();
-				fprintf(stderr,"\nCountAlleles = %d - ", numSNVs);
-				for (i=0; i<numSNVs; i++)
-				  fprintf (stderr, " %d",SNVsites[i]);
-				}
 			
             cumNumSNVs += numSNVs;
             cumNumSNVsSq += pow(numSNVs,2);
@@ -1870,18 +1859,29 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 
 
 /********************* AllelicDropout  ************************/
-/*	Remove alleles from single chromosomes at a given ADO rate  */
+/*
+ Remove alleles from single chromosomes at a given ADO rate per genotype
+
+ We assume that ADOrate is the product of the allele dropout rate as follows:
+ A = genotype ADO; a = allele error
+ A = 2a - a^2
+ a = 1 - sqrt(1-A)
+*/
+
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
+	double alleleADOrate;
 	
+	alleleADOrate = 1.0 - sqrt (1.0 -  ADOrate);
+
 	for (i=0; i<numCells+1; i++)
 		{
 		for (j=0; j<numSites; j++)
 			{
 			if (data[MATERNAL][i][j] != DELETION)
 				{
-				if (RandomUniform(seed) < ADOrate)
+				if (RandomUniform(seed) < alleleADOrate)
 					{
 					data[MATERNAL][i][j] = ADO;
 					allSites[i].hasADO = YES;
@@ -1889,7 +1889,7 @@ void AllelicDropout (long int *seed)
 				}
 			if (data[PATERNAL][i][j] != DELETION)
 				{
-				if (RandomUniform(seed) < ADOrate)
+				if (RandomUniform(seed) < alleleADOrate)
 					{
 					data[PATERNAL][i][j] = ADO;
 					allSites[i].hasADO = YES;
@@ -1903,13 +1903,21 @@ void AllelicDropout (long int *seed)
 
 /********************* GenotypeError  ************************/
 /*
-	Introduce false positive errors directly in the genotypes (as opposed to errors just in the reads)
-	(note Eij=0 when i=j)
- */
+ Introduce false positive errors directly in the genotypes
+ (as opposed to errors just in the reads) (note Eij=0 when i=j)
+ 
+ We assume that the genotype error is the product of the allele error as follows:
+ G = genotype error; a = allele error
+ G = 2a - a^2
+ a = 1 - sqrt(1-E)
+*/
 
 void GenotypeError (long int *seed)
 	{
 	int i,j;
+	double alleleError;
+	
+	alleleError = 1.0 - sqrt (1.0 -  genotypingError);
 	
 	if (alphabet == DNA)
 		{
@@ -1917,20 +1925,15 @@ void GenotypeError (long int *seed)
 			{
 			for (j=0; j<numSites; j++)
 				{
-				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
+				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
+					{
 					data[MATERNAL][i][j] = ChooseUniformState (Eij[data[MATERNAL][i][j]], seed);
-				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
-					data[PATERNAL][i][j] = ChooseUniformState (Eij[data[PATERNAL][i][j]], seed);
-			
-				if (data[MATERNAL][i][j] != A && data[MATERNAL][i][j] != C  &&  data[MATERNAL][i][j] != G  && data[MATERNAL][i][j] != T  && data[MATERNAL][i][j] != ADO  && data[MATERNAL][i][j] != DELETION)
-					{
-					fprintf (stderr, "\nERROR: data[MATERNAL][%d][%d] = %d\n", i,j,data[MATERNAL][i][j]);
-					exit(-1);
+					allSites[j].hasGenotypeError = YES;
 					}
-				if (data[PATERNAL][i][j] != A  && data[PATERNAL][i][j] != C && data[PATERNAL][i][j] != G  && data[PATERNAL][i][j] != T  && data[PATERNAL][i][j] != ADO  && data[PATERNAL][i][j] != DELETION)
+				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
-					fprintf (stderr, "\nERROR: data[PATERNAL][%d][%d] = %d\n", i,j,data[PATERNAL][i][j]);
-					exit(-1);
+					data[PATERNAL][i][j] = ChooseUniformState (Eij[data[PATERNAL][i][j]], seed);
+					allSites[j].hasGenotypeError = YES;
 					}
 				}
 			}
@@ -1941,20 +1944,21 @@ void GenotypeError (long int *seed)
 			{
 			for (j=0; j<numSites; j++)
 				{
-				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
+				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
 					if (data[MATERNAL][i][j] == 0)
 						data[MATERNAL][i][j] = 1;
 					else if (data[MATERNAL][i][j] == 1)
 						data[MATERNAL][i][j] = 0;
+					allSites[j].hasGenotypeError = YES;
 					}
-
-				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < genotypingError)
+				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
 					if (data[PATERNAL][i][j] == 0)
 						data[PATERNAL][i][j] = 1;
 					else if (data[PATERNAL][i][j] == 1)
 						data[PATERNAL][i][j] = 0;
+					allSites[j].hasGenotypeError = YES;
 					}
 				}
 			}
@@ -1993,7 +1997,7 @@ int CountSNVs ()
 
 
 /************************* CountAlleles  ************************/
-/* Identify reference and alternate alleles */
+/* Identify reference and alternate alleles plus SNVs, in tumor plus healthy cells */
 
 int CountAlleles ()
 	{
@@ -2034,7 +2038,6 @@ int CountAlleles ()
 				countDEL++;
 			}
 		
-		/* assing counts to sites structure */
 		allSites[site].countA = countA;
 		allSites[site].countC = countC;
 		allSites[site].countG = countG;
@@ -2055,7 +2058,7 @@ int CountAlleles ()
 		allSites[site].numAltAlleles = numAltAlleles;
 		
 		/* find out whether this site is a SNV */
-		if (numAltAlleles > 0) //FIXME: take a look
+		if (numAltAlleles > 0)
 			{
 			allSites[site].isSNV = YES;
 			SNVsites[nSNVs++] = site;
@@ -3512,6 +3515,7 @@ static void PrintSiteInfo (FILE *fp, int i)
 	fprintf (fp, "\n  numMutationsMaternal = %d", allSites[i].numMutationsMaternal);
 	fprintf (fp, "\n  numMutationsPaternal = %d", allSites[i].numMutationsPaternal);
 	fprintf (fp, "\n hasADO = %d", allSites[i].hasADO);
+	fprintf (fp, "\n hasGenotypingError = %d", allSites[i].hasGenotypeError);
 	fprintf (fp, "\n referenceAllele = %c", WhichNuc(allSites[i].referenceAllele));
 	fprintf (fp, "\n numAltAlleles = %d   (", allSites[i].numAltAlleles);
 	for (j=0; j <allSites[i].numAltAlleles; j++)
@@ -4321,7 +4325,8 @@ static void	PrintRunInformation (FILE *filep)
     int		i;
 		
     fprintf (filep, "\n\nRun settings\n------------");
-    fprintf (filep, "\n[Assumptions in brackets]\n");
+    if (noisy > 1)
+		fprintf (filep, "\n[Assumptions in brackets]\n");
     fprintf (filep, "\n Seed                                         =   %-3ld", originalSeed);
     fprintf (filep, "\n Number replicate data sets                   =   %-3d",  numDataSets);
     fprintf (filep, "\n Number of tumor cells                        =   %-3d",  numCells);
@@ -4330,7 +4335,7 @@ static void	PrintRunInformation (FILE *filep)
     fprintf (filep, "\n\nDemographics");
     fprintf (filep, "\n Effective population size                    =   %-3d",  N);
     if (doExponential == YES)
-        fprintf (filep, "\n Exponential growth rate                      =   %+2.1e", growthRate);
+        fprintf (filep, "\n Exponential growth rate                      =   %2.1e", growthRate);
     else if (doDemographics == YES)
         {
         fprintf (filep, "\n Period   Nbegin     Nend    Duration    Growth rate");
@@ -4340,13 +4345,15 @@ static void	PrintRunInformation (FILE *filep)
         }
 		
     fprintf (filep, "\n\nCoalescent");
-    fprintf (filep, "\n Mean number of coalescence events            =   %3.2f", meanNumCA);
+   // fprintf (filep, "\n Mean number of coalescence events            =   %3.2f", meanNumCA);
     fprintf (filep, "\n Mean time to the tumor MRCA (# generations)  =   %3.2f", meanTMRCA);
-    fprintf (filep, "\n Exp time to the tumor MRCA [constant Ne]     =   %3.2f", expTMRCA);
+	if (noisy > 1)
+		fprintf (filep, "\n Exp time to the tumor MRCA [constant Ne]     =   %3.2f", expTMRCA);
     if (numDataSets > 1)
         {
         fprintf (filep, "\n Variance time tumor MRCA                     =   %3.2f", varTMRCA);
-        fprintf (filep, "\n Exp variance time tumor MRCA [constant Ne]   =   %3.2f", expVarTMRCA);
+		if (noisy > 1)
+			fprintf (filep, "\n Exp variance time tumor MRCA [constant Ne]   =   %3.2f", expVarTMRCA);
         }
     if (rateVarAmongLineages == YES)
         fprintf (filep, "\n Rate variation among branches (alpha)        =   %-3.2f", alphaBranches);
@@ -4393,18 +4400,18 @@ static void	PrintRunInformation (FILE *filep)
            }
 			
         if (rateVarAmongSites == YES)
-            fprintf (filep, "\n  Rate variation among sites (alpha)          =   %-3.2f", alphaSites);
+            fprintf (filep, "\n Rate variation among sites (alpha)           =   %-3.2f", alphaSites);
         else
-            fprintf (filep, "\n  Equal rates among sites");
+            fprintf (filep, "\n Equal rates among sites");
 
         if (alphabet == DNA && propAltModelSites > 0 && altModel == 2)
             {
-            fprintf (filep, "\n  Base frequencies (ACGT)                     =   %3.2f %3.2f %3.2f %3.2f", freq[0], freq[1], freq[2], freq[3]);
+            fprintf (filep, "\n Base frequencies (ACGT)                      =   %3.2f %3.2f %3.2f %3.2f", freq[0], freq[1], freq[2], freq[3]);
 			if (doHKY == YES)
-				fprintf (filep, "\n  Transition/transversion ratio               =   %3.2f  (kappa = %3.2f)", titv, kappa);
+				fprintf (filep, "\n Transition/transversion ratio                =   %3.2f  (kappa = %3.2f)", titv, kappa);
 			if (thereIsMij == YES)
 				{
-				fprintf (filep, "\n  Mutation rate matrix                        =   %3.2f %3.2f %3.2f %3.2f", Mij[0][0], Mij[0][1], Mij[0][2], Mij[0][3]);
+				fprintf (filep, "\n Mutation rate matrix                         =   %3.2f %3.2f %3.2f %3.2f", Mij[0][0], Mij[0][1], Mij[0][2], Mij[0][3]);
 				fprintf (filep, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Mij[1][0], Mij[1][1], Mij[1][2], Mij[1][3]);
 				fprintf (filep, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Mij[2][0], Mij[2][1], Mij[2][2], Mij[2][3]);
 				fprintf (filep, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Mij[3][0], Mij[3][1], Mij[3][2], Mij[3][3]);
@@ -4420,14 +4427,16 @@ static void	PrintRunInformation (FILE *filep)
             {
             fprintf (filep, "\n Mutation rate                                =   %2.1e", mutationRate);
             fprintf (filep, "\n Population mutation parameter (4Nu2L)        =   %3.2f", theta);
-            fprintf (filep, "\n Exp num mutation events [Ne=cte,ISMh,tumor]  =   %3.2f", expNumMU);
+            if (noisy > 1)
+				fprintf (filep, "\n Exp num mutation events [Ne=cte,ISMh,tumor]  =   %3.2f", expNumMU);
             }
         fprintf (filep, "\n Mean number of mutation events               =   %3.2f", meanNumMU);
         if (numDataSets > 1)
             {
             if (doSimulateFixedNumSNVs == NO)
 				{
-                fprintf (filep, "\n Exp variance num mut events [Ne=cte,ISM]     =   %3.2f", expVarNumMU);
+                if (noisy > 1)
+					fprintf (filep, "\n Exp variance num mut events [Ne=cte,ISM]     =   %3.2f", expVarNumMU);
 				fprintf (filep, "\n Variance number of mutation events           =   %3.2f", varNumMU);
 				}
              }
@@ -4734,12 +4743,6 @@ int ChooseUniformState (double *prob, long int *seed)
 	while (ran > cumProb)
 		cumProb += prob[++chosenState];
 	
-	if (chosenState > 3)
-	  {
- 		fprintf (stderr, "\nERROR: chosenState = %d,  ran = %f, cumProb = %f\n",  chosenState, ran, cumProb);
-		exit(-1);
-	}
-
 	return chosenState;
 	}
 

@@ -75,6 +75,7 @@ typedef struct site
     int		numDeletionsPaternal;
     int     numDeletions;
 	int		hasADO;
+	int		hasGenotypeError;
 	int		countA;
 	int		countC;
 	int		countG;

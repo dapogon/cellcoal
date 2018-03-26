@@ -16,7 +16,7 @@
 	[COALESCENT]
 	[number of replicates] n1
 	[sample size (# tumor cells)] s10
-	[number of sites] l100000
+	[number of sites] l100
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
@@ -55,7 +55,7 @@
 									0.042	0.124	0.026	0
 									[signature 1 - like, with freqs already included]  
 	[NGS PARAMETERS]
-	[genotyping error; no reads] G0.5
+	[genotyping error; no reads] G0.1
  	[sequencing coverage; reads simulated] [C100]
 	[coverage overdispersion] [V5]
 	[amplification error] [A0.1 0.01 0]
