@@ -103,12 +103,13 @@ static void		ReadParametersFromCommandLine (int argc, char **argv);
 static void 	PrintCommandLine (FILE *fp, int argc,char **argv);
 static void		PrepareGlobalFiles (int argc, char **argv);
 static void		PrepareSeparateFiles (int replicate);
-static void		ReadTree (FILE *fp, TreeNode *treeRoot);
+static void		ReadUserTree (FILE *fp);
 static void		CheckTree (char *treeString);
-static void		PrintTree (TreeNode *treeRoot);
-static void		WriteTree (TreeNode *p);
-static void		PrintTimes (int listPosition);
-static void		ListTimes (int position);
+static void 	RelabelUserTree (TreeNode *p);
+static void		PrintTree (TreeNode *treeRoot, FILE *fp);
+static void		WriteTree (TreeNode *p, FILE *fp);
+static void		PrintTimes (int listPosition, FILE *fp);
+static void		ListTimes (int position, FILE *fp);
 static void		PrintSNVGenotypes (FILE *fp);
 static void		PrintSNVHaplotypes (FILE *fp);
 static void 	PrintFullGenotypes (FILE *fp);
@@ -184,7 +185,7 @@ static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], SNVtrueHap
 static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME];
 static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], SNVtrueHaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME];
-static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName;
+static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames;
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintSNVtrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
 static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts, taxonNamesAreChars;
@@ -197,6 +198,7 @@ static double	Rmat[6], NRmat[12], Cijk[256], Root[4];
 static double	SNPrate, alphaCoverage;
 static int		HEALTHY_ROOT, TUMOR_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
+static int		TipNodeNum, IntNodeNum;
 
 
 #ifdef CHECK_MUT_DISTRIBUTION
@@ -205,7 +207,7 @@ static double	sumPos, meansumPos;
 #endif
 
 /* File pointers */
-FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpSNVtrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpSettings;
+FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpSNVtrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpSettings, *fpUserTree;
 
 
 

@@ -1,34 +1,21 @@
-[
-#Sim3: genotype simulation under a finite, complex model, large number of SNVs (whole-genome sequencing)
-#genotype error: 0, 0.01, 0.1, 0.2
-#ADO: 0, 0.05, 0.15, 0.5
-#cells = 100
-#rate variation among lineages (alpha=1)
-#sites = 10000
-#growthRate = 10-4
-#mutation rate = 10-6
-#model = GTnR (collapsed signature 1) + G (alpha=1),
-#replicates = 100
-]
-
 	[PARAMETER FILE for CoalTumor] [text in brackets will be ignored]
 	
 	[COALESCENT]
-	[number of replicates] n1
-	[sample size (# tumor cells)] s10
+	[number of replicates] n20
+	[sample size (# tumor cells)] s4
 	[number of sites] l100
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 
 	[GENEALOGY MODIFIERS]
-	[transforming branch length] k0.01
-	[healthy tip branch length] [q0.0]
+	[transforming branch length; exp subst] k0.01
+	[healthy tip branch length; exp subst]  q0.09
 	[rate variation among lineages] i1
 
 	[MUTATION MODEL]
 	[alphabet 0:binary 1:DNA] b1
-	[mutation rate] u0e-6
+	[mutation rate] [u1e-6]
 	[deletion rate] [d1e-6]
 	[fixed number of SNVs - ISM] [j1]
     [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m2
@@ -55,17 +42,17 @@
 									0.042	0.124	0.026	0
 									[signature 1 - like, with freqs already included]  
 	[NGS PARAMETERS]
-	[genotyping error; no reads] G0.1
+	[genotyping error; no reads] [G0.01]
  	[sequencing coverage; reads simulated] [C100]
 	[coverage overdispersion] [V5]
 	[amplification error] [A0.1 0.01 0]
 	[sequencing error] [E0.01]
-	[allelic dropout] D0
+	[allelic dropout] [D0.1]
 	[ADO/DEL read reduction] [R0.5]	
 	[error matrix ACGT x ACGT] 	   [X0 1 1 1
-    							 	1 0 1 1
-    							 	1 1 0 1
-    							 	1 1 1 0]
+    							 	 1 0 1 1
+    							 	 1 1 0 1
+    							 	 1 1 1 0]
 	[OUTPUT]
 	[print SNV genotypes] 1
 	[print SNV haplotypes] 2
@@ -79,7 +66,7 @@
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] x
 	[results folder name] ores2
-	[user treefile] [Susertree]
+	[user treefile] [Susertree.0003]
 	
 	[OTHER]
 	[simulate only trees] [0]
