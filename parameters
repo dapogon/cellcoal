@@ -1,9 +1,9 @@
 	[PARAMETER FILE for CoalTumor] [text in brackets will be ignored]
 	
 	[COALESCENT]
-	[number of replicates] n20
-	[sample size (# tumor cells)] s4
-	[number of sites] l100
+	[number of replicates] n1
+	[sample size (# tumor cells)] s9
+	[number of sites] l1000
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
@@ -64,9 +64,9 @@
 	[print CATG] [8]
 	[print SNV true haplotypes] 9
 	[print replicates in individual folders] v
-	[print consensus/IUPAC haplotypes] x
+	[print consensus/IUPAC haplotypes] [x]
 	[results folder name] ores2
-	[user treefile] [Susertree.0003]
+	[user treefile] Susertree.0003
 	
 	[OTHER]
 	[simulate only trees] [0]

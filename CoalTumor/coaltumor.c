@@ -69,6 +69,7 @@
 
 
 TODO:
+- double-check read tree works for all models, deletions, ADO etc
 - implement trinucleotide mutational signatures
 - simulate seq errors in reads from non-SNV sites - easy, this is just a loop
 - simulate doublets?
@@ -1323,7 +1324,7 @@ static void ReadUserTree (FILE *fp)
 		PrintUsage();
 		}
 
-	fprintf (stderr, "\nUser-defined tree: ");
+	fprintf (stderr, "\n\nUser-defined tree: ");
 	PrintTree (healthyRoot, stderr);
 	//PrintTimes (0, stderr);
 	
@@ -3811,7 +3812,7 @@ static void PrintSNVHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04dm ", i+1);
 					else
-						fprintf (fp,"%-12sm", cellNames[i]);
+						fprintf (fp,"m%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichNuc(data[MATERNAL][i][SNVsites[j]]));
@@ -3825,7 +3826,7 @@ static void PrintSNVHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04dp ", i+1);
 					else
-						fprintf (fp,"%-12sp", cellNames[i]);
+						fprintf (fp,"p%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichNuc(data[PATERNAL][i][SNVsites[j]]));
@@ -3895,7 +3896,7 @@ static void PrintSNVHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04dm ", i+1);
 					else
-						fprintf (fp,"%-12sm", cellNames[i]);
+						fprintf (fp,"m%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][SNVsites[j]]));
@@ -3909,7 +3910,7 @@ static void PrintSNVHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04dp ", i+1);
 					else
-						fprintf (fp,"%-12sp", cellNames[i]);
+						fprintf (fp,"p%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][SNVsites[j]]));
@@ -4078,7 +4079,7 @@ static void PrintFullHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04dm ", i+1);
 					else
-						fprintf (fp,"%-12sm", cellNames[i]);
+						fprintf (fp,"m%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichNuc(data[MATERNAL][i][j]));
@@ -4092,7 +4093,7 @@ static void PrintFullHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04p ", i+1);
 					else
-						fprintf (fp,"%-12sp", cellNames[i]);
+						fprintf (fp,"p%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichNuc(data[PATERNAL][i][j]));
@@ -4162,7 +4163,7 @@ static void PrintFullHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04dm ", i+1);
 					else
-						fprintf (fp,"%-12sm", cellNames[i]);
+						fprintf (fp,"m%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][j]));
@@ -4176,7 +4177,7 @@ static void PrintFullHaplotypes (FILE *fp)
 					if (doUserTree == NO)
 						fprintf (fp,"tumcell%04dp ", i+1);
 					else
-						fprintf (fp,"%-12sp", cellNames[i]);
+						fprintf (fp,"p%-12s", cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][j]));
