@@ -24,7 +24,7 @@
 #define PROGRAM_NAME            "CoalTumor"
 #define PROGRAM_NAME_UPPERCASE	"COALTUMOR"
 #define VERSION_NUMBER          "version 0.1"
-#define	MAX_NAME                50
+#define	MAX_NAME                100
 #define	MAX_LINE                3000
 #define	NO                      0
 #define	YES                     1
