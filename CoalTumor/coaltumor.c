@@ -336,6 +336,8 @@ int main (int argc, char **argv)
 
     for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
         {
+        numCA = numMU = numDEL = numProposedMU = TMRCA = numSNVmaternal = 0;
+
 		if (doPrintSeparateReplicates == YES)
 			PrepareSeparateFiles(dataSetNum);
 
@@ -351,8 +353,6 @@ int main (int argc, char **argv)
 				fflush (stderr);
 				}
 			}
-			
-        numCA = numMU = numDEL = numProposedMU = TMRCA = numSNVmaternal = 0;
 			
         /* Generate coalescence tree */
 		if (doUserTree == NO)
@@ -455,6 +455,7 @@ int main (int argc, char **argv)
             {
             numISMmutations = 0;
 			numISMdeletions = 0;
+ 
              /* assign ancestral states to all genomes */
             InitializeGenomes (healthyRoot, &seed);
 			
@@ -500,8 +501,7 @@ int main (int argc, char **argv)
 				}
 				
 			/* count how many SNVs we observe before ADO and genotype errors */
-			if (doSimulateFixedNumSNVs == NO)
-				numSNVs = CountTrueVariants();
+			numSNVs = CountTrueVariants();
 				
 			/* print references sequences without errors */
 			if (doPrintSNVtrueHaplotypes == YES)
@@ -520,7 +520,6 @@ int main (int argc, char **argv)
 				GenotypeError(&seed);
 
 			/* count how many alleles are at each site and how many SNVs we observe */
-			if (doSimulateFixedNumSNVs == NO)
 				numSNVs = CountAlleles();
 			
             cumNumSNVs += numSNVs;
@@ -3794,7 +3793,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d ", i+1);
+						fprintf (fp,"tumcell%04d  ", i+1);
 					else
 						fprintf (fp,"%-12s ", cellNames[i]);
 					}
@@ -4061,7 +4060,7 @@ static void PrintFullHaplotypes (FILE *fp)
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d ", i+1);
+						fprintf (fp,"tumcell%04d  ", i+1);
 					else
 						fprintf (fp,"%-12s ", cellNames[i]);
 					}

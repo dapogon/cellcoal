@@ -24,11 +24,11 @@
 #define PROGRAM_NAME            "CoalTumor"
 #define PROGRAM_NAME_UPPERCASE	"COALTUMOR"
 #define VERSION_NUMBER          "version 0.1"
-#define	MAX_NAME                100
-#define	MAX_LINE                300
+#define	MAX_NAME                120
+#define	MAX_LINE                350
 #define	NO                      0
 #define	YES                     1
-#define	infinity                99999
+#define	infinity                999999
 #define	MATERNAL                0
 #define	PATERNAL                1
 #define BINARY                  0
