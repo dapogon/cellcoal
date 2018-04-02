@@ -25,10 +25,10 @@
 #define PROGRAM_NAME_UPPERCASE	"COALTUMOR"
 #define VERSION_NUMBER          "version 0.1"
 #define	MAX_NAME                100
-#define	MAX_LINE                3000
+#define	MAX_LINE                300
 #define	NO                      0
 #define	YES                     1
-#define	infinity                999999
+#define	infinity                99999
 #define	MATERNAL                0
 #define	PATERNAL                1
 #define BINARY                  0
@@ -59,7 +59,8 @@ typedef struct node
     {
     struct node		*left, *right, *anc;
     int				index, label, isHealthyTip, isHealthyRoot;
-    double			length, time, branchLength;;
+    double			length, time, branchLength;
+    char			*name;
     }
     TreeNode;
 
@@ -67,6 +68,7 @@ typedef struct site
     {
     int		isSNV;
 	int		isSNP;
+	int		isVariant;
 	int		numMutationsMaternal;
     int		numMutationsPaternal;
     int     numMutations;
@@ -74,6 +76,7 @@ typedef struct site
     int		numDeletionsPaternal;
     int     numDeletions;
 	int		hasADO;
+	int		hasGenotypeError;
 	int		countA;
 	int		countC;
 	int		countG;
@@ -90,23 +93,26 @@ typedef struct site
     SiteStr;
 
 /* Prototypes */
-static void 	PrintHeader (FILE *file);
-static void 	PrintDate (FILE *file);
+static void 	PrintHeader (FILE *fp);
+static void 	PrintDate (FILE *fp);
 static void 	PrintUsage (void);
 static void 	PrintDefaults (FILE *fp);
 static void		ReadUntil (FILE *fv, char stopChar, char *what);
-static void		PrintRunInformation (FILE *filep);
+static void		PrintRunInformation (FILE *fp);
 static void		ReadParametersFromFile (void);
 static void		ReadParametersFromCommandLine (int argc, char **argv);
 static void 	PrintCommandLine (FILE *fp, int argc,char **argv);
 static void		PrepareGlobalFiles (int argc, char **argv);
 static void		PrepareSeparateFiles (int replicate);
-static void		PrintTree (TreeNode *treeRoot);
-static void		WriteTree (TreeNode *p);
-static void		PrintTimes (int listPosition);
-static void		ListTimes (int position);
+static void		ReadUserTree (FILE *fp);
+static void		CheckTree (char *treeString);
+static void 	RelabelUserTree (TreeNode *p);
+static void		PrintTree (TreeNode *treeRoot, FILE *fp);
+static void		WriteTree (TreeNode *p, FILE *fp);
+static void		PrintTimes (int listPosition, FILE *fp);
+static void		ListTimes (int position, FILE *fp);
 static void		PrintSNVGenotypes (FILE *fp);
-static void		PrintSNVHaplotypes (FILE *fp);
+static void		PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants);
 static void 	PrintFullGenotypes (FILE *fp);
 static void 	PrintFullHaplotypes (FILE *fp);
 static void		PrintSiteInfo (FILE *fp, int site);
@@ -138,9 +144,9 @@ static void		HKYmodel (double Pij[4][4], double branchLength);
 static void		GTRmodel (double Pij[4][4], double branchLength);
 static void 	EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed);
 static void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed);
-static void		CountAlleles (void);
+static int 		CountTrueVariants(void);
+static int		CountAlleles (void);
 static double	SumBranches (TreeNode *p);
-static int 		CountSNVs(void);
 static double 	RandomUniform (long int *seed);
 static int 		RandomUniformTo (int max, long int *seed);
 static int		RandomPoisson (double lambda, long int *seed);
@@ -162,7 +168,7 @@ TreeNode		*treeNodes, *coalTreeMRCA, *healthyRoot, *healthyTip;
 SiteStr			*allSites;
 long int		userSeed, originalSeed;
 static int		***data;
-static int      *SNVsites, *DefaultModelSites, *AltModelSites;
+static int      *SNVsites, *DefaultModelSites, *AltModelSites, *variantSites;
 static int		tipLabel, intLabel;
 static int		ploidy, numCells, N, *Nbegin, *Nend,  *cumDuration, numSites, numDataSets, numPeriods;
 static int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutations, altModel;
@@ -176,14 +182,14 @@ static double	expNumMU, expVarNumMU;
 static double	theta, healthyTipBranchLength, transformingBranchLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate;
 static double	deletionRate;
-static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
-static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME];;
-static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
+static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], SNVtrueHaplotypesFile[MAX_NAME],fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
+static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME];
+static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], SNVtrueHaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME];
-static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine;
-static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree;
+static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames;
+static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintSNVtrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
-static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts;
+static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage;
 static double	*periodGrowth, growthRate, sequencingError, ADOrate, singleAlleleCoverageReduction, genotypingError, meanAmplificationError, varAmplificationError;
@@ -193,6 +199,7 @@ static double	Rmat[6], NRmat[12], Cijk[256], Root[4];
 static double	SNPrate, alphaCoverage;
 static int		HEALTHY_ROOT, TUMOR_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
+static int		TipNodeNum, IntNodeNum;
 
 
 #ifdef CHECK_MUT_DISTRIBUTION
@@ -201,7 +208,7 @@ static double	sumPos, meansumPos;
 #endif
 
 /* File pointers */
-FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpSettings;
+FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpSNVtrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpSettings, *fpUserTree;
 
 
 
