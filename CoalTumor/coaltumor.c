@@ -19,7 +19,7 @@
 //  CoalTumor
 //
 //  Created by David Posada on 01/06/16.
-//  Copyright (c) 2016 David Posada. All rights reserved.
+//  Copyright (c) 2016-2018 David Posada. All rights reserved.
 
 	Name:		CoalTumor
 	Purpose:	To simulate the clonal neutral evolution of cells within a tumor
@@ -67,15 +67,14 @@
 - changed letters/symbols for command line arguments
 - prints true variants to a file
 - can read and use a user tree
+- genotype error and ADO now parameterized at the genotype level
+- simulate reads for and print all sites in the VCF
 
 
 TODO:
-- double-check read tree works for all models, deletions, ADO etc
+- simulate doublets? (for example adding two random alleles from the population according to their AF)
 - implement trinucleotide mutational signatures
-- simulate seq errors in reads from non-SNV sites - easy, this is just a loop
-- simulate doublets?
 - simulate gene conversions (copy-neutral LOH)?
-- mark somatic variation
 - dated tips (maybe)
  
 [MODELS implemented]
@@ -122,10 +121,10 @@ int main (int argc, char **argv)
 	titv = 0.5;					/* transition/transversion rate ratio */
 	thereIsMij = NO;			/* mutation rate matrix*/
 	Mij[0][0] = Mij[1][1] = Mij[2][2] = Mij[3][3] = 0;  /* mutation probabilities */
-	Mij[0][1] = Mij[0][2] = Mij[0][3] = 0.33;
-	Mij[1][0] = Mij[1][2] = Mij[1][3] = 0.33;
-	Mij[2][0] = Mij[2][1] = Mij[2][3] = 0.33;
-	Mij[3][0] = Mij[3][1] = Mij[3][2] = 0.33;
+	Mij[0][1] = Mij[0][2] = Mij[0][3] = 1.0/3;
+	Mij[1][0] = Mij[1][2] = Mij[1][3] = 1.0/3;
+	Mij[2][0] = Mij[2][1] = Mij[2][3] = 1.0/3;
+	Mij[3][0] = Mij[3][1] = Mij[3][2] = 1.0/3;
 	thereIsEij = NO;			/* error rate matrix*/
 	Eij[0][0] = Eij[1][1] = Eij[2][2] = Eij[3][3] = 0;  /* sequencing error probabilities */
 	Eij[0][1] = Eij[0][2] = Eij[0][3] = 1.0/3;
@@ -136,40 +135,40 @@ int main (int argc, char **argv)
 	doHKY = NO;
 	doGTR = NO;
 	doGTnR = NO;
-	rateVarAmongSites = NO;     /* rate variation among different sites along the genome */
-    alphaSites = infinity;      /* alpha shape of the gamma distribution for rate variation among sites */
-    alphaBranches = infinity;   /* alpha shape of the gamma distribution for rate variation among lineages */
-    alphaCoverage = infinity;   /* alpha shape of the gamma distribution for coverage */
+	rateVarAmongSites = NO;     	/* rate variation among different sites along the genome */
+    alphaSites = infinity;      	/* alpha shape of the gamma distribution for rate variation among sites */
+    alphaBranches = infinity;   	/* alpha shape of the gamma distribution for rate variation among lineages */
+    alphaCoverage = infinity;   	/* alpha shape of the gamma distribution for coverage */
 	doSimulateFixedNumSNVs = NO;	/* whether to simulate a fixed number of SNV sites */
-	doUserTree = NO;			/* whether to assume a user tree instead od making the coalescent */
-    doPrintSNVgenotypes = NO;	/* whether to print SNVs */
-    doPrintSNVhaplotypes = NO;  /* whether to print haplotypes */
+	doUserTree = NO;				/* whether to assume a user tree instead od making the coalescent */
+    doPrintSNVgenotypes = NO;		/* whether to print SNVs */
+    doPrintSNVhaplotypes = NO;  	/* whether to print haplotypes */
     doPrintSNVtrueHaplotypes = NO;  /* whether to print haplotypes without errors */
-    doPrintFullHaplotypes = NO;	/* whether to print sequences */
-    doPrintFullGenotypes = NO;	/* whether to print all genotypes (variable + invariable) */
-    doPrintTree = NO;			/* whether to print the coalescent tree */
-    doPrintTimes = NO;			/* whether to print coalescent times */
-	doPrintAncestors = NO;      /* whether to print data for ancestral tumor and healthy cells */
-	doSimulateReadCounts = NO;  /* do not produce reads by default */
-	doPrintCATG = NO;			/* whether to print read counts for SNVs in CATG format*/
-	doSimulateData = YES;		/* whether to simulate any data (or just look at the expectations; useful for debugging) */
+    doPrintFullHaplotypes = NO;		/* whether to print sequences */
+    doPrintFullGenotypes = NO;		/* whether to print all genotypes (variable + invariable) */
+    doPrintTree = NO;				/* whether to print the coalescent tree */
+    doPrintTimes = NO;				/* whether to print coalescent times */
+	doPrintAncestors = NO;      	/* whether to print data for ancestral tumor and healthy cells */
+	doSimulateReadCounts = NO;  	/* do not produce reads by default */
+	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
+	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
 	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
-	doPrintIUPAChaplotypes = NO;			/* whether to print IUPAC halotypes */
-    healthyTipBranchLength = 0; /* length of the branch leading to the healthy cell */
-    transformingBranchLength = 0; /* length of the transforming branch leading to the healthy ancestral cell */
-	coverage = 0;				/* NGS  depth for read counts */
-	rateVarCoverage = NO;		/* there is coverage dispersion */
-	ADOrate = 0;				/* allelic dropout */
-	sequencingError = 0;		/* NGS error rate */
-	genotypingError = 0;		/* add errors directly in the genotypes */
-	SNPrate = 0.0;				/* germline variation rate for rooth healthy genome */
-	meanAmplificationError = 0; /* mean of beta distribution for WGA errors */
-	varAmplificationError = 0;  /* variance of beta distribution for WGA errors */
+	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
+    healthyTipBranchLength = 0; 	/* length of the branch leading to the healthy cell */
+    transformingBranchLength = 0; 	/* length of the transforming branch leading to the healthy ancestral cell */
+	coverage = 0;					/* NGS  depth for read counts */
+	rateVarCoverage = NO;			/* there is coverage dispersion */
+	ADOrate = 0;					/* allelic dropout */
+	sequencingError = 0;			/* NGS error rate */
+	genotypingError = 0;			/* add errors directly in the genotypes */
+	SNPrate = 0.0;					/* germline variation rate for rooth healthy genome */
+	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
+	varAmplificationError = 0;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simualate maximum of two templates after single-cell amplification, or there can be all four */
-    numNodes = 3001;            /* initial number of nodes allocated to build the coalescent trees */
-	noisy = 1;					/* level of information to be printed in the screen (see below) */
-	seed = time(NULL); 			/* seed for random numbers */
-    userSeed = 0;				/* seed entered by the user */
+    numNodes = 3000;            	/* initial number of nodes allocated to build the coalescent trees */
+	seed = time(NULL); 				/* seed for random numbers */
+    userSeed = 0;					/* seed entered by the user */
+	noisy = 1;						/* level of information to be printed in the screen (see below) */
 
 	/*
 	 noisy = 0: does not print anything
@@ -200,9 +199,8 @@ int main (int argc, char **argv)
         {
         PrintHeader(stderr);
         PrintDate(stderr);
-		PrintCommandLine (stderr, argc, argv);
-        /* PrintMemory (stderr); */
-        }
+ 		PrintCommandLine (stderr, argc, argv);
+		}
 		
     if (doSimulateData == NO)
         {
@@ -216,7 +214,7 @@ int main (int argc, char **argv)
 		doPrintCATG = NO;
    		}
 		
-    /* initialize some variables */
+    /* initialize a few variables */
     a = 0;
     a2 = 0;
     for (i=1; i<numCells; i++) /* ignoring outgroup (healthy cell) */
@@ -236,6 +234,30 @@ int main (int argc, char **argv)
 		
     altModelMutationRate = mutationRate*nonISMRelMutRate;
 	
+	if (doSimulateData == YES && alphabet == DNA)
+		{
+		/* initialize cumfreq */
+		cumfreq[0] = freq[0];
+		for (i=1; i<4; i++)
+			cumfreq[i] = cumfreq[i-1] + freq[i];
+	
+		/* initialize cumMij */
+		for (i=0; i<4; i++)
+			{
+			cumMij[i][0] = Mij[i][0];
+			for (j=1; j<4; j++)
+				cumMij[i][j] = cumMij[i][j-1] + Mij[i][j];
+			}
+
+		/* initialize cumEij */
+		for (i=0; i<4; i++)
+			{
+			cumEij[i][0] = Eij[i][0];
+			for (j=1; j<4; j++)
+				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
+			}
+		}
+
     /* Set seed and spin wheels of pseudorandom number generator */
     /* seed = (unsigned int) clock();*/
     if (userSeed > 0)
@@ -290,39 +312,19 @@ int main (int argc, char **argv)
 	if (doPrintSeparateReplicates == NO)
 		PrepareGlobalFiles(argc, argv);
 
+	/* Start printing info to log */
 	sprintf(File,"%s/%s", resultsDir, settingsFile);
-	if ((fpSettings = fopen(File, "w")) == NULL)
+	if ((fpLog = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
 		exit(-1);
 		}
- 
-	/* Start printing info to log */
+
+	PrintHeader(fpLog);
+	PrintDate(fpLog);
 	sprintf(File,"%s/%s", resultsDir, settingsFile);
-	PrintCommandLine (fpSettings, argc, argv);
-
-	if (doSimulateData == YES && alphabet == DNA)
-		{
-		/* initialize cumfreq */
-		cumfreq[0] = freq[0];
-		for (i=1; i<4; i++)
-			cumfreq[i] = cumfreq[i-1] + freq[i];
-		/* initialize cumMij */
-		for (i=0; i<4; i++)
-			{
-			cumMij[i][0] = Mij[i][0];
-			for (j=1; j<4; j++)
-				cumMij[i][j] = cumMij[i][j-1] + Mij[i][j];
-			}
-		/* initialize cumEij */
-		for (i=0; i<4; i++)
-			{
-			cumEij[i][0] = Eij[i][0];
-			for (j=1; j<4; j++)
-				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
-			}
-		}
-
+	PrintCommandLine (fpLog, argc, argv);
+ 
 	/* Read user treefile  */
 	if (doUserTree == YES)
 		{
@@ -568,34 +570,6 @@ int main (int argc, char **argv)
 
 			if (alphabet == DNA)
 				{
-				if (doSimulateReadCounts == YES)
-					{
-					fprintf (fpVCF,"##fileformat=VCF4.2");
-					fprintf (fpVCF,"\n##filedate=");
-					PrintDate (fpVCF);
-					fprintf (fpVCF,"##source=CoalTumor simulation");
-					fprintf (fpVCF,"\n##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral allele\">");
-					fprintf (fpVCF,"\n##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of samples with data\">");
-					fprintf (fpVCF,"\n##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Combined depth across samples Depth\">");
-					fprintf (fpVCF,"\n##INFO=<ID=AF,Number=R,Type=Float,Description=\"Alternate/s allele frequency\">");
-					fprintf (fpVCF,"\n##FILTER=<ID=s50,Description=\"Less than half of samples have data\">");
-					fprintf (fpVCF,"\n##FORMAT=<ID=GT,Number=1,Type=String,Description=\"True Genotype\">");
-					fprintf (fpVCF,"\n##FORMAT=<ID=GL,Number=G,Type=Float,Description=\"Reescaled genotype likelihood in log10\">");
-					fprintf (fpVCF,"\n##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read Depth\">");
-					fprintf (fpVCF,"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
-					for (i=0; i<numCells; i++)
-						fprintf (fpVCF,"\ttumcell%04d", i+1);
-					fprintf (fpVCF,"\thealthycell");
-					}
-				
-				if (doPrintCATG == YES)
-					{
-					fprintf (fpCATG,"%d %d\n",numCells+1, numSNVs);
-					for (i=0; i<numCells; i++)
-						fprintf (fpCATG,"tumcell%04d  ", i+1);
-					fprintf (fpCATG,"healthycell  ");
-					}
-				
 				/* Generate the NGS reads if suitable */
 				if (doSimulateReadCounts)
 					GenerateReadCounts(&seed);
@@ -706,7 +680,7 @@ int main (int argc, char **argv)
         PrintRunInformation (stdout);
 			
 		/* print run settings to file */
-		PrintRunInformation (fpSettings);
+		PrintRunInformation (fpLog);
 	
 	        fprintf (stdout, "\n\n\nOutput files are in folder \"%s\":", resultsDir);
         if (doPrintTree == YES)
@@ -828,12 +802,10 @@ int main (int argc, char **argv)
 
 
 /************************* MakeCoalescenceTree  ************************/
-/*	Builds a genealogy for each site under the coalescent without recombination */
-
-//TODO David: numSites is not used by this function!
+/*	Builds a genealogy  under the coalescent with exponential growth and no recombination */
 
 void MakeCoalescenceTree(int numCells, int N, long int *seed)
-{
+	{
     int			i, *activeNodes, numActiveNodes,nextAvailableNode,
 				firstNode, secondNode, newNode, eventNum,period;
     double		rateCA, timeCA, currentTime, eventTime;
@@ -1336,12 +1308,11 @@ static void ReadUserTree (FILE *fp)
 		PrintUsage();
 		}
 
-	fprintf (stderr, "\n\nUser-defined tree: ");
-	PrintTree (healthyRoot, stderr);
-	//PrintTimes (0, stderr);
-	
+	fprintf (fpLog, "\n\nUser-defined tree: ");
+	PrintTree (healthyRoot, fpLog);
+
 	free (tempString);
-}
+	}
 
 
 /***************** CheckTree *******************/
@@ -1454,6 +1425,7 @@ void RelabelNodes (TreeNode *p)
             p->label = intLabel++; /* is internal */
         }
     }
+
 
 /**************** MakeTreeNonClock **************/
 /*	Introduce rate variation among lineages using gamma rate  */
@@ -2370,8 +2342,8 @@ void GenotypeError (long int *seed)
 
 
 /************************* CountTrueVariants  ************************/
-/* Count number of variants in a given data set, assuming no ADO
- variant is defined as no-deletion genotype different from the healthy root  */
+/* Count number of variants in a given data set, assuming there is no ADO (yet).
+   A variant is defined as no-deletion genotype different from the healthy root genotype */
 
 int CountTrueVariants () 
 	{
@@ -2394,20 +2366,20 @@ int CountTrueVariants ()
     return nVariants;
 	}
 
-
 /************************* CountAlleles  ************************/
-/* Identify reference and alternate alleles plus SNVs, in tumor plus healthy cells */
+/* Identify reference and alternate alleles plus SNVs, in tumor plus healthy cells
+   A SNV is defined as no-deletion genotype different from the reference genotype */
 
 int CountAlleles ()
 	{
 	int		numAltAlleles, cell, site;
-	int		countA, countC, countG, countT, countADO, countDEL, nSNVs;
+	int		countA, countC, countG, countT, countADO, countDEL, nSNVs, countCellswithData;
 	
 	nSNVs = 0;
 	
 	for (site=0; site<numSites; site++)
 		{
-		countA = countC = countG = countT = countADO = countDEL = 0;
+		countA = countC = countG = countT = countADO = countDEL = countCellswithData = 0;
 		for (cell=0; cell<numCells+1; cell++)
 			{
 			if (data[MATERNAL][cell][site] == A)
@@ -2433,17 +2405,22 @@ int CountAlleles ()
 				countT++;
 			else if (data[PATERNAL][cell][site] == ADO)
 				countADO++;
-			else if (data[MATERNAL][cell][site] == DELETION)
+			else if (data[PATERNAL][cell][site] == DELETION)
 				countDEL++;
+			
+			if ((data[MATERNAL][cell][site] != ADO && data[MATERNAL][cell][site] != DELETION) ||
+			    (data[PATERNAL][cell][site] != ADO && data[PATERNAL][cell][site] != DELETION))
+			    countCellswithData++;
 			}
-		
+
 		allSites[site].countA = countA;
 		allSites[site].countC = countC;
 		allSites[site].countG = countG;
 		allSites[site].countT = countT;
 		allSites[site].countACGT = countA + countC + countG + countT;
 		allSites[site].countDropped = countADO + countDEL;
-		
+		allSites[site].countCellswithData = countCellswithData;
+
 		/* count number of alternate alleles, ignoring ADO or DELETION */
 		numAltAlleles = 0;
 		if (countA > 0 && allSites[site].referenceAllele != A)
@@ -2520,7 +2497,7 @@ double SumBranches (TreeNode *p)
 
 void GenerateReadCounts (long int *seed)
 	{
-    int		i, j, k, l, m, a1, a2;
+    int		i, j, k, l, m, a1, a2, MLa1, MLa2;
 	int		snv, read, template, template1, template2;
 	int		maternalAllele, paternalAllele, referenceAllele;
 	int		numMaternalReads, numPaternalReads, numReads;
@@ -2638,10 +2615,42 @@ void GenerateReadCounts (long int *seed)
 				ngsEij[i][j] = Eij[i][j]/cumEij[i][3] * sequencingError;
 			}
 
-	/* MARK: note we are simulating read counts only for true SNV sites */
-	for (snv=0; snv<numSNVs; snv++)
+	/* print VCG file header */
+	fprintf (fpVCF,"##fileformat=VCFv4.3");
+	fprintf (fpVCF,"\n##filedate=");
+	PrintDate (fpVCF);
+	fprintf (fpVCF,"##source=CoalTumor SNV simulation");
+	fprintf (fpVCF,"\n##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral allele\">");
+	fprintf (fpVCF,"\n##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of samples with data\">");
+	//fprintf (fpVCF,"\n##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Combined depth across samples\">");
+	fprintf (fpVCF,"\n##INFO=<ID=AF,Number=R,Type=Float,Description=\"True alternate/s allele frequency\">");
+	fprintf (fpVCF,"\n##FILTER=<ID=s50,Description=\"Less than half of samples have data\">");
+	fprintf (fpVCF,"\n##FORMAT=<ID=GT,Number=1,Type=String,Description=\"True genotype\">");
+	fprintf (fpVCF,"\n##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read depth\">");
+	fprintf (fpVCF,"\n##FORMAT=<ID=RC,Number=4,Type=Integer,Description=\"Read counts for AGCT\">");
+	fprintf (fpVCF,"\n##FORMAT=<ID=GL,Number=G,Type=Float,Description=\"Scaled genotype likelihoods in log10 (AA AC AG AT CC CG CT GG GT TT)\">");
+	fprintf (fpVCF,"\n##FORMAT=<ID=ML,Number=1,Type=String,Description=\"Maximum likelihood genotype\">");
+	fprintf (fpVCF,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True SNV genotype\">");
+	fprintf (fpVCF,"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
+	for (i=0; i<numCells; i++)
+		fprintf (fpVCF,"\ttumcell%04d", i+1);
+	fprintf (fpVCF,"\thealthycell");
+
+	if (doPrintCATG == YES)
 		{
-		j = SNVsites[snv];
+		fprintf (fpCATG,"%d %d\n",numCells+1, numSNVs);
+		for (i=0; i<numCells; i++)
+			fprintf (fpCATG,"tumcell%04d  ", i+1);
+		fprintf (fpCATG,"healthycell  ");
+		}
+
+	
+	//for (snv=0; snv<numSNVs; snv++)
+		//{
+		//j = SNVsites[snv]; /* this is if we want to simulate read counts only for true SNV sites */
+	for (snv=0; snv<numSites; snv++)
+		{
+		j = snv;
 		
 		if (doPrintCATG == YES)
 			{
@@ -2659,8 +2668,11 @@ void GenerateReadCounts (long int *seed)
 			fprintf (fpVCF,"\t%d", j+1);
 			
 			/* VFC: ID */
-			fprintf (fpVCF,"\t%d", snv+1);
-			
+			if (allSites[j].isSNV == NO)
+				fprintf (fpVCF,"\tinv%06d", j+1);
+			else
+				fprintf (fpVCF,"\tsnv%06d", j+1);
+
 			/* VFC: REFERENCE allele(s) => healthy root alleles */
 			referenceAllele = allSites[j].referenceAllele;
 			fprintf (fpVCF,"\t%c", WhichNuc(referenceAllele));
@@ -2698,7 +2710,7 @@ void GenerateReadCounts (long int *seed)
 			fprintf (fpVCF, "\tAA:%c", WhichNuc(referenceAllele));
 
 			/* VFC: INFO: NS (number of samples with data) */
-			fprintf (fpVCF, ";NS:%d", allSites[j].countACGT);
+			fprintf (fpVCF, ";NS:%d", allSites[j].countCellswithData);
 
 			/* VFC: INFO: AF (alternate allele frequencies) */
 			fprintf (fpVCF, ";AF:");
@@ -2724,7 +2736,7 @@ void GenerateReadCounts (long int *seed)
 			fprintf (fpVCF, ";SOMATIC");
 			
 			/* VFC: FORMAT */
-			fprintf (fpVCF, "\tGT:GL:DP");
+			fprintf (fpVCF, "\tGT:DP:RC:GL:ML:TG");
 
 			for (i=0; i<numCells+1; i++)
 				{
@@ -2822,8 +2834,7 @@ void GenerateReadCounts (long int *seed)
 				readCount[A] = readCount[C] = readCount[G] = readCount[T] = 0;
 				if (numReads > 0)
 					{
-					/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the
-					error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
+					/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
 					maternalSiteAmplificationError = paternalSiteAmplificationError = 0;
 					if (meanAmplificationError > 0)
 						{
@@ -2983,6 +2994,12 @@ void GenerateReadCounts (long int *seed)
 						}
 					}
 					
+				/* VFC: FORMAT: DP (read depth) */
+				fprintf (fpVCF, ":%d", numReads);
+	
+				/* VFC: FORMAT: RC (read counts ACGT) */
+				fprintf (fpVCF,":%d,%d,%d,%d",  readCount[A], readCount[C], readCount[G], readCount[T]);
+
 				/* print read counts to CATG file */
 				if (doPrintCATG == YES)
 					fprintf (fpCATG,"\t%d,%d,%d,%d",  readCount[C], readCount[A], readCount[T], readCount[G]);
@@ -3037,11 +3054,12 @@ void GenerateReadCounts (long int *seed)
 
 
 				/* Calculate genotype likelihoods for this site and cell given the reads simulated */
-				/* 00 01 02 03  11 12 13  22 23  33 */
+				/* 00 01 02 03 11 12 13 22 23 33 */
+				/* AA AC AG AT CC CG CT GG GT TT */
 				
 				/* MODEL 0: genotype log10 likelihoods according to the observed read assuming a single sequencing error independent of the nucleotides involved, and no amplification error */
 				/* extended from Korneliussen 2013 BMCBioinf
-				p(D|G=A1,A2) = multip over reads [ 1/2 p(read i|A1) + 1/2 p(read i|A2)]
+				p(D|G=A1,A2) = multiply over reads [ 1/2 p(read i|A1) + 1/2 p(read i|A2)]
 				where p(read|A) e/3 if b!=A  or 1-e if b=A
 				N.B: ANGSD seems to use natural logs!
 				*/
@@ -3173,12 +3191,18 @@ void GenerateReadCounts (long int *seed)
 
 					}
 				
-				/* rescale to ln likelihood ratios */
+				/* rescale to log10 likelihood ratios */
 					maxLike = genLike[0][0];
+					MLa1 = MLa2 = 0;
+					
 					for (a1=0; a1<4; a1++)
 						for (a2=a1; a2<4; a2++)
 							if (genLike[a1][a2] > maxLike)
+								{
 								maxLike = genLike[a1][a2];
+								MLa1 = a1;
+								MLa2 = a2;
+								}
 					for (a1=0; a1<4; a1++)
 						for (a2=a1; a2<4; a2++)
 							genLike[a1][a2] -= maxLike;
@@ -3200,7 +3224,8 @@ void GenerateReadCounts (long int *seed)
 						fprintf (stderr, "\n");
 						}
 					/****************************************************************/
-		
+				
+
 				/* VFC: FORMAT: GL (genotype likelihoods) */
 				fprintf (fpVCF, ":");
 				for (a1=0; a1<4; a1++)
@@ -3208,9 +3233,14 @@ void GenerateReadCounts (long int *seed)
 						fprintf (fpVCF, "%3.1f,", genLike[a1][a2]);
 				fseek(fpVCF, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
-				/* VFC: FORMAT: DP (read depth) */
-				fprintf (fpVCF, ":%d", numReads);
-				
+				/* VFC: FORMAT: ML (maximum likelihood genotype) */
+				fprintf (fpVCF, ":");
+				fprintf (fpVCF, "%c/%c",WhichNuc(MLa1), WhichNuc(MLa2));
+
+				/* VFC: FORMAT: TG (true SNV genotype) */
+				fprintf (fpVCF, ":");
+				fprintf (fpVCF, "%c|%c",WhichNuc(maternalAllele), WhichNuc(paternalAllele));
+
 				} // cell
 			} // print vcf
 		} //snv
@@ -3258,7 +3288,6 @@ void PrepareGlobalFiles(int argc, char **argv)
             exit(-1);
             }
         }
-
 		
     if (doSimulateData == YES)
         {
@@ -3403,8 +3432,6 @@ void PrepareGlobalFiles(int argc, char **argv)
         PrintCommandLine (fpCATG, argc, argv);
         fprintf (fpCATG,"\n%d\n", numDataSets);
         }
-
-
 	}
 
 
@@ -3602,7 +3629,7 @@ void PrintTimes(int listPosition, FILE *fp)
  */
 
 void ListTimes (int position, FILE *fp)
-{
+	{
     TreeNode	*p;
     do
     {
@@ -3631,10 +3658,9 @@ void ListTimes (int position, FILE *fp)
             fprintf (stderr, "\n\nERROR: Problems when listing times in the tree\n\n");
             exit(-1);
             }
-		
-    }
+		}
     while (p->isHealthyTip == NO);
- }
+	}
 
 
 
@@ -4567,7 +4593,7 @@ static void	PrintRunInformation (FILE *fp)
                      i, Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1], periodGrowth[i]);
         }
 	if (doUserTree == YES)
-		fprintf (fp, "\n\nUser tree file                                =   %s", userTreeFile); //FIXME: check
+		fprintf (fp, "\n\nUser tree file                                =   %s", userTreeFile);
 	else
 		{
 		fprintf (fp, "\n\nCoalescent");
@@ -4704,9 +4730,9 @@ static void	PrintRunInformation (FILE *fp)
 			fprintf (fp, "\n  Mean                                        =   %2.1e", meanAmplificationError);
 			fprintf (fp, "\n  Variance                                    =   %2.1e", varAmplificationError);
 			if (simulateOnlyTwoTemplates == YES)
-				fprintf (fp, "\n  2 templates");
+				fprintf (fp, "\n  2-template model");
 			else
-				fprintf (fp, "\n  4 templates");
+				fprintf (fp, "\n  4-template model");
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
 			fprintf (fp, "\n ADO/deletion read reduction                  =   %-3.2f", singleAlleleCoverageReduction);
 			if (thereIsEij == YES)
@@ -4806,7 +4832,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 static void PrintDefaults (FILE *fp)
     {
     int		i;
-
+		
 	/* Coalescent */
     fprintf (fp,"\n-n: number of replicates =  %d", numDataSets);
     fprintf (fp,"\n-s: sample size (#tumor cells) =  %d", numCells);
@@ -4859,6 +4885,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
 	fprintf (fp,"\n-o: results folder name =  %s", resultsDir);
+	fprintf (fp,"\n-T: user tree file name =  %s", "no input file");
 
 	/* Other */
 	fprintf (fp,"\n-0: simulate just the genealogies =  %d", doSimulateData);
@@ -4919,6 +4946,7 @@ static void PrintUsage(void)
 	fprintf (stderr,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (stderr,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
 	fprintf (stderr,"\n-o: results folder name (e.g. -oresultsFolder)");
+	fprintf (stderr,"\n-T: user-tree file (e.g. -Susertree)");
 	fprintf (stderr,"\n-0: simulate just the genealogies (e.g. -0)");
 	fprintf (stderr,"\n-y: noisy (e.g. -y1)");
     fprintf (stderr,"\n      = 0: does not print anything");
@@ -5318,11 +5346,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o S 0 y z #
+	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G                     R S     V   X
+	A   C D E   G                     R   T   V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -5354,7 +5382,6 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
         argv[i]++;
         argument = -9999;
 			
-        //switch (toupper(flag))
         switch (flag)
 			{
 			case 'n':
@@ -5822,7 +5849,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				if(!isspace(ch))
 					strcpy(resultsDir,argv[i]);
 			break;
- 			case 'S':
+ 			case 'T':
 				ch = *argv[i];
 				if(!isspace(ch))
 					strcpy(userTreeFile,argv[i]);
@@ -5875,11 +5902,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 /* Reads parameter values from the parameter file  */
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o S 0 y z #
+	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G                     R S     V   X
+	A   C D E   G                     R   T   V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -5911,7 +5938,7 @@ void ReadParametersFromFile ()
     while(!feof(stdin))
         {
         argument = 0;
-        /*ch=toupper(ch);*/
+
         switch (ch)
             {
             case 'n':
@@ -6352,7 +6379,7 @@ void ReadParametersFromFile ()
 					resultsDir[j]='\0';
 					}
 			break;
-			case 'S':
+			case 'T':
 				ch=fgetc(stdin);
 				if(!isspace(ch))
 					{

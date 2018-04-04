@@ -82,6 +82,7 @@ typedef struct site
 	int		countG;
 	int		countT;
 	int		countACGT;
+	int		countCellswithData;
 	int		countDropped;
 	int		referenceAllele;
 	int		*alternateAlleles;
@@ -208,7 +209,7 @@ static double	sumPos, meansumPos;
 #endif
 
 /* File pointers */
-FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpSNVtrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpSettings, *fpUserTree;
+FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpSNVtrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpLog, *fpUserTree;
 
 
 
