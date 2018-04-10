@@ -143,7 +143,7 @@ int main (int argc, char **argv)
 	doUserTree = NO;				/* whether to assume a user tree instead od making the coalescent */
     doPrintSNVgenotypes = NO;		/* whether to print SNVs */
     doPrintSNVhaplotypes = NO;  	/* whether to print haplotypes */
-    doPrintSNVtrueHaplotypes = NO;  /* whether to print haplotypes without errors */
+    doPrintTrueHaplotypes = NO;  /* whether to print haplotypes without errors */
     doPrintFullHaplotypes = NO;		/* whether to print sequences */
     doPrintFullGenotypes = NO;		/* whether to print all genotypes (variable + invariable) */
     doPrintTree = NO;				/* whether to print the coalescent tree */
@@ -209,7 +209,7 @@ int main (int argc, char **argv)
         {
         doPrintSNVgenotypes = NO;
         doPrintSNVhaplotypes = NO;
-		doPrintSNVtrueHaplotypes = NO;
+		doPrintTrueHaplotypes = NO;
 		doPrintFullHaplotypes = NO;
         doPrintFullGenotypes = NO;
 		doPrintAncestors = NO;
@@ -297,7 +297,7 @@ int main (int argc, char **argv)
    	strcpy(timesDir, "times_dir");
 	strcpy(SNVgenotypesDir, "snv_genotypes_dir");
     strcpy(SNVhaplotypesDir, "snv_haplotypes_dir");
-    strcpy(SNVtrueHaplotypesDir, "snv_true_haplotypes_dir");
+    strcpy(trueHaplotypesDir, "true_haplotypes_dir");
     strcpy(fullHaplotypesDir, "full_haplotypes_dir");
     strcpy(fullGenotypesDir, "full_genotypes_dir");
     strcpy(CATGdir, "catg_dir");
@@ -305,7 +305,7 @@ int main (int argc, char **argv)
 	
 	strcpy(SNVgenotypesFile, "snv_gen");
     strcpy(SNVhaplotypesFile, "snv_hap");
-    strcpy(SNVtrueHaplotypesFile, "snv_true_hap");
+    strcpy(trueHaplotypesFile, "true_hap");
     strcpy(fullHaplotypesFile, "full_hap");
     strcpy(fullGenotypesFile, "full_gen");
     strcpy(treeFile, "trees");
@@ -589,11 +589,11 @@ int main (int argc, char **argv)
 			numSNVs = CountTrueVariants();
 				
 			/* print references sequences without errors */
-			if (doPrintSNVtrueHaplotypes == YES)
+			if (doPrintTrueHaplotypes == YES)
 				{
   				if (doPrintSeparateReplicates == NO)
-					fprintf (fpSNVtrueHaplotypes, "[#%d]\n", dataSetNum+1);
-                PrintSNVHaplotypes(fpSNVtrueHaplotypes, YES);
+					fprintf (fpTrueHaplotypes, "[#%d]\n", dataSetNum+1);
+                PrintFullHaplotypes(fpTrueHaplotypes);
 				}
 
 			/* do alellic dropout */
@@ -727,8 +727,8 @@ int main (int argc, char **argv)
 					fclose(fpFullGenotypes);
 				if (doPrintSNVhaplotypes == YES)
 					fclose(fpSNVhaplotypes);
-				if (doPrintSNVtrueHaplotypes == YES)
-					fclose(fpSNVtrueHaplotypes);
+				if (doPrintTrueHaplotypes == YES)
+					fclose(fpTrueHaplotypes);
 				if (doPrintFullHaplotypes == YES)
 					fclose(fpFullHaplotypes);
 				if (doSimulateReadCounts == YES)
@@ -813,16 +813,16 @@ int main (int argc, char **argv)
 				else
 					fprintf (stdout, " in folder \"%s\"", SNVhaplotypesDir);
                 }
-            if (doPrintSNVtrueHaplotypes == YES)
+            if (doPrintTrueHaplotypes == YES)
                 {
 				if (doPrintIUPAChaplotypes == YES)
-					fprintf (stdout, "\n SNV true haplotypes (IUPAC codes) printed to file \"%s\"", SNVtrueHaplotypesFile);
+					fprintf (stdout, "\n True haplotypes (IUPAC codes) printed to file \"%s\"", trueHaplotypesFile);
 				else
-					fprintf (stdout, "\n SNV true haplotypes printed to file \"%s\"", SNVtrueHaplotypesFile);
+					fprintf (stdout, "\n True haplotypes printed to file \"%s\"", trueHaplotypesFile);
  				if (doPrintSeparateReplicates == NO)
-					fclose(fpSNVtrueHaplotypes);
+					fclose(fpTrueHaplotypes);
 				else
-					fprintf (stdout, " in folder \"%s\"", SNVtrueHaplotypesDir);
+					fprintf (stdout, " in folder \"%s\"", trueHaplotypesDir);
                 }
             if (doPrintFullHaplotypes == YES)
                 {
@@ -3496,6 +3496,7 @@ void GenerateReadCounts (long int *seed)
 				fseek(fpVCF, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
 				/* VFC: FORMAT: ML (maximum likelihood genotype) */
+				//fprintf (stderr, "\n*cell=%3d  snv=%3d  numReads=%3d",i+1, snv+1, numReads );
 				if (numReads > 0)
 					{
 					fprintf (fpVCF, ":");
@@ -3581,10 +3582,10 @@ void PrepareGlobalFiles(int argc, char **argv)
             }
 
         /* contains error-free haplotypes for variable sites for every cell */
-        if (doPrintSNVtrueHaplotypes == YES)
+        if (doPrintTrueHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVtrueHaplotypesFile);
-            if ((fpSNVtrueHaplotypes = fopen(File, "w")) == NULL)
+			sprintf(File,"%s/%s", resultsDir, trueHaplotypesFile);
+            if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
                 exit(-1);
@@ -3655,13 +3656,13 @@ void PrepareGlobalFiles(int argc, char **argv)
         fprintf (fpSNVhaplotypes,"\n%d\n", numDataSets);
         }
 
-     if (doPrintSNVtrueHaplotypes == YES)
+     if (doPrintTrueHaplotypes == YES)
         {
-        fprintf (fpSNVtrueHaplotypes, "%s - ",PROGRAM_NAME);
-        PrintDate (fpSNVtrueHaplotypes);
-        fprintf (fpSNVtrueHaplotypes, "SNV true haplotypes\n");
-        PrintCommandLine (fpSNVtrueHaplotypes, argc, argv);
-        fprintf (fpSNVtrueHaplotypes,"\n%d\n", numDataSets);
+        fprintf (fpTrueHaplotypes, "%s - ",PROGRAM_NAME);
+        PrintDate (fpTrueHaplotypes);
+        fprintf (fpTrueHaplotypes, "True haplotypes\n");
+        PrintCommandLine (fpTrueHaplotypes, argc, argv);
+        fprintf (fpTrueHaplotypes,"\n%d\n", numDataSets);
         }
 
    if (doPrintFullGenotypes == YES)
@@ -3762,12 +3763,12 @@ void PrepareSeparateFiles(int replicate)
             }
 
         /* contains reference haplotypes (before errors) for variable sites for every cell */
-        if (doPrintSNVtrueHaplotypes == YES)
+        if (doPrintTrueHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVtrueHaplotypesDir);
+			sprintf(File,"%s/%s", resultsDir, trueHaplotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, SNVtrueHaplotypesDir, SNVtrueHaplotypesFile, replicate+1);
-            if ((fpSNVtrueHaplotypes = fopen(File, "w")) == NULL)
+			sprintf(File,"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
+            if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
                 exit(-1);
@@ -5082,7 +5083,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 			fprintf (fp, " -%d", 7);
 		if (doPrintCATG == YES)
 			fprintf (fp, " -%d", 8);
-		if (doPrintSNVtrueHaplotypes == YES)
+		if (doPrintTrueHaplotypes == YES)
 			fprintf (fp, " -%d", 9);
 		if (doPrintSeparateReplicates == YES)
 			fprintf (fp, " -%c", 'v');
@@ -5154,7 +5155,7 @@ static void PrintDefaults (FILE *fp)
     fprintf (fp,"\n-6: print trees to a file =  %d", doPrintTree);
     fprintf (fp,"\n-7: print times to a file =  %d", doPrintTimes);
     fprintf (fp,"\n-8: print read counts in CATG format =  %d", doPrintCATG);
-    fprintf (fp,"\n-9: print SNV true haplotypes to a file =  %d", doPrintSNVtrueHaplotypes);
+    fprintf (fp,"\n-9: print true haplotypes to a file =  %d", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
 	fprintf (fp,"\n-o: results folder name =  %s", resultsDir);
@@ -6120,7 +6121,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					}
                break;
             case '9':
-                doPrintSNVtrueHaplotypes = YES;
+                doPrintTrueHaplotypes = YES;
                 break;
  			case 'v':
                 doPrintSeparateReplicates = YES;
@@ -6649,7 +6650,7 @@ void ReadParametersFromFile ()
 					}
 				break;
 			case '9':
-                doPrintSNVtrueHaplotypes = YES;
+                doPrintTrueHaplotypes = YES;
 				break;
 			case 'v':
                 doPrintSeparateReplicates = YES;
