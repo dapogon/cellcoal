@@ -7,8 +7,6 @@
 //
 
 #include "eigen.h"
-#include "common.h"
-
 
 int EigenREV (double Root[], double Cijk[])
 {
@@ -20,7 +18,7 @@ int EigenREV (double Root[], double Cijk[])
 	abyx (1/mr, Qij, 16);
 
 	if ((k=eigen (1, Qij, 4, Root, T1, U, V, T2))!=0) {
-		fprintf(fperr, "\ncomplex roots in EigenREV");
+		fprintf(stderr, "\ncomplex roots in EigenREV");
 		exit(0);
 	}
 	xtoy (U, V, 16);
@@ -63,7 +61,7 @@ int matinv( double x[], int n, int m, double space[])
       }
       det *= xmax;
       if (xmax < ee)   {
-	 fprintf(fperr,"\nDet becomes zero at %3d!\t\n", i+1);
+	 fprintf(stderr,"\nDet becomes zero at %3d!\t\n", i+1);
 	 return(-1);
       }
       if (irow[i] != i) {
@@ -284,7 +282,7 @@ int cmatinv( complex x[], int n, int m, double space[])
           }
        }
        if (xmaxsize < ee)   {
-           fprintf(fperr,"\nDet goes to zero at %8d!\t\n", i+1);
+           fprintf(stderr,"\nDet goes to zero at %8d!\t\n", i+1);
            return(-1);
        }
        if (irow[i] != i) {

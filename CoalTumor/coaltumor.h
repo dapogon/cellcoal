@@ -25,7 +25,7 @@
 #define PROGRAM_NAME_UPPERCASE	"COALTUMOR"
 #define VERSION_NUMBER          "version 0.1"
 #define	MAX_NAME                120
-#define	MAX_LINE                350
+#define	MAX_LINE                3500
 #define	NO                      0
 #define	YES                     1
 #define	infinity                999999
@@ -66,24 +66,12 @@ typedef struct node
 
 typedef struct site
     {
-    int		isSNV;
-	int		isSNP;
-	int		isVariant;
-	int		numMutationsMaternal;
-    int		numMutationsPaternal;
-    int     numMutations;
-	int		numDeletionsMaternal;
-    int		numDeletionsPaternal;
-    int     numDeletions;
+    int		isSNV, isSNP, isVariant;
+	int		numMutations, numMutationsMaternal, numMutationsPaternal;
+    int     numDeletions, numDeletionsMaternal, numDeletionsPaternal;
 	int		hasADO;
 	int		hasGenotypeError;
-	int		countA;
-	int		countC;
-	int		countG;
-	int		countT;
-	int		countACGT;
-	int		countCellswithData;
-	int		countDropped;
+	int		countA, countC, countG, countT, countACGT, countCellswithData, countDropped;
 	int		referenceAllele;
 	int		*alternateAlleles;
 	int		numAltAlleles;
@@ -92,6 +80,18 @@ typedef struct site
     double  rateMultiplier;
 	}
     SiteStr;
+
+/*
+typedef struct cell
+    {
+    int				index;
+	int				**genome;
+	int				**readCount;
+	double			**genLike;
+    char			*name;
+    }
+    CellStr;
+*/
 
 /* Prototypes */
 static void 	PrintHeader (FILE *fp);
@@ -143,6 +143,7 @@ static void		FillSubstitutionMatrix (double ch_prob[4][4], double branchLength);
 static void		JCmodel (double Pij[4][4], double branchLength);
 static void		HKYmodel (double Pij[4][4], double branchLength);
 static void		GTRmodel (double Pij[4][4], double branchLength);
+static void 	LoadGeneticSignatures (void);
 static void 	EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed);
 static void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed);
 static int 		CountTrueVariants(void);
@@ -162,11 +163,13 @@ static int		ChooseUniformState (double *freq, long int *seed);
 static int		Unlink_callback(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf);
 static int		RemoveDir(char *path);
 static int 		CheckMatrixSymmetry(double matrix[4][4]);
-double 			Qij[16], mr;
+extern int 		EigenREV (double Root[], double Cijk[]);
+
 
 /* Global variables */
 TreeNode		*treeNodes, *coalTreeMRCA, *healthyRoot, *healthyTip;
 SiteStr			*allSites;
+//CellStr			*cell;
 long int		userSeed, originalSeed;
 static int		***data;
 static int      *SNVsites, *DefaultModelSites, *AltModelSites, *variantSites;
@@ -191,7 +194,7 @@ static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[M
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintSNVtrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
 static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts, taxonNamesAreChars;
-static int		doJC, doHKY, doGTR, doGTnR;
+static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures, geneticSignature;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage;
 static double	*periodGrowth, growthRate, sequencingError, ADOrate, singleAlleleCoverageReduction, genotypingError, meanAmplificationError, varAmplificationError;
 static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
@@ -201,6 +204,7 @@ static double	SNPrate, alphaCoverage;
 static int		HEALTHY_ROOT, TUMOR_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
 static int		TipNodeNum, IntNodeNum;
+extern double 	Qij[16], mr;
 
 
 #ifdef CHECK_MUT_DISTRIBUTION

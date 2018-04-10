@@ -89,7 +89,7 @@ TODO:
 */
 
 #include "coaltumor.h"
-#include "common.h"
+//#include "signatures.h"
 
 int main (int argc, char **argv)
     {
@@ -154,6 +154,8 @@ int main (int argc, char **argv)
 	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
 	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
 	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
+	doGeneticSignatures = NO;		/* whether to use a genetic signature to model trinucleotide mutations */
+	geneticSignature = 0;			/* by default we do not use a genetic signature */
     healthyTipBranchLength = 0; 	/* length of the branch leading to the healthy cell */
     transformingBranchLength = 0; 	/* length of the transforming branch leading to the healthy ancestral cell */
 	coverage = 0;					/* NGS  depth for read counts */
@@ -165,6 +167,7 @@ int main (int argc, char **argv)
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
 	varAmplificationError = 0;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simualate maximum of two templates after single-cell amplification, or there can be all four */
+	singleAlleleCoverageReduction = 1.0; /* proportion of reads produced when a single allele is present */
     numNodes = 3000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
     userSeed = 0;					/* seed entered by the user */
@@ -213,7 +216,15 @@ int main (int argc, char **argv)
 		doSimulateReadCounts = NO;
 		doPrintCATG = NO;
    		}
+	
+		 if (doGeneticSignatures == YES)
+		 {
+		 LoadGeneticSignatures();
+		 exit(-1);
+		 }
 		
+
+	
     /* initialize a few variables */
     a = 0;
     a2 = 0;
@@ -405,7 +416,79 @@ int main (int argc, char **argv)
                     }
                 }
             }
-			
+	
+	
+	/* Allocate cell structure */ /* and remember to free it at the end! */
+/*
+	 cell = (CellStr *) calloc(2*numCells, sizeof(CellStr));
+	 if (!cell)
+		 {
+		 fprintf (stderr, "Could not allocate cell (%ld)\n", 2*numCells * sizeof(CellStr));
+		 exit (-1);
+		 }
+ 
+     for (i=0; i<2*numCells; i++)
+		 {
+		 cell[i].index = 0;
+ 
+		 cell[i].genome = (int**) calloc (2, sizeof(int*));
+		 if (!cell[i].genome)
+			 {
+			 fprintf (stderr, "Could not allocate the cell[%d].genome structure\n", i);
+			 exit (-1);
+			 }
+		 for (j=0; j<2; j++)
+			 {
+			 cell[i].genome[j] = (int*) calloc (numSites, sizeof(int));
+			 if (!cell[i].genome[j])
+				{
+				fprintf (stderr, "Could not allocate the cell[%d].genome[%d] structure\n", i, j);
+				exit (-1);
+				}
+			 }
+
+ 		cell[i].readCount = (int*) calloc (numSites, sizeof(int));
+		if (!cell[i].readCount)
+			{
+			fprintf (stderr, "Could not allocate the cell[%d].readCount structure\n", i);
+			exit (-1);
+			}
+
+		 for (j=0; j<4; j++)
+			 {
+			 cell[i].genome[j] = (int*) calloc (4, sizeof(int));
+			 if (!cell[i].genome[j])
+				{
+				fprintf (stderr, "Could not allocate the cell[%d].readCount[%d] structure\n", i, j);
+				exit (-1);
+				}
+			 }
+
+ 		cell[i].genLike = (double**) calloc (4, sizeof(double*));
+		if (!cell[i].genLike)
+			{
+			fprintf (stderr, "Could not allocate the cell[%d].genLike structure\n", i);
+			exit (-1);
+			}
+		 for (j=0; j<4; j++)
+			 {
+			 cell[i].genLike[j] = (double*) calloc (4, sizeof(double));
+			 if (!cell[i].genLike[j])
+				{
+				fprintf (stderr, "Could not allocate the cell[%d].genLike[%d] structure\n", i, j);
+				exit (-1);
+				}
+			 }
+
+		cell[i].name = (char*) calloc (MAX_NAME, sizeof(char));
+		if (!treeNodes[i].name)
+			{
+			fprintf (stderr, "Could not allocate the treeNodes[i].name structure\n");
+			exit (-1);
+			}
+		}
+*/
+	
         /* allocate memory for site information (equal for maternal and paternal) */
         allSites = (SiteStr*) calloc (numSites, sizeof(SiteStr));
         if (!allSites)
@@ -422,7 +505,7 @@ int main (int argc, char **argv)
                 exit (-1);
                 }
 			}
-			
+
         /* the arrays below keep the index for different types of sites */
         SNVsites = (int*) calloc (numSites, sizeof(int));
         if (!SNVsites)
@@ -2099,13 +2182,183 @@ void GTRmodel (double Pij[4][4], double branchLength)
 	}
 
 
+/*************** GeneticSignatures **********************/
+/*
+https://cancer.sanger.ac.uk/cosmic/signatures
+
+The profile of each signature is displayed using the six substitution subtypes: C>A, C>G, C>T, T>A, T>C, and T>G
+(all substitutions are referred to by the pyrimidine of the mutated Watson–Crick base pair).
+
+Further, each of the substitutions is examined by incorporating information on the bases immediately 5’ and 3’ to each
+mutated base generating 96 possible mutation types (6 types of substitution ∗ 4 types of 5’ base ∗ 4 types of 3’ base).
+
+Mutational signatures are displayed and reported based on the observed trinucleotide frequency of the human genome,
+i.e., representing the relative proportions of mutations generated by each signature based on the actual trinucleotide
+frequencies of the reference human genome version GRCh37.
+
+All the data used for deriving the 30 mutational signatures in COSMIC are publicly and freely available.
+Please note that most of these data were generated as part of studies performed by others.
+Information about the data sources containing these freely available data is provided in Supplementary Data 1 of
+“Clock-like mutational processes in human somatic cells” Nature Genetics, 2015, 47, 1402-1407.
+This information can be used to download any sample from its respective data source.
+
+P[C][A] = P[G][T]
+P[C][G] = P[G][C]
+P[C][T] = P[G][A]
+P[T][A] = P[A][T]
+P[T][C] = P[A][G]
+P[T][G] = P[A][C]
+
+P[A][A] = P[C][C] = P[G][G] = P[T][T] = 0
+*/
+
+void LoadGeneticSignatures (void)
+	{
+	FILE 	*fpSign;
+	int 	i, j, k, l;
+	//double 	P[4][6][4][30]; // P[5prime][change][3prime][signature]
+	double	****P;
+	double 	signature[4][6][4]; // P[5prime][change][3prime]
+	char	*header, *token;
+
+	header = (char*) calloc (MAX_LINE, sizeof(char));
+	if (!header)
+		{
+		fprintf (stderr, "Could not allocate the header string\n");
+		exit (-1);
+		}
+
+	token = (char*) calloc (MAX_NAME, sizeof(char));
+	if (!token)
+		{
+		fprintf (stderr, "Could not allocate the token string\n");
+		exit (-1);
+		}
+//TODO: do a calloc for signature matrix
+
+	P = (double****) calloc (4, sizeof(double***));
+	if (!P)
+		{
+		fprintf (stderr, "Could not allocate the P array\n");
+		exit (-1);
+		}
+	for (i=0; i<4; i++)
+		{
+		P[i] = (double***) calloc (6, sizeof(double**));
+		if (!P[i])
+			{
+			fprintf (stderr, "Could not allocate the P[%d] array\n", i);
+			exit (-1);
+			}
+		for (j=0; j<6; j++)
+			{
+			P[i][j] = (double**) calloc (4, sizeof(double*));
+			if (!P[i][j])
+				{
+				fprintf (stderr, "Could not allocate the P[%d][%d] array\n", i, j);
+				exit (-1);
+				}
+			for (k=0; k<4; k++)
+				{
+				P[i][j][k] = (double*) calloc (30, sizeof(double));
+				if (!P[i][j][k])
+					{
+					fprintf (stderr, "Could not allocate the P[%d][%d][%d] array\n", i, j, k);
+					exit (-1);
+					}
+				}
+			}
+		}
+
+	/* open signatures file */
+	if ((fpSign = fopen("signatures/signatures_probabilities.txt", "r")) == NULL)
+		{
+		fprintf (stderr, "\nERROR: Can't open file \"%s\"\n", "signatures_probabilities.txt");
+		PrintUsage();
+		}
+
+	/* read the header string */
+	fgets (header, MAX_LINE, fpSign);
+
+	/* read in the probabilities */
+	for (i=0; i<4; i++)
+		for (j=0; j<6; j++)
+			for (k=0; k<4; k++)
+			 	{
+			 	fscanf (fpSign, "%s %s %s", token, token, token);
+				for (l=0; l<30; l++)
+					fscanf (fpSign, "%lf", &P[i][j][k][l]);
+				}
+		
+	/* print the probabilities */
+	/*
+	for (i=0; i<4; i++)
+		for (j=0; j<6; j++)
+			for (k=0; k<4; k++)
+				{
+				fprintf (stderr, "\n%c[%d]%c", WhichNuc(i), j, WhichNuc(k));
+				for (l=0; l<30; l++)
+					fprintf (stderr, "\t%14.12lf", P[i][j][k][l]);
+				}
+	fprintf (stderr, "\n\n");
+	*/
+
+	#undef PRINT_CODE
+	#ifdef PRINT_CODE
+	/* print for hard coding */
+	for (l=0; l<30; l++)
+		fprintf (stderr, "\nstatic double signature%02d[4][6][4];", l+1);
+	
+	for (l=0; l<30; l++)
+		{
+		fprintf (stderr, "\n\n/* Signature %02d */", l+1);
+		for (i=0; i<4; i++)
+			for (j=0; j<6; j++)
+				{
+				if (j == 0) strcpy(token,"CG_AT");
+				else if (j == 1) strcpy(token,"CG_GC");
+				else if (j == 2) strcpy(token,"CG_TA");
+				else if (j == 3) strcpy(token,"TA_AT");
+				else if (j == 4) strcpy(token,"TA_CG");
+				else if (j == 5) strcpy(token,"TA_CG");
+				for (k=0; k<4; k++)
+					fprintf (stderr, "\nsignature%02d[%c][%s][%c] = %14.12lf;", l+1, WhichNuc(i), token, WhichNuc(k), P[i][j][k][l]);
+				}
+		}
+	#endif
+	
+	/* copy in the selected genetic signature  */
+	for (i=0; i<4; i++)
+		for (j=0; j<6; j++)
+			for (k=0; k<4; k++)
+				signature[i][j][k] = P[i][j][k][geneticSignature-1];
+		
+	/* print the selected genetic signature */
+	for (i=0; i<4; i++)
+		for (j=0; j<6; j++)
+			for (k=0; k<4; k++)
+				fprintf (stderr, "\n%c[%d]%c\t%14.12lf", WhichNuc(i), j, WhichNuc(k),  signature[i][j][k]);
+	fprintf (stderr, "\n\n");
+	
+
+
+	/* close signatures file */
+	fclose(fpSign);
+	
+	free(header);
+	free(token);
+	free(P);
+	}
+
+
+
 /********************************** SimulateDeletions ***********************************/
  /*	Simulates point deletions under an infinite haploid sites model (ISM).
     Haploid here means that site 33 in the maternal genome and site 33 in the paternal
     genome will be considered different sites, so both can mutate.
  
-  This is a very simple mode, where deletions are simulated after the sequences have been evolved
-  (i.e., SNVs are already in place)
+   This is a very simple mode, where deletions are simulated after the sequences have been evolved
+   (i.e., SNVs are already in place)
  
     The number of point deletions will be distributed as a Poisson with parameter the sum of
 	branch lengths (node length * deletion rate) over all sites.
@@ -2469,14 +2722,12 @@ double SumBranches (TreeNode *p)
 	given some sequencing depth or coverage. The number of reads follow a Poisson
 	or a Negative Binomial distribution around mean coverage.
 	Reads are randomly assigned to maternal/paternal chromosome.
-	Reads can contain some errors according to a sequencing error parameter
- 
+	Reads can contain some errors according to sequencing and amplification error parameters
  
 **	Genotype likelihoods can be calculated given the read counts and the sequencing error
 	(see Korneliussen 2013 BMCBioinf) and printed to VCF file
  
- 
-**	PyRAD output format with read counts
+**	CATG output format with read counts
 	http://nbviewer.jupyter.org/gist/dereneaton/d2fd4e70d29f5ee5d195/testing_cat.ipynb#View-the-.cat-results-files
 
 	The first line has the number of samples and the number of sites.
@@ -2491,7 +2742,6 @@ double SumBranches (TreeNode *p)
 	CCCCCCCCCCCC	20,0,0,0	20,0,0,0	20,0,0,0	20,0,0,0 ...
 	AAAAAAAAAAAA	0,20,0,0	0,20,0,0	0, 20,0,0	0,20,0,0 ...
 	...
-
 
 */
 
@@ -2520,10 +2770,6 @@ void GenerateReadCounts (long int *seed)
 	ampErrorPaternalAllele = -9;
 	badTemplate = -9;
 	goodTemplate = -9;
-	thereIsMaternalAllele = YES;
-	thereIsPaternalAllele = YES;
-	numMaternalReads = 0;
-	numPaternalReads = 0;
 	
 	probs = (double*) calloc (4, sizeof(double));
 	if (!probs)
@@ -2740,6 +2986,10 @@ void GenerateReadCounts (long int *seed)
 
 			for (i=0; i<numCells+1; i++)
 				{
+
+				thereIsMaternalAllele = YES;
+				thereIsPaternalAllele = YES;
+
 				maternalAllele = data[MATERNAL][i][j];
 				if (maternalAllele == ADO || maternalAllele == DELETION)
 						thereIsMaternalAllele = NO;
@@ -2749,7 +2999,11 @@ void GenerateReadCounts (long int *seed)
 						thereIsPaternalAllele = NO;
 
 				/* VFC: FORMAT: GT (genotypes) */
-				if (maternalAllele == referenceAllele)
+				if (maternalAllele == ADO)
+					fprintf (fpVCF, "\t_");
+				else if (maternalAllele == DELETION)
+					fprintf (fpVCF, "\t-");
+				else if (maternalAllele == referenceAllele)
 					fprintf (fpVCF, "\t0");
 				else
 					{
@@ -2766,7 +3020,11 @@ void GenerateReadCounts (long int *seed)
 					
 				fprintf (fpVCF, "|");
 
-				if (paternalAllele == referenceAllele)
+				if (paternalAllele == ADO)
+					fprintf (fpVCF, "_");
+				else if (paternalAllele == DELETION)
+					fprintf (fpVCF, "-");
+				else if (paternalAllele == referenceAllele)
 					fprintf (fpVCF, "0");
 				else
 					{
@@ -2779,8 +3037,12 @@ void GenerateReadCounts (long int *seed)
 							}
 						}
 					}
-
+					
+					
 				/* number of reads will follow a Poisson or a Negative Binomial distribution (overdispersed coverage) around mean coverage, and are randomly assigned to maternal/paternal chromosome */
+				numMaternalReads = 0;
+				numPaternalReads = 0;
+
 				if (rateVarCoverage == YES) /* Negative Binomial */
 					{
 					if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
@@ -2827,9 +3089,8 @@ void GenerateReadCounts (long int *seed)
 						numPaternalReads = 0;
 						}
 					}
-
 				numReads = numMaternalReads + numPaternalReads;
-				
+
 				/* read count simulation */
 				readCount[A] = readCount[C] = readCount[G] = readCount[T] = 0;
 				if (numReads > 0)
@@ -3003,6 +3264,7 @@ void GenerateReadCounts (long int *seed)
 				/* print read counts to CATG file */
 				if (doPrintCATG == YES)
 					fprintf (fpCATG,"\t%d,%d,%d,%d",  readCount[C], readCount[A], readCount[T], readCount[G]);
+
 
 
 				/********************  for debugging ********************************************/
@@ -3234,9 +3496,14 @@ void GenerateReadCounts (long int *seed)
 				fseek(fpVCF, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
 				/* VFC: FORMAT: ML (maximum likelihood genotype) */
-				fprintf (fpVCF, ":");
-				fprintf (fpVCF, "%c/%c",WhichNuc(MLa1), WhichNuc(MLa2));
-
+				if (numReads > 0)
+					{
+					fprintf (fpVCF, ":");
+					fprintf (fpVCF, "%c/%c",WhichNuc(MLa1), WhichNuc(MLa2));
+					}
+				else
+					fprintf (fpVCF, ":?/?");
+				
 				/* VFC: FORMAT: TG (true SNV genotype) */
 				fprintf (fpVCF, ":");
 				fprintf (fpVCF, "%c|%c",WhichNuc(maternalAllele), WhichNuc(paternalAllele));
@@ -4626,8 +4893,12 @@ static void	PrintRunInformation (FILE *fp)
             fprintf (fp, "0/1");
         else if (alphabet == DNA)
             fprintf (fp, "DNA");
-			
-        if (propAltModelSites == 0)
+		
+		
+		if (doGeneticSignatures == YES)
+		fprintf (fp, "\n Trinucleotide genetic signature              =   %d", geneticSignature);
+
+        else if (propAltModelSites == 0)
             fprintf (fp, "\n All sites evolving under the ISM diploid");
 			
         else if (propAltModelSites > 0)
@@ -4658,7 +4929,7 @@ static void	PrintRunInformation (FILE *fp)
         else
             fprintf (fp, "\n Equal rates among sites");
 
-        if (alphabet == DNA && propAltModelSites > 0 && altModel == 2)
+        if (alphabet == DNA && propAltModelSites > 0 && altModel == 2 && doGeneticSignatures == NO)
             {
             fprintf (fp, "\n Base frequencies (ACGT)                      =   %3.2f %3.2f %3.2f %3.2f", freq[0], freq[1], freq[2], freq[3]);
 			if (doHKY == YES)
@@ -4772,6 +5043,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -u%2.1e", mutationRate);
 		fprintf (fp, " -d%2.1e", deletionRate);
 		fprintf (fp, " -j%d", numFixedSNVs);
+		fprintf (fp, " -S%d", geneticSignature);
 		fprintf (fp, " -m%d", altModel);
 		fprintf (fp, " -p%6.4f", propAltModelSites);
 		fprintf (fp, " -w%6.4f", nonISMRelMutRate);
@@ -4853,6 +5125,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-u: mutation rate =  %2.1e", mutationRate);
 	fprintf (fp,"\n-d: deletion rate =  %2.1e", deletionRate);
     fprintf (fp,"\n-j: fixed number of SNVs =  %d", numFixedSNVs);
+    fprintf (fp,"\n-S: trinucleotide genetic signature =  %d", geneticSignature);
     fprintf (fp,"\n-m: alternative mutation model =  %d", altModel);
     fprintf (fp,"\n-p: proportion of alternative model sites =  %6.4f", propAltModelSites);
     fprintf (fp,"\n-w: alternative/default model relative mutation rate =  %6.4f", nonISMRelMutRate);
@@ -4917,6 +5190,7 @@ static void PrintUsage(void)
 	fprintf (stderr,"\n-u: mutation rate (e.g. -u1e-6)");
 	fprintf (stderr,"\n-d: deletion rate (e.g. -d1e-5)");
     fprintf (stderr,"\n-j: fixed number of SNVs (e.g. -j100)");
+    fprintf (stderr,"\n-S: trinucleotide genetic signature (e.g. -S1)");
     fprintf (stderr,"\n-m: alternative mutation model [0:ISMhap 1:Mk2 2:finiteDNA] [default mutation model is ISM diploid] (e.g. -m2)");
     fprintf (stderr,"\n-p: proportion of alternative model sites (e.g. -p0.1)");
     fprintf (stderr,"\n-w: alternative/default model relative mutation rate (e.g. -w1)");
@@ -5346,11 +5620,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T 0 y z #
+	n s l e g h k q i b u d j S m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G                     R   T   V   X
+	A   C D E   G                     R S  T   V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -5536,6 +5810,16 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					PrintUsage();
                     }
                 break;
+			case 'S':
+                argument = atof(argv[i]);
+                geneticSignature = (int) argument;
+                if (geneticSignature < 1 || geneticSignature > 30)
+                    {
+                    fprintf (stderr, "PARAMETER ERROR: Bad genetic signature (%d), it has to be a single number between 1 and 30\n\n", geneticSignature);
+                    PrintUsage();
+                    }
+                doGeneticSignatures = YES;
+			    break;
 			case 'm':
                 argument = atof(argv[i]);
                 altModel = (int) argument;
@@ -5902,11 +6186,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 /* Reads parameter values from the parameter file  */
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T 0 y z #
+	n s l e g h k q i b u d j S m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G                     R   T   V   X
+	A   C D E   G                     R S T   V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -6080,6 +6364,15 @@ void ReadParametersFromFile ()
                     PrintUsage();
                     }
                 break;
+           case 'S':
+                if (fscanf(stdin, "%f", &argument) !=1 || argument < 1 || argument > 30)
+                    {
+					fprintf (stderr, "PARAMETER ERROR: Bad genetic signature (%d), it has to be a single number between 1 and 30\n\n", (int) argument);
+                    PrintUsage();
+                    }
+                geneticSignature = (int) argument;
+                doGeneticSignatures = YES;
+				break;
             case 'm':
                   if (fscanf(stdin, "%f", &argument) !=1 || argument < 0 || argument > 2)
                     {

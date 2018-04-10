@@ -14,7 +14,8 @@
 #include <stdio.h>
 #include <stdlib.h>
 
-FILE			*fpout, *fperr;
+int EigenREV (double Root[], double Cijk[]);
+double Qij[16], mr;
 
 /* Everything below is shamelessly taken from Yang's Paml package */
 int abyx (double a, double x[], int n);
@@ -25,7 +26,6 @@ void balance(double mat[], int n, int *low, int *hi, double scale[]);
 void unbalance(int n, double vr[], double vi[], int low, int hi, double scale[]);
 int realeig(int job, double mat[], int n,int low, int hi, double valr[], double vali[], double vr[], double vi[]);
 void elemhess(int job, double mat[], int n, int low, int hi, double vr[], double vi[], int work[]);
-
 
 typedef struct { double re, im; } complex;
 #define csize(a) (fabs(a.re)+fabs(a.im))
