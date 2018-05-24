@@ -3,7 +3,7 @@ SRCDIR = CoalTumor
 
 CC ?= gcc
 
-OBJS = coaltumor.o eigen.o
+OBJS = coaltumor.o eigen.o signatures.o
 CFLAGS ?= -Wall $(PROFILING) -O3 $(WARN) -DUSE_COLORS
 
 LIBS = -lm

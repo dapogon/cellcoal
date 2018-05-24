@@ -21,39 +21,7 @@
 #include <sys/stat.h>
 #include <ftw.h>
 
-#define PROGRAM_NAME            "CoalTumor"
-#define PROGRAM_NAME_UPPERCASE	"COALTUMOR"
-#define VERSION_NUMBER          "version 0.1"
-#define	MAX_NAME                120
-#define	MAX_LINE                3500
-#define	NO                      0
-#define	YES                     1
-#define	infinity                999999
-#define	MATERNAL                0
-#define	PATERNAL                1
-#define BINARY                  0
-#define	DNA                     1
-
-#define ISMhap					0
-#define Mk						1
-#define finiteDNA				2
-
-#define A						0
-#define C						1
-#define G						2
-#define T						3
-#define ADO						9
-#define DELETION				7
-
-#define ISMhap					0
-#define Mk2						1
-#define finiteDNA				2
-
-#define CHECK_MUT_DISTRIBUTION
-#undef CHECK_MUT_DISTRIBUTION
-
-#define MYDEBUG
-#undef MYDEBUG
+#include "definitions.h"
 
 typedef struct node
     {
@@ -81,6 +49,14 @@ typedef struct site
 	}
     SiteStr;
 
+typedef struct
+    {
+	int 	tempLength;
+	int 	numAvailablePositions;
+	int 	*position;
+	}
+    TriNucStr;
+
 /*
 typedef struct cell
     {
@@ -95,8 +71,8 @@ typedef struct cell
 
 /* Prototypes */
 static void 	PrintHeader (FILE *fp);
+extern void 	PrintUsage (void);
 static void 	PrintDate (FILE *fp);
-static void 	PrintUsage (void);
 static void 	PrintDefaults (FILE *fp);
 static void		ReadUntil (FILE *fv, char stopChar, char *what);
 static void		PrintRunInformation (FILE *fp);
@@ -120,7 +96,7 @@ static void		PrintSiteInfo (FILE *fp, int site);
 static void		AllelicDropout (long int *seed);
 static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
-static char		WhichNuc (int nucleotide);
+extern char		WhichNuc (int nucleotide);
 static char		WhichMut (int state);
 static char		WhichIUPAC (int allele1, int allele2);
 static char 	WhichConsensusBinary (int allele1, int allele2);
@@ -139,11 +115,14 @@ static void 	SimulateISMforSite (TreeNode *p,  int genome, int site, int doISMha
 static void 	SimulateISMDNAforSite (TreeNode *p,  int genome, int site, int doISMhaploid, long int *seed);
 static void 	SimulateFiniteDNA (TreeNode *p, int genome, long int *seed);
 static void		SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed);
+static void 	SimulateSignatureISM (TreeNode *p,  int genome, long int *seed);
+static void		SimulateSignatureISMforSite (TreeNode *p,  int genome, int site, int newState, long int *seed);
+static void		SimulateTriNucFreqGenome (int cell, long int *seed);
+static int		ChooseTrinucleotideSite (long int *seed, int *newState);
 static void		FillSubstitutionMatrix (double ch_prob[4][4], double branchLength);
 static void		JCmodel (double Pij[4][4], double branchLength);
 static void		HKYmodel (double Pij[4][4], double branchLength);
 static void		GTRmodel (double Pij[4][4], double branchLength);
-static void 	LoadGeneticSignatures (void);
 static void 	EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed);
 static void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed);
 static int 		CountTrueVariants(void);
@@ -163,12 +142,16 @@ static int		ChooseUniformState (double *freq, long int *seed);
 static int		Unlink_callback(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf);
 static int		RemoveDir(char *path);
 static int 		CheckMatrixSymmetry(double matrix[4][4]);
-extern int 		EigenREV (double Root[], double Cijk[]);
+static void 	RecordTriNucObservation(TriNucStr *trin, int site);
+static void 	RemoveTriNucObservation(TriNucStr *trin, int site);
 
+extern int 		EigenREV (double Root[], double Cijk[]);
+extern void		PrepareGeneticSignatures(void);
 
 /* Global variables */
 TreeNode		*treeNodes, *coalTreeMRCA, *healthyRoot, *healthyTip;
 SiteStr			*allSites;
+TriNucStr 		*triNucleotide;
 //CellStr			*cell;
 long int		userSeed, originalSeed;
 static int		***data;
@@ -179,7 +162,7 @@ static int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutat
 static int		numCA, numMU, numDEL, numProposedMU, numSNVs, numFixedSNVs, numSNVmaternal, zeroSNVs;
 static int		numISMdeletions;
 static double	meanNumSNVs, meanNumCA, meanNumMU, meanNumDEL;
-static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL;
+static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumCountMLgenotypeErrors;
 static double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq;
 static double	varNumMU, varNumSNVs, varNumDEL;
 static double	expNumMU, expVarNumMU;
@@ -194,9 +177,9 @@ static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[M
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
 static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts, taxonNamesAreChars;
-static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures, geneticSignature;
-static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage;
-static double	*periodGrowth, growthRate, sequencingError, ADOrate, singleAlleleCoverageReduction, genotypingError, meanAmplificationError, varAmplificationError;
+static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
+static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage, countMLgenotypeErrors;
+static double	*periodGrowth, growthRate, sequencingError, ADOrate, singleAlleleCoverageProportion, genotypingError, meanAmplificationError, varAmplificationError;
 static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
 static double	Rmat[6], NRmat[12], Cijk[256], Root[4];
@@ -204,7 +187,25 @@ static double	SNPrate, alphaCoverage;
 static int		HEALTHY_ROOT, TUMOR_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
 static int		TipNodeNum, IntNodeNum;
+static int		complementBase[4] = {3,2,1,0};
+static int		targetTriChange[6] = {0,2,3,0,1,2};
+
+/*
+	P[C][A] = P[G][T]
+	P[C][G] = P[G][C]
+	P[C][T] = P[G][A]
+	P[T][A] = P[A][T]
+	P[T][C] = P[A][G]
+	P[T][G] = P[A][C]
+
+*/
+static int		*triMutationsCounter;
+
 extern double 	Qij[16], mr;
+extern double 	***selectedSignature;
+extern double	*signatureProbs;
+extern double	*triNucFreq;
+int				userSignature;
 
 
 #ifdef CHECK_MUT_DISTRIBUTION

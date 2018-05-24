@@ -1,31 +1,46 @@
+[
+#ADO = 0.00, 0.10, 0.25
+#sequencing coverage = 5, 10, 50, 100
+#coverage overdispersion = 5
+#sequencing error = 0.01
+#amplification error = 0.00, 0.10 (0.01 0.00), 0.20 (0.01 0.00)
+#cells = 40
+#rate variation among lineages (alpha=1)
+#sites = 10000
+#growthRate = 10-4
+#mutation rate = 10-6
+#model = GTnR (signature 1) + G (alpha=1)
+#replicates = 100
+]
+
 	[PARAMETER FILE for CoalTumor] [text in brackets will be ignored]
 	
 	[COALESCENT]
 	[number of replicates] n1
 	[sample size (# tumor cells)] s4
-	[number of sites] l10
-	[effective population size] e1000
+	[number of sites] l100000
+	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 
 	[GENEALOGY MODIFIERS]
-	[transforming branch length; exp subst] [k0.01]
-	[healthy tip branch length; exp subst]  [q0.001]
-	[rate variation among lineages] i1
+	[transforming branch length; exp subst] [k0.01] k0
+	[healthy tip branch length; exp subst]  [q0.001] q0
+	[rate variation among lineages] [i1]
 
 	[MUTATION MODEL]
 	[alphabet 0:binary 1:DNA] b1
 	[mutation rate] u1e-6
 	[deletion rate] [d1e-6]
 	[fixed number of true SNVs - ISM] [j10]
-	[trinucleotide genetic signature] [S29]
+	[trinucleotide genetic signature] S9
     [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m2
      [default mutation model is ISM diploid]	
-	[proportion of alternative model sites] p1
+	[proportion of alternative model sites] p0
 	[alternative/default model relative mutation rate] [w1]
 	[germline SNP rate] [c0.00001]
 		[base frequencies]	f0.3 0.2 0.2 0.3
-	[transition/transversion ratio] [t2]
+	[transition/transversion ratio] [t1.7]
 	[rate variation among sites] [a1]
 	[mutation matrix ACGT x ACGT]  [r0 1 1 1
     							 	1 0 1 1
@@ -45,12 +60,12 @@
 
 	
 	[NGS PARAMETERS]
-	[genotyping error; no reads] [G0.01]
- 	[sequencing coverage; reads simulated] C100
+	[genotyping error; no reads] [G0.1]
+ 	[sequencing coverage; reads simulated] C10
 	[coverage overdispersion] [V5]
-	[amplification error] [A0.1 0.01 0]
-	[sequencing error] [E0.05]
-	[allelic dropout] D0.4
+	[amplification error] [A0.2 0.01 0]
+	[sequencing error] E0
+	[allelic dropout] D0
 	[ADO/DEL read reduction] [R0.5]	
 	[error matrix ACGT x ACGT] 	   [X0 1 1 1
     							 	 1 0 1 1
@@ -65,7 +80,7 @@
 	[print trees] 6
 	[print times] [7]
 	[print CATG] [8]
-	[print SNV true haplotypes] 9
+	[print true haplotypes] 9
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] [x]
 	[results folder name] oresults
