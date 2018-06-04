@@ -23,51 +23,6 @@
 
 #include "definitions.h"
 
-typedef struct node
-    {
-    struct node		*left, *right, *anc;
-    int				index, label, isHealthyTip, isHealthyRoot;
-    double			length, time, branchLength;
-    char			*name;
-    }
-    TreeNode;
-
-typedef struct site
-    {
-    int		isSNV, isSNP, isVariant;
-	int		numMutations, numMutationsMaternal, numMutationsPaternal;
-    int     numDeletions, numDeletionsMaternal, numDeletionsPaternal;
-	int		hasADO;
-	int		hasGenotypeError;
-	int		countA, countC, countG, countT, countACGT, countCellswithData, countDropped;
-	int		referenceAllele;
-	int		*alternateAlleles;
-	int		numAltAlleles;
-	double	branchSum;
-	double	deletionBranchSum;
-    double  rateMultiplier;
-	}
-    SiteStr;
-
-typedef struct
-    {
-	int 	tempLength;
-	int 	numAvailablePositions;
-	int 	*position;
-	}
-    TriNucStr;
-
-/*
-typedef struct cell
-    {
-    int				index;
-	int				**genome;
-	int				**readCount;
-	double			**genLike;
-    char			*name;
-    }
-    CellStr;
-*/
 
 /* Prototypes */
 static void 	PrintHeader (FILE *fp);
@@ -81,6 +36,7 @@ static void		ReadParametersFromCommandLine (int argc, char **argv);
 static void 	PrintCommandLine (FILE *fp, int argc,char **argv);
 static void		PrepareGlobalFiles (int argc, char **argv);
 static void		PrepareSeparateFiles (int replicate);
+static void		ReadUserGenome (FILE *fp);
 static void		ReadUserTree (FILE *fp);
 static void		CheckTree (char *treeString);
 static void 	RelabelUserTree (TreeNode *p);
@@ -97,6 +53,7 @@ static void		AllelicDropout (long int *seed);
 static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
 extern char		WhichNuc (int nucleotide);
+static int		WhichNucChar (char nucleotide);
 static char		WhichMut (int state);
 static char		WhichIUPAC (int allele1, int allele2);
 static char 	WhichConsensusBinary (int allele1, int allele2);
@@ -118,7 +75,8 @@ static void		SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long i
 static void 	SimulateSignatureISM (TreeNode *p,  int genome, long int *seed);
 static void		SimulateSignatureISMforSite (TreeNode *p,  int genome, int site, int newState, long int *seed);
 static void		SimulateTriNucFreqGenome (int cell, long int *seed);
-static int		ChooseTrinucleotideSite (long int *seed, int *newState);
+static void 	CountTriNucFrequencies (int *genome_array, int genome);
+static int		ChooseTrinucleotideSite (long int *seed, int *newState, int genome);
 static void		FillSubstitutionMatrix (double ch_prob[4][4], double branchLength);
 static void		JCmodel (double Pij[4][4], double branchLength);
 static void		HKYmodel (double Pij[4][4], double branchLength);
@@ -151,7 +109,7 @@ extern void		PrepareGeneticSignatures(void);
 /* Global variables */
 TreeNode		*treeNodes, *coalTreeMRCA, *healthyRoot, *healthyTip;
 SiteStr			*allSites;
-TriNucStr 		*triNucleotide;
+TriNucStr		*triNucleotideMaternal, *triNucleotidePaternal;
 //CellStr			*cell;
 long int		userSeed, originalSeed;
 static int		***data;
@@ -159,7 +117,7 @@ static int      *SNVsites, *DefaultModelSites, *AltModelSites, *variantSites;
 static int		tipLabel, intLabel;
 static int		ploidy, numCells, N, *Nbegin, *Nend,  *cumDuration, numSites, numDataSets, numPeriods;
 static int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutations, altModel;
-static int		numCA, numMU, numDEL, numProposedMU, numSNVs, numFixedSNVs, numSNVmaternal, zeroSNVs;
+static int		numCA, numMU, numDEL, numProposedMU, numSNVs, numFixedMutations, numSNVmaternal, zeroSNVs;
 static int		numISMdeletions;
 static double	meanNumSNVs, meanNumCA, meanNumMU, meanNumDEL;
 static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumCountMLgenotypeErrors;
@@ -170,13 +128,13 @@ static double	theta, healthyTipBranchLength, transformingBranchLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate;
 static double	deletionRate;
 static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], trueHaplotypesFile[MAX_NAME],fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
-static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME];
+static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME];
 static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], trueHaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME];
 static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames;
-static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree;
+static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
-static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumSNVs,doSimulateReadCounts, taxonNamesAreChars;
+static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumMutations,doSimulateReadCounts, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage, countMLgenotypeErrors;
 static double	*periodGrowth, growthRate, sequencingError, ADOrate, singleAlleleCoverageProportion, genotypingError, meanAmplificationError, varAmplificationError;
@@ -187,25 +145,18 @@ static double	SNPrate, alphaCoverage;
 static int		HEALTHY_ROOT, TUMOR_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
 static int		TipNodeNum, IntNodeNum;
+static char		*maternalUserGenome, *paternalUserGenome;
 static int		complementBase[4] = {3,2,1,0};
 static int		targetTriChange[6] = {0,2,3,0,1,2};
-
-/*
-	P[C][A] = P[G][T]
-	P[C][G] = P[G][C]
-	P[C][T] = P[G][A]
-	P[T][A] = P[A][T]
-	P[T][C] = P[A][G]
-	P[T][G] = P[A][C]
-
-*/
 static int		*triMutationsCounter;
-
+static int		numUserSignatures;
+static double	*signatureWeight;
+static int		*signatureID;
 extern double 	Qij[16], mr;
 extern double 	***selectedSignature;
-extern double	*signatureProbs;
+extern double	****geneticSignature;
+extern double	**signatureProbs;
 extern double	*triNucFreq;
-int				userSignature;
 
 
 #ifdef CHECK_MUT_DISTRIBUTION
@@ -214,7 +165,7 @@ static double	sumPos, meansumPos;
 #endif
 
 /* File pointers */
-FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpLog, *fpUserTree;
+FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpLog, *fpUserTree, *fpUserGenome;
 
 
 

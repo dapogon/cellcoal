@@ -32,33 +32,26 @@
 	[alphabet 0:binary 1:DNA] b1
 	[mutation rate] u1e-6
 	[deletion rate] [d1e-6]
-	[fixed number of true SNVs - ISM] [j10]
-	[trinucleotide genetic signature] S9
-    [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m2
+	[fixed number of true SNVs - ISM] [j1000]
+	[trinucleotide genetic signature - ISM] [S2 11 0.5 22 0.5] S1 17 1.0
+    [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m0
      [default mutation model is ISM diploid]	
-	[proportion of alternative model sites] p0
+	[proportion of alternative model sites] p1
 	[alternative/default model relative mutation rate] [w1]
 	[germline SNP rate] [c0.00001]
 		[base frequencies]	f0.3 0.2 0.2 0.3
 	[transition/transversion ratio] [t1.7]
 	[rate variation among sites] [a1]
-	[mutation matrix ACGT x ACGT]  [r0 1 1 1
+	[mutation matrix ACGT x ACGT]  r0 1 1 1
     							 	1 0 1 1
     							 	1 1 0 1
-    							 	1 1 1 0]
+    							 	1 1 1 0
     							 	
     							   [r0 1 2 3
     							 	1 0 4 5
     							 	2 4 0 1
     							 	3 5 1 0]
-    							 	
-    							 	r0	0.026	0.124	0.042
-									0.110	0	0.023	0.675
-									0.675	0.023	0	0.110
-									0.042	0.124	0.026	0
-									[signature 1 - like, with freqs already included]  
 
-	
 	[NGS PARAMETERS]
 	[genotyping error; no reads] [G0.1]
  	[sequencing coverage; reads simulated] C10
@@ -84,7 +77,8 @@
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] [x]
 	[results folder name] oresults
-	[user treefile] [Tusertree.0003]
+	[user tree file] [Tusertree.0003]
+	[user genome file] Ugenome.fas
 	
 	[OTHER]
 	[simulate only trees] [0]

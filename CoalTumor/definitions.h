@@ -14,6 +14,7 @@
 #define VERSION_NUMBER          "version 0.1"
 #define	MAX_NAME                120
 #define	MAX_LINE                3500
+#define	MAX_GENOME              1000000
 #define	NO                      0
 #define	YES                     1
 #define	infinity                999999
@@ -52,9 +53,58 @@
 
 #define LOAD_INTERNAL_SIGNATURES
 
-#define NUM_SIGNATURES			31
+#define NUM_SIGNATURES			30
 
 #define trinuc(i,j,k)   (i*16 + j*4 + k)
 #define trimut(i,j,k)   (i*24 + j*4 + k)
+
+
+typedef struct tnode
+    {
+    struct tnode		*left, *right, *anc;
+    int				index, label, isHealthyTip, isHealthyRoot;
+    double			length, time, branchLength;
+    char			*name;
+    }
+    TreeNode;
+
+typedef struct
+    {
+    int		isSNV, isSNP, isVariant;
+	int		numMutations, numMutationsMaternal, numMutationsPaternal;
+    int     numDeletions, numDeletionsMaternal, numDeletionsPaternal;
+	int		hasADO;
+	int		hasGenotypeError;
+	int		countA, countC, countG, countT, countACGT, countCellswithData, countDropped;
+	int		referenceAllele;
+	int		*alternateAlleles;
+	int		numAltAlleles;
+	double	branchSum;
+	double	deletionBranchSum;
+    double  rateMultiplier;
+	}
+    SiteStr;
+
+
+typedef struct
+    {
+	int 	tempLength;
+	int 	numAvailablePositions;
+	int 	*position;
+	}
+    TriNucStr;
+
+
+/*
+typedef struct cell
+    {
+    int				index;
+	int				**genome;
+	int				**readCount;
+	double			**genLike;
+    char			*name;
+    }
+    CellStr;
+*/
 
 #endif /* macros_h */
