@@ -4,6 +4,7 @@ SRCDIR = CoalTumor
 CC ?= gcc
 
 OBJS = coaltumor.o eigen.o signatures.o
+
 CFLAGS ?= -Wall $(PROFILING) -O3 $(WARN) -DUSE_COLORS
 
 LIBS = -lm
@@ -19,4 +20,4 @@ $(PROG) : $(OBJS)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
 clean:
-	rm -f $(OBJS) $(PROG)
+	rm -f $(OBJS)

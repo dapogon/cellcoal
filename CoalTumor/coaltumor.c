@@ -2229,7 +2229,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 			SimulateSignatureISMforSite (p, genome, chosenSite, newState, seed);
 			mutationsSoFar++;
 			}
-		else
+		else // chose another site as this site has already changed in the maternal chromosome
 			{
 			//fprintf (stderr, "\nsite %d has already changed", chosenSite+1);
 			}
@@ -2451,9 +2451,6 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 	#ifdef PRINT_TRIMUTATIONS
 		fprintf (stderr, "\nfinally chosen trimutation index = %d", chosenTriMutation);
 	#endif
-//FIXME: signatures are not working for deconstructSIgs (they seem OK for somatic signature), is the counter, the printing somehow?
-
-
 	
 	/* 3: Select the genomic position where this mutation will take place */
 	/* note we assume for convenience that the context is constant along the phylogeny */
@@ -6158,7 +6155,6 @@ int CheckMatrixSymmetry(double matrix[4][4])
 	A   C D E   G           M         R S T U V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
-//TODO: check signatures work from command line
 static void ReadParametersFromCommandLine (int argc,char **argv)
 {
     int		i, j;
