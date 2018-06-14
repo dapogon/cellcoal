@@ -45,6 +45,12 @@
 #define Mk2						1
 #define finiteDNA				2
 
+#define NUM_SIGNATURES			30
+
+#define trinuc(i,j,k)   (i*16 + j*4 + k)
+#define trimut(i,j,k)   (i*24 + j*4 + k)
+
+
 #define CHECK_MUT_DISTRIBUTION
 #undef CHECK_MUT_DISTRIBUTION
 
@@ -53,10 +59,14 @@
 
 #define LOAD_INTERNAL_SIGNATURES
 
-#define NUM_SIGNATURES			30
+#define PRINT_TRIMUTATIONS
+#undef PRINT_TRIMUTATIONS
 
-#define trinuc(i,j,k)   (i*16 + j*4 + k)
-#define trimut(i,j,k)   (i*24 + j*4 + k)
+#define PRINT_TRIMUTCOUNTER
+#undef PRINT_TRIMUTCOUNTER
+
+#define PRINT_TRINUC_GENOME
+#undef PRINT_TRINUC_GENOME
 
 
 typedef struct tnode

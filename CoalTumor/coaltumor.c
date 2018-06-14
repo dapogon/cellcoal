@@ -73,10 +73,10 @@
 - implemented user genome
 
 //TODO:
-- change random number generator ?
 - simulate doublets? (for example adding two random alleles from the population according to their AF)
 - simulate gene conversions (copy-neutral LOH)?
 - dated tips (maybe)
+- change random number generator ?
 
  
 [MODELS implemented]
@@ -170,7 +170,7 @@ int main (int argc, char **argv)
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
 	varAmplificationError = 0;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simualate maximum of two templates after single-cell amplification, or there can be all four */
-	singleAlleleCoverageProportion = 1.0; /* proportion of reads produced when a single allele is present */
+	singleAlleleCoverageProportion = 0.5; /* proportion of reads produced when a single allele is present */
     numNodes = 3000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
     userSeed = 0;					/* seed entered by the user */
@@ -1761,27 +1761,6 @@ void SimulateTriNucFreqGenome (int cell, long int *seed)
 		n3 = nextNucleotide;
 		}
  
-	#undef PRINT_TRINUC_GENOME
-//	#define PRINT_TRINUC_GENOME
-	#ifdef PRINT_TRINUC_GENOME
-		fprintf (stderr, "\n\nSimulated trinuc genome: ");
-		for (i=0; i<numSites; i++)
-			fprintf (stderr, "%c", WhichNuc(allSites[i].referenceAllele));
-		
-		fprintf (stderr, "\n\nObserved trinuc freqs: ");
-		for (i=0; i<64; i++)
-			{
-			n1 = i/16;
-			rest = i%16;
-			n2 = rest/4;
-			n3 = rest%4;
-			fprintf (stderr, "\n%2d %c%c%c [%d] = ", i+1, WhichNuc(n1), WhichNuc(n2), WhichNuc(n3), triNucleotide[i].numAvailablePositions);
-			for (int j=0; j<triNucleotide[i].numAvailablePositions; j++)
-				fprintf (stderr, "%d ",triNucleotide[i].position[j]+1);
-			 }
-		fprintf (stderr, "\n\n");
-	#endif
-
 	free(prob4);
 	}
 
@@ -2086,12 +2065,12 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
                     data[genome][cell][site] = 1;
                 else if (data[genome][anccell][site] == 1)
                     {
-                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cell %d cannot mutate twice under the ISM model", site, genome, cell);
+                    fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d cannot mutate twice under the ISM model", site, genome, cell);
                     exit(-1);
                     }
                 else
                     {
-                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model", site, genome, anccell, data[genome][anccell][site]);
+                    fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model", site, genome, anccell, data[genome][anccell][site]);
                     exit(-1);
                     }
 					
@@ -2172,7 +2151,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
 /*************************** SimulateSignatureISM **********************************/
 /*	Simulates genetic signatures under an infinite diploid trinucleotide model (ISM).
 
-    Importantly, in the current implementation we assume that the context does not evolve
+   //TODO: Importantly, in the current implementation we assume that the context does not evolve
 
     Diploid here means that if site 33 mutates in the female genome,
     site 33 in the male genome will not mutate, and viceversa.
@@ -2189,9 +2168,9 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
 
 void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
     {
-    int		i, numMutations, mutationsSoFar;
+    int		site, numMutations, mutationsSoFar;
     double	totalBranchSum;
-	int		newState;
+	int		newState, chosenSite;
 	
 	newState = -9;
 	
@@ -2199,10 +2178,10 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	CountTriNucFrequencies (data[genome][HEALTHY_ROOT], genome);
 	
     totalBranchSum = 0;
-    for (i=0; i<numSites; i++)
+    for (site=0; site<numSites; site++)
         {
-        allSites[i].branchSum = SumBranches (healthyRoot);
-        totalBranchSum += allSites[i].branchSum;
+        allSites[site].branchSum = SumBranches (healthyRoot);
+        totalBranchSum += allSites[site].branchSum;
         }
 	
     if (doSimulateFixedNumMutations == YES) /* conditioned on a specified number of mutations */
@@ -2228,12 +2207,10 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 
 	numISMmutations += numMutations;
 
-	#undef PRINT_TRIMUTCOUNTER
-	#define PRINT_TRIMUTCOUNTER
 	#ifdef PRINT_TRIMUTCOUNTER
 	if (genome == MATERNAL)
 		{
-		triMutationsCounter = (int *) calloc (96, sizeof(i));
+		triMutationsCounter = (int *) calloc (96, sizeof(int));
 		if (!triMutationsCounter)
 			{
 			fprintf (stderr, "Could not allocate the triMutationsCounter vector\n");
@@ -2245,29 +2222,58 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
     mutationsSoFar = 0;
     while (mutationsSoFar < numMutations)
         {
- 		i = ChooseTrinucleotideSite(seed, &newState, genome);
-		SimulateSignatureISMforSite (p, genome, i, newState, seed);
-        mutationsSoFar++;
+ 		chosenSite = ChooseTrinucleotideSite(seed, &newState, genome);
+		
+		if (allSites[chosenSite].numMutations == 0) /* force ISM diploid */
+			{
+			SimulateSignatureISMforSite (p, genome, chosenSite, newState, seed);
+			mutationsSoFar++;
+			}
+		else
+			{
+			//fprintf (stderr, "\nsite %d has already changed", chosenSite+1);
+			}
         }
 	
-	//fprintf (stderr, "\n\nmutationsSoFar = %d (genome = %d)",mutationsSoFar, genome);
+	//fprintf (stderr, "\n\nnumISMmutations = %d  numMutations = %d   mutationsSoFar = %d (genome = %d)",numISMmutations, numMutations, mutationsSoFar, genome);
 	
 	#ifdef PRINT_TRIMUTCOUNTER
-	FILE *fptmp;
+	int i, j, k;
+	int doDeconstructSigs = YES;
+	FILE *fpCounts, *fpRefGenome;
+
 	sprintf(File,"%s/%s", resultsDir, "trimutcounts");
-	
-	if ((fptmp = fopen(File, "w")) == NULL)
+	if ((fpCounts = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
 		exit(-1);
 		}
-	//for (i=0; i<96; i++)  /* counter for SomaticSignatures */
-		//fprintf (fptmp, "%d\n", triMutationsCounter[i]);
-	
-	for (int j=0; j<6; j++) /* counter for deconstructSigs */
-		for (i=0; i<4; i++)
-			for (int k=0; k<4; k++)
-				fprintf (fptmp, "%d\n", triMutationsCounter[trimut(i,j,k)]);
+
+	if (doDeconstructSigs == NO) /* counter for SomaticSignatures */
+		{
+		for (i=0; i<96; i++)
+			fprintf (fpCounts, "%d\n", triMutationsCounter[i]);
+		}
+	else /* counter for deconstructSigs */
+		{
+		for (j=0; j<6; j++)
+			for (i=0; i<4; i++)
+				for (k=0; k<4; k++)
+					fprintf (fpCounts, "%d\n", triMutationsCounter[trimut(i,j,k)]);
+		}
+	fclose(fpCounts);
+
+	/* print reference genome as genome context for SomaticSignatures */
+	sprintf(File,"%s/%s", resultsDir, "contextGenome");
+	if ((fpRefGenome = fopen(File, "w")) == NULL)
+		{
+		fprintf (stderr, "Can't open \"%s\"\n", File);
+		exit(-1);
+		}
+	fprintf (fpRefGenome, ">1\n");
+	for (i=0; i<numSites; i++)
+		fprintf (fpRefGenome, "%c", WhichNuc(allSites[i].referenceAllele));
+	fclose(fpRefGenome);
 	#endif
 		
     }
@@ -2275,7 +2281,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 
 /********************************** CountTriNucFrequencies ***********************************/
 /*
-	 Counts the trinucleotide frequencies in the passed genome
+	 Counts the trinucleotide frequencies in the given genome
 */
 
 void CountTriNucFrequencies (int *genome_array, int genome)
@@ -2293,8 +2299,31 @@ void CountTriNucFrequencies (int *genome_array, int genome)
 		n1 = genome_array[i];
 		n2 = genome_array[i+1];
 		n3 = genome_array[i+2];
-		RecordTriNucObservation(&triNucleotide[trinuc(n1,n2,n3)], i-1); //we record the central position
+		RecordTriNucObservation(&triNucleotide[trinuc(n1,n2,n3)], i);
 		}
+
+	#ifdef PRINT_TRINUC_GENOME
+		if (genome == MATERNAL)
+			{
+			fprintf (stderr, "\n\nSimulated trinuc maternal genome: ");
+			int rest;
+			for (i=0; i<numSites; i++)
+				fprintf (stderr, "%c", WhichNuc(allSites[i].referenceAllele));
+			
+			fprintf (stderr, "\n\nObserved trinuc freqs: ");
+			for (i=0; i<64; i++)
+				{
+				n1 = i/16;
+				rest = i%16;
+				n2 = rest/4;
+				n3 = rest%4;
+				fprintf (stderr, "\n%2d %c%c%c [%d] = ", i+1, WhichNuc(n1), WhichNuc(n2), WhichNuc(n3), triNucleotide[i].numAvailablePositions);
+				for (int j=0; j<triNucleotide[i].numAvailablePositions; j++)
+					fprintf (stderr, "%d ",triNucleotide[i].position[j]+1);
+				 }
+			fprintf (stderr, "\n\n");
+			}
+	#endif
 	}
 
 
@@ -2332,7 +2361,7 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 	//chosenTriMutation = ChooseTrinucMutation(geneticSignature[chosenSignature], seed);
 	chosenTriMutation = ChooseUniformState(signatureProbs[chosenSignature-1], seed);
 
-	/* 3: Define the trinucleotide class where this mutation would take place */
+	/* 3: Define in which of the 64 trinucleotide classes this mutation will take place */
 	r1 = chosenTriMutation/24;
 	rest = chosenTriMutation%24;
 	if (rest/4 < 3)
@@ -2360,8 +2389,7 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 		
 	trindex = trinuc(n1,n2,n3);
 
-	#undef PRINT_ME
-	#ifdef PRINT_ME
+	#ifdef PRINT_TRIMUTATIONS
 	fprintf (stderr, "\n\nchosen triMutation (id %d) = %c%c%c",chosenTriMutation, WhichNuc(r1), WhichNuc(r2), WhichNuc(r3));
 	fprintf (stderr, "\n%c%c%c [%d] => ", WhichNuc(n1), WhichNuc(n2), WhichNuc(n3), triNucleotide[trindex].numAvailablePositions);
 	fprintf (stderr, "%c%c%c", WhichNuc(n1), WhichNuc(*newState), WhichNuc(n3));
@@ -2406,7 +2434,7 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 			
 		trindex = trinuc(n1,n2,n3);
 		
-		#ifdef PRINT_ME
+		#ifdef PRINT_TRIMUTATIONS
 		fprintf (stderr, "\nnew chosen triMutation (id %d) = %c%c%c", chosenTriMutation, WhichNuc(r1), WhichNuc(r2), WhichNuc(r3));
 		fprintf (stderr, "\n%c%c%c [%d] => ", WhichNuc(n1), WhichNuc(n2), WhichNuc(n3), triNucleotide[trindex].numAvailablePositions);
 		fprintf (stderr, "%c%c%c", WhichNuc(n1), WhichNuc(*newState), WhichNuc(n3));
@@ -2420,13 +2448,15 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 			}
 		}
 
-	//fprintf (stderr, "\nfinally chosen trimutation index = %d", chosenTriMutation);
-
-	#ifdef PRINT_TRIMUTCOUNTER
-	triMutationsCounter[chosenTriMutation]++;
+	#ifdef PRINT_TRIMUTATIONS
+		fprintf (stderr, "\nfinally chosen trimutation index = %d", chosenTriMutation);
 	#endif
+//FIXME: signatures are not working for deconstructSIgs (they seem OK for somatic signature), is the counter, the printing somehow?
+
+
 	
-	/* 3: Select the genomic position where this mutation will take place */ /* note we assume the context is constant */
+	/* 3: Select the genomic position where this mutation will take place */
+	/* note we assume for convenience that the context is constant along the phylogeny */
 	if (triNucleotide[trindex].numAvailablePositions == 1)
 		index = 0;
 	else if (triNucleotide[trindex].numAvailablePositions > 1)
@@ -2437,9 +2467,16 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 		exit(-1);
 		}
 
-	chosenPosition = triNucleotide[trindex].position[index];
-	//fprintf (stderr, "\nposition selected = %d", chosenPosition+1);
-
+	chosenPosition = triNucleotide[trindex].position[index] + 1; 
+	#ifdef PRINT_TRIMUTATIONS
+		fprintf (stderr, "\nposition selected = %d", chosenPosition+1);
+	#endif
+	
+	#ifdef PRINT_TRIMUTCOUNTER
+	if (allSites[chosenPosition].numMutations == 0)
+		triMutationsCounter[chosenTriMutation]++;
+	#endif
+	
 	/* 4: remove the chosen position from the available list */
 	RemoveTriNucObservation(&triNucleotide[trindex], index);
 
@@ -2457,8 +2494,7 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 void SimulateSignatureISMforSite (TreeNode *p, int genome, int site, int newState, long int *seed)
 	{
     static double	cumBranchLength, uniform;
-    int             cell, anccell, ancstate;
-	
+    int             cell, anccell, ancState;
 	
     if (p != NULL)
         {
@@ -2473,12 +2509,12 @@ void SimulateSignatureISMforSite (TreeNode *p, int genome, int site, int newStat
         else
             {
             anccell = p->anc->label;
-            ancstate = data[genome][anccell][site];
+            ancState = data[genome][anccell][site];
             cumBranchLength += p->branchLength;
 				
-            if (cumBranchLength < uniform || allSites[site].numMutations > 0)/* => there will be no change */
+            if (cumBranchLength < uniform || allSites[site].numMutations > 0)/* => there will be no change; forcing ISM diploid */
                 {
-                data[genome][cell][site] = ancstate;
+                data[genome][cell][site] = ancState;
  				//fprintf (stderr, "\ncopying ancstate %c", WhichNuc(ancstate));
                }
             else /* => there will be change */
@@ -2490,7 +2526,7 @@ void SimulateSignatureISMforSite (TreeNode *p, int genome, int site, int newStat
                     allSites[site].numMutationsPaternal++;
                 allSites[site].numMutations++;
                 numMU++;
-				//fprintf (stderr, "\nchange here to state %c", WhichNuc(newState));
+				//fprintf (stderr, "\nchange at site %d from %c to %c  (numMU = %d)", site+1, WhichNuc(ancState), WhichNuc(newState), numMU);
  				}
             }
         SimulateSignatureISMforSite (p->left, genome, site, newState, seed);
@@ -5361,7 +5397,7 @@ static void	PrintRunInformation (FILE *fp)
 			{
 			fprintf (fp, "\n Number of trinucleotide genetic signatures   =   %d", numUserSignatures);
 			for (i=0; i<numUserSignatures; i++)
-				fprintf (fp, "\n  signature %2d weight                         =   %4.2f", signatureID[i], signatureWeight[i]);
+				fprintf (fp, "\n  signature %02d weight                         =   %4.2f", signatureID[i], signatureWeight[i]);
 			}
         else if (propAltModelSites == 0)
             fprintf (fp, "\n All sites evolving under the ISM diploid");
@@ -5387,12 +5423,12 @@ static void	PrintRunInformation (FILE *fp)
 				else if (doGTnR == YES)
 					fprintf (fp, "GTnR");
 				}
-           }
 			
-        if (rateVarAmongSites == YES)
-            fprintf (fp, "\n Rate variation among sites (alpha)           =   %-3.2f", alphaSites);
-        else
-            fprintf (fp, "\n Equal rates among sites");
+			if (rateVarAmongSites == YES)
+				fprintf (fp, "\n Rate variation among sites (alpha)           =   %-3.2f", alphaSites);
+			else
+				fprintf (fp, "\n Equal rates among sites");
+		   }
 
         if (alphabet == DNA && propAltModelSites > 0 && altModel == 2 && doGeneticSignatures == NO)
             {
@@ -5452,7 +5488,7 @@ static void	PrintRunInformation (FILE *fp)
 		if (genotypingError > 0)
 			{
 			fprintf (fp, "\n Genotype error                               =   %2.1e", genotypingError);
-			fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
+			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
 			}
 		else if (doSimulateReadCounts == YES)
 			{
@@ -5490,10 +5526,10 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 	int i;
 
 	if (readingParameterFile == NO)
-		fprintf (fp, "Command line arguments = %s", CommandLine);
+		fprintf (fp, "Command line arguments (some might not affect) = %s", CommandLine);
 	else
 		{
-		fprintf (fp, "Parameter file arguments = ");
+		fprintf (fp, "Parameter file arguments (some might not affect) = ");
 		
 		/* Coalescent */
 		fprintf (fp, " -n%d -s%d -l%d -e%d -g%2.1e -h%d", numDataSets, numCells, numSites, N, growthRate, numPeriods);
