@@ -1829,7 +1829,7 @@ void AddGermlineVariation (long int *seed)
  */
 void EvolveSitesOnTree (TreeNode *treeRoot, int genome, long int *seed)
     {
-    int i;
+    int i = 0;
 		
     if (rateVarAmongSites == YES)
         for (i=0; i<numSites; i++)
@@ -2168,12 +2168,39 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
 
 void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
     {
-    int		site, numMutations, mutationsSoFar;
+    int		i, site, numMutations, mutationsSoFar;
     double	totalBranchSum;
 	int		newState, chosenSite;
 	
 	newState = -9;
 	
+	/* allocate memory to store the trinucleotide frequencies */
+	triNucleotideMaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
+	if (!triNucleotideMaternal)
+		{
+		fprintf (stderr, "Could not allocate the triNucleotideMaternal vector\n");
+		exit (-1);
+		}
+	for (i=0; i<64; i++)
+		{
+		triNucleotideMaternal[i].tempLength = 100;
+		triNucleotideMaternal[i].numAvailablePositions = 0;
+		triNucleotideMaternal[i].position = (int *) calloc(100,sizeof(int));
+		}
+
+	triNucleotidePaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
+	if (!triNucleotidePaternal)
+		{
+		fprintf (stderr, "Could not allocate the triNucleotidePaternal vector\n");
+		exit (-1);
+		}
+	for (i=0; i<64; i++)
+		{
+		triNucleotidePaternal[i].tempLength = 100;
+		triNucleotidePaternal[i].numAvailablePositions = 0;
+		triNucleotidePaternal[i].position = (int *) calloc(100,sizeof(int));
+		}
+
 	/* count trinucleotide frequencies in the healthy root genome */
 	CountTriNucFrequencies (data[genome][HEALTHY_ROOT], genome);
 	
@@ -2288,7 +2315,7 @@ void CountTriNucFrequencies (int *genome_array, int genome)
 	{
 	int i, n1, n2, n3;
 	TriNucStr *triNucleotide;
-	
+
 	if (genome == MATERNAL)
 		triNucleotide = triNucleotideMaternal;
 	else

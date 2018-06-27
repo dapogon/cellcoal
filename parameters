@@ -1,21 +1,9 @@
-[
-ADO = 0.00, 0.10, 0.25, 0.50
-genotype error = 0.00, 0.01, 0.05, 0.10
-cells = 100
-rate variation among lineages (alpha=1)
-sites = 10000
-growthRate = 10-4
-mutation rate = 10-6
-model = signature 1, signature 5
-replicates = 100  
-]
-
 	[PARAMETER FILE for CoalTumor] [text in brackets will be ignored]
 	
 	[COALESCENT]
-	[number of replicates] n1
-	[sample size (# tumor cells)] s4
-	[number of sites] l10000
+	[number of replicates] n100
+	[sample size (# tumor cells)] s100
+	[number of sites] l1000
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
@@ -30,7 +18,7 @@ replicates = 100
 	[mutation rate] u1e-6
 	[deletion rate] [d1e-6]
 	[fixed number of true SNVs - ISM] [j3]
-	[trinucleotide genetic signature - ISM] [S1 1 1.0] S2 11 0.3 22 0.7
+	[trinucleotide genetic signature - ISM] S1 1 1.0 [S2 11 0.3 22 0.7]
     [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m0
      [default mutation model is ISM diploid]	
 	[proportion of alternative model sites] p0
@@ -50,12 +38,12 @@ replicates = 100
     							 	3 5 1 0]
 
 	[NGS PARAMETERS]
-	[genotyping error; no reads] G0.00
- 	[sequencing coverage; reads simulated] C100
+	[genotyping error; no reads] [G0.00]
+ 	[sequencing coverage; reads simulated] [C100]
 	[coverage overdispersion] [V5]
 	[amplification error] [A0.2 0.01 0]
 	[sequencing error] [E0.01]
-	[allelic dropout] D0.00
+	[allelic dropout] [D0.00]
 	[ADO/DEL read reduction] [R0.5]	
 	[error matrix ACGT x ACGT] 	   [X0 1 1 1
     							 	 1 0 1 1
@@ -70,7 +58,7 @@ replicates = 100
 	[print trees] 6
 	[print times] [7]
 	[print CATG] [8]
-	[print true haplotypes] 9
+	[print true haplotypes] [9]
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] x
 	[results folder name] oresults

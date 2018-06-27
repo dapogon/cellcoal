@@ -91,33 +91,6 @@ void PrepareGeneticSignatures ()
 			}
 		}
 	
-	/* allocate memory to store the trinucleotide frequencies */
-	triNucleotideMaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
-	if (!triNucleotideMaternal)
-		{
-		fprintf (stderr, "Could not allocate the triNucleotideMaternal vector\n");
-		exit (-1);
-		}
-	for (i=0; i<64; i++)
-		{
-		triNucleotideMaternal[i].tempLength = 100;
-		triNucleotideMaternal[i].numAvailablePositions = 0;
-		triNucleotideMaternal[i].position = (int *) calloc(100,sizeof(int));
-		}
-
-	triNucleotidePaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
-	if (!triNucleotidePaternal)
-		{
-		fprintf (stderr, "Could not allocate the triNucleotidePaternal vector\n");
-		exit (-1);
-		}
-	for (i=0; i<64; i++)
-		{
-		triNucleotidePaternal[i].tempLength = 100;
-		triNucleotidePaternal[i].numAvailablePositions = 0;
-		triNucleotidePaternal[i].position = (int *) calloc(100,sizeof(int));
-		}
-
 	
 	/*
 	selectedSignature = (double***) calloc (4, sizeof(double**));

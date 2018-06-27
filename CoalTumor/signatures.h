@@ -24,8 +24,4 @@ double		****geneticSignature; 	// [signature][5prime][change][3prime]
 double 		**signatureProbs;
 double 		*triNucFreq;
 
-
-extern  TriNucStr *triNucleotideMaternal;
-extern  TriNucStr *triNucleotidePaternal;
-
 #endif /* signatures_h */
