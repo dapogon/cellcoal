@@ -7,7 +7,7 @@ CoalTumor simulates the somatic evolution of single-cells. CoalTumor generates a
 
 ## Getting started
 
-1. Download: get the program from the GitHub repository at <https://github.com/dapogon>. An easy way of doing this is to press the 'Download ZIP' button located under the "Clone or Download" drop down green button. Then unzip the *coaltumor-master.zip* file. You should see now a folder called coaltumor-master. Move into the folder to compile and run the program.
+1. Download: get the program from the GitHub repository at <https://github.com/dapogon>. Under the "Code" tab you will see a section call "release". Click on it download the source code in .zip (or tar.gz) format. Then unzip the *coaltumor-x.y.z.zip* file (for example, coaltumor-1.0.0). You should see now a folder called coaltumor-x.y.z. Move into the folder to compile and run the program.
 
 2. Compile: type make. The program should compile without much problem in Linux/MacOSX. The makefile is provided for the gcc compiler.
 
