@@ -1,13 +1,13 @@
 //
-//  coaltumor.h
-//  CoalTumor
+//  cellcoal.h
+//  CellCoal
 //
 //  Created by David Posada on 21/11/2017.
 //  Copyright © 2017 David Posada. All rights reserved.
 //
 
-#ifndef coaltumor_h
-#define coaltumor_h
+#ifndef cellcoal_h
+#define cellcoal_h
 
 #include <unistd.h>
 #include <stdio.h>

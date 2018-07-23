@@ -1,4 +1,4 @@
-# CoalTumor
+# CellCoal
 Coalescent simulation of somatic cells  
 (c) 2018 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
 
@@ -7,14 +7,14 @@ CoalTumor simulates the somatic evolution of single-cells. CoalTumor generates a
 
 ## Getting started
 
-1. Download: get the program from the GitHub repository at <https://github.com/dapogon>. Under the "Code" tab you will see a section call "release". Click on it download the source code in .zip (or tar.gz) format. Then unzip the *coaltumor-x.y.z.zip* file (for example, coaltumor-1.0.0). You should see now a folder called coaltumor-x.y.z. Move into the folder to compile and run the program.
+1. Download: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the "Code" tab you will see a section call "release". Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-1.0.0). You should see now a folder called cellcoal-x.y.z. Move into the folder to compile and run the program.
 
 2. Compile: type make. The program should compile without much problem in Linux/MacOSX. The makefile is provided for the gcc compiler.
 
-3. Run: type ./coaltumor. Arguments will be read from a parameter file calle. Alternatively, arguments can be entered directly in the command line.
+3. Run: type ./cellcoal. Arguments will be read from a parameter file calle. Alternatively, arguments can be entered directly in the command line.
 
 
 ## Citation
 
-- If you use CoalTumor, please cite: Posada D. (2018) *CoalTumor: coalescent simulation of single-cell genomes*. <https://github.com/dapogon/coaltumor>
+- If you use CellCoal, please cite: Posada D. (2018) *CellCoal: coalescent simulation of single-cell genomes*. <https://github.com/dapogon/cellcoal>
 

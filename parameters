@@ -1,7 +1,7 @@
 	[PARAMETER FILE for CoalTumor] [text in brackets will be ignored]
 	
 	[COALESCENT]
-	[number of replicates] n100
+	[number of replicates] n1
 	[sample size (# tumor cells)] s100
 	[number of sites] l1000
 	[effective population size] e10000

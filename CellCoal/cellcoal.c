@@ -15,14 +15,14 @@
 	Foundation, Inc., 59 Temple Place - Suite 330, Boston, MA  02111-1307, USA.
  ******************************************************************************/
 
-/*  coaltumor.c
-//  CoalTumor
+/*  cellcoal
+//  CellCoal
 //
 //  Created by David Posada on 01/06/16.
 //  Copyright (c) 2016-2018 David Posada. All rights reserved.
 
-	Name:		CoalTumor
-	Purpose:	To simulate the clonal neutral evolution of cells within a tumor
+	Name:		CellCoal
+	Purpose:	To simulate the clonal neutral evolution of single cells (for example within a tumor)
 	Code:		David Posada (DP)
 	Started:	01 June 2016
 
@@ -90,7 +90,7 @@
 7:GTRnrDNA
 */
 
-#include "coaltumor.h"
+#include "cellcoal.h"
 #include "definitions.h"
 
 int main (int argc, char **argv)
@@ -104,7 +104,7 @@ int main (int argc, char **argv)
 		
     /* Default settings */
     numDataSets = 10;			/* the number of samples to simulate */
-    numCells = 8;				/* number of tumor cells in each data set */
+    numCells = 8;				/* number of cells in each data set */
     ploidy = 2;                 /* we assume diploid genomes */
     numSites = 200;				/* number of sites (markers, loci) to simulate = length of the chromosomes */
     N = 1000;					/* effective population size */
@@ -151,7 +151,7 @@ int main (int argc, char **argv)
     doPrintFullGenotypes = NO;		/* whether to print all genotypes (variable + invariable) */
     doPrintTree = NO;				/* whether to print the coalescent tree */
     doPrintTimes = NO;				/* whether to print coalescent times */
-	doPrintAncestors = NO;      	/* whether to print data for ancestral tumor and healthy cells */
+	doPrintAncestors = NO;      	/* whether to print data for ancestral cells */
 	doSimulateReadCounts = NO;  	/* do not produce reads by default */
 	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
 	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
@@ -385,7 +385,7 @@ int main (int argc, char **argv)
 			if (noisy > 2)
 				fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
 	 
-		   /* Make tumor tree non-clock if needed */
+		   /* Make cell tree non-clock if needed */
 			if (rateVarAmongLineages == YES)
 				MakeTreeNonClock (coalTreeMRCA, &seed);
 			
@@ -1104,12 +1104,12 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             fprintf (stderr, "\n\nERROR: Too many nodes!\n");
             exit (-1);
             }
-    } /* coalescent tumor tree finished */
+    } /* coalescent cell tree finished */
 	
     TMRCA = currentTime / (2.0 * N);  /* so TMRCA is in coalescent generations */
     coalTreeMRCA = r;
 	
-    /* connect the coalescent tumor MRCA node with the healthy ancestral cell*/
+    /* connect the coalescent cell MRCA node with the healthy ancestral cell*/
     if (noisy > 2)
         fprintf (stderr, "\n>> Adding healthy root ... ");
     healthyRoot = treeNodes + nextAvailableNode;
@@ -1444,7 +1444,7 @@ static void ReadUserTree (FILE *fp)
         i++;
         } while (treeString[i] != ';');
 	
-	/* connect the coalescent tumor MRCA node with the healthy ancestral cell*/
+	/* connect the coalescent cell MRCA node with the outgroup ancestral cell*/
     if (noisy > 2)
         fprintf (stderr, "\n>> Adding healthy root ... ");
     healthyRoot = treeNodes + nextAvailableNode;
@@ -1609,9 +1609,9 @@ void RelabelNodes (TreeNode *p)
         {
         RelabelNodes (p->left);
         RelabelNodes (p->right);
-        if (p->left == NULL && p->right == NULL && p->isHealthyTip == NO) /* is tumor tip */
+        if (p->left == NULL && p->right == NULL && p->isHealthyTip == NO) /* is cell tip */
             p->label = p->index;
-        else if (p->left == NULL && p->right == NULL && p->isHealthyTip == YES) /* is healthy tip */
+        else if (p->left == NULL && p->right == NULL && p->isHealthyTip == YES) /* is outgroup tip */
                 p->label = tipLabel++;
         else
             p->label = intLabel++; /* is internal */
@@ -3115,7 +3115,7 @@ int CountTrueVariants ()
 	}
 
 /************************* CountAlleles  ************************/
-/* Identify reference and alternate alleles plus SNVs, in tumor plus healthy cells
+/* Identify reference and alternate alleles plus SNVs, in ingroup plus outgroup cells
    A SNV is defined as no-deletion genotype different from the reference genotype */
 
 int CountAlleles ()
@@ -3361,7 +3361,7 @@ void GenerateReadCounts (long int *seed)
 	fprintf (fpVCF,"##fileformat=VCFv4.3");
 	fprintf (fpVCF,"\n##filedate=");
 	PrintDate (fpVCF);
-	fprintf (fpVCF,"##source=CoalTumor SNV simulation");
+	fprintf (fpVCF,"##source=CellCoal SNV simulation");
 	fprintf (fpVCF,"\n##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral allele\">");
 	fprintf (fpVCF,"\n##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of samples with data\">");
 	//fprintf (fpVCF,"\n##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Combined depth across samples\">");
@@ -5328,7 +5328,7 @@ char WhichMut (int state)
 
 static void PrintHeader(FILE *fp)
     {
-    fprintf (fp,"Tumor coalescent simulation - %s", PROGRAM_NAME);
+    fprintf (fp,"Cell coalescent simulation - %s", PROGRAM_NAME);
     fprintf (fp,"  %s", VERSION_NUMBER);
     fprintf (fp,"\n (c) 2018 David Posada - dposada@uvigo.es");
     fprintf (fp,"\n__________________________________________________\n\n");
@@ -5362,7 +5362,7 @@ static void	PrintRunInformation (FILE *fp)
 		fprintf (fp, "\n[Assumptions in brackets]\n");
     fprintf (fp, "\n Seed                                         =   %-3ld", originalSeed);
     fprintf (fp, "\n Number replicate data sets                   =   %-3d",  numDataSets);
-    fprintf (fp, "\n Number of tumor cells                        =   %-3d",  numCells);
+    fprintf (fp, "\n Number of cells                              =   %-3d",  numCells);
 	if (doUserGenome == YES)
 		fprintf (fp, "\n Number of sites in the user genome           =   %-3d",  numSites);
 	else
@@ -5385,14 +5385,14 @@ static void	PrintRunInformation (FILE *fp)
 		{
 		fprintf (fp, "\n\nCoalescent");
 	   // fprintf (fp, "\n Mean number of coalescence events            =   %3.2f", meanNumCA);
-		fprintf (fp, "\n Mean time to the tumor MRCA (# generations)  =   %3.2f", meanTMRCA);
+		fprintf (fp, "\n Mean time to the       MRCA (# generations)  =   %3.2f", meanTMRCA);
 		if (noisy > 1)
-			fprintf (fp, "\n Exp time to the tumor MRCA [constant Ne]     =   %3.2f", expTMRCA);
+			fprintf (fp, "\n Exp time to the       MRCA [constant Ne]     =   %3.2f", expTMRCA);
 		if (numDataSets > 1)
 			{
-			fprintf (fp, "\n Variance time tumor MRCA                     =   %3.2f", varTMRCA);
+			fprintf (fp, "\n Variance time       MRCA                     =   %3.2f", varTMRCA);
 			if (noisy > 1)
-				fprintf (fp, "\n Exp variance time tumor MRCA [constant Ne]   =   %3.2f", expVarTMRCA);
+				fprintf (fp, "\n Exp variance time       MRCA [constant Ne]   =   %3.2f", expVarTMRCA);
 			}
 	 
 		if (rateVarAmongLineages == YES)
@@ -5478,7 +5478,7 @@ static void	PrintRunInformation (FILE *fp)
             fprintf (fp, "\n Mutation rate                                =   %2.1e", mutationRate);
             fprintf (fp, "\n Population mutation parameter (4Nu2L)        =   %3.2f", theta);
             if (noisy > 1)
-				fprintf (fp, "\n Exp num mutation events [Ne=cte,ISMh,tumor]  =   %3.2f", expNumMU);
+				fprintf (fp, "\n Exp num mutation events [Ne=cte,ISMh]        =   %3.2f", expNumMU);
             }
         fprintf (fp, "\n Mean number of mutation events               =   %3.2f", meanNumMU);
         if (numDataSets > 1)
@@ -5640,7 +5640,7 @@ static void PrintDefaults (FILE *fp)
 		
 	/* Coalescent */
     fprintf (fp,"\n-n: number of replicates =  %d", numDataSets);
-    fprintf (fp,"\n-s: sample size (#tumor cells) =  %d", numCells);
+    fprintf (fp,"\n-s: sample size (# cells) =  %d", numCells);
     fprintf (fp,"\n-l: number of sites =  %d", numSites);
     fprintf (fp,"\n-e: effective population size =  %d", N);
     fprintf (fp,"\n-g: growth rate =  %2.1e", growthRate);
@@ -5707,11 +5707,11 @@ void PrintUsage(void)
 {
     fprintf (stderr, "\n\n--------------------------------------------------------------------------------------------------------\n");
     fprintf (stderr, "%s", PROGRAM_NAME_UPPERCASE);
-    fprintf (stderr, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from tumoral cells (no recombination), together with a healthy cell as outgroup.", PROGRAM_NAME);
+    fprintf (stderr, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a healthy cell as outgroup.", PROGRAM_NAME);
     fprintf (stderr, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -u# -d# -j# -S# (# #) -m# -p# -w# -c# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # #  -G# -C# -V# -A# # # -E# -D# -R# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -0 -y# -z# -## -?]", PROGRAM_NAME);
 	
     fprintf (stderr,"\n-n: number of replicates (e.g. -n1000)");
-    fprintf (stderr,"\n-s: sample size (#tumor cells) (e.g. -s8)");
+    fprintf (stderr,"\n-s: sample size (# cells) (e.g. -s8)");
     fprintf (stderr,"\n-l: number of sites (e.g. -l500)");
     fprintf (stderr,"\n-e: effective population size (e.g. -e1000)");
     fprintf (stderr,"\n-g: growth rate (e.g. -g1e-5)");

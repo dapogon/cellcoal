@@ -1,6 +1,6 @@
 //
 //  signatures.h
-//  CoalTumor
+//  CellCoal
 //
 //  Created by David Posada on 06/04/2018.
 //  Copyright © 2018 David Posada. All rights reserved.

@@ -1,6 +1,6 @@
 //
 //  macros.h
-//  CoalTumor
+//  CellCoal
 //
 //  Created by David Posada on 11/04/2018.
 //  Copyright © 2018 David Posada. All rights reserved.
@@ -9,8 +9,8 @@
 #ifndef macros_h
 #define macros_h
 
-#define PROGRAM_NAME            "CoalTumor"
-#define PROGRAM_NAME_UPPERCASE	"COALTUMOR"
+#define PROGRAM_NAME            "CellCoal"
+#define PROGRAM_NAME_UPPERCASE	"CELLCOAL"
 #define VERSION_NUMBER          "version 0.1"
 #define	MAX_NAME                120
 #define	MAX_LINE                3500

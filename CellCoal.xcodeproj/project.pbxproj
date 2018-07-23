@@ -1,0 +1,285 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 46;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		D58E3F851FC432FD0002C0A6 /* eigen.c in Sources */ = {isa = PBXBuildFile; fileRef = D58E3F841FC432FD0002C0A6 /* eigen.c */; };
+		D593630C1E22A2EB0019EF0C /* cellcoal.c in Sources */ = {isa = PBXBuildFile; fileRef = D593630B1E22A2EB0019EF0C /* cellcoal.c */; };
+		D5D2197F207E235600C9DF7E /* signatures.c in Sources */ = {isa = PBXBuildFile; fileRef = D5D2197E207E235600C9DF7E /* signatures.c */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		D59362FF1E22A28E0019EF0C /* CopyFiles */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = /usr/share/man/man1/;
+			dstSubfolderSpec = 0;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 1;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		D58E3F821FC4321D0002C0A6 /* cellcoal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cellcoal.h; sourceTree = "<group>"; };
+		D58E3F831FC432FD0002C0A6 /* eigen.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = eigen.h; sourceTree = "<group>"; };
+		D58E3F841FC432FD0002C0A6 /* eigen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = eigen.c; sourceTree = "<group>"; };
+		D59363011E22A28E0019EF0C /* CellCoal */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CellCoal; sourceTree = BUILT_PRODUCTS_DIR; };
+		D593630B1E22A2EB0019EF0C /* cellcoal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cellcoal.c; sourceTree = "<group>"; };
+		D5D2197D207E1B7800C9DF7E /* signatures.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = signatures.h; sourceTree = "<group>"; };
+		D5D2197E207E235600C9DF7E /* signatures.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signatures.c; sourceTree = "<group>"; };
+		D5D21980207E292400C9DF7E /* definitions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = definitions.h; sourceTree = "<group>"; };
+		D5F0500C20EE5291008E8029 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		D59362FE1E22A28E0019EF0C /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		D59362F81E22A28E0019EF0C = {
+			isa = PBXGroup;
+			children = (
+				D59363031E22A28E0019EF0C /* CellCoal */,
+				D59363021E22A28E0019EF0C /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		D59363021E22A28E0019EF0C /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D59363011E22A28E0019EF0C /* CellCoal */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		D59363031E22A28E0019EF0C /* CellCoal */ = {
+			isa = PBXGroup;
+			children = (
+				D593630B1E22A2EB0019EF0C /* cellcoal.c */,
+				D58E3F841FC432FD0002C0A6 /* eigen.c */,
+				D5D2197E207E235600C9DF7E /* signatures.c */,
+				D58E3F821FC4321D0002C0A6 /* cellcoal.h */,
+				D58E3F831FC432FD0002C0A6 /* eigen.h */,
+				D5D2197D207E1B7800C9DF7E /* signatures.h */,
+				D5D21980207E292400C9DF7E /* definitions.h */,
+				D5F0500C20EE5291008E8029 /* README.md */,
+			);
+			path = CellCoal;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		D59363001E22A28E0019EF0C /* CellCoal */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = D59363081E22A28E0019EF0C /* Build configuration list for PBXNativeTarget "CellCoal" */;
+			buildPhases = (
+				D59362FD1E22A28E0019EF0C /* Sources */,
+				D59362FE1E22A28E0019EF0C /* Frameworks */,
+				D59362FF1E22A28E0019EF0C /* CopyFiles */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = CellCoal;
+			productName = CoalTumor;
+			productReference = D59363011E22A28E0019EF0C /* CellCoal */;
+			productType = "com.apple.product-type.tool";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		D59362F91E22A28E0019EF0C /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				LastUpgradeCheck = 0900;
+				ORGANIZATIONNAME = "David Posada";
+				TargetAttributes = {
+					D59363001E22A28E0019EF0C = {
+						CreatedOnToolsVersion = 8.2.1;
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = D59362FC1E22A28E0019EF0C /* Build configuration list for PBXProject "CellCoal" */;
+			compatibilityVersion = "Xcode 3.2";
+			developmentRegion = English;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+			);
+			mainGroup = D59362F81E22A28E0019EF0C;
+			productRefGroup = D59363021E22A28E0019EF0C /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				D59363001E22A28E0019EF0C /* CellCoal */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXSourcesBuildPhase section */
+		D59362FD1E22A28E0019EF0C /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				D58E3F851FC432FD0002C0A6 /* eigen.c in Sources */,
+				D5D2197F207E235600C9DF7E /* signatures.c in Sources */,
+				D593630C1E22A2EB0019EF0C /* cellcoal.c in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin XCBuildConfiguration section */
+		D59363061E22A28E0019EF0C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				MTL_ENABLE_DEBUG_INFO = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = macosx;
+			};
+			name = Debug;
+		};
+		D59363071E22A28E0019EF0C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++0x";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_IDENTITY = "-";
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu99;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				MACOSX_DEPLOYMENT_TARGET = 10.12;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				SDKROOT = macosx;
+			};
+			name = Release;
+		};
+		D59363091E22A28E0019EF0C /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				"INFOPLIST_FILE[sdk=*]" = "";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Debug;
+		};
+		D593630A1E22A28E0019EF0C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				PRODUCT_NAME = "$(TARGET_NAME)";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		D59362FC1E22A28E0019EF0C /* Build configuration list for PBXProject "CellCoal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D59363061E22A28E0019EF0C /* Debug */,
+				D59363071E22A28E0019EF0C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		D59363081E22A28E0019EF0C /* Build configuration list for PBXNativeTarget "CellCoal" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				D59363091E22A28E0019EF0C /* Debug */,
+				D593630A1E22A28E0019EF0C /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = D59362F91E22A28E0019EF0C /* Project object */;
+}

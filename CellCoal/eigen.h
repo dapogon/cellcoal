@@ -1,6 +1,6 @@
 //
 //  eigein.h
-//  CoalTumor
+//  CellCoal
 //
 //  Created by David Posada on 21/11/2017.
 //  Everything below is shamelessly taken from Yang's Paml package */
