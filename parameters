@@ -40,12 +40,12 @@
 
 	[NGS PARAMETERS]
 	[genotyping error; no reads] [G0.00]
- 	[sequencing coverage; reads simulated] [C100]
-	[coverage overdispersion] [V5]
-	[amplification error] [A0.2 0.01 0]
-	[sequencing error] [E0.01]
-	[allelic dropout] [D0.00]
-	[ADO/DEL read reduction] [R0.5]	
+ 	[sequencing coverage; reads simulated] C100
+	[coverage overdispersion] V5
+	[amplification error] A0.2 0.01 0
+	[sequencing error] E0.01
+	[allelic dropout] D0.10
+	[ADO/DEL allelic imbalance] [R0.5]	
 	[error matrix ACGT x ACGT] 	   [X0 1 1 1
     							 	 1 0 1 1
     							 	 1 1 0 1
@@ -58,7 +58,7 @@
 	[print ancestors] [5]
 	[print trees] 6
 	[print times] [7]
-	[print CATG] [8]
+	[print CATG] 8
 	[print true haplotypes] [9]
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] x

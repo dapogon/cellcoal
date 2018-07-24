@@ -403,7 +403,7 @@ int main (int argc, char **argv)
  
 		totalTreeLength = SumBranches(healthyRoot);
  
-        /* allocate genotype data to be stored in data[genome][cell][site] */
+	/* allocate genotype data to be stored in data[genome][cell][site] */
         data = (int ***) calloc (ploidy, sizeof(int **));
         if (!data)
             {
@@ -429,77 +429,8 @@ int main (int argc, char **argv)
                 }
             }
 	
-	
-	/* Allocate cell structure */ /* and remember to free it at the end! */
-/*
-	 cell = (CellStr *) calloc(2*numCells, sizeof(CellStr));
-	 if (!cell)
-		 {
-		 fprintf (stderr, "Could not allocate cell (%ld)\n", 2*numCells * sizeof(CellStr));
-		 exit (-1);
-		 }
- 
-     for (i=0; i<2*numCells; i++)
-		 {
-		 cell[i].index = 0;
- 
-		 cell[i].genome = (int**) calloc (2, sizeof(int*));
-		 if (!cell[i].genome)
-			 {
-			 fprintf (stderr, "Could not allocate the cell[%d].genome structure\n", i);
-			 exit (-1);
-			 }
-		 for (j=0; j<2; j++)
-			 {
-			 cell[i].genome[j] = (int*) calloc (numSites, sizeof(int));
-			 if (!cell[i].genome[j])
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].genome[%d] structure\n", i, j);
-				exit (-1);
-				}
-			 }
+		
 
- 		cell[i].readCount = (int*) calloc (numSites, sizeof(int));
-		if (!cell[i].readCount)
-			{
-			fprintf (stderr, "Could not allocate the cell[%d].readCount structure\n", i);
-			exit (-1);
-			}
-
-		 for (j=0; j<4; j++)
-			 {
-			 cell[i].genome[j] = (int*) calloc (4, sizeof(int));
-			 if (!cell[i].genome[j])
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].readCount[%d] structure\n", i, j);
-				exit (-1);
-				}
-			 }
-
- 		cell[i].genLike = (double**) calloc (4, sizeof(double*));
-		if (!cell[i].genLike)
-			{
-			fprintf (stderr, "Could not allocate the cell[%d].genLike structure\n", i);
-			exit (-1);
-			}
-		 for (j=0; j<4; j++)
-			 {
-			 cell[i].genLike[j] = (double*) calloc (4, sizeof(double));
-			 if (!cell[i].genLike[j])
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].genLike[%d] structure\n", i, j);
-				exit (-1);
-				}
-			 }
-
-		cell[i].name = (char*) calloc (MAX_NAME, sizeof(char));
-		if (!treeNodes[i].name)
-			{
-			fprintf (stderr, "Could not allocate the treeNodes[i].name structure\n");
-			exit (-1);
-			}
-		}
-*/
         /* allocate memory for site information (equal for maternal and paternal) */
         allSites = (SiteStr*) calloc (numSites, sizeof(SiteStr));
         if (!allSites)
@@ -690,7 +621,10 @@ int main (int argc, char **argv)
 				if (doSimulateReadCounts)
 					{
 					GenerateReadCounts(&seed);
+					PrintVCF (fpVCF);
 					cumCountMLgenotypeErrors += countMLgenotypeErrors;
+					if (doPrintCATG == YES)
+						PrintCATG(fpCATG);
 					}
 				}
 			} //simdata
@@ -784,7 +718,20 @@ int main (int argc, char **argv)
 					fclose(fpCATG);
 				}
 			}
-			
+		
+		if (doSimulateReadCounts == YES)
+			{
+			for (i=0; i<numCells; i++)
+				{
+				for (j=0; j<numSites; j++)
+					{
+					free(cell[i].site[j].readCount);
+					free(cell[i].site[j].genLike);
+					}
+				}
+			free (cell);
+			}
+		
         /* if(((dataSetNum*10)%numDataSets) == 0)
          PrintMemory(stderr); */
     } // replicate
@@ -3141,6 +3088,8 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
     }
 
 
+
+
 /********************* AllelicDropout  ************************/
 /*
  Remove alleles from single chromosomes at a given ADO rate per genotype
@@ -3373,32 +3322,16 @@ double SumBranches (TreeNode *p)
     }
 
 
+
 /********************* GenerateReadCounts  ************************/
 /*	For each individual SNV genotype the program will generate read counts
 	given some sequencing depth or coverage. The number of reads follow a Poisson
 	or a Negative Binomial distribution around mean coverage.
-	Reads are randomly assigned to maternal/paternal chromosome.
+	Reads are randomly assigned to maternal/paternal chromosome, according to an allelic imbalance (by default 0.5).
 	Reads can contain some errors according to sequencing and amplification error parameters
  
 **	Genotype likelihoods can be calculated given the read counts and the sequencing error
 	(see Korneliussen 2013 BMCBioinf) and printed to VCF file
- 
-**	CATG output format with read counts
-	http://nbviewer.jupyter.org/gist/dereneaton/d2fd4e70d29f5ee5d195/testing_cat.ipynb#View-the-.cat-results-files
-
-	The first line has the number of samples and the number of sites.
-	Following this is a transposed data matrix with the consensus base calls where each row is a site and each column a different sample.
-	To the right of each site is a tab-separated list of counts of the four bases at that site in the order C,A,T,G.
-
-	12 44500
-	1A0	1B0	1C0	1D0	2E0	2F0	2G0	2H0	3I0
-	YCCCCCCCCCCC	10,0,10,0	20,0,0,0	20,0,0,0	20,0,0, ...
-	GGGGGGGGGGGG	0,0,0,20	0,0,0,20	0,0,0,20	0,0,0,20 ...
-	AAAAAAAAAAAA	0,20,0,0	0,20,0,0	0,20,0,0	0,20,0,0 ...
-	CCCCCCCCCCCC	20,0,0,0	20,0,0,0	20,0,0,0	20,0,0,0 ...
-	AAAAAAAAAAAA	0,20,0,0	0,20,0,0	0, 20,0,0	0,20,0,0 ...
-	...
-
 */
 
 void GenerateReadCounts (long int *seed)
@@ -3458,6 +3391,42 @@ void GenerateReadCounts (long int *seed)
 			}
 		}
 	
+	/* Allocate cell structure */
+	 cell = (CellStr*) calloc(numCells+1, sizeof(CellStr));
+	 if (!cell)
+		 {
+		 fprintf (stderr, "Could not allocate cell (%ld)\n", (numCells+1) * sizeof(CellStr));
+		 exit (-1);
+		 }
+ 
+     for (i=0; i<numCells+1; i++)
+		 {
+		 cell[i].site  = (CellSiteStr*) calloc (numSites, sizeof(CellSiteStr));
+		 if (!cell[i].site)
+			 {
+			 fprintf (stderr, "Could not allocate the cell[%d].site structure\n", i);
+			 exit (-1);
+			 }
+		 for (j=0; j<numSites; j++)
+			 {
+			 cell[i].site[j].readCount = (int*) calloc (4, sizeof(int));
+			 if (!cell[i].site[j].readCount)
+				{
+				fprintf (stderr, "Could not allocate the cell[%d].site[%d].readCount structure\n", i, j);
+				exit (-1);
+				}
+			 }
+		 for (j=0; j<numSites; j++)
+			 {
+			 cell[i].site[j].genLike = (double*) calloc (10, sizeof(double));
+			 if (!cell[i].site[j].genLike)
+				{
+				fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLike structure\n", i, j);
+				exit (-1);
+				}
+			 }
+		}
+
 	/* error probabilities for NGS */
 	ngsEij = (double**) calloc (4, sizeof(double**));
 	if (!ngsEij)
@@ -3517,662 +3486,481 @@ void GenerateReadCounts (long int *seed)
 			else
 				ngsEij[i][j] = Eij[i][j]/cumEij[i][3] * sequencingError;
 			}
-
-	/* print VCG file header */
-	fprintf (fpVCF,"##fileformat=VCFv4.3");
-	fprintf (fpVCF,"\n##filedate=");
-	PrintDate (fpVCF);
-	fprintf (fpVCF,"##source=CellCoal SNV simulation");
-	fprintf (fpVCF,"\n##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral allele\">");
-	fprintf (fpVCF,"\n##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of samples with data\">");
-	//fprintf (fpVCF,"\n##INFO=<ID=DP,Number=1,Type=Integer,Description=\"Combined depth across samples\">");
-	fprintf (fpVCF,"\n##INFO=<ID=AF,Number=R,Type=Float,Description=\"True alternate/s allele frequency\">");
-	fprintf (fpVCF,"\n##FILTER=<ID=s50,Description=\"Less than half of samples have data\">");
-	fprintf (fpVCF,"\n##FORMAT=<ID=GT,Number=1,Type=String,Description=\"True genotype\">");
-	fprintf (fpVCF,"\n##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read depth\">");
-	fprintf (fpVCF,"\n##FORMAT=<ID=RC,Number=4,Type=Integer,Description=\"Read counts for AGCT\">");
-	fprintf (fpVCF,"\n##FORMAT=<ID=GL,Number=G,Type=Float,Description=\"Scaled genotype likelihoods in log10 (AA AC AG AT CC CG CT GG GT TT)\">");
-	fprintf (fpVCF,"\n##FORMAT=<ID=ML,Number=1,Type=String,Description=\"Maximum likelihood genotype\">");
-	fprintf (fpVCF,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True SNV genotype\">");
-	fprintf (fpVCF,"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
-	for (i=0; i<numCells; i++)
-		fprintf (fpVCF,"\ttumcell%04d", i+1);
-	fprintf (fpVCF,"\thealthycell");
-
-	if (doPrintCATG == YES)
-		{
-		fprintf (fpCATG,"%d %d\n",numCells+1, numSNVs);
-		for (i=0; i<numCells; i++)
-			fprintf (fpCATG,"tumcell%04d  ", i+1);
-		fprintf (fpCATG,"healthycell  ");
-		}
-	
-	for (snv=0; snv<numSNVs; snv++)
+		//TODO: trying to reorder this but it does not work
+	for (snv=0; snv<numSNVs; snv++) // produce read counts only for observed SNV sites
 		{
 		j = SNVsites[snv];
 		
-		if (doPrintCATG == YES)
+		for (i=0; i<numCells+1; i++)
 			{
-			fprintf (fpCATG,"\n");
-			for (i=0; i<numCells+1; i++)
-				fprintf (fpCATG,"%c",WhichIUPAC(data[MATERNAL][i][j], data[PATERNAL][i][j]));
-			}
+			thereIsMaternalAllele = YES;
+			thereIsPaternalAllele = YES;
 
-		if (doSimulateReadCounts == YES)
-			{
-			 /* VFC: CHROMOSOME */
-			fprintf (fpVCF,"\n%d", 1);
-			
-			/* VFC: POSITION */
-			fprintf (fpVCF,"\t%d", j+1);
-			
-			/* VFC: ID */
-			if (allSites[j].isSNV == NO)
-				fprintf (fpVCF,"\tinv%06d", j+1);
-			else
-				fprintf (fpVCF,"\tsnv%06d", j+1);
-
-			/* VFC: REFERENCE allele(s) => healthy root alleles */
-			referenceAllele = allSites[j].referenceAllele;
-			fprintf (fpVCF,"\t%c", WhichNuc(referenceAllele));
+			maternalAllele = data[MATERNAL][i][j];
+			if (maternalAllele == ADO || maternalAllele == DELETION)
+					thereIsMaternalAllele = NO;
 				
-			/* VFC: ALTERNATE allele(s) */
-			fprintf (fpVCF,"\t");
-			if (allSites[j].countACGT == allSites[j].countA ||
-			allSites[j].countACGT == allSites[j].countC ||
-			allSites[j].countACGT == allSites[j].countG ||
-			allSites[j].countACGT == allSites[j].countT)
-				fprintf (fpVCF,".");
-			else
+			paternalAllele = data[PATERNAL][i][j];
+			if (paternalAllele == ADO || paternalAllele == DELETION)
+					thereIsPaternalAllele = NO;
+
+				
+			/* number of reads will follow a Poisson or a Negative Binomial distribution (overdispersed coverage) around mean coverage, and are randomly assigned to maternal/paternal chromosome */
+			numMaternalReads = 0;
+			numPaternalReads = 0;
+
+			if (rateVarCoverage == YES) /* Negative Binomial */
 				{
-				if (allSites[j].countA > 0 && referenceAllele != A)
-					fprintf (fpVCF,"A,");
-				if (allSites[j].countC > 0 && referenceAllele != C)
-					fprintf (fpVCF,"C,");
-				if (allSites[j].countG > 0 && referenceAllele != G)
-					fprintf (fpVCF,"G,");
-				if (allSites[j].countT > 0 && referenceAllele != T)
-					fprintf (fpVCF,"T,");
-				fseek(fpVCF, -1, SEEK_CUR); 	/* get rid of the last comma */
+				if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
+					{
+					numMaternalReads = RandomNegativeBinomial(0.5*coverage, alphaCoverage, seed);
+					numPaternalReads = RandomNegativeBinomial(0.5*coverage, alphaCoverage, seed);
+					}
+				else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
+					{
+					numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage, alphaCoverage, seed);
+					numPaternalReads = 0;
+					}
+				else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
+					{
+					numMaternalReads = 0;
+					numPaternalReads = RandomNegativeBinomial(allelicImbalance*coverage, alphaCoverage, seed);
+					}
+				else /* no allele is present (locus dropout/deletion) */
+					{
+					numMaternalReads = 0;
+					numPaternalReads = 0;
+					}
 				}
-			
-			/* VFC: QUALITY */  /* Qphred probability that a SNV exists at this site; I will put missing info here */
-			fprintf (fpVCF, "\t.");
-
-			/* VFC: FILTER */
-			if (allSites[j].countACGT < allSites[j].countDropped)  /* if less than half of the samples have missing data */
-				fprintf (fpVCF, "\ts50");
-			else
-				fprintf (fpVCF, "\tPASS");
-
-			/* VFC: INFO: AA (ancestral allele) */
-			fprintf (fpVCF, "\tAA=%c", WhichNuc(referenceAllele));
-
-			/* VFC: INFO: NS (number of samples with data) */
-			fprintf (fpVCF, ";NS=%d", allSites[j].countCellswithData);
-
-			/* VFC: INFO: AF (alternate allele frequencies) */
-			fprintf (fpVCF, ";AF=");
-			if (allSites[j].countACGT == allSites[j].countA ||
-			allSites[j].countACGT == allSites[j].countC ||
-			allSites[j].countACGT == allSites[j].countG ||
-			allSites[j].countACGT == allSites[j].countT)
-				fprintf (fpVCF,".");
-			else
+			else /* Poisson distributed */
 				{
-				if (allSites[j].countA > 0 && referenceAllele != A)
-					fprintf (fpVCF,"%4.3f,", (double) allSites[j].countA / allSites[j].countACGT);
-				if (allSites[j].countC > 0 && referenceAllele != C)
-					fprintf (fpVCF,"%4.3f,", (double) allSites[j].countC / allSites[j].countACGT);
-				if (allSites[j].countG > 0 && referenceAllele != G)
-					fprintf (fpVCF,"%4.3f,", (double) allSites[j].countG / allSites[j].countACGT);
-				if (allSites[j].countT > 0 && referenceAllele != T)
-					fprintf (fpVCF,"%4.3f,", (double) allSites[j].countT / allSites[j].countACGT);
-				fseek(fpVCF, -1, SEEK_CUR); 	/* get rid of the last comma */
+				if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
+					{
+					numMaternalReads = RandomPoisson(0.5*coverage, seed);
+					numPaternalReads = RandomPoisson(0.5*coverage, seed);
+					}
+				else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
+					{
+					numMaternalReads = RandomPoisson(allelicImbalance*coverage, seed);
+					numPaternalReads = 0;
+					}
+				else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
+					{
+					numMaternalReads = 0;
+					numPaternalReads = RandomPoisson(allelicImbalance*coverage, seed);
+					}
+				else /* no allele is present (locus dropout/deletion) */
+					{
+					numMaternalReads = 0;
+					numPaternalReads = 0;
+					}
 				}
-		
-			/* VFC: INFO : SOMATIC */
-			fprintf (fpVCF, ";SOMATIC");
-			
-			/* VFC: FORMAT */
-			fprintf (fpVCF, "\tGT:DP:RC:GL:ML:TG");
+			numReads = numMaternalReads + numPaternalReads;
 
-			for (i=0; i<numCells+1; i++)
+			/* read count simulation */
+			readCount[A] = readCount[C] = readCount[G] = readCount[T] = 0;
+			if (numReads > 0)
 				{
-				thereIsMaternalAllele = YES;
-				thereIsPaternalAllele = YES;
-
-				maternalAllele = data[MATERNAL][i][j];
-				if (maternalAllele == ADO || maternalAllele == DELETION)
-						thereIsMaternalAllele = NO;
-					
-				paternalAllele = data[PATERNAL][i][j];
-				if (paternalAllele == ADO || paternalAllele == DELETION)
-						thereIsPaternalAllele = NO;
-
-				/* VFC: FORMAT: GT (genotypes) */
-				if (maternalAllele == ADO)
-					fprintf (fpVCF, "\t_");
-				else if (maternalAllele == DELETION)
-					fprintf (fpVCF, "\t-");
-				else if (maternalAllele == referenceAllele)
-					fprintf (fpVCF, "\t0");
-				else
+				/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
+				maternalSiteAmplificationError = paternalSiteAmplificationError = 0;
+				if (meanAmplificationError > 0)
 					{
-					fprintf (fpVCF,"\t");
-					for (l=0; l<allSites[j].numAltAlleles; l++)
-						{
-						if (maternalAllele == allSites[j].alternateAlleles[l])
-							{
-							fprintf (fpVCF,"%d", l+1);
-							break;
-							}
-						}
+					maternalSiteAmplificationError = RandomBeta(meanAmplificationError, varAmplificationError, seed);
+					paternalSiteAmplificationError = RandomBeta(meanAmplificationError, varAmplificationError, seed);
 					}
-					
-				fprintf (fpVCF, "|");
 
-				if (paternalAllele == ADO)
-					fprintf (fpVCF, "_");
-				else if (paternalAllele == DELETION)
-					fprintf (fpVCF, "-");
-				else if (paternalAllele == referenceAllele)
-					fprintf (fpVCF, "0");
-				else
+				/* initialize ampEijmat */
+				for (k=0; k<4; k++)
+					for (l=0; l<4; l++)
+						{
+						if (k == l)
+							ampEijmat[k][l] = 1.0 - maternalSiteAmplificationError;
+						else
+							ampEijmat[k][l] = Eij[k][l]/cumEij[k][3] * maternalSiteAmplificationError;
+						}
+
+				/* initialize ampEijpat */
+				for (k=0; k<4; k++)
+					for (l=0; l<4; l++)
+						{
+						if (k == l)
+							ampEijpat[k][l] = 1.0 - paternalSiteAmplificationError;
+						else
+							ampEijpat[k][l] = Eij[k][l]/cumEij[k][3] * paternalSiteAmplificationError;
+						}
+
+				if (simulateOnlyTwoTemplates == YES)
 					{
-					for (l=0; l<allSites[j].numAltAlleles; l++)
+					/* choose base for wrong maternal template */
+					ampErrorMaternalAllele = maternalAllele;
+					if (maternalSiteAmplificationError > 0 && thereIsMaternalAllele == YES )
 						{
-						if (paternalAllele == allSites[j].alternateAlleles[l])
-							{
-							fprintf (fpVCF,"%d", l+1);
-							break;
-							}
-						}
-					}
-					
-					
-				/* number of reads will follow a Poisson or a Negative Binomial distribution (overdispersed coverage) around mean coverage, and are randomly assigned to maternal/paternal chromosome */
-				numMaternalReads = 0;
-				numPaternalReads = 0;
-
-				if (rateVarCoverage == YES) /* Negative Binomial */
-					{
-					if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
-						{
-						numMaternalReads = RandomNegativeBinomial(0.5*coverage, alphaCoverage, seed);
-						numPaternalReads = RandomNegativeBinomial(0.5*coverage, alphaCoverage, seed);
-						}
-					else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
-						{
-						numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage, alphaCoverage, seed);
-						numPaternalReads = 0;
-						}
-					else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
-						{
-						numMaternalReads = 0;
-						numPaternalReads = RandomNegativeBinomial(allelicImbalance*coverage, alphaCoverage, seed);
-						}
-					else /* no allele is present (locus dropout/deletion) */
-						{
-						numMaternalReads = 0;
-						numPaternalReads = 0;
-						}
-					}
-				else /* Poisson distributed */
-					{
-					if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
-						{
-						numMaternalReads = RandomPoisson(0.5*coverage, seed);
-						numPaternalReads = RandomPoisson(0.5*coverage, seed);
-						}
-					else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
-						{
-						numMaternalReads = RandomPoisson(allelicImbalance*coverage, seed);
-						numPaternalReads = 0;
-						}
-					else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
-						{
-						numMaternalReads = 0;
-						numPaternalReads = RandomPoisson(allelicImbalance*coverage, seed);
-						}
-					else /* no allele is present (locus dropout/deletion) */
-						{
-						numMaternalReads = 0;
-						numPaternalReads = 0;
-						}
-					}
-				numReads = numMaternalReads + numPaternalReads;
-
-				/* read count simulation */
-				readCount[A] = readCount[C] = readCount[G] = readCount[T] = 0;
-				if (numReads > 0)
-					{
-					/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
-					maternalSiteAmplificationError = paternalSiteAmplificationError = 0;
-					if (meanAmplificationError > 0)
-						{
-						maternalSiteAmplificationError = RandomBeta(meanAmplificationError, varAmplificationError, seed);
-						paternalSiteAmplificationError = RandomBeta(meanAmplificationError, varAmplificationError, seed);
-						}
-
-					/* initialize ampEijmat */
-					for (k=0; k<4; k++)
-						for (l=0; l<4; l++)
-							{
-							if (k == l)
-								ampEijmat[k][l] = 1.0 - maternalSiteAmplificationError;
-							else
-								ampEijmat[k][l] = Eij[k][l]/cumEij[k][3] * maternalSiteAmplificationError;
-							}
-
-					/* initialize ampEijpat */
-					for (k=0; k<4; k++)
-						for (l=0; l<4; l++)
-							{
-							if (k == l)
-								ampEijpat[k][l] = 1.0 - paternalSiteAmplificationError;
-							else
-								ampEijpat[k][l] = Eij[k][l]/cumEij[k][3] * paternalSiteAmplificationError;
-							}
-
-					if (simulateOnlyTwoTemplates == YES)
-						{
-						/* choose base for wrong maternal template */
-						ampErrorMaternalAllele = maternalAllele;
-						if (maternalSiteAmplificationError > 0 && thereIsMaternalAllele == YES )
-							{
-							uniform = RandomUniform(seed) * cumEij[maternalAllele][3];
-							for (m=0; m<4; m++)
-								if (uniform <= cumEij[maternalAllele][m])
-									{
-									ampErrorMaternalAllele = m;
-									break;
-									}
-							}
-						/* choose base for wrong paternal template */
-						ampErrorPaternalAllele = paternalAllele;
-						if (paternalSiteAmplificationError > 0 && thereIsPaternalAllele == YES )
-							{
-							uniform = RandomUniform(seed) * cumEij[paternalAllele][3];
-							for (m=0; m<4; m++)
-								if (uniform <= cumEij[paternalAllele][m])
-									{
-									ampErrorPaternalAllele = m;
-									break;
-									}
-							}
-						}
-						
-					/* probabilities for the different types of reads  */
-					if (sequencingError > 0 || maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0)
-						{
-						if (thereIsMaternalAllele == YES)
-							{
-							if (simulateOnlyTwoTemplates == YES)
+						uniform = RandomUniform(seed) * cumEij[maternalAllele][3];
+						for (m=0; m<4; m++)
+							if (uniform <= cumEij[maternalAllele][m])
 								{
-								/* probabilities for maternal reads  (assuming a chosen template )*/
-								noSeqError = 1.0 - sequencingError;
-								badTemplateProb = maternalSiteAmplificationError;
-								goodTemplateProb = 1.0 - maternalSiteAmplificationError;
-								badTemplate = ampErrorMaternalAllele;
-								goodTemplate = maternalAllele;
-								for (read=0; read<4; read++)
-									{
-									if (read == maternalAllele)
-										probs[read] = goodTemplateProb * noSeqError + badTemplateProb * ngsEij[badTemplate][read];
-									else if (read == ampErrorMaternalAllele)
-										probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * noSeqError;
-									else
-										probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * ngsEij[badTemplate][read];
-									}
+								ampErrorMaternalAllele = m;
+								break;
 								}
-							else
+						}
+					/* choose base for wrong paternal template */
+					ampErrorPaternalAllele = paternalAllele;
+					if (paternalSiteAmplificationError > 0 && thereIsPaternalAllele == YES )
+						{
+						uniform = RandomUniform(seed) * cumEij[paternalAllele][3];
+						for (m=0; m<4; m++)
+							if (uniform <= cumEij[paternalAllele][m])
 								{
-								/* probabilities for maternal reads integrating over all potential templates) */
-								for (read=0; read<4; read++)
-									{
-									probs[read] = 0;
-									for (template=0; template<4; template++)
-										probs[read] += ampEijmat[maternalAllele][template] * ngsEij[template][read];
-									}
+								ampErrorPaternalAllele = m;
+								break;
 								}
-
-							cumProb = 0;
-							readsLeft = numMaternalReads;
-							/* multinomial assignment of reads */
+						}
+					}
+					
+				/* probabilities for the different types of reads  */
+				if (sequencingError > 0 || maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0)
+					{
+					if (thereIsMaternalAllele == YES)
+						{
+						if (simulateOnlyTwoTemplates == YES)
+							{
+							/* probabilities for maternal reads  (assuming a chosen template )*/
+							noSeqError = 1.0 - sequencingError;
+							badTemplateProb = maternalSiteAmplificationError;
+							goodTemplateProb = 1.0 - maternalSiteAmplificationError;
+							badTemplate = ampErrorMaternalAllele;
+							goodTemplate = maternalAllele;
 							for (read=0; read<4; read++)
 								{
-								if (read != maternalAllele)
-									{
-									badReads = RandomBinomial (probs[read] / (1 - cumProb), readsLeft, seed);
-									readsLeft -= badReads;
-									readCount[read] += badReads;
-									cumProb += probs[read];
-									}
+								if (read == maternalAllele)
+									probs[read] = goodTemplateProb * noSeqError + badTemplateProb * ngsEij[badTemplate][read];
+								else if (read == ampErrorMaternalAllele)
+									probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * noSeqError;
+								else
+									probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * ngsEij[badTemplate][read];
 								}
-							readCount[maternalAllele] += readsLeft; /* good reads */
+							}
+						else
+							{
+							/* probabilities for maternal reads integrating over all potential templates) */
+							for (read=0; read<4; read++)
+								{
+								probs[read] = 0;
+								for (template=0; template<4; template++)
+									probs[read] += ampEijmat[maternalAllele][template] * ngsEij[template][read];
+								}
 							}
 
-						if (thereIsPaternalAllele == YES)
+						cumProb = 0;
+						readsLeft = numMaternalReads;
+						/* multinomial assignment of reads */
+						for (read=0; read<4; read++)
 							{
-							if (simulateOnlyTwoTemplates == YES)
+							if (read != maternalAllele)
 								{
-								/* probabilities for paternal reads  (assuming a chosen template )*/
-								badTemplateProb = paternalSiteAmplificationError;
-								goodTemplateProb = 1.0 - paternalSiteAmplificationError;
-								badTemplate = ampErrorPaternalAllele;
-								goodTemplate = paternalAllele;
-								
-								for (read=0; read<4; read++)
-									{
-									if (read == paternalAllele)
-										probs[read] = goodTemplateProb * noSeqError + badTemplateProb * ngsEij[badTemplate][read];
-									else if (read == ampErrorPaternalAllele)
-										probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * noSeqError;
-									else
-										probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * ngsEij[badTemplate][read];
-									}
+								badReads = RandomBinomial (probs[read] / (1 - cumProb), readsLeft, seed);
+								readsLeft -= badReads;
+								readCount[read] += badReads;
+								cumProb += probs[read];
 								}
-							else
-								{
-								/* probabilities for paternal reads  (integrating over all potential templates) */
-								for (read=0; read<4; read++)
-									{
-									probs[read] = 0;
-									for (template=0; template<4; template++)
-										probs[read] += ampEijpat[paternalAllele][template] * ngsEij[template][read];
-									}
-								}
+							}
+						readCount[maternalAllele] += readsLeft; /* good reads */
+						}
+
+					if (thereIsPaternalAllele == YES)
+						{
+						if (simulateOnlyTwoTemplates == YES)
+							{
+							/* probabilities for paternal reads  (assuming a chosen template )*/
+							badTemplateProb = paternalSiteAmplificationError;
+							goodTemplateProb = 1.0 - paternalSiteAmplificationError;
+							badTemplate = ampErrorPaternalAllele;
+							goodTemplate = paternalAllele;
 							
-							cumProb = 0;
-							readsLeft = numPaternalReads;
-							/* multinomial assignment of reads */
 							for (read=0; read<4; read++)
 								{
-								if (read != paternalAllele)
-									{
-									badReads = RandomBinomial (probs[read] / (1 - cumProb), readsLeft, seed);
-									readsLeft -= badReads;
-									readCount[read] += badReads;
-									cumProb += probs[read];
-									}
+								if (read == paternalAllele)
+									probs[read] = goodTemplateProb * noSeqError + badTemplateProb * ngsEij[badTemplate][read];
+								else if (read == ampErrorPaternalAllele)
+									probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * noSeqError;
+								else
+									probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * ngsEij[badTemplate][read];
 								}
-							readCount[paternalAllele] += readsLeft; // good reads
 							}
-						}
-					else /* no sequencing neither amplification error */
-						{
-						readCount[maternalAllele] += numMaternalReads;
-						readCount[paternalAllele] += numPaternalReads;
+						else
+							{
+							/* probabilities for paternal reads  (integrating over all potential templates) */
+							for (read=0; read<4; read++)
+								{
+								probs[read] = 0;
+								for (template=0; template<4; template++)
+									probs[read] += ampEijpat[paternalAllele][template] * ngsEij[template][read];
+								}
+							}
+						
+						cumProb = 0;
+						readsLeft = numPaternalReads;
+						/* multinomial assignment of reads */
+						for (read=0; read<4; read++)
+							{
+							if (read != paternalAllele)
+								{
+								badReads = RandomBinomial (probs[read] / (1 - cumProb), readsLeft, seed);
+								readsLeft -= badReads;
+								readCount[read] += badReads;
+								cumProb += probs[read];
+								}
+							}
+						readCount[paternalAllele] += readsLeft; // good reads
 						}
 					}
+				else /* no sequencing or amplification error */
+					{
+					readCount[maternalAllele] += numMaternalReads;
+					readCount[paternalAllele] += numPaternalReads;
+					}
+				} // numReads > 0
+			
+			/* update info for cell structure */
+			cell[i].site[j].numReads = numReads;
+			cell[i].site[j].readCount[A] = readCount[A];
+			cell[i].site[j].readCount[C] = readCount[C];
+			cell[i].site[j].readCount[G] = readCount[G];
+			cell[i].site[j].readCount[T] = readCount[T];
+
+
+			/********************  for debugging ********************************************/
+			// debug_GL
+			debug_GL = NO;
+			if (debug_GL == YES)
+				{
+				maternalAllele = A;
+				paternalAllele = C;
+				readCount[A] = 50;
+				readCount[C] = 40;
+				readCount[G] = 20;
+				readCount[T] = 10;
+				numReads=120;
+				sequencingError = 0.001;
+				maternalSiteAmplificationError = 0.000;
+				paternalSiteAmplificationError = 0.000;
+				/* reinitialize ngsEij  */
+				for (k=0; k<4; k++)
+					for (l=0; l<4; l++)
+						{
+						if (k == l)
+							ngsEij[k][l] = 1.0 - sequencingError;
+						else
+							ngsEij[k][l] = Eij[k][l]/cumEij[k][3] * sequencingError;
+						}
+
+				/* reinitialize ampEijmat */
+				for (k=0; k<4; k++)
+					for (l=0; l<4; l++)
+						{
+						if (k == l)
+							ampEijmat[k][l] = 1.0 - maternalSiteAmplificationError;
+						else
+							ampEijmat[k][l] = Eij[k][l]/cumEij[k][3] * maternalSiteAmplificationError;
+						}
+
+				/* reinitialize ampEijpat */
+				for (k=0; k<4; k++)
+					for (l=0; l<4; l++)
+						{
+						if (k == l)
+							ampEijpat[k][l] = 1.0 - paternalSiteAmplificationError;
+						else
+							ampEijpat[k][l] = Eij[k][l]/cumEij[k][3] * paternalSiteAmplificationError;
+						}
+				}
+			/****************************************************************/
+
+
+			/* Calculate genotype likelihoods for this site and cell given the reads simulated */
+			/* 00 01 02 03 11 12 13 22 23 33 */
+			/* AA AC AG AT CC CG CT GG GT TT */
+			
+			/* MODEL 0: genotype log10 likelihoods according to the observed read assuming a single sequencing error independent of the nucleotides involved, and no amplification error */
+			/* extended from Korneliussen 2013 BMCBioinf
+			p(D|G=A1,A2) = multiply over reads [ 1/2 p(read i|A1) + 1/2 p(read i|A2)]
+			where p(read|A) e/3 if b!=A  or 1-e if b=A
+			N.B: ANGSD seems to use natural logs!
+			*/
+			if (maternalSiteAmplificationError == 0 && paternalSiteAmplificationError == 0 )
+				{
+				homozygote_for_read = log10(1.0 - sequencingError);
+				no_allele_for_read = log10(sequencingError/3.0);
+				heterozygote_for_read = log10((1.0 - sequencingError)/2.0 + sequencingError/6.0);
+				
+				for (a1=0; a1<4; a1++) //a1 is maternal
+					for (a2=a1; a2<4; a2++) //a2 is paternal
+					{
+					genLike[a1][a2] = -0.0;
 					
-				/* VFC: FORMAT: DP (read depth) */
-				fprintf (fpVCF, ":%d", numReads);
-	
-				/* VFC: FORMAT: RC (read counts ACGT) */
-				fprintf (fpVCF,":%d,%d,%d,%d",  readCount[A], readCount[C], readCount[G], readCount[T]);
-
-				/* print read counts to CATG file */
-				if (doPrintCATG == YES)
-					fprintf (fpCATG,"\t%d,%d,%d,%d",  readCount[C], readCount[A], readCount[T], readCount[G]);
-
-
+					for (k=0; k<4; k++)
+						{
+						if (readCount[k] > 0)
+							{
+							if (k == a1 && k == a2)
+								genLike[a1][a2] += readCount[k] * homozygote_for_read;
+							else if (k != a1 && k != a2)
+								genLike[a1][a2] += readCount[k] * no_allele_for_read;
+							else
+								genLike[a1][a2] += readCount[k] * heterozygote_for_read;
+							//fprintf (stderr, "\nread=%c gl[%c][%c] = %lf", WhichNuc(k), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+							}
+						}
+					}
 
 				/********************  for debugging ********************************************/
-				// debug_GL
-				debug_GL = NO;
 				if (debug_GL == YES)
 					{
-					maternalAllele = A;
-					paternalAllele = C;
-					readCount[A] = 50;
-					readCount[C] = 40;
-					readCount[G] = 20;
-					readCount[T] = 10;
-					numReads=120;
-					sequencingError = 0.001;
-					maternalSiteAmplificationError = 0.000;
-					paternalSiteAmplificationError = 0.000;
-					/* reinitialize ngsEij  */
-					for (k=0; k<4; k++)
-						for (l=0; l<4; l++)
-							{
-							if (k == l)
-								ngsEij[k][l] = 1.0 - sequencingError;
-							else
-								ngsEij[k][l] = Eij[k][l]/cumEij[k][3] * sequencingError;
-							}
+					fprintf (stderr,"\n\n%c|%c   A=%d C=%d G=%d T=%d" ,   WhichNuc(maternalAllele),  WhichNuc(paternalAllele), readCount[A], readCount[C], readCount[G], readCount[T]);
+					for (a1=0; a1<4; a1++)
+						for (a2=a1; a2<4; a2++)
+							fprintf (stderr, "\n(1)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+								fprintf (stderr, "\n");
+					}
+				/****************************************************************/
+				}
 
-					/* reinitialize ampEijmat */
-					for (k=0; k<4; k++)
-						for (l=0; l<4; l++)
-							{
-							if (k == l)
-								ampEijmat[k][l] = 1.0 - maternalSiteAmplificationError;
-							else
-								ampEijmat[k][l] = Eij[k][l]/cumEij[k][3] * maternalSiteAmplificationError;
-							}
 
-					/* reinitialize ampEijpat */
-					for (k=0; k<4; k++)
-						for (l=0; l<4; l++)
+
+			/* MODEL 4-templates: genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with all 4 templates */
+			
+			if (simulateOnlyTwoTemplates == NO && (maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0))
+				{
+				for (a1=0; a1<4; a1++) //a1 is maternal
+					for (a2=a1; a2<4; a2++) //a2 is paternal
+						{
+						genLike[a1][a2] = -0.0;
+						for (read=0; read<4; read++)
 							{
-							if (k == l)
-								ampEijpat[k][l] = 1.0 - paternalSiteAmplificationError;
-							else
-								ampEijpat[k][l] = Eij[k][l]/cumEij[k][3] * paternalSiteAmplificationError;
+							pReadGivenA1 = pReadGivenA2 = 0.0;
+							if (readCount[read] > 0)
+								{
+								for (template=0; template<4; template++)
+									{
+									pReadGivenA1 += ampEijmat[a1][template] * ngsEij[template][read];
+									pReadGivenA2 += ampEijpat[a2][template] * ngsEij[template][read];
+									//fprintf (stderr, "\n ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ", WhichNuc(a1), WhichNuc(template), ampEijmat[a1][template], WhichNuc(a2), WhichNuc(template), ngsEij[template][read]);
+									}
+								genLike[a1][a2] += readCount[read] * log10(pReadGivenA1*0.5 + pReadGivenA2*0.5);
+								}
+								//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2],pReadGivenA1,pReadGivenA2);
 							}
+						}
+
+				/********************  for debugging ********************************************/
+				if (debug_GL == YES)
+					{
+					fprintf (stderr,"\n\n%c|%c   A=%d C=%d G=%d T=%d" ,   WhichNuc(maternalAllele),  WhichNuc(paternalAllele), readCount[A], readCount[C], readCount[G], readCount[T]);
+					for (a1=0; a1<4; a1++)
+						for (a2=a1; a2<4; a2++)
+							fprintf (stderr, "\n(2)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+								fprintf (stderr, "\n");
+					
+						for (a1=0; a1<4; a1++)
+							for (a2=a1; a2<4; a2++)
+								genLike[a1][a2] = 0.0;
+
+					}
+				/****************************************************************/
+				}
+
+				
+			// this calculation seems OK but I cannot say I am 100% sure
+			/* MODEL 2-templates: genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with up to 2 templates */
+			if (simulateOnlyTwoTemplates == YES && (maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0))
+				{
+				for (a1=0; a1<4; a1++) //a1 is maternal
+					for (a2=a1; a2<4; a2++) //a2 is paternal
+						{
+						genLike[a1][a2] = -0.0;
+						for (template1=0; template1<4; template1++)
+							if (template1 != a1)
+								{
+								for (template2=0; template2<4; template2++)
+									if (template2 != a2)
+										{
+										for (read=0; read<4; read++)
+											{
+											if (readCount[read] > 0)
+												{
+												pReadGivenA1 = (1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + ampEijmat[a1][template1] * ngsEij[template1][read];
+												pReadGivenA2 = (1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + ampEijpat[a2][template2] * ngsEij[template2][read];
+												if (pReadGivenA1 > 0 || pReadGivenA2 >0)
+													genLike[a1][a2] += Eij[a1][template1]/cumEij[a1][3] * Eij[a2][template2]/cumEij[a2][3] * readCount[read] * log10(pReadGivenA1*0.5 + pReadGivenA2*0.5);
+												//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)  ampEijmat[%c][%c]=%lf  ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ngsEij[%c]][%c]=%lf", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2],pReadGivenA1,pReadGivenA2,
+												//WhichNuc(a1), WhichNuc(template1), ampEijmat[a1][template1], WhichNuc(a2), WhichNuc(template2), ampEijmat[a2][template2], WhichNuc(a1), WhichNuc(template1), ngsEij[template1][read], WhichNuc(a2), WhichNuc(template2), ngsEij[template2][read]);
+												}
+											}
+										}
+								}
+						}
+				
+				/********************  for debugging ********************************************/
+				if (debug_GL == YES)
+					{
+					fprintf (stderr,"\n\n%c|%c   A=%d C=%d G=%d T=%d" ,   WhichNuc(maternalAllele),  WhichNuc(paternalAllele), readCount[A], readCount[C], readCount[G], readCount[T]);
+					for (a1=0; a1<4; a1++)
+						for (a2=a1; a2<4; a2++)
+							fprintf (stderr, "\n(3)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+								fprintf (stderr, "\n");
+					
 					}
 				/****************************************************************/
 
-
-				/* Calculate genotype likelihoods for this site and cell given the reads simulated */
-				/* 00 01 02 03 11 12 13 22 23 33 */
-				/* AA AC AG AT CC CG CT GG GT TT */
+				}
+			
+			/* rescale to log10 likelihood ratios */
+				maxLike = genLike[0][0];
+				MLmatAllele = MLpatAllele = 0;
 				
-				/* MODEL 0: genotype log10 likelihoods according to the observed read assuming a single sequencing error independent of the nucleotides involved, and no amplification error */
-				/* extended from Korneliussen 2013 BMCBioinf
-				p(D|G=A1,A2) = multiply over reads [ 1/2 p(read i|A1) + 1/2 p(read i|A2)]
-				where p(read|A) e/3 if b!=A  or 1-e if b=A
-				N.B: ANGSD seems to use natural logs!
-				*/
-				if (maternalSiteAmplificationError == 0 && paternalSiteAmplificationError == 0 )
-					{
-					homozygote_for_read = log10(1.0 - sequencingError);
-					no_allele_for_read = log10(sequencingError/3.0);
-					heterozygote_for_read = log10((1.0 - sequencingError)/2.0 + sequencingError/6.0);
-					
-					for (a1=0; a1<4; a1++) //a1 is maternal
-						for (a2=a1; a2<4; a2++) //a2 is paternal
-						{
-						genLike[a1][a2] = -0.0;
-						
-						for (k=0; k<4; k++)
-							{
-							if (readCount[k] > 0)
-								{
-								if (k == a1 && k == a2)
-									genLike[a1][a2] += readCount[k] * homozygote_for_read;
-								else if (k != a1 && k != a2)
-									genLike[a1][a2] += readCount[k] * no_allele_for_read;
-								else
-									genLike[a1][a2] += readCount[k] * heterozygote_for_read;
-								//fprintf (stderr, "\nread=%c gl[%c][%c] = %lf", WhichNuc(k), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
-								}
-							}
-						}
-
-					/********************  for debugging ********************************************/
-					if (debug_GL == YES)
-						{
-						fprintf (stderr,"\n\n%c|%c   A=%d C=%d G=%d T=%d" ,   WhichNuc(maternalAllele),  WhichNuc(paternalAllele), readCount[A], readCount[C], readCount[G], readCount[T]);
-						for (a1=0; a1<4; a1++)
-							for (a2=a1; a2<4; a2++)
-								fprintf (stderr, "\n(1)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
-									fprintf (stderr, "\n");
-						}
-					/****************************************************************/
-					}
-
-
-
-				/* MODEL 4-templates: genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with all 4 templates */
-				
-				if (simulateOnlyTwoTemplates == NO && (maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0))
-					{
-					for (a1=0; a1<4; a1++) //a1 is maternal
-						for (a2=a1; a2<4; a2++) //a2 is paternal
-							{
-							genLike[a1][a2] = -0.0;
-							for (read=0; read<4; read++)
-								{
-								pReadGivenA1 = pReadGivenA2 = 0.0;
-								if (readCount[read] > 0)
-									{
-									for (template=0; template<4; template++)
-										{
-										pReadGivenA1 += ampEijmat[a1][template] * ngsEij[template][read];
-										pReadGivenA2 += ampEijpat[a2][template] * ngsEij[template][read];
-										//fprintf (stderr, "\n ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ", WhichNuc(a1), WhichNuc(template), ampEijmat[a1][template], WhichNuc(a2), WhichNuc(template), ngsEij[template][read]);
-										}
-									genLike[a1][a2] += readCount[read] * log10(pReadGivenA1*0.5 + pReadGivenA2*0.5);
-									}
-									//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2],pReadGivenA1,pReadGivenA2);
-								}
-							}
-
-					/********************  for debugging ********************************************/
-					if (debug_GL == YES)
-						{
-						fprintf (stderr,"\n\n%c|%c   A=%d C=%d G=%d T=%d" ,   WhichNuc(maternalAllele),  WhichNuc(paternalAllele), readCount[A], readCount[C], readCount[G], readCount[T]);
-						for (a1=0; a1<4; a1++)
-							for (a2=a1; a2<4; a2++)
-								fprintf (stderr, "\n(2)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
-									fprintf (stderr, "\n");
-						
-							for (a1=0; a1<4; a1++)
-								for (a2=a1; a2<4; a2++)
-									genLike[a1][a2] = 0.0;
-
-						}
-					/****************************************************************/
-					}
-
-	
-					
-				// this calculation seems OK but I cannot say I am 100% sure
-				/* MODEL 2-templates: genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with up to 2 templates */
-				if (simulateOnlyTwoTemplates == YES && (maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0))
-					{
-					for (a1=0; a1<4; a1++) //a1 is maternal
-						for (a2=a1; a2<4; a2++) //a2 is paternal
-							{
-							genLike[a1][a2] = -0.0;
-							for (template1=0; template1<4; template1++)
-								if (template1 != a1)
-									{
-									for (template2=0; template2<4; template2++)
-										if (template2 != a2)
-											{
-											for (read=0; read<4; read++)
-												{
-												if (readCount[read] > 0)
-													{
-													pReadGivenA1 = (1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + ampEijmat[a1][template1] * ngsEij[template1][read];
-													pReadGivenA2 = (1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + ampEijpat[a2][template2] * ngsEij[template2][read];
-													if (pReadGivenA1 > 0 || pReadGivenA2 >0)
-														genLike[a1][a2] += Eij[a1][template1]/cumEij[a1][3] * Eij[a2][template2]/cumEij[a2][3] * readCount[read] * log10(pReadGivenA1*0.5 + pReadGivenA2*0.5);
-													//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)  ampEijmat[%c][%c]=%lf  ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ngsEij[%c]][%c]=%lf", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2],pReadGivenA1,pReadGivenA2,
-													//WhichNuc(a1), WhichNuc(template1), ampEijmat[a1][template1], WhichNuc(a2), WhichNuc(template2), ampEijmat[a2][template2], WhichNuc(a1), WhichNuc(template1), ngsEij[template1][read], WhichNuc(a2), WhichNuc(template2), ngsEij[template2][read]);
-													}
-												}
-											}
-									}
-							}
-					
-					/********************  for debugging ********************************************/
-					if (debug_GL == YES)
-						{
-						fprintf (stderr,"\n\n%c|%c   A=%d C=%d G=%d T=%d" ,   WhichNuc(maternalAllele),  WhichNuc(paternalAllele), readCount[A], readCount[C], readCount[G], readCount[T]);
-						for (a1=0; a1<4; a1++)
-							for (a2=a1; a2<4; a2++)
-								fprintf (stderr, "\n(3)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
-									fprintf (stderr, "\n");
-						
-						}
-					/****************************************************************/
-
-					}
-				
-				/* rescale to log10 likelihood ratios */
-					maxLike = genLike[0][0];
-					MLmatAllele = MLpatAllele = 0;
-					
-					for (a1=0; a1<4; a1++)
-						for (a2=a1; a2<4; a2++)
-							if (genLike[a1][a2] > maxLike)
-								{
-								maxLike = genLike[a1][a2];
-								MLmatAllele = a1;
-								MLpatAllele = a2;
-								}
-					for (a1=0; a1<4; a1++)
-						for (a2=a1; a2<4; a2++)
-							genLike[a1][a2] -= maxLike;
-					
-				// Qphred = -10 log(10) Perror)
-				// Perror = 10 ^(-Qphred/10)
-					
-					/********************  for debugging ********************************************/
-					if (debug_GL == YES)
-						{
-						//PrintSiteInfo (stderr, SNVsites[snv]);
-						fprintf (stderr,"\ncell %d: %c%c", i+1, WhichNuc(maternalAllele), WhichNuc(paternalAllele));
-						fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d  | total:%d",  readCount[A], readCount[C], readCount[G], readCount[T], numReads);
-						fprintf (stderr,"\nmatAmpError = %f", maternalSiteAmplificationError);
-						fprintf (stderr,"\npatAmpError = %f", paternalSiteAmplificationError);
-						for (a1=0; a1<4; a1++)
-							for (a2=a1; a2<4; a2++)
-								fprintf (stderr, "\nlog10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
-						fprintf (stderr, "\n");
-						}
-					/****************************************************************/
-				
-
-				/* VFC: FORMAT: GL (genotype likelihoods) */
-				fprintf (fpVCF, ":");
 				for (a1=0; a1<4; a1++)
 					for (a2=a1; a2<4; a2++)
-						fprintf (fpVCF, "%3.1f,", genLike[a1][a2]);
-				fseek(fpVCF, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
-
-				/* VFC: FORMAT: ML (maximum likelihood genotype) */
-				//fprintf (stderr, "\n*cell=%3d  snv=%3d  numReads=%3d",i+1, snv+1, numReads );
-				if (numReads > 0)
-					{
-					fprintf (fpVCF, ":");
-					fprintf (fpVCF, "%c/%c",WhichNuc(MLmatAllele), WhichNuc(MLpatAllele));
-					}
-				else
-					fprintf (fpVCF, ":?/?");
+						if (genLike[a1][a2] > maxLike)
+							{
+							maxLike = genLike[a1][a2];
+							MLmatAllele = a1;
+							MLpatAllele = a2;
+							}
+				for (a1=0; a1<4; a1++)
+					for (a2=a1; a2<4; a2++)
+						genLike[a1][a2] -= maxLike;
 				
-				/* VFC: FORMAT: TG (true SNV genotype) */
-				fprintf (fpVCF, ":");
-				fprintf (fpVCF, "%c|%c",WhichNuc(maternalAllele), WhichNuc(paternalAllele));
+			// Qphred = -10 log(10) Perror)
+			// Perror = 10 ^(-Qphred/10)
+				
+				/********************  for debugging ********************************************/
+				if (debug_GL == YES)
+					{
+					//PrintSiteInfo (stderr, SNVsites[snv]);
+					fprintf (stderr,"\ncell %d: %c%c", i+1, WhichNuc(maternalAllele), WhichNuc(paternalAllele));
+					fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d  | total:%d",  readCount[A], readCount[C], readCount[G], readCount[T], numReads);
+					fprintf (stderr,"\nmatAmpError = %f", maternalSiteAmplificationError);
+					fprintf (stderr,"\npatAmpError = %f", paternalSiteAmplificationError);
+					for (a1=0; a1<4; a1++)
+						for (a2=a1; a2<4; a2++)
+							fprintf (stderr, "\nlog10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+					fprintf (stderr, "\n");
+					}
+				/****************************************************************/
+			
+			/* update info for cell structure */
+			k=0;
+			for (a1=0; a1<4; a1++)
+				for (a2=a1; a2<4; a2++)
+					cell[i].site[j].genLike[k++] = genLike[a1][a2];
+			cell[i].site[j].MLmatAllele = MLmatAllele;
+			cell[i].site[j].MLpatAllele = MLpatAllele;
 
-
-				/* count ML genotyping errors */
-				if ((thereIsMaternalAllele == YES && MLmatAllele != maternalAllele) || (thereIsPaternalAllele == YES && MLpatAllele != paternalAllele))
-					countMLgenotypeErrors++;
-				} // cell
-			} // print vcf
+			/* count ML genotyping errors */
+			if ((thereIsMaternalAllele == YES && MLmatAllele != maternalAllele) || (thereIsPaternalAllele == YES && MLpatAllele != paternalAllele))
+				countMLgenotypeErrors++;
+			} // cell
 		} //snv
-
-	if (doSimulateReadCounts == YES)
-		fprintf (fpVCF, "\n");
-	if (doPrintCATG == YES)
-		fprintf (fpCATG,"\n");
 	
 	free (probs);
 	free (readCount);
@@ -4183,6 +3971,272 @@ void GenerateReadCounts (long int *seed)
 	}
 
 
+/********************* MakeDoublets  ************************/
+/*
+ We simulate the possibility of amplifying/sequencing two cells at once
+ by adding read counts from another sampled cell.
+ 
+ Only tumor cells are considered here
+
+*/
+
+void MakeDoublets (long int *seed)
+	{
+	int	c1, c2, site;
+	int i, j, k;
+	CellStr *cellType;
+	
+	/* first we need to have a copy of the original cell types in terms of read counts */
+		//TODO: probably we need to do this in a different way
+	
+	//TODO: remove me later
+	doubletRate = 1e-6;
+
+	for (c1=0; c1<numCells;c1++)
+		{
+		if (RandomUniform(seed) < doubletRate)
+			{
+			// select the second cell from the sample, including itself
+			c2 = RandomUniformTo (numCells,seed);
+
+			// for all sites
+			for (j=0; j<numSites; j++)
+				cell[c1].site[j].numReads = -999;
+			
+			
+			}
+		}
+	}
+
+
+
+
+/********************* PrintCATG  ************************/
+/**	CATG output format with read counts
+	http://nbviewer.jupyter.org/gist/dereneaton/d2fd4e70d29f5ee5d195/testing_cat.ipynb#View-the-.cat-results-files
+
+	The first line has the number of samples and the number of sites.
+	Following this is a transposed data matrix with the consensus base calls where each row is a site and each column a different sample.
+	To the right of each site is a tab-separated list of counts of the four bases at that site in the order C,A,T,G.
+
+	12 44500
+	1A0	1B0	1C0	1D0	2E0	2F0	2G0	2H0	3I0
+	YCCCCCCCCCCC	10,0,10,0	20,0,0,0	20,0,0,0	20,0,0, ...
+	GGGGGGGGGGGG	0,0,0,20	0,0,0,20	0,0,0,20	0,0,0,20 ...
+	AAAAAAAAAAAA	0,20,0,0	0,20,0,0	0,20,0,0	0,20,0,0 ...
+	CCCCCCCCCCCC	20,0,0,0	20,0,0,0	20,0,0,0	20,0,0,0 ...
+	AAAAAAAAAAAA	0,20,0,0	0,20,0,0	0, 20,0,0	0,20,0,0 ...
+	...
+*/
+void PrintCATG (FILE *fp)
+	{
+	int	i, j, snv;
+
+	fprintf (fp,"%d %d\n",numCells+1, numSNVs);
+	for (i=0; i<numCells; i++)
+		fprintf (fp,"tumcell%04d  ", i+1);
+	fprintf (fp,"healthycell  ");
+		
+	for (snv=0; snv<numSNVs; snv++)
+		{
+		j = SNVsites[snv];
+		fprintf (fp,"\n");
+		for (i=0; i<numCells+1; i++)
+			fprintf (fp,"%c",WhichIUPAC(data[MATERNAL][i][j], data[PATERNAL][i][j]));
+		for (i=0; i<numCells+1; i++)
+			fprintf (fp,"\t%d,%d,%d,%d",  cell[i].site[j].readCount[C], cell[i].site[j].readCount[A], cell[i].site[j].readCount[T], cell[i].site[j].readCount[G]);
+		}
+
+	fprintf (fp,"\n");
+	}
+
+
+/********************* PrintVCF  ************************/
+/**	VCF output format with read counts
+
+
+*/
+void PrintVCF (FILE *fp)
+	{
+	int		i, j, k, l, snv;
+	int		maternalAllele, paternalAllele, referenceAllele;
+
+	/* print file header */
+	fprintf (fp,"##fileformat=VCFv4.3");
+	fprintf (fp,"\n##filedate=");
+	PrintDate (fp);
+	fprintf (fp,"##source=CellCoal SNV simulation");
+	fprintf (fp,"\n##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral allele\">");
+	fprintf (fp,"\n##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of samples with data\">");
+	fprintf (fp,"\n##INFO=<ID=AF,Number=R,Type=Float,Description=\"True alternate/s allele frequency\">");
+	fprintf (fp,"\n##FILTER=<ID=s50,Description=\"Less than half of samples have data\">");
+	fprintf (fp,"\n##FORMAT=<ID=GT,Number=1,Type=String,Description=\"True genotype\">");
+	fprintf (fp,"\n##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read depth\">");
+	fprintf (fp,"\n##FORMAT=<ID=RC,Number=4,Type=Integer,Description=\"Read counts for AGCT\">");
+	fprintf (fp,"\n##FORMAT=<ID=GL,Number=G,Type=Float,Description=\"Scaled genotype likelihoods in log10 (AA AC AG AT CC CG CT GG GT TT)\">");
+	fprintf (fp,"\n##FORMAT=<ID=ML,Number=1,Type=String,Description=\"Maximum likelihood genotype\">");
+	fprintf (fp,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True SNV genotype\">");
+	fprintf (fp,"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
+	
+	for (i=0; i<numCells; i++)
+		fprintf (fp,"\ttumcell%04d", i+1);
+	fprintf (fp,"\thealthycell");
+
+	for (snv=0; snv<numSNVs; snv++)
+		{
+		j = SNVsites[snv];
+		
+		 /* VFC: CHROMOSOME */
+		fprintf (fp,"\n%d", 1);
+		
+		/* VFC: POSITION */
+		fprintf (fp,"\t%d", j+1);
+		
+		/* VFC: ID */
+		if (allSites[j].isSNV == NO)
+			fprintf (fp,"\tinv%06d", j+1);
+		else
+			fprintf (fp,"\tsnv%06d", j+1);
+
+		/* VFC: REFERENCE allele(s) => healthy root alleles */
+		referenceAllele = allSites[j].referenceAllele;
+		fprintf (fp,"\t%c", WhichNuc(referenceAllele));
+			
+		/* VFC: ALTERNATE allele(s) */
+		fprintf (fp,"\t");
+		if (allSites[j].countACGT == allSites[j].countA ||
+		allSites[j].countACGT == allSites[j].countC ||
+		allSites[j].countACGT == allSites[j].countG ||
+		allSites[j].countACGT == allSites[j].countT)
+			fprintf (fp,".");
+		else
+			{
+			if (allSites[j].countA > 0 && referenceAllele != A)
+				fprintf (fp,"A,");
+			if (allSites[j].countC > 0 && referenceAllele != C)
+				fprintf (fp,"C,");
+			if (allSites[j].countG > 0 && referenceAllele != G)
+				fprintf (fp,"G,");
+			if (allSites[j].countT > 0 && referenceAllele != T)
+				fprintf (fp,"T,");
+			fseek(fp, -1, SEEK_CUR); 	/* get rid of the last comma */
+			}
+		
+		/* VFC: QUALITY */  /* Qphred probability that a SNV exists at this site; I will put missing info here */
+		fprintf (fp, "\t.");
+
+		/* VFC: FILTER */
+		if (allSites[j].countACGT < allSites[j].countDropped)  /* if less than half of the samples have missing data */
+			fprintf (fp, "\ts50");
+		else
+			fprintf (fp, "\tPASS");
+
+		/* VFC: INFO: AA (ancestral allele) */
+		fprintf (fp, "\tAA=%c", WhichNuc(referenceAllele));
+
+		/* VFC: INFO: NS (number of samples with data) */
+		fprintf (fp, ";NS=%d", allSites[j].countCellswithData);
+
+		/* VFC: INFO: AF (alternate allele frequencies) */
+		fprintf (fp, ";AF=");
+		if (allSites[j].countACGT == allSites[j].countA ||
+		allSites[j].countACGT == allSites[j].countC ||
+		allSites[j].countACGT == allSites[j].countG ||
+		allSites[j].countACGT == allSites[j].countT)
+			fprintf (fp,".");
+		else
+			{
+			if (allSites[j].countA > 0 && referenceAllele != A)
+				fprintf (fp,"%4.3f,", (double) allSites[j].countA / allSites[j].countACGT);
+			if (allSites[j].countC > 0 && referenceAllele != C)
+				fprintf (fp,"%4.3f,", (double) allSites[j].countC / allSites[j].countACGT);
+			if (allSites[j].countG > 0 && referenceAllele != G)
+				fprintf (fp,"%4.3f,", (double) allSites[j].countG / allSites[j].countACGT);
+			if (allSites[j].countT > 0 && referenceAllele != T)
+				fprintf (fp,"%4.3f,", (double) allSites[j].countT / allSites[j].countACGT);
+			fseek(fp, -1, SEEK_CUR); 	/* get rid of the last comma */
+			}
+	
+		/* VFC: INFO : SOMATIC */
+		fprintf (fp, ";SOMATIC");
+		
+		/* VFC: FORMAT */
+		fprintf (fp, "\tGT:DP:RC:GL:ML:TG");
+		
+		for (i=0; i<numCells+1; i++)
+			{
+			maternalAllele = data[MATERNAL][i][j];
+			paternalAllele = data[PATERNAL][i][j];
+
+			/* VFC: FORMAT: GT (genotypes) */
+			if (maternalAllele == ADO)
+				fprintf (fp, "\t_");
+			else if (maternalAllele == DELETION)
+				fprintf (fp, "\t-");
+			else if (maternalAllele == referenceAllele)
+				fprintf (fp, "\t0");
+			else
+				{
+				fprintf (fp,"\t");
+				for (l=0; l<allSites[j].numAltAlleles; l++)
+					{
+					if (maternalAllele == allSites[j].alternateAlleles[l])
+						{
+						fprintf (fp,"%d", l+1);
+						break;
+						}
+					}
+				}
+			fprintf (fp, "|");
+			if (paternalAllele == ADO)
+				fprintf (fp, "_");
+			else if (paternalAllele == DELETION)
+				fprintf (fp, "-");
+			else if (paternalAllele == referenceAllele)
+				fprintf (fp, "0");
+			else
+				{
+				for (l=0; l<allSites[j].numAltAlleles; l++)
+					{
+					if (paternalAllele == allSites[j].alternateAlleles[l])
+						{
+						fprintf (fp,"%d", l+1);
+						break;
+						}
+					}
+				}
+
+			/* VFC: FORMAT: DP (read depth) */
+			fprintf (fp, ":%d", cell[i].site[j].numReads);
+
+			/* VFC: FORMAT: RC (read counts ACGT) */
+			fprintf (fp,":%d,%d,%d,%d",  cell[i].site[j].readCount[A], cell[i].site[j].readCount[C], cell[i].site[j].readCount[G], cell[i].site[j].readCount[T]);
+
+			/* VFC: FORMAT: GL (genotype likelihoods) */
+			fprintf (fp, ":");
+			for (k=0; k<10; k++)
+				fprintf (fp, "%3.1f,", cell[i].site[j].genLike[k]);
+			fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
+
+			/* VFC: FORMAT: ML (maximum likelihood genotype) */
+			if (cell[i].site[j].numReads > 0)
+				{
+				fprintf (fp, ":");
+				fprintf (fp, "%c/%c",WhichNuc(cell[i].site[j].MLmatAllele), WhichNuc(cell[i].site[j].MLpatAllele));
+				}
+			else
+				fprintf (fp, ":?/?");
+			
+			/* VFC: FORMAT: TG (true SNV genotype) */
+			fprintf (fp, ":");
+			fprintf (fp, "%c|%c",WhichNuc(maternalAllele), WhichNuc(paternalAllele));
+
+	
+			} // cell
+		} // snv
+	
+	fprintf (fp, "\n");
+	}
 
 /********************* PrepareGlobalFiles **********************/
 /* Open global files to output results */
@@ -5701,14 +5755,14 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n  [coverage follows a Poisson distribution]");
 			fprintf (fp, "\n Alellic dropout                              =   %2.1e", ADOrate);
 			fprintf (fp, "\n Amplification error");
+			if (simulateOnlyTwoTemplates == YES)
+				fprintf (fp, " (2-template model)");
+			else
+				fprintf (fp, " (4-template model)");
 			fprintf (fp, "\n  Mean                                        =   %2.1e", meanAmplificationError);
 			fprintf (fp, "\n  Variance                                    =   %2.1e", varAmplificationError);
-			if (simulateOnlyTwoTemplates == YES)
-				fprintf (fp, "\n  2-template model");
-			else
-				fprintf (fp, "\n  4-template model");
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
-			fprintf (fp, "\n Allelic imbalance                 =   %-3.2f", allelicImbalance);
+			fprintf (fp, "\n Allelic imbalance                            =   %-3.2f", allelicImbalance);
 			if (thereIsEij == YES)
 				{
 				fprintf (fp, "\n  NGS error rate matrix                       =   %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]);

@@ -71,7 +71,7 @@
 
 typedef struct tnode
     {
-    struct tnode		*left, *right, *anc;
+    struct tnode	*left, *right, *anc;
     int				index, label, isHealthyTip, isHealthyRoot;
     double			length, time, branchLength;
     char			*name;
@@ -104,16 +104,21 @@ typedef struct
     TriNucStr;
 
 
-/*
-typedef struct cell
+typedef struct csite
     {
-    int				index;
-	int				**genome;
-	int				**readCount;
-	double			**genLike;
-    char			*name;
+	int		numReads;
+	int		*readCount;
+	double	*genLike;
+	int		MLmatAllele;
+	int		MLpatAllele;
+    }
+    CellSiteStr;
+
+typedef struct
+    {
+	struct csite	*site;
     }
     CellStr;
-*/
+
 
 #endif /* macros_h */
