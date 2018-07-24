@@ -71,10 +71,11 @@
 - simulate reads for and print all sites in the VCF
 - implemented trinucleotide mutational signatures (alone or mixture)
 - implemented user genome
+- implemented copy-neutral LOH
+
 
 //TODO:
 - simulate doublets? (for example adding two random alleles from the population according to their AF)
-- simulate gene conversions (copy-neutral LOH)?
 - dated tips (maybe)
 - change random number generator ?
 
@@ -170,7 +171,7 @@ int main (int argc, char **argv)
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
 	varAmplificationError = 0;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simualate maximum of two templates after single-cell amplification, or there can be all four */
-	singleAlleleCoverageProportion = 0.5; /* proportion of reads produced when a single allele is present */
+	allelicImbalance = 0.5;         /* proportion of reads produced when a single allele is present */
     numNodes = 3000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
     userSeed = 0;					/* seed entered by the user */
@@ -400,7 +401,9 @@ int main (int argc, char **argv)
         if (doPrintTimes == YES)
             PrintTimes (0, fpTimes);
  
-        /* Allocate genotype data to be stored in data[genome][cell][site] */
+		totalTreeLength = SumBranches(healthyRoot);
+ 
+        /* allocate genotype data to be stored in data[genome][cell][site] */
         data = (int ***) calloc (ploidy, sizeof(int **));
         if (!data)
             {
@@ -548,6 +551,7 @@ int main (int argc, char **argv)
             {
             numISMmutations = 0;
 			numISMdeletions = 0;
+ 			numISMCNLOH = 0;
  
              /* assign ancestral states to all genomes */
             InitializeGenomes (healthyRoot, &seed);
@@ -573,6 +577,26 @@ int main (int argc, char **argv)
             cumNumMU += numMU;
             cumNumMUSq += pow(numMU,2);
 
+			if (CNLOHrate > 0)
+				{
+				/* evolve maternal CN_LOH */
+				if (noisy > 2)
+					fprintf (stderr, "\n>> Evolving maternal CN_LOH ... ");
+				 EvolveCNLOHonTree(healthyRoot, MATERNAL, &seed);
+				if (noisy > 2)
+					fprintf (stderr, "DONE");
+
+				/* evolve paternal CN_LOH  */
+				 if (noisy > 2)
+					fprintf (stderr, "\n>> Evolving paternal CN_LOH ... ");
+				 EvolveCNLOHonTree(healthyRoot, PATERNAL, &seed);
+				if (noisy > 2)
+					fprintf (stderr, "DONE\n\n");
+
+				cumNumCNLOH += numCNLOH;
+				cumNumCNLOHSq += pow(numCNLOH,2);
+				}
+
 			if (deletionRate > 0)
 				{
 				/* evolve maternal deletions */
@@ -592,8 +616,9 @@ int main (int argc, char **argv)
 				cumNumDEL += numDEL;
 				cumNumDELSq += pow(numDEL,2);
 				}
-				
-			/* count how many SNVs we observe before ADO and genotype errors */
+
+
+			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 			numSNVs = CountTrueVariants();
 				
 			/* print reference haplotypes without errors */
@@ -768,6 +793,7 @@ int main (int argc, char **argv)
     meanNumMU  = cumNumMU /  (double) numDataSets;
     meanNumSNVs  = cumNumSNVs / (double) numDataSets;
     meanNumDEL  = cumNumDEL /  (double) numDataSets;
+    meanNumCNLOH = cumNumCNLOH/  (double) numDataSets;
     meanTMRCA  =  cumTMRCA /  (double) numDataSets;
 		
     varNumMU = (1.0 / (double) (numDataSets-1)) * (cumNumMUSq - pow(cumNumMU,2) / (double) numDataSets);
@@ -1947,14 +1973,17 @@ void SimulateISM (TreeNode *p, int genome, int doISMhaploid, long int *seed)
 		numModelSites = numAltModelSites;
 		}
 
+/*
     totalBranchSum = 0;
     for (i=0; i<numModelSites; i++)
         {
         allSites[modelSites[i]].branchSum = SumBranches (healthyRoot);
         totalBranchSum += allSites[modelSites[i]].branchSum;
         }
-	
-	//fprintf (stderr, "\ntotalBranchSum = %6.4f",totalBranchSum);
+
+*/
+
+	totalBranchSum = totalTreeLength * numModelSites;
 
     if (doSimulateFixedNumMutations == YES) /* conditioned on a specific number of mutations */
         {
@@ -2045,7 +2074,7 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
         if (p->isHealthyRoot == YES)
             {
             cumBranchLength = 0;
-            uniform = RandomUniform(seed) * allSites[site].branchSum;
+            uniform = RandomUniform(seed) * totalTreeLength;
             }
         else
             {
@@ -2107,7 +2136,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
         if (p->isHealthyRoot == YES)
             {
             cumBranchLength = 0;
-            uniform = RandomUniform(seed) * allSites[site].branchSum;
+            uniform = RandomUniform(seed) * totalTreeLength;
             }
         else
             {
@@ -2168,7 +2197,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
 
 void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
     {
-    int		i, site, numMutations, mutationsSoFar;
+    int		i, numMutations, mutationsSoFar;
     double	totalBranchSum;
 	int		newState, chosenSite;
 	
@@ -2203,14 +2232,16 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 
 	/* count trinucleotide frequencies in the healthy root genome */
 	CountTriNucFrequencies (data[genome][HEALTHY_ROOT], genome);
-	
+/*
     totalBranchSum = 0;
     for (site=0; site<numSites; site++)
         {
         allSites[site].branchSum = SumBranches (healthyRoot);
         totalBranchSum += allSites[site].branchSum;
         }
-	
+*/
+	totalBranchSum = totalTreeLength * numSites;
+
     if (doSimulateFixedNumMutations == YES) /* conditioned on a specified number of mutations */
 		{
         if (genome == MATERNAL)
@@ -2527,7 +2558,7 @@ void SimulateSignatureISMforSite (TreeNode *p, int genome, int site, int newStat
         if (p->isHealthyRoot == YES)
             {
             cumBranchLength = 0;
-            uniform = RandomUniform(seed) * allSites[site].branchSum;
+             uniform = RandomUniform(seed) * totalTreeLength;
 			//fprintf (stderr, "\nsimulating at root of position %d", site+1);
             }
         else
@@ -2847,7 +2878,132 @@ void GTRmodel (double Pij[4][4], double branchLength)
 	}
 
 
-/********************************** SimulateDeletions ***********************************/
+
+/********************************** EvolveCNLOHonTree ***********************************/
+ /*	Simulates point copy-number neutral loss of heterozygosity events (CN-LOH) under an infinite haploid sites model (ISM).
+    Haploid here means that site 33 in the maternal genome and site 33 in the paternal
+    genome will be considered different sites, so both can mutate.
+ 
+   This is a very simple mode, where CN_LOH evebts are simulated after the sequences have been evolved
+   (i.e., SNVs are already in place)
+ 
+    The number of point CNLOH will be distributed as a Poisson with parameter the sum of
+	branch lengths (node length * deletion rate) over all sites.
+	
+	We will force it to get at most one CNLOH per site
+*/
+void EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed)
+	{
+    int		i, trials, numCNLOH, CNLOHsoFar;
+    double	totalCNLOHbranchSum;
+
+	totalCNLOHbranchSum = numSites * totalTreeLength / mutationRate * CNLOHrate;
+	numCNLOH = RandomPoisson (totalCNLOHbranchSum, seed); /* the number of CNLOH events will be distributed as a Poisson with parameter totalCNLOHbranchSum */
+	
+     /* if the number of CNLOH events is bigger than the number of sites quit the program and warn the user about violation of ISM */
+     if (numISMCNLOH + numCNLOH > (2*numSites))
+        {
+        fprintf (stderr, "\n\nERROR: The haploid infinite sites model (ISM) for CNLOH events has been violated. There will be");
+        fprintf (stderr, "\nmore CNLOH events (%d existing + %d proposed]) than available sites under this model (%d).", numISMCNLOH, numCNLOH, 2*numSites);
+        fprintf (stderr, "\nTry using a smaller deletion rate.");
+        fprintf (stderr, "\nIf using a user tree, try introducing smaller branch lengths.\n");
+        exit (-1);
+        }
+	
+    numISMCNLOH += numCNLOH;
+    trials = 0;
+    CNLOHsoFar = 0;
+    while (CNLOHsoFar < numCNLOH)
+        {
+        i = RandomUniformTo(numSites, seed);  /* choose a site at random */
+        while ((genome == MATERNAL && allSites[i].numCNLOHmaternal != 0) ||
+               (genome == PATERNAL && allSites[i].numCNLOHpaternal != 0))
+            {
+            i = RandomUniformTo(numSites, seed);
+            if (trials++ > 100*numSites)
+                {
+                fprintf (stderr, "\n\n ERROR: after %d trials cannot find a site without CNLOH",100*numSites);
+                fprintf (stderr, "\nCNLOH = %d  CNLOH so far = %d\n\n",numCNLOH, CNLOHsoFar);
+                for (i=0; i<numSites; i++)
+                    fprintf (stderr, "\nsite %d has %d CNLOHs",i+1, allSites[i].numCNLOH);
+                 fprintf (stderr, "\n");
+                 exit(-1);
+                }
+            }
+	
+		SimulateCNLOHforSite (p, genome, i, seed);
+			
+        CNLOHsoFar++;
+			
+        #ifdef MYDEBUG
+            fprintf (stderr, "\nCNLOH = %d   nCNLOH so far = %d\n",numCNLOH, CNLOHsoFar);
+            if (allSites[i]].numDeletions > 1)
+                {
+                fprintf (stderr, "\n\n ERROR: %d CNLOH in site %d",allSites[i].numCNLOH, i+1);
+                exit(-1);
+                }
+            for (i=0; i<numSites; i++)
+                fprintf (stderr, "%2d[%d] ",i+1, allSites[i].numCNLOH);
+        #endif
+			
+        }
+	}
+
+
+/********************************** SimulateCNLOHforSite ***********************************/
+/*	Simulates a CNLOH event infinite sites model (ISM) for a given site. The branch
+	where this mutation is placed is chosen according to its length.
+  */
+void SimulateCNLOHforSite (TreeNode *p, int genome, int site, long int *seed)
+    {
+    static double	cumCNLOHbranchLength, uniform;
+    int             cell, anccell;
+		
+	if (p != NULL)
+        {
+        cell = p->label;
+			
+        if (p->isHealthyRoot == YES)
+            {
+            cumCNLOHbranchLength = 0;
+            uniform = RandomUniform(seed) * totalTreeLength / mutationRate * CNLOHrate;;
+            }
+        else
+            {
+            anccell = p->anc->label;
+            cumCNLOHbranchLength += p->branchLength / mutationRate * CNLOHrate;
+				
+             if ((cumCNLOHbranchLength < uniform) || /* => there will be no change at this branch */
+                ((genome == MATERNAL) && (allSites[site].numCNLOHmaternal > 0)) ||
+                ((genome == PATERNAL) && (allSites[site].numCNLOHpaternal > 0)))
+                {
+                data[genome][cell][site] = data[genome][anccell][site];
+                }
+			else /* => there will be a CN_LOH event */
+                {
+				if (genome == MATERNAL)
+					{
+					data[genome][cell][site] = data[PATERNAL][cell][site];
+					allSites[site].numCNLOHmaternal++;
+					}
+				else
+					{
+					data[genome][cell][site] = data[MATERNAL][cell][site];
+					allSites[site].numCNLOHpaternal++;
+					}
+
+                allSites[site].numCNLOH++;
+                numCNLOH++;
+                }
+            }
+            SimulateCNLOHforSite (p->left, genome, site, seed);
+            SimulateCNLOHforSite (p->right, genome, site, seed);
+        }
+    }
+
+
+
+/********************************** EvolveDeletionsOnTree ***********************************/
  /*	Simulates point deletions under an infinite haploid sites model (ISM).
     Haploid here means that site 33 in the maternal genome and site 33 in the paternal
     genome will be considered different sites, so both can mutate.
@@ -2857,6 +3013,7 @@ void GTRmodel (double Pij[4][4], double branchLength)
  
     The number of point deletions will be distributed as a Poisson with parameter the sum of
 	branch lengths (node length * deletion rate) over all sites.
+
 	We will force it to get at most one deletion per site
 */
 void EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed)
@@ -2864,13 +3021,16 @@ void EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed)
     int		i, trials, numDeletions, deletionsSoFar;
     double	totalDeletionBranchSum;
 
+    /*
     totalDeletionBranchSum = 0;
     for (i=0; i<numSites; i++)
         {
         allSites[i].deletionBranchSum = SumBranches (healthyRoot) / mutationRate * deletionRate;;
         totalDeletionBranchSum += allSites[i].deletionBranchSum;
         }
+	*/
 	
+	totalDeletionBranchSum = numSites * totalTreeLength / mutationRate * deletionRate;
 	numDeletions = RandomPoisson (totalDeletionBranchSum, seed); /* the number of deletions will be distributed as a Poisson with parameter totalDeletionBranchSum */
 	
      /* if the number of deletions is bigger than the number of sites quit the program and warn the user about violation of ISM */
@@ -2938,8 +3098,9 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
         if (p->isHealthyRoot == YES)
             {
             cumDeletionBranchLength = 0;
-            uniform = RandomUniform(seed) * allSites[site].deletionBranchSum;
-            }
+//            uniform = RandomUniform(seed) * allSites[site].deletionBranchSum;
+             uniform = RandomUniform(seed) * totalTreeLength / mutationRate * deletionRate;;
+           }
         else
             {
             anccell = p->anc->label;
@@ -2951,7 +3112,7 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
                 {
                 data[genome][cell][site] = data[genome][anccell][site];
                 }
-			else /* => there will be change */
+			else /* => there will be a deletion */
                 {
                 if (data[genome][anccell][site] != DELETION)  /* checking all this might be excessive */
                     data[genome][cell][site] = DELETION;
@@ -3385,7 +3546,6 @@ void GenerateReadCounts (long int *seed)
 			fprintf (fpCATG,"tumcell%04d  ", i+1);
 		fprintf (fpCATG,"healthycell  ");
 		}
-
 	
 	for (snv=0; snv<numSNVs; snv++)
 		{
@@ -3544,13 +3704,13 @@ void GenerateReadCounts (long int *seed)
 						}
 					else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 						{
-						numMaternalReads = RandomNegativeBinomial(singleAlleleCoverageProportion*coverage, alphaCoverage, seed);
+						numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage, alphaCoverage, seed);
 						numPaternalReads = 0;
 						}
 					else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 						{
 						numMaternalReads = 0;
-						numPaternalReads = RandomNegativeBinomial(singleAlleleCoverageProportion*coverage, alphaCoverage, seed);
+						numPaternalReads = RandomNegativeBinomial(allelicImbalance*coverage, alphaCoverage, seed);
 						}
 					else /* no allele is present (locus dropout/deletion) */
 						{
@@ -3567,13 +3727,13 @@ void GenerateReadCounts (long int *seed)
 						}
 					else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 						{
-						numMaternalReads = RandomPoisson(singleAlleleCoverageProportion*coverage, seed);
+						numMaternalReads = RandomPoisson(allelicImbalance*coverage, seed);
 						numPaternalReads = 0;
 						}
 					else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 						{
 						numMaternalReads = 0;
-						numPaternalReads = RandomPoisson(singleAlleleCoverageProportion*coverage, seed);
+						numPaternalReads = RandomPoisson(allelicImbalance*coverage, seed);
 						}
 					else /* no allele is present (locus dropout/deletion) */
 						{
@@ -4404,7 +4564,7 @@ void ListTimes (int position, FILE *fp)
                      "healthyTip", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
         else if (p->anc != NULL && p->left != NULL && p->right != NULL && p->anc->anc == NULL)
             fprintf (fp, "%12s   %4d   %4d  (%4d %4d %4d) |   %10.2lf      %10.2lf       %10.4lf\n",
-                     "tumorMRCA", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
+                     "ingroupMRCA", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
         else if (p->anc != NULL && p->left != NULL && p->right != NULL)
             fprintf (fp, "%12s   %4d   %4d  (%4d %4d %4d) |   %10.2lf      %10.2lf       %10.4lf\n",
                      "internal", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
@@ -4413,7 +4573,7 @@ void ListTimes (int position, FILE *fp)
                      "tip", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
         else if (p->anc == NULL && p->left != NULL && p->right != NULL)
             fprintf (fp, "%12s   %4d   %4d  (%4d %4d %4d) |   %10.2lf      %10.2lf       %10.4lf\n",
-                     "healthyRoot", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
+                     "outgroupRoot", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
 		
         position++;
 		
@@ -4440,6 +4600,12 @@ static void PrintSiteInfo (FILE *fp, int i)
 	fprintf (fp, "\n numMutations = %d", allSites[i].numMutations);
 	fprintf (fp, "\n  numMutationsMaternal = %d", allSites[i].numMutationsMaternal);
 	fprintf (fp, "\n  numMutationsPaternal = %d", allSites[i].numMutationsPaternal);
+	fprintf (fp, "\n numDeletions = %d", allSites[i].numDeletions);
+	fprintf (fp, "\n  numDeletionsMaternal = %d", allSites[i].numDeletionsMaternal);
+	fprintf (fp, "\n  numDeletionsPaternal = %d", allSites[i].numDeletionsPaternal);
+	fprintf (fp, "\n numCNLOH = %d", allSites[i].numCNLOH);
+	fprintf (fp, "\n  numCNLOHmaternal = %d", allSites[i].numCNLOHmaternal);
+	fprintf (fp, "\n  numCNLOHpaternal = %d", allSites[i].numCNLOHpaternal);
 	fprintf (fp, "\n hasADO = %d", allSites[i].hasADO);
 	fprintf (fp, "\n hasGenotypingError = %d", allSites[i].hasGenotypeError);
 	fprintf (fp, "\n referenceAllele = %c", WhichNuc(allSites[i].referenceAllele));
@@ -4452,7 +4618,6 @@ static void PrintSiteInfo (FILE *fp, int i)
 	fprintf (fp, "\n countG = %d", allSites[i].countG);
 	fprintf (fp, "\n countT = %d", allSites[i].countT);
 	fprintf (fp, "\n countDropped = %d", allSites[i].countDropped);
-	fprintf (fp, "\n branchSum = %f", allSites[i].branchSum);
 	fprintf (fp, "\n rateMultiplier = %f", allSites[i].rateMultiplier);
 }
 
@@ -5497,11 +5662,24 @@ static void	PrintRunInformation (FILE *fp)
 			fprintf (fp, "\n Proportion of reps without SNV sites         =   %3.2f", zeroSNVs/(double)numDataSets);
 			}
 
-		fprintf (fp, "\n\nDeletion rates");
-		fprintf (fp, "\n Deletion rate                                =   %2.1e", deletionRate);
-        fprintf (fp, "\n Mean number of deletion events               =   %3.2f", meanNumDEL);
-        if (numDataSets > 1)
-			fprintf (fp, "\n Variance number of deletion events           =   %3.2f", varNumDEL);
+		if (deletionRate > 0)
+			{
+			fprintf (fp, "\n\nDeletion rates");
+			fprintf (fp, "\n Deletion rate                                =   %2.1e", deletionRate);
+			fprintf (fp, "\n Mean number of deletion events               =   %3.2f", meanNumDEL);
+			if (numDataSets > 1)
+				fprintf (fp, "\n Variance number of deletion events           =   %3.2f", varNumDEL);
+			}
+
+		if (CNLOHrate > 0)
+			{
+			fprintf (fp, "\n\nCopy-neutral LOH rates");
+			fprintf (fp, "\n CN-LOH rate                                  =   %2.1e", CNLOHrate);
+			fprintf (fp, "\n Mean number of CN-LOH events                 =   %3.2f", meanNumCNLOH);
+			if (numDataSets > 1)
+				fprintf (fp, "\n Variance number of CN-LOH events            =   %3.2f", varNumCNLOH);
+			}
+
 		}
  
 		if (genotypingError > 0 || doSimulateReadCounts == YES)
@@ -5530,7 +5708,7 @@ static void	PrintRunInformation (FILE *fp)
 			else
 				fprintf (fp, "\n  4-template model");
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
-			fprintf (fp, "\n ADO/deletion read proportion                 =   %-3.2f", singleAlleleCoverageProportion);
+			fprintf (fp, "\n Allelic imbalance                 =   %-3.2f", allelicImbalance);
 			if (thereIsEij == YES)
 				{
 				fprintf (fp, "\n  NGS error rate matrix                       =   %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]);
@@ -5569,6 +5747,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -b%d", alphabet);
 		fprintf (fp, " -u%2.1e", mutationRate);
 		fprintf (fp, " -d%2.1e", deletionRate);
+		fprintf (fp, " -H%2.1e", CNLOHrate);
 		fprintf (fp, " -j%d", numFixedMutations);
 		fprintf (fp, " -S%d", numUserSignatures);
 		for (i=0; i<numUserSignatures; i++)
@@ -5590,7 +5769,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -A%2.1e %2.1e %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 		fprintf (fp, " -E%2.1e", sequencingError);
 		fprintf (fp, " -D%2.1e", ADOrate);
-		fprintf (fp, " -R%2.1e", singleAlleleCoverageProportion);
+		fprintf (fp, " -R%2.1e", allelicImbalance);
 		fprintf (fp, " -X%3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]
 		, Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 
@@ -5657,6 +5836,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] =  %d", alphabet);
 	fprintf (fp,"\n-u: mutation rate =  %2.1e", mutationRate);
 	fprintf (fp,"\n-d: deletion rate =  %2.1e", deletionRate);
+	fprintf (fp,"\n-H: CNLOH rate =  %2.1e", CNLOHrate);
     fprintf (fp,"\n-j: fixed number of mutations =  %d", numFixedMutations);
     fprintf (fp,"\n-S: number of trinucleotide genetic signature =  %d", numUserSignatures);
     fprintf (fp,"\n-m: alternative mutation model =  %d", altModel);
@@ -5675,7 +5855,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-A: amplification error, var, 2-template model =  %2.1e, %2.1e, %d)", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
 	fprintf (fp,"\n-D: allelic dropout =  %2.1e", ADOrate);
-	fprintf (fp,"\n-R: ADO/deletion read proportion =  %2.1e", singleAlleleCoverageProportion);
+	fprintf (fp,"\n-R: allelic imbalance =  %2.1e", allelicImbalance);
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3], Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 
     /* Output */
@@ -5707,8 +5887,8 @@ void PrintUsage(void)
 {
     fprintf (stderr, "\n\n--------------------------------------------------------------------------------------------------------\n");
     fprintf (stderr, "%s", PROGRAM_NAME_UPPERCASE);
-    fprintf (stderr, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a healthy cell as outgroup.", PROGRAM_NAME);
-    fprintf (stderr, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -u# -d# -j# -S# (# #) -m# -p# -w# -c# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # #  -G# -C# -V# -A# # # -E# -D# -R# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -0 -y# -z# -## -?]", PROGRAM_NAME);
+    fprintf (stderr, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
+    fprintf (stderr, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -c# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # #  -G# -C# -V# -A# # # -E# -D# -R# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -0 -y# -z# -## -?]", PROGRAM_NAME);
 	
     fprintf (stderr,"\n-n: number of replicates (e.g. -n1000)");
     fprintf (stderr,"\n-s: sample size (# cells) (e.g. -s8)");
@@ -5723,6 +5903,7 @@ void PrintUsage(void)
 	fprintf (stderr,"\n-b: alphabet [0:binary 1:DNA] (e.g. -b0)");
 	fprintf (stderr,"\n-u: mutation rate (e.g. -u1e-6)");
 	fprintf (stderr,"\n-d: deletion rate (e.g. -d1e-5)");
+	fprintf (stderr,"\n-H: CNLOH rate (e.g. -H1e-5)");
     fprintf (stderr,"\n-j: fixed number of mutations (e.g. -j100)");
     fprintf (stderr,"\n-S: trinucleotide genetic signatures (e.g. -S2 3 0.8 13 0.2)");
     fprintf (stderr,"\n-m: alternative mutation model [0:ISMhap 1:Mk2 2:finiteDNA] [default mutation model is ISM diploid] (e.g. -m2)");
@@ -5739,7 +5920,7 @@ void PrintUsage(void)
 	fprintf (stderr,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
 	fprintf (stderr,"\n-E: sequencing error (e.g. -E0.001)");
 	fprintf (stderr,"\n-D: allelic dropout (e.g. -D0.1)");
-	fprintf (stderr,"\n-R: ADO/deletion read proportion (e.g. -R0.5)");
+	fprintf (stderr,"\n-R: ADO/deletion allelic imbalance (e.g. -R0.5)");
 	fprintf (stderr,"\n-X: error matrix ACGT x ACGT (e.g. -X0 1 1 1 1 0 1 1 1 1 0 1 1 1 1 0)");
 
     fprintf (stderr,"\n-1: print SNV genotypes to a file (e.g. -1)");
@@ -6175,11 +6356,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j S m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
+	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G           M         R S T U V   X
+	A   C D E   G H         M         R S T U V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 static void ReadParametersFromCommandLine (int argc,char **argv)
@@ -6346,6 +6527,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 if (deletionRate < 0)
                     {
                     fprintf (stderr, "PARAMETER ERROR: Bad deletion rate (%f)\n\n", deletionRate);
+                    PrintUsage();
+                    }
+                break;
+            case 'H':
+                CNLOHrate = atof(argv[i]);
+                if (CNLOHrate < 0)
+                    {
+                    fprintf (stderr, "PARAMETER ERROR: Bad CNLOH rate (%f)\n\n", CNLOHrate);
                     PrintUsage();
                     }
                 break;
@@ -6649,10 +6838,10 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 break;
 			case 'R':
-				singleAlleleCoverageProportion = atof(argv[i]);
-				if (singleAlleleCoverageProportion < 0 ||singleAlleleCoverageProportion > 1)
+				allelicImbalance = atof(argv[i]);
+				if (allelicImbalance < 0 ||allelicImbalance > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad one allele coverage proportion (%f)\n\n", singleAlleleCoverageProportion);
+                    fprintf (stderr, "PARAMETER ERROR: Bad one allele coverage proportion (%f)\n\n", allelicImbalance);
                     PrintUsage();
                     }
                 break;
@@ -6783,11 +6972,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 /* Reads parameter values from the parameter file  */
 /*
  USED IN ORDER
-	n s l e g h k q i b u d j S m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
+	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D R M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A   C D E   G           M         R S T U V   X
+	A   C D E   G H         M         R S T U V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -6944,6 +7133,13 @@ void ReadParametersFromFile ()
                 if (fscanf(stdin, "%lf", &deletionRate)!=1 || deletionRate < 0 || deletionRate > 1)
                     {
                     fprintf (stderr, "PARAMETER ERROR: Bad deletion rate (%f)\n\n", deletionRate);
+                    PrintUsage();
+                    }
+                break;
+ 			case 'H':
+                if (fscanf(stdin, "%lf", &CNLOHrate)!=1 || CNLOHrate < 0 || CNLOHrate > 1)
+                    {
+                    fprintf (stderr, "PARAMETER ERROR: Bad CNLOH rate (%f)\n\n", CNLOHrate);
                     PrintUsage();
                     }
                 break;
@@ -7229,9 +7425,9 @@ void ReadParametersFromFile ()
 					}
 				break;
 			case 'R':
-				if (fscanf(stdin, "%lf", &singleAlleleCoverageProportion) !=1 ||singleAlleleCoverageProportion < 0 ||singleAlleleCoverageProportion > 1)
+				if (fscanf(stdin, "%lf", &allelicImbalance) !=1 ||allelicImbalance < 0 ||allelicImbalance > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad one allele coverage proportion (%f)\n\n", singleAlleleCoverageProportion);
+					fprintf (stderr, "PARAMETER ERROR: Bad one allele coverage proportion (%f)\n\n", allelicImbalance);
 					PrintUsage();
 					}
 				break;

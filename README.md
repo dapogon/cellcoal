@@ -2,8 +2,8 @@
 Coalescent simulation of somatic cells  
 (c) 2018 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
 
-## About CoalTumor
-CoalTumor simulates the somatic evolution of single-cells. CoalTumor generates a coalescent tree and can simulate a sample of diploid genomes from tumoral cells –no recombination– from a growing population, together with a healthy cell as outgroup. CoalTumor implements multiple mutations models (0/1, DNA, infinite and finite site models, cancer signatures) and is able to generate read counts and genotype likelihoods considering allelic dropout, sequencing and amplification error.
+## About CellCoal
+CellCoal simulates the somatic evolution of single-cells. CellCoal generates a coalescent tree and can simulate a sample of diploid genomes from somatic cells –no recombination– from a growing population, together with a another cell as outgroup. For example a growing tumor population together with a healthy cell as outgroup. CellCoal implements multiple mutations models (0/1, DNA, infinite and finite site models, deletion, copy-neutral LOH, 30 cancer signatures) and is able to generate read counts and genotype likelihoods considering allelic dropout, sequencing and amplification error.
 
 ## Getting started
 

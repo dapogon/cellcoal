@@ -2,7 +2,7 @@
 	
 	[COALESCENT]
 	[number of replicates] n1
-	[sample size (# tumor cells)] s100
+	[sample size (# tumor cells)] s20
 	[number of sites] l1000
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
@@ -15,10 +15,11 @@
 
 	[MUTATION MODEL]
 	[alphabet 0:binary 1:DNA] b1
-	[mutation rate] u1e-6
+	[mutation rate] u2e-6
 	[deletion rate] [d1e-6]
+	[CN_LOH rate] [H1e-5]
 	[fixed number of true SNVs - ISM] [j3]
-	[trinucleotide genetic signature - ISM] S1 1 1.0 [S2 11 0.3 22 0.7]
+	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
     [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m0
      [default mutation model is ISM diploid]	
 	[proportion of alternative model sites] p0
@@ -69,7 +70,7 @@
 	[simulate only trees] [0]
 	[noisy]	y1
 	[number of nodes] z1000
-	[seed] [#1523360268] [if no seed is specified, the current time will be used as seed]
+	[seed] [#1523360268] #13 [if no seed is specified, the current time will be used as seed]
 
 	[noisy = 0: does not print anything
 	 noisy = 1: + simulation summary, 

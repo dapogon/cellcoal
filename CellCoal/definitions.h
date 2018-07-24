@@ -83,14 +83,13 @@ typedef struct
     int		isSNV, isSNP, isVariant;
 	int		numMutations, numMutationsMaternal, numMutationsPaternal;
     int     numDeletions, numDeletionsMaternal, numDeletionsPaternal;
+    int     numCNLOH, numCNLOHmaternal, numCNLOHpaternal;
 	int		hasADO;
 	int		hasGenotypeError;
 	int		countA, countC, countG, countT, countACGT, countCellswithData, countDropped;
 	int		referenceAllele;
 	int		*alternateAlleles;
 	int		numAltAlleles;
-	double	branchSum;
-	double	deletionBranchSum;
     double  rateMultiplier;
 	}
     SiteStr;
