@@ -47,7 +47,7 @@
 	[haploid coverage] [R0.5]	
 	[amplification error] A0.2 0.01 0
 	[sequencing error] E0.1
-	[doublet rate per cell] B1
+	[doublet rate per cell] B0.1
 	[error matrix ACGT x ACGT] 	   [X0 1 1 1
     							 	 1 0 1 1
     							 	 1 1 0 1
