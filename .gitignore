@@ -54,8 +54,8 @@ build/
 # NB: slash on the end, so we only remove the FOLDER, not any files that were badly named "Stuff"
 
 Stuff/
-CellCoal.xcodeproj
-.gitignore
+*.xcodeproj
+*.gitignore
 
 ##Compilation folders
 bin
