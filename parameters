@@ -18,7 +18,7 @@
 	[mutation rate] u2e-6
 	[deletion rate] [d1e-6]
 	[CN_LOH rate] [H1e-5]
-	[fixed number of true SNVs - ISM] j1
+	[fixed number of true SNVs - ISM] [j100]
 	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
     [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m0
      [default mutation model is ISM diploid]	

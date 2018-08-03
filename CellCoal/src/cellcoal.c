@@ -77,7 +77,7 @@
 - print ML haplotypes
  
 [TO-DOs]
-//TODO: at some point move data  structure into cell structure
+//TODO: at some point move data structure into cell structure
 - dated tips (maybe)
 - population structure (maybe)
 - change random number generator ?
