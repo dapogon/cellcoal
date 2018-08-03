@@ -555,7 +555,6 @@ int main (int argc, char **argv)
 				cumNumDELSq += pow(numDEL,2);
 				}
 
-
 			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 			numSNVs = CountTrueVariants();
 				
