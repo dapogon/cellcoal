@@ -2,8 +2,8 @@
 	
 	[COALESCENT]
 	[number of replicates] n1
-	[sample size (# tumor cells)] s20
-	[number of sites] l1000
+	[sample size (# tumor cells)] s4
+	[number of sites] l100
 	[effective population size] e10000
 	[exponential growth rate] g1e-4  [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
@@ -18,7 +18,7 @@
 	[mutation rate] u2e-6
 	[deletion rate] [d1e-6]
 	[CN_LOH rate] [H1e-5]
-	[fixed number of true SNVs - ISM] [j3]
+	[fixed number of true SNVs - ISM] j1
 	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
     [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m0
      [default mutation model is ISM diploid]	
@@ -42,10 +42,12 @@
 	[genotyping error; no reads] [G0.00]
  	[sequencing coverage; reads simulated] C100
 	[coverage overdispersion] V5
+	[mat/pat allelic imbalance] [I0.5]	
+	[allelic dropout] D0.1
+	[haploid coverage] [R0.5]	
 	[amplification error] A0.2 0.01 0
-	[sequencing error] E0.01
-	[allelic dropout] D0.10
-	[ADO/DEL allelic imbalance] [R0.5]	
+	[sequencing error] E0.1
+	[doublet rate per cell] B1
 	[error matrix ACGT x ACGT] 	   [X0 1 1 1
     							 	 1 0 1 1
     							 	 1 1 0 1
@@ -60,6 +62,7 @@
 	[print times] [7]
 	[print CATG] 8
 	[print true haplotypes] [9]
+	[print ML haplotypes] [@]
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] x
 	[results folder name] oresults

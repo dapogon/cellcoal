@@ -7,9 +7,9 @@
 	objects = {
 
 /* Begin PBXBuildFile section */
-		D58E3F851FC432FD0002C0A6 /* eigen.c in Sources */ = {isa = PBXBuildFile; fileRef = D58E3F841FC432FD0002C0A6 /* eigen.c */; };
-		D593630C1E22A2EB0019EF0C /* cellcoal.c in Sources */ = {isa = PBXBuildFile; fileRef = D593630B1E22A2EB0019EF0C /* cellcoal.c */; };
-		D5D2197F207E235600C9DF7E /* signatures.c in Sources */ = {isa = PBXBuildFile; fileRef = D5D2197E207E235600C9DF7E /* signatures.c */; };
+		D5287AB7210F2EEF00E19545 /* signatures.c in Sources */ = {isa = PBXBuildFile; fileRef = D5287AB0210F2EEF00E19545 /* signatures.c */; };
+		D5287AB8210F2EEF00E19545 /* eigen.c in Sources */ = {isa = PBXBuildFile; fileRef = D5287AB1210F2EEF00E19545 /* eigen.c */; };
+		D5287AB9210F2EEF00E19545 /* cellcoal.c in Sources */ = {isa = PBXBuildFile; fileRef = D5287AB5210F2EEF00E19545 /* cellcoal.c */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXCopyFilesBuildPhase section */
@@ -25,14 +25,14 @@
 /* End PBXCopyFilesBuildPhase section */
 
 /* Begin PBXFileReference section */
-		D58E3F821FC4321D0002C0A6 /* cellcoal.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = cellcoal.h; sourceTree = "<group>"; };
-		D58E3F831FC432FD0002C0A6 /* eigen.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = eigen.h; sourceTree = "<group>"; };
-		D58E3F841FC432FD0002C0A6 /* eigen.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = eigen.c; sourceTree = "<group>"; };
+		D5287AB0210F2EEF00E19545 /* signatures.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = signatures.c; sourceTree = "<group>"; };
+		D5287AB1210F2EEF00E19545 /* eigen.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = eigen.c; sourceTree = "<group>"; };
+		D5287AB2210F2EEF00E19545 /* cellcoal.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = cellcoal.h; sourceTree = "<group>"; };
+		D5287AB3210F2EEF00E19545 /* signatures.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = signatures.h; sourceTree = "<group>"; };
+		D5287AB4210F2EEF00E19545 /* eigen.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = eigen.h; sourceTree = "<group>"; };
+		D5287AB5210F2EEF00E19545 /* cellcoal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cellcoal.c; sourceTree = "<group>"; };
+		D5287AB6210F2EEF00E19545 /* definitions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = definitions.h; sourceTree = "<group>"; };
 		D59363011E22A28E0019EF0C /* CellCoal */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CellCoal; sourceTree = BUILT_PRODUCTS_DIR; };
-		D593630B1E22A2EB0019EF0C /* cellcoal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cellcoal.c; sourceTree = "<group>"; };
-		D5D2197D207E1B7800C9DF7E /* signatures.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = signatures.h; sourceTree = "<group>"; };
-		D5D2197E207E235600C9DF7E /* signatures.c */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.c; path = signatures.c; sourceTree = "<group>"; };
-		D5D21980207E292400C9DF7E /* definitions.h */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.c.h; path = definitions.h; sourceTree = "<group>"; };
 		D5F0500C20EE5291008E8029 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -47,6 +47,20 @@
 /* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
+		D5287AAF210F2EEF00E19545 /* src */ = {
+			isa = PBXGroup;
+			children = (
+				D5287AB5210F2EEF00E19545 /* cellcoal.c */,
+				D5287AB0210F2EEF00E19545 /* signatures.c */,
+				D5287AB1210F2EEF00E19545 /* eigen.c */,
+				D5287AB2210F2EEF00E19545 /* cellcoal.h */,
+				D5287AB3210F2EEF00E19545 /* signatures.h */,
+				D5287AB4210F2EEF00E19545 /* eigen.h */,
+				D5287AB6210F2EEF00E19545 /* definitions.h */,
+			);
+			path = src;
+			sourceTree = "<group>";
+		};
 		D59362F81E22A28E0019EF0C = {
 			isa = PBXGroup;
 			children = (
@@ -66,13 +80,7 @@
 		D59363031E22A28E0019EF0C /* CellCoal */ = {
 			isa = PBXGroup;
 			children = (
-				D593630B1E22A2EB0019EF0C /* cellcoal.c */,
-				D58E3F841FC432FD0002C0A6 /* eigen.c */,
-				D5D2197E207E235600C9DF7E /* signatures.c */,
-				D58E3F821FC4321D0002C0A6 /* cellcoal.h */,
-				D58E3F831FC432FD0002C0A6 /* eigen.h */,
-				D5D2197D207E1B7800C9DF7E /* signatures.h */,
-				D5D21980207E292400C9DF7E /* definitions.h */,
+				D5287AAF210F2EEF00E19545 /* src */,
 				D5F0500C20EE5291008E8029 /* README.md */,
 			);
 			path = CellCoal;
@@ -104,7 +112,7 @@
 		D59362F91E22A28E0019EF0C /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 0900;
+				LastUpgradeCheck = 0940;
 				ORGANIZATIONNAME = "David Posada";
 				TargetAttributes = {
 					D59363001E22A28E0019EF0C = {
@@ -135,9 +143,9 @@
 			isa = PBXSourcesBuildPhase;
 			buildActionMask = 2147483647;
 			files = (
-				D58E3F851FC432FD0002C0A6 /* eigen.c in Sources */,
-				D5D2197F207E235600C9DF7E /* signatures.c in Sources */,
-				D593630C1E22A2EB0019EF0C /* cellcoal.c in Sources */,
+				D5287AB9210F2EEF00E19545 /* cellcoal.c in Sources */,
+				D5287AB8210F2EEF00E19545 /* eigen.c in Sources */,
+				D5287AB7210F2EEF00E19545 /* signatures.c in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -157,6 +165,7 @@
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -164,6 +173,7 @@
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
@@ -210,6 +220,7 @@
 				CLANG_WARN_BOOL_CONVERSION = YES;
 				CLANG_WARN_COMMA = YES;
 				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
 				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
 				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
 				CLANG_WARN_EMPTY_BODY = YES;
@@ -217,6 +228,7 @@
 				CLANG_WARN_INFINITE_RECURSION = YES;
 				CLANG_WARN_INT_CONVERSION = YES;
 				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
 				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
 				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
 				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
