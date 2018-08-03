@@ -64,6 +64,7 @@
 		D59362F81E22A28E0019EF0C = {
 			isa = PBXGroup;
 			children = (
+				D5287AAF210F2EEF00E19545 /* src */,
 				D59363031E22A28E0019EF0C /* CellCoal */,
 				D59363021E22A28E0019EF0C /* Products */,
 			);
@@ -80,7 +81,6 @@
 		D59363031E22A28E0019EF0C /* CellCoal */ = {
 			isa = PBXGroup;
 			children = (
-				D5287AAF210F2EEF00E19545 /* src */,
 				D5F0500C20EE5291008E8029 /* README.md */,
 			);
 			path = CellCoal;
