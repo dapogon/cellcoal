@@ -82,7 +82,6 @@
 - population structure (maybe)
 - change random number generator ?
 
-
 [MODELS implemented]
 0:ISM_01
 1:ISMhap_01

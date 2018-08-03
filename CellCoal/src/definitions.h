@@ -134,5 +134,4 @@ typedef struct
 	}
     CellStr;
 
-
 #endif /* macros_h */
