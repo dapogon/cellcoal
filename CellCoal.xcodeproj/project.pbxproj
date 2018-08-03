@@ -33,6 +33,7 @@
 		D5287AB5210F2EEF00E19545 /* cellcoal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cellcoal.c; sourceTree = "<group>"; };
 		D5287AB6210F2EEF00E19545 /* definitions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = definitions.h; sourceTree = "<group>"; };
 		D59363011E22A28E0019EF0C /* CellCoal */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CellCoal; sourceTree = BUILT_PRODUCTS_DIR; };
+		D5BB89472114674100F07B05 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		D5F0500C20EE5291008E8029 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 /* End PBXFileReference section */
 
@@ -66,6 +67,7 @@
 			children = (
 				D5287AAF210F2EEF00E19545 /* src */,
 				D5F0500C20EE5291008E8029 /* README.md */,
+				D5BB89472114674100F07B05 /* .gitignore */,
 				D59363021E22A28E0019EF0C /* Products */,
 			);
 			sourceTree = "<group>";
