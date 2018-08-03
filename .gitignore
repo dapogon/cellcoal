@@ -1,62 +1,15 @@
-#########################
-# .gitignore file for Xcode4 and Xcode5 Source projects
-#
-# Apple bugs, waiting for Apple to fix/respond:
-#
-#    15564624 - what does the xccheckout file in Xcode5 do? Where's the documentation?
-#
-# Version 2.6
-# For latest version, see: http://stackoverflow.com/questions/49478/git-ignore-file-for-xcode-projects
-#
-# 2015 updates:
-# - Fixed typo in "xccheckout" line - thanks to @lyck for pointing it out!
-# - Fixed the .idea optional ignore. Thanks to @hashier for pointing this out
-# - Finally added "xccheckout" to the ignore. Apple still refuses to answer support requests about this, but in practice it seems you should ignore it.
-# - minor tweaks from Jona and Coeur (slightly more precise xc* filtering/names)
-# 2014 updates:
-# - appended non-standard items DISABLED by default (uncomment if you use those tools)
-# - removed the edit that an SO.com moderator made without bothering to ask me
-# - researched CocoaPods .lock more carefully, thanks to Gokhan Celiker
-# 2013 updates:
-# - fixed the broken "save personal Schemes"
-# - added line-by-line explanations for EVERYTHING (some were missing)
-#
-# NB: if you are storing "built" products, this WILL NOT WORK,
-# and you should use a different .gitignore (or none at all)
-# This file is for SOURCE projects, where there are many extra
-# files that we want to exclude
-#
-#########################
-
-#####
-# OS X temporary files that should never be committed
-#
-# c.f. http://www.westwind.com/reference/os-x/invisibles.html
-
 .DS_Store
 .Trashes
 *.swp
 *.lock
 *~.nib
-
-
-####
-# Xcode build files -
-#
-# NB: slash on the end, so we only remove the FOLDER, not any files that were badly named "DerivedData"
+*.xcodeproj
+.gitignore
 
 DerivedData/
-build/
+stuff/
+bin/
+out/
 
-####
-# Personal files
-#
-# NB: slash on the end, so we only remove the FOLDER, not any files that were badly named "Stuff"
 
-Stuff/
-*.xcodeproj
-*.gitignore
 
-##Compilation folders
-bin
-out
