@@ -3,13 +3,13 @@
 *.swp
 *.lock
 *~.nib
-*.xcodeproj
-.gitignore
 
+CellCoal.xcodeproj/
 DerivedData/
 stuff/
 bin/
 out/
 
+.gitignore
 
 
