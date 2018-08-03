@@ -76,7 +76,7 @@
 - added option for allelic imbalance
 - print ML haplotypes
  
-[TODOs]
+[TO-DOs]
 //TODO: at some point move data  structure into cell structure
 - dated tips (maybe)
 - population structure (maybe)
