@@ -67,6 +67,7 @@
 
 #define PRINT_TRIMUTCOUNTER
 #undef PRINT_TRIMUTCOUNTER
+#define PRINT_TRIMUTCOUNTER
 
 
 typedef struct tnode

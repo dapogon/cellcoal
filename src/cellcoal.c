@@ -78,6 +78,7 @@
  
 [TO-DOs]
 //TODO: at some point move data structure into cell structure
+- capability to specify transforming and helthy tip branch lengths as a function of the tumor MRCA depth
 - dated tips (maybe)
 - population structure (maybe)
 - change random number generator ?
@@ -1123,8 +1124,9 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
     } /* coalescent cell tree finished */
 	
-    TMRCA = currentTime / (2.0 * N);  /* so TMRCA is in coalescent generations */
-    coalTreeMRCA = r;
+    TMRCA = currentTime / (2.0 * N);  /* so TMRCA is in 2N generations */
+	//TMRCA = currentTime;  /* so TMRCA is in coalescent generations */
+	coalTreeMRCA = r;
 	
     /* connect the coalescent cell MRCA node with the healthy ancestral cell*/
     if (noisy > 2)
@@ -2287,7 +2289,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	//fprintf (stderr, "\n\nnumISMmutations = %d  numMutations = %d   mutationsSoFar = %d (genome = %d)",numISMmutations, numMutations, mutationsSoFar, genome);
 	
 	#ifdef PRINT_TRIMUTCOUNTER
-	int i, j, k;
+	int j, k;
 	int doDeconstructSigs = YES;
 	FILE *fpCounts, *fpRefGenome;
 
@@ -6116,14 +6118,14 @@ static void	PrintRunInformation (FILE *fp)
 		{
 		fprintf (fp, "\n\nCoalescent");
 	   // fprintf (fp, "\n Mean number of coalescence events            =   %3.2f", meanNumCA);
-		fprintf (fp, "\n Mean time to the       MRCA (# generations)  =   %3.2f", meanTMRCA);
+		fprintf (fp, "\n Mean time to the MRCA (2N generations)       =   %3.2f", meanTMRCA);
 		if (noisy > 1)
-			fprintf (fp, "\n Exp time to the       MRCA [constant Ne]     =   %3.2f", expTMRCA);
+			fprintf (fp, "\n Exp time to the MRCA [constant Ne]           =   %3.2f", expTMRCA);
 		if (numDataSets > 1)
 			{
-			fprintf (fp, "\n Variance time       MRCA                     =   %3.2f", varTMRCA);
+			fprintf (fp, "\n Variance time MRCA                           =   %3.2f", varTMRCA);
 			if (noisy > 1)
-				fprintf (fp, "\n Exp variance time       MRCA [constant Ne]   =   %3.2f", expVarTMRCA);
+				fprintf (fp, "\n Exp variance time MRCA [constant Ne]         =   %3.2f", expVarTMRCA);
 			}
 	 
 		if (rateVarAmongLineages == YES)
@@ -7390,7 +7392,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf(stderr, "PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
 					PrintUsage();
 					}
-				if (varAmplificationError < 0 || varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError)))
+				if (varAmplificationError < 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
 					{
 					fprintf(stderr, "PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
 					PrintUsage();
@@ -8003,7 +8005,7 @@ void ReadParametersFromFile ()
 					fprintf(stderr, "PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
 					PrintUsage();
 					}
-				if (varAmplificationError < 0 || varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError)))
+				if (varAmplificationError < 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
 					{
 					fprintf(stderr, "PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
 					PrintUsage();
