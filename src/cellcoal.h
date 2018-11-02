@@ -48,7 +48,8 @@ static void		PrintSNVGenotypes (FILE *fp);
 static void		PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants);
 static void 	PrintFullGenotypes (FILE *fp);
 static void 	PrintFullHaplotypes (FILE *fp);
-static void 	PrintMLhaplotypes (FILE *fp);
+static void 	PrintMLFullhaplotypes (FILE *fp);
+static void 	PrintMLSNVhaplotypes (FILE *fp);
 static void		PrintSiteInfo (FILE *fp, int site);
 static void		PrintCATG(FILE *fp);
 static void		PrintVCF(FILE *fp);
@@ -93,6 +94,7 @@ static void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long in
 static void		SimulateCNLOHforSite (TreeNode *p, int genome, int site, long int *seed);
 static int 		CountTrueVariants(void);
 static int		CountAlleles (void);
+static int		CountAllelesInCalls (void);
 static double	SumBranches (TreeNode *p);
 static double 	RandomUniform (long int *seed);
 static int 		RandomUniformTo (int max, long int *seed);

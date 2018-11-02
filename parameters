@@ -1,58 +1,68 @@
-	[PARAMETER FILE for CoalTumor] [text in brackets will be ignored]
+[PARAMETER FILE for CellCoal] [text in brackets will be ignored]
 	
-	[COALESCENT]
+[COALESCENT]
 	[number of replicates] n1
 	[sample size (# tumor cells)] s4
-	[number of sites] l100
+	[number of sites] l10
 	[effective population size] e10000
-	[exponential growth rate] g1e-4  [ln2=0.6931 max]
+	[exponential growth rate] g1e-4 [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 
-	[GENEALOGY MODIFIERS]
-	[transforming branch length; exp subst] k0.01
+[GENEALOGY MODIFIERS]
+	[transforming branch length; exp subst] k0.00
 	[healthy tip branch length; exp subst]  [q0.001] q0
 	[rate variation among lineages] i1
 
-	[MUTATION MODEL]
+[MUTATION MODEL]
 	[alphabet 0:binary 1:DNA] b1
-	[mutation rate] u2e-6
+	[mutation rate] u1e-6
 	[deletion rate] [d1e-6]
 	[CN_LOH rate] [H1e-5]
 	[fixed number of true SNVs - ISM] [j100]
 	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
-    [alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m0
-     [default mutation model is ISM diploid]	
-	[proportion of alternative model sites] p0
+	[alternative mutation model 0:ISMhap 1:Mk2 2:finiteDNA] m2
+	 [default mutation model is ISM diploid]	
+	[proportion of alternative model sites] p1
 	[alternative/default model relative mutation rate] [w1]
 	[germline SNP rate] [c0.00001]
-		[base frequencies]	[f0.3 0.2 0.2 0.3]
+	[base frequencies]	f0.3 0.2 0.2 0.3
 	[transition/transversion ratio] [t1.7]
-	[rate variation among sites] [a1]
-	[mutation matrix ACGT x ACGT]  r0 1 1 1
-    							 	1 0 1 1
-    							 	1 1 0 1
-    							 	1 1 1 0
-    							 	
-    							   [r0 1 2 3
-    							 	1 0 4 5
-    							 	2 4 0 1
-    							 	3 5 1 0]
+	[rate variation among sites] a1
+	[mutation matrix ACGT x ACGT] [r0 1 1 1
+									1 0 1 1
+									1 1 0 1
+									1 1 1 0]
 
-	[NGS PARAMETERS]
+								[r0 1 2 3
+								  1 0 4 5
+								  2 4 0 1
+								  3 5 1 0]
+
+								[r0 1 2 3
+								  1 0 4 5
+								  2 4 0 1
+								  3 5 1 0]
+
+								 r0.00 0.03 0.12 0.04 
+								  0.11 0.00 0.02 0.68 
+								  0.68 0.02 0.00 0.11 
+								  0.04 0.12 0.03 0.00
+
+[NGS PARAMETERS]
 	[genotyping error; no reads] [G0.00]
- 	[sequencing coverage; reads simulated] C100
+	[sequencing coverage; reads simulated] C100
 	[coverage overdispersion] V5
 	[mat/pat allelic imbalance] [I0.5]	
-	[allelic dropout] D0.1
+	[allelic dropout] D0.0
 	[haploid coverage] [R0.5]	
-	[amplification error] A0.2 0.01 0
-	[sequencing error] E0.1
-	[doublet rate per cell] B0.1
-	[error matrix ACGT x ACGT] 	   [X0 1 1 1
-    							 	 1 0 1 1
-    							 	 1 1 0 1
-    							 	 1 1 1 0]
-	[OUTPUT]
+	[amplification error] A0.5 0.01 0
+	[sequencing error] [E0.01]
+	[doublet rate per cell] [B0.1]
+	[error matrix ACGT x ACGT] [X0 1 1 1
+								 1 0 1 1
+								 1 1 0 1
+								 1 1 1 0]
+[OUTPUT]
 	[print SNV genotypes] 1
 	[print SNV haplotypes] 2
 	[print full genotypes] 3
@@ -60,24 +70,23 @@
 	[print ancestors] [5]
 	[print trees] 6
 	[print times] [7]
-	[print CATG] 8
-	[print true haplotypes] [9]
-	[print ML haplotypes] [@]
+	[print CATG] [8]
+	[print true haplotypes] 9
+	[print ML haplotypes] @
 	[print replicates in individual folders] v
 	[print consensus/IUPAC haplotypes] x
 	[results folder name] oresults
 	[user tree file] [Tusertree.0003]
 	[user genome file] [Uusergenome.fas]
 	
-	[OTHER]
+[OTHER]
 	[simulate only trees] [0]
 	[noisy]	y1
 	[number of nodes] z1000
-	[seed] [#1523360268] #13 [if no seed is specified, the current time will be used as seed]
+	[seed] [#1523360268] [#13] [if no seed is specified, the current time will be used as seed]
 
 	[noisy = 0: does not print anything
 	 noisy = 1: + simulation summary, 
 	 noisy = 2: + replicate information, 
-	 noisy = 3: + calculation status and event information]
-	
-	
+	noisy = 3: + calculation status and event information]
+
