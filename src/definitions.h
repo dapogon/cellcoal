@@ -33,6 +33,7 @@
 #define T						3
 #define ADO						9
 #define DELETION				7
+#define MISSING					-9
 
 #define CG_AT					0 	// C>A or G>T
 #define CG_GC					1	// C>G or G>C
@@ -87,7 +88,9 @@ typedef struct
     int     numCNLOH, numCNLOHmaternal, numCNLOHpaternal;
 	int		hasADO;
 	int		hasGenotypeError;
-	int		countA, countC, countG, countT, countACGT, countCellswithData, countDropped;
+	int		countA, countC, countG, countT, countN, countACGT; // alelle counts in genotypes
+	int		readCountA, readCountC, readCountG, readCountT, readCountACGT; // alelle counts in reads
+	int		countCellswithData, countDropped;
 	int		referenceAllele;
 	int		*alternateAlleles;
 	int		numAltAlleles;
