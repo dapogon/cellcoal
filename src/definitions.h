@@ -51,7 +51,6 @@
 #define trinuc(i,j,k)   (i*16 + j*4 + k)
 #define trimut(i,j,k)   (i*24 + j*4 + k)
 
-
 #define CHECK_MUT_DISTRIBUTION
 #undef CHECK_MUT_DISTRIBUTION
 

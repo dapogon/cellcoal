@@ -172,6 +172,8 @@ int main (int argc, char **argv)
 	coverage = 0;					/* NGS  depth for read counts */
 	rateVarCoverage = NO;			/* there is coverage dispersion */
 	ADOrate = 0;					/* allelic dropout */
+	alphaADOsites = infinity;			/* alpha shape allelic dropout heterogeneity among sites */
+	alphaADOcells = infinity;			/* alpha shape allelic dropout heterogeneity among cells */
 	sequencingError = 0;			/* NGS error rate */
 	genotypingError = 0;			/* add errors directly in the genotypes */
 	SNPrate = 0.0;					/* germline variation rate for rooth healthy genome */
@@ -2160,7 +2162,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
 		}
 	}
 
-
+	//FIXME: check S1
 
 /*************************** SimulateSignatureISM **********************************/
 /*	Simulates genetic signatures under an infinite diploid trinucleotide model (ISM).
@@ -2445,7 +2447,7 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 		/* 1: Choose a mutation signature */
 		signID = ChooseUniformState(signatureWeight, seed);
 		chosenSignature = signatureID[signID];
-		
+		//fprintf (stderr,"\nchosenSignature = %d", chosenSignature);
 		/* 2: Select a mutation out of the 96 possible ones for the choosen signature */
 		chosenTriMutation = ChooseUniformState(signatureProbs[chosenSignature-1], seed);
 
@@ -3488,83 +3490,87 @@ void AllocateCellStructure()
 			fprintf (stderr, "Could not allocate the cell[%d].site structure\n", i);
 			exit (-1);
 			}
-		for (j=0; j<numSites; j++)
+
+		if (doNGS == YES)
 			{
-			cell[i].site[j].readCount = (int*) calloc (4, sizeof(int));
-			if (!cell[i].site[j].readCount)
+			for (j=0; j<numSites; j++)
 				{
-				fprintf (stderr, "Could not allocate the cell[%d].site[%d].readCount structure\n", i, j);
-				exit (-1);
-				}
-			
-			cell[i].site[j].readCountDoublet = (int*) calloc (4, sizeof(int));
-			if (!cell[i].site[j].readCountDoublet)
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].site[%d].readCountDoublet structure\n", i, j);
-				exit (-1);
-				}
-			
-			cell[i].site[j].genLike = (double**) calloc (4, sizeof(double*));
-			if (!cell[i].site[j].genLike)
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLike structure\n", i, j);
-				exit (-1);
-				}
-			for (k=0; k<4; k++)
-				{
-				cell[i].site[j].genLike[k] = (double*) calloc (4, sizeof(double));
-				if (! cell[i].site[j].genLike[k] )
+				cell[i].site[j].readCount = (int*) calloc (4, sizeof(int));
+				if (!cell[i].site[j].readCount)
 					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLike[%d] structure\n", i,j,k);
+					fprintf (stderr, "Could not allocate the cell[%d].site[%d].readCount structure\n", i, j);
 					exit (-1);
 					}
-				}
-			
-			cell[i].site[j].scaledGenLike = (double**) calloc (4, sizeof(double*));
-			if (!cell[i].site[j].scaledGenLike)
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLike structure\n", i, j);
-				exit (-1);
-				}
-			for (k=0; k<4; k++)
-				{
-				cell[i].site[j].scaledGenLike[k] = (double*) calloc (4, sizeof(double));
-				if (!cell[i].site[j].scaledGenLike[k] )
+				
+				cell[i].site[j].readCountDoublet = (int*) calloc (4, sizeof(int));
+				if (!cell[i].site[j].readCountDoublet)
 					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLike[%d] structure\n", i,j,k);
+					fprintf (stderr, "Could not allocate the cell[%d].site[%d].readCountDoublet structure\n", i, j);
 					exit (-1);
 					}
-				}
-			
-			cell[i].site[j].genLikeDoublet = (double**) calloc (4, sizeof(double*));
-			if (!cell[i].site[j].genLikeDoublet)
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLikeDoublet structure\n", i, j);
-				exit (-1);
-				}
-			for (k=0; k<4; k++)
-				{
-				cell[i].site[j].genLikeDoublet[k] = (double*) calloc (4, sizeof(double));
-				if (!cell[i].site[j].genLikeDoublet[k] )
+				
+				cell[i].site[j].genLike = (double**) calloc (4, sizeof(double*));
+				if (!cell[i].site[j].genLike)
 					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLikeDoublet[%d] structure\n", i,j,k);
+					fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLike structure\n", i, j);
 					exit (-1);
 					}
-				}
-			
-			cell[i].site[j].scaledGenLikeDoublet = (double**) calloc (4, sizeof(double*));
-			if (!cell[i].site[j].scaledGenLikeDoublet)
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLikeDoublet structure\n", i, j);
-				exit (-1);
-				}
-			for (k=0; k<4; k++)
-				{
-				cell[i].site[j].scaledGenLikeDoublet[k] = (double*) calloc (4, sizeof(double));
-				if (!cell[i].site[j].scaledGenLikeDoublet[k] )
+				for (k=0; k<4; k++)
 					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLikeDoublet[%d] structure\n", i,j,k);
+					cell[i].site[j].genLike[k] = (double*) calloc (4, sizeof(double));
+					if (! cell[i].site[j].genLike[k] )
+						{
+						fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLike[%d] structure\n", i,j,k);
+						exit (-1);
+						}
+					}
+				
+				cell[i].site[j].scaledGenLike = (double**) calloc (4, sizeof(double*));
+				if (!cell[i].site[j].scaledGenLike)
+					{
+					fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLike structure\n", i, j);
 					exit (-1);
+					}
+				for (k=0; k<4; k++)
+					{
+					cell[i].site[j].scaledGenLike[k] = (double*) calloc (4, sizeof(double));
+					if (!cell[i].site[j].scaledGenLike[k] )
+						{
+						fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLike[%d] structure\n", i,j,k);
+						exit (-1);
+						}
+					}
+				
+				cell[i].site[j].genLikeDoublet = (double**) calloc (4, sizeof(double*));
+				if (!cell[i].site[j].genLikeDoublet)
+					{
+					fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLikeDoublet structure\n", i, j);
+					exit (-1);
+					}
+				for (k=0; k<4; k++)
+					{
+					cell[i].site[j].genLikeDoublet[k] = (double*) calloc (4, sizeof(double));
+					if (!cell[i].site[j].genLikeDoublet[k] )
+						{
+						fprintf (stderr, "Could not allocate the cell[%d].site[%d].genLikeDoublet[%d] structure\n", i,j,k);
+						exit (-1);
+						}
+					}
+				
+				cell[i].site[j].scaledGenLikeDoublet = (double**) calloc (4, sizeof(double*));
+				if (!cell[i].site[j].scaledGenLikeDoublet)
+					{
+					fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLikeDoublet structure\n", i, j);
+					exit (-1);
+					}
+				for (k=0; k<4; k++)
+					{
+					cell[i].site[j].scaledGenLikeDoublet[k] = (double*) calloc (4, sizeof(double));
+					if (!cell[i].site[j].scaledGenLikeDoublet[k] )
+						{
+						fprintf (stderr, "Could not allocate the cell[%d].site[%d].scaledGenLikeDoublet[%d] structure\n", i,j,k);
+						exit (-1);
+						}
 					}
 				}
 			}
@@ -4524,14 +4530,34 @@ void PrintVCF (FILE *fp)
 	int		trueMaternalAllele, truePaternalAllele;
 	int		maternalAlleleDoublet, paternalAlleleDoublet;
 
+		//FIXME: fix header
+	
+	
+	/*
+	 there are a few small issues with VCF generated by cellcoal:
+	 
+	 2.  Missing field declarations in the header:
+	 ```[W::vcf_parse] Contig '1' is not defined in the header. (Quick workaround: index the file with tabix.)
+	 [W::vcf_parse] INFO 'SOMATIC' is not defined in the header, assuming Type=String```
+	
+	 here is the modified header which can be parsed without errors/warnings by the `htslib`:
+...
+	 ##FORMAT=<ID=NG,Number=1,Type=String,Description="Genotype in the NGS library (considers ADO/DEL; ignores doublets)">
+	 ##FORMAT=<ID=DG,Number=1,Type=String,Description="Genotype in the NGS library for the second cell if there is a doublet">
+	 ##FORMAT=<ID=TG,Number=1,Type=String,Description="True genotype (considers DEL; ignores ADO/doublets">
+	 ##contig=<ID=1,length=10000>```
+	 */
+	
 	/* print file header */
 	fprintf (fp,"##fileformat=VCFv4.3");
 	fprintf (fp,"\n##filedate=");
 	PrintDate (fp);
 	fprintf (fp,"##source=CellCoal SNV simulation");
+	fprintf (fp,"\n##contig=<ID=1>");
 	fprintf (fp,"\n##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral allele\">");
 	fprintf (fp,"\n##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of samples with data\">");
 	fprintf (fp,"\n##INFO=<ID=AF,Number=R,Type=Float,Description=\"True alternate/s allele frequency (ignores doublets)\">");
+	fprintf (fp,"\n##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description=\"Somatic SNV flag\">");
 	fprintf (fp,"\n##FILTER=<ID=s50,Description=\"Less than half of samples have data\">");
 	fprintf (fp,"\n##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Called ML genotype\">");
 	fprintf (fp,"\n##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read depth\">");
@@ -4540,7 +4566,7 @@ void PrintVCF (FILE *fp)
 	fprintf (fp,"\n##FORMAT=<ID=GL,Number=G,Type=Float,Description=\"Scaled log10 genotype likelihoods\">");
 	fprintf (fp,"\n##FORMAT=<ID=ML,Number=1,Type=String,Description=\"Maximum likelihood genotype\">");
 	fprintf (fp,"\n##FORMAT=<ID=NG,Number=1,Type=String,Description=\"Genotype in the NGS library (considers ADO/DEL; ignores doublets)\">");
-	fprintf (fp,"\n##FORMAT=<ID=DG,Number=1,Type=Integer,Description=\"Genotype in the NGS library for the second cell if there is a doublet\">");
+	fprintf (fp,"\n##FORMAT=<ID=DG,Number=1,Type=String,Description=\"Genotype in the NGS library for the second cell if there is a doublet\">");
 	fprintf (fp,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True genotype (considers DEL; ignores ADO/doublets\">");
 	fprintf (fp,"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
 	
@@ -5264,7 +5290,7 @@ static void PrintSNVGenotypes (FILE *fp)
 				else if (cell[i].hasDoublet == NO)
 					fprintf (fp, " %c%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAllele), WhichNuc(cell[i].site[SNVsites[j]].MLpatAllele));
 				else
-					fprintf (fp, " %c%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAlleleDoublet), WhichNuc(cell[SNVsites[j]].site[j].MLpatAlleleDoublet));
+					fprintf (fp, " %c%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAlleleDoublet), WhichNuc(cell[i].site[SNVsites[j]].MLpatAlleleDoublet));
 				}
            fprintf (fp,"\n");
             }
@@ -5368,7 +5394,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichIUPAC(cell[i].site[SNVsites[j]].MLmatAllele, cell[i].site[SNVsites[j]].MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichIUPAC(cell[i].site[SNVsites[j]].MLmatAlleleDoublet, cell[SNVsites[j]].site[j].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichIUPAC(cell[i].site[SNVsites[j]].MLmatAlleleDoublet, cell[i].site[SNVsites[j]].MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -7227,11 +7253,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
-	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
+	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A B C D E   G H I       M         R S T U V   X
+	A B C D E   G H I       M     P Q R S T U V   X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 static void ReadParametersFromCommandLine (int argc,char **argv)
@@ -7708,6 +7734,22 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     PrintUsage();
                     }
                 break;
+			case 'P':
+				alphaADOsites = atof(argv[i]);
+				if (alphaADOsites < 0 ||alphaADOsites > 1)
+					{
+					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout heterogeneity among sites (%f)\n\n", alphaADOsites);
+					PrintUsage();
+					}
+				break;
+			case 'Q':
+				alphaADOcells = atof(argv[i]);
+				if (alphaADOcells < 0 ||alphaADOcells > 1)
+					{
+					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout heterogeneity among cells (%f)\n\n", alphaADOcells);
+					PrintUsage();
+					}
+				break;
 			case 'I':
 				allelicImbalance = atof(argv[i]);
 				if (allelicImbalance < 0 || allelicImbalance > 1)
@@ -7856,16 +7898,15 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 
 
 /***************************** ReadParametersFromFile *******************************/
-/* Reads parameter values from the parameter file  */
 /*
  USED IN ORDER
-	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
+ n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
  
  USED
-	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A B C D E   G H I       M         R S T U V   X
-	0 1 2 3 4 5 6 7 8 9 #
-*/
+ a b c d e f g h i j k l m n o p q r s t u v w x y z
+ A B C D E   G H I       M     P Q R S T U V   X
+ 0 1 2 3 4 5 6 7 8 9 #
+ */
 
 void ReadParametersFromFile ()
 {
@@ -8305,9 +8346,23 @@ void ReadParametersFromFile ()
 					}
 				break;
 			case 'D':
-				if (fscanf(stdin, "%lf", &ADOrate) !=1 ||ADOrate < 0 ||ADOrate > 1)
+				if (fscanf(stdin, "%lf", &ADOrate) !=1 || ADOrate < 0 ||ADOrate > 1)
 					{
 					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout rate (%f)\n\n", ADOrate);
+					PrintUsage();
+					}
+				break;
+			case 'P':
+				if (fscanf(stdin, "%lf", &alphaADOsites) !=1 || alphaADOsites < 0 || alphaADOsites > 1)
+					{
+					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout hetereogeneity among sites (%f)\n\n", alphaADOsites);
+					PrintUsage();
+					}
+				break;
+			case 'Q':
+				if (fscanf(stdin, "%lf", &alphaADOcells) !=1 || alphaADOcells < 0 || alphaADOcells > 1)
+					{
+					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout hetereogeneity among cells (%f)\n\n", alphaADOcells);
 					PrintUsage();
 					}
 				break;
