@@ -147,7 +147,7 @@ static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicat
 static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumMutations,doNGS, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage, countMLgenotypeErrors;
-static double	*periodGrowth, growthRate, sequencingError, ADOrate, alphaADOcells, alphaADOsites, allelicImbalance, haploidCoverageReduction, genotypingError, meanAmplificationError, varAmplificationError, doubletRate;
+static double	*periodGrowth, growthRate, sequencingError, ADOrate, alphaADOcells, alphaADOsites, ADOvarAmongSites, ADOvarAmongCells, allelicImbalance, haploidCoverageReduction, genotypingError, meanAmplificationError, varAmplificationError, doubletRate;
 static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
 static double	Rmat[6], NRmat[12], Cijk[256], Root[4];
