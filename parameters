@@ -3,15 +3,15 @@
 	
 [COALESCENT]
 	[number of replicates] n1
-	[sample size (# tumor cells)] s4
-	[number of sites] l4
+	[sample size (# tumor cells)] s20
+	[number of sites] l1000
 	[effective population size] e10000
 	[exponential growth rate] g1e-4 [ln2=0.6931 max]
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 
 [GENEALOGY MODIFIERS]
-	[transforming branch length; exp subst] k0.01
-	[healthy tip branch length; exp subst]  [q0.001] q0
+	[transforming branch length ratio] k0.1
+	[healthy tip branch length ratio] [q0.001] q0.2
 	[rate variation among lineages] [i1]
 
 [MUTATION MODEL]
@@ -78,7 +78,7 @@
 	[print replicates in individual folders] v
 	[print consensus IUPAC haplotypes] x
 	[results folder name] oresults
-	[user tree file] [Tusertree.0003]
+	[user tree file] [Tusertree.0005]
 	[user genome file] [Uusergenome.fas]
 	
 [OTHER]

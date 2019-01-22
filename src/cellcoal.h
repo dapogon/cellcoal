@@ -95,6 +95,7 @@ static int 		CountTrueVariants(void);
 static int		CountAllelesInObservedGenotypes (void);
 static int		CountAllelesInMLGenotypes (void);
 static double	SumBranches (TreeNode *p);
+/*static double	SumTreeHeights (TreeNode *p, double mean, int *numTips);*/
 static double 	RandomUniform (long int *seed);
 static int 		RandomUniformTo (int max, long int *seed);
 static int		RandomPoisson (double lambda, long int *seed);
@@ -135,7 +136,7 @@ static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountM
 static double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
 static double	varNumMU, varNumSNVs, varNumDEL, varNumCNLOH;
 static double	expNumMU, expVarNumMU;
-static double	theta, healthyTipBranchLength, transformingBranchLength, totalTreeLength;
+static double	theta, healthyTipBranchLength, transformingBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
 static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], trueHaplotypesFile[MAX_NAME],MLhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
 static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME];

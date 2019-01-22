@@ -73,8 +73,9 @@
 typedef struct tnode
     {
     struct tnode	*left, *right, *anc;
-    int				index, label, isHealthyTip, isHealthyRoot;
-    double			length, time, branchLength;
+	int				index, label, isHealthyTip, isHealthyRoot;
+	int				numLeftDescendants, numRightDescendants;
+    double			length, time, branchLength, meanDepth;
     char			*name;
     }
     TreeNode;

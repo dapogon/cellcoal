@@ -79,10 +79,10 @@
 - NGS data: genotypes and haplotypes show ML genotypes
 - VCF: GL is now G10; GL now follows VCF standards
 - variable ADO rates among sites and/or cells
+- transforming/healthytip branch lengths are not a function of the tumor MRCA / total depth
  
 [TO-DOs]
-- at some point move data structure into cell structure
-- capability to specify transforming and helthy tip branch lengths as a function of the tumor MRCA depth
+ - at some point move data structure into cell structure
 - dated tips (maybe)
 - population structure (maybe)
 - change random number generator ?
@@ -167,9 +167,9 @@ int main (int argc, char **argv)
 	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
 	doGeneticSignatures = NO;		/* whether to use a genetic signature to model trinucleotide mutations */
 	numUserSignatures = 0;			/* by default we do not use a genetic signature */
-    healthyTipBranchLength = 0; 	/* length of the branch leading to the healthy cell */
-    transformingBranchLength = 0; 	/* length of the transforming branch leading to the healthy ancestral cell */
-	coverage = 0;					/* NGS  depth for read counts */
+	transformingBranchLengthRatio = 1.0; /* ratio of the transforming branch length compare to the tumor MRCA length */
+	healthyTipBranchLengthRatio = 0.0; 	/* ratio the branch leading to the healthy cell to the (tumor MRCA + transfoming branch) length*/
+ 	coverage = 0;					/* NGS  depth for read counts */
 	rateVarCoverage = NO;			/* there is coverage dispersion */
 	ADOrate = 0;					/* allelic dropout */
 	ADOvarAmongSites = NO;     		/* ADO variation among different sites along the genome */
@@ -359,6 +359,10 @@ int main (int argc, char **argv)
 		if (noisy > 2)
 			fprintf (stderr, "\n>> Reading user tree ...");
 		ReadUserTree(fpUserTree);
+		//fprintf(stderr,"\nreading tree mean depth = %6.4f", coalTreeMRCA->meanDepth);
+		//numTips = 0;
+		//fprintf(stderr,"\nmeandepth = %6.4f (numTips = %d)\n", SumTreeHeights(coalTreeMRCA,0, &numTips) / numTips, numTips);
+		//exit(0);
 		}
 
 	/* Read user genomefile  */
@@ -1120,43 +1124,44 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
     } /* coalescent cell tree finished */
 	
-    TMRCA = currentTime / (2.0 * N);  /* so TMRCA is in 2N generations */
-	//TMRCA = currentTime;  /* so TMRCA is in coalescent generations */
+  	TMRCA = currentTime / (2.0 * N) ;  /* TMRCA is now in 2N coalescent generations */
 	coalTreeMRCA = r;
 	
-    /* connect the coalescent cell MRCA node with the healthy ancestral cell*/
+	//FIXME: proportional brnches
+	
+    /* Connect the coalescent cell MRCA node with the healthy ancestral cell */
     if (noisy > 2)
         fprintf (stderr, "\n>> Adding healthy root ... ");
     healthyRoot = treeNodes + nextAvailableNode;
     healthyRoot->index = nextAvailableNode;
     healthyRoot->left = coalTreeMRCA;
     coalTreeMRCA->anc = healthyRoot;
-    coalTreeMRCA->length = transformingBranchLength/mutationRate;
-    coalTreeMRCA->branchLength = transformingBranchLength;
-    healthyRoot->time = currentTime +  transformingBranchLength/mutationRate;
+    healthyRoot->time = currentTime + (currentTime * transformingBranchLengthRatio);
     healthyRoot->length = 0;
     healthyRoot->isHealthyRoot = YES;
-    if (noisy > 2)
+	coalTreeMRCA->length = healthyRoot->time - coalTreeMRCA->time;
+	coalTreeMRCA->branchLength = coalTreeMRCA->length * mutationRate;
+   if (noisy > 2)
         fprintf (stderr, "DONE");
 
     nextAvailableNode++;
 	
-    /* connect the healthy ancestral cell with the tip healthy cell*/
+    /* Connect the healthy ancestral cell with the tip healthy cell*/
     if (noisy > 2)
         fprintf (stderr, "\n>> Adding healthy tip ... ");
     healthyTip = treeNodes + nextAvailableNode;
-    healthyTip->left = NULL;
+	healthyTip->index = nextAvailableNode;
+  	healthyTip->left = NULL;
     healthyTip->right = NULL;
     healthyTip->anc = healthyRoot;
     healthyRoot->right = healthyTip;
     healthyTip->time = 0;
-    healthyTip->length = healthyTipBranchLength/mutationRate;
-    healthyTip->branchLength = healthyTipBranchLength;
+    healthyTip->length = (healthyRoot->time - healthyTip->time) * healthyTipBranchLengthRatio;
+    healthyTip->branchLength = healthyTip->length * mutationRate;
     healthyTip->isHealthyTip = YES;
-    healthyTip->index = nextAvailableNode;
     if (noisy > 2)
         fprintf (stderr, "DONE");
-	
+
     /* Relabel nodes on tree (label tips with indexes) */
     if (noisy > 2)
         fprintf (stderr, "\n>> Relabeling nodes on tree ... ");
@@ -1246,6 +1251,8 @@ void ReadUserGenome (FILE *fp)
 	}
 
 
+/********************************** ReadUserTree ***********************************/
+/* Reads a rooted phyogenetic tree of the tumor sample with branch lengths in Newick format */
 static void ReadUserTree (FILE *fp)
 	{
 	int			taxonNumber, numDigits;
@@ -1388,6 +1395,22 @@ static void ReadUserTree (FILE *fp)
 	        	tempString[j++] = treeString[i++];
 	        i--;
 	        sscanf (tempString, "%lf", &p->branchLength);
+			
+			if (p->left == NULL)
+				p->numLeftDescendants = 1;
+			
+			if( p->right == NULL)
+				p->numRightDescendants = 1;
+			
+			if (p->left != NULL && p->right != NULL)
+				{
+				p->numLeftDescendants += p->left->numLeftDescendants + p->left->numRightDescendants;
+				p->numRightDescendants += p->right->numLeftDescendants + p->right->numRightDescendants;
+				
+				p->meanDepth = ((p->left->branchLength +  p->left->meanDepth) * p->numLeftDescendants
+								+ (p->right->branchLength +  p->right->meanDepth) * p->numRightDescendants)
+								/ (p->numLeftDescendants + p->numRightDescendants);
+				}
 			}
         else
         	/* now read taxon names*/
@@ -1459,35 +1482,45 @@ static void ReadUserTree (FILE *fp)
         i++;
         } while (treeString[i] != ';');
 	
-	/* connect the coalescent cell MRCA node with the outgroup ancestral cell*/
+	//FIXME: how to add transforming and healty if we do not know the current time, we will need to find the mean treeheight
+	
+	/* Connect the coalescent cell MRCA node with the outgroup ancestral cell */
+	p = coalTreeMRCA;
+	if (p->left != NULL && p->right != NULL)
+		{
+		p->numLeftDescendants += p->left->numLeftDescendants + p->left->numRightDescendants;
+		p->numRightDescendants += p->right->numLeftDescendants + p->right->numRightDescendants;
+		
+		p->meanDepth = ((p->left->branchLength +  p->left->meanDepth) * p->numLeftDescendants
+						 + (p->right->branchLength +  p->right->meanDepth) * p->numRightDescendants)
+		/ (p->numLeftDescendants + p->numRightDescendants);
+		}
+	
     if (noisy > 2)
-        fprintf (stderr, "\n>> Adding healthy root ... ");
+        fprintf (stderr, "\n>> Adding healthy root to user tree... ");
     healthyRoot = treeNodes + nextAvailableNode;
-    healthyRoot->left = coalTreeMRCA;
-    coalTreeMRCA->anc = healthyRoot;
-    //coalTreeMRCA->length = transformingBranchLength/mutationRate;
-    coalTreeMRCA->branchLength = transformingBranchLength;
-    //healthyRoot->time = currentTime +  transformingBranchLength/mutationRate;
-    healthyRoot->length = 0;
-    healthyRoot->name = "healthyroot";
-    healthyRoot->isHealthyRoot = YES;
-    healthyRoot->index = nextAvailableNode;
-   if (noisy > 2)
+	healthyRoot->index = nextAvailableNode;
+   	healthyRoot->left = coalTreeMRCA;
+	healthyRoot->length = 0;
+	healthyRoot->isHealthyRoot = YES;
+	healthyRoot->name = "healthyroot";
+	coalTreeMRCA->anc = healthyRoot;
+	coalTreeMRCA->branchLength = coalTreeMRCA->meanDepth * transformingBranchLengthRatio;
+    if (noisy > 2)
         fprintf (stderr, "DONE");
 
     nextAvailableNode++;
 	
-    /* connect the healthy ancestral cell with the tip healthy cell*/
+    /* Connect the healthy ancestral cell with the tip healthy cell*/
     if (noisy > 2)
-        fprintf (stderr, "\n>> Adding healthy tip ... ");
+        fprintf (stderr, "\n>> Adding healthy tip to user tree... ");
     healthyTip = treeNodes + nextAvailableNode;
     healthyTip->left = NULL;
     healthyTip->right = NULL;
     healthyTip->anc = healthyRoot;
     healthyRoot->right = healthyTip;
     healthyTip->time = 0;
-    //healthyTip->length = healthyTipBranchLength/mutationRate;
-    healthyTip->branchLength = healthyTipBranchLength;
+    healthyTip->branchLength = (coalTreeMRCA->meanDepth + coalTreeMRCA->branchLength) * healthyTipBranchLengthRatio;
     healthyTip->isHealthyTip = YES;
 	healthyTip->name = "healthy";
 	healthyTip->index = nextAvailableNode;
@@ -2081,7 +2114,7 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
                 {
                 if (data[genome][anccell][site] == 0)  /* checking all this might be excessive */
                     data[genome][cell][site] = 1;
-                else if (data[genome][anccell][site] == 1)
+				else if (data[genome][anccell][site] == 1)  //FIXME: if this is a germline mutation??
                     {
                     fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d cannot mutate twice under the ISM model", site, genome, cell);
                     exit(-1);
@@ -3465,7 +3498,7 @@ int CountAllelesInMLGenotypes()
 
 
 /*************************** SumBranchlengths **********************************/
-/* Returns the sum of the branch lengths for a given tree */
+/* Returns the sum of the branch lengths for a given tree/subtree */
 double SumBranches (TreeNode *p)
     {
     static double sum;
@@ -3483,6 +3516,26 @@ double SumBranches (TreeNode *p)
     return sum;
     }
 
+
+/*************************** SumTreeHeights **********************************/
+/* Returns the total height (sum of all paths from root to tips)
+ 	and the number of tips for for a given tree/subtree
+*/
+/*
+ double SumTreeHeights (TreeNode *p, double total, int *numTips)
+	{
+	if (p == NULL)
+		return 0;
+
+	if (p->left == NULL)
+		{
+		(*numTips)++;
+		return total;
+		}
+	else return SumTreeHeights(p->left, total + p->left->branchLength, numTips) +
+				SumTreeHeights(p->right, total + p->right->branchLength, numTips);
+	}
+*/
 
 
 /********************* CompareGenotypes  ************************/
@@ -6488,8 +6541,8 @@ static void	PrintRunInformation (FILE *fp)
 		}
 		
     fprintf (fp, "\n\nUser-defined branches");
-    fprintf (fp, "\n Transforming branch length                   =   %2.1e", transformingBranchLength);
-    fprintf (fp, "\n Healthy tip branch length                    =   %2.1e", healthyTipBranchLength);
+    fprintf (fp, "\n Transforming branch length ratio             =   %2.1e", transformingBranchLengthRatio);
+    fprintf (fp, "\n Healthy tip branch length ratio              =   %2.1e", healthyTipBranchLengthRatio);
 
 	if (doUserGenome == YES)
 		fprintf (fp, "\n\nUser genome file                              =   %s", userGenomeFile);
@@ -6676,8 +6729,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 			fprintf (fp, " %d %d %d", Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
 
 		/* Post-coalescent */
-		fprintf (fp, " -k%2.1e", transformingBranchLength);
-		fprintf (fp, " -q%2.1e", healthyTipBranchLength);
+		fprintf (fp, " -k%2.1e", transformingBranchLengthRatio);
+		fprintf (fp, " -q%2.1e", healthyTipBranchLengthRatio);
 		fprintf (fp, " -i%6.4f", alphaBranches);
 
 		/* Mutation model */
@@ -6769,8 +6822,8 @@ static void PrintDefaults (FILE *fp)
 			fprintf (fp, "\n  period %d =  %d %d %d", i, Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
 
 	/* Post-coalescent */
-	fprintf (fp,"\n-k: transforming branch length =  %2.1e", transformingBranchLength);
-    fprintf (fp,"\n-q: healthy tip branch length =  %2.1e", healthyTipBranchLength);
+	fprintf (fp,"\n-k: transforming branch length ratio =  %2.1e", transformingBranchLengthRatio);
+    fprintf (fp,"\n-q: healthy tip branch length ratio =  %2.1e", healthyTipBranchLengthRatio);
     fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages =  %6.4f", alphaBranches);
 	
 	/* Mutation model */
@@ -6795,6 +6848,8 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
 	fprintf (fp,"\n-I: allelic imbalance =  %2.1e", allelicImbalance);
 	fprintf (fp,"\n-D: allelic dropout =  %2.1e", ADOrate);
+	fprintf (fp,"\n-P: allelic dropout variation among sites =  %2.1e", ADOvarAmongSites);
+	fprintf (fp,"\n-Q: allelic dropout cariation among cells=  %2.1e", ADOvarAmongCells);
 	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
 	fprintf (fp,"\n-A: amplification error, var, 2-template model =  %2.1e, %2.1e, %d)", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
@@ -7429,18 +7484,18 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 break;
             case 'k':
-                transformingBranchLength = atof(argv[i]);
-              if (transformingBranchLength < 0)
+                transformingBranchLengthRatio = atof(argv[i]);
+              if (transformingBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLength);
+                    fprintf (stderr, "PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLengthRatio);
                     PrintUsage();
                     }
                 break;
 			case 'q':
-                healthyTipBranchLength = atof(argv[i]);
-                if (healthyTipBranchLength < 0)
+                healthyTipBranchLengthRatio = atof(argv[i]);
+                if (healthyTipBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLength);
+                    fprintf (stderr, "PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLengthRatio);
                     PrintUsage();
                     }
                 break;
@@ -8074,16 +8129,16 @@ void ReadParametersFromFile ()
                     }
                 break;
             case 'k':
-                if (fscanf(stdin, "%lf", &transformingBranchLength)!=1 || transformingBranchLength < 0)
+                if (fscanf(stdin, "%lf", &transformingBranchLengthRatio)!=1 || transformingBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLength);
+                    fprintf (stderr, "PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLengthRatio);
                     PrintUsage();
                     }
                  break;
             case 'q':
-                if (fscanf(stdin, "%lf", &healthyTipBranchLength)!=1 || healthyTipBranchLength < 0)
+                if (fscanf(stdin, "%lf", &healthyTipBranchLengthRatio)!=1 || healthyTipBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLength);
+                    fprintf (stderr, "PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLengthRatio);
                     PrintUsage();
                     }
                 break;
