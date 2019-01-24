@@ -23,10 +23,9 @@
 
 #include "definitions.h"
 
-
 /* Prototypes */
 static void 	PrintHeader (FILE *fp);
-extern void 	PrintUsage (void);
+extern void 	PrintUsage (FILE *fp);
 static void 	PrintDate (FILE *fp);
 static void 	PrintDefaults (FILE *fp);
 static void		ReadUntil (FILE *fv, char stopChar, char *what);
@@ -130,7 +129,7 @@ static int		tipLabel, intLabel;
 static int		ploidy, numCells, N, *Nbegin, *Nend,  *cumDuration, numSites, numDataSets, numPeriods;
 static int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutations, altModel;
 static int		numCA, numMU, numDEL, numCNLOH, numProposedMU, numSNVs, numFixedMutations, numSNVmaternal, zeroSNVs;
-static int		numISMdeletions, numISMCNLOH;
+static int		numISMdeletions, numISMCNLOH, stringPrecision;
 static double	meanNumSNVs, meanNumCA, meanNumMU, meanNumDEL, meanNumCNLOH;
 static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountMLgenotypeErrors;
 static double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
@@ -143,9 +142,10 @@ static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfil
 static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], trueHaplotypesDir[MAX_NAME], MLhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME];
 static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames;
+static char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome;
 static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
-static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumMutations,doNGS, taxonNamesAreChars;
+static int		doExponential, doDemographics, doSimulateData, doSimulateFixedNumMutations, doNGS, doTumorNames, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij, coverage, countMLgenotypeErrors;
 static double	*periodGrowth, growthRate, sequencingError, ADOrate, alphaADOcells, alphaADOsites, ADOvarAmongSites, ADOvarAmongCells, allelicImbalance, haploidCoverageReduction, genotypingError, meanAmplificationError, varAmplificationError, doubletRate;
@@ -153,7 +153,7 @@ static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVar
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
 static double	Rmat[6], NRmat[12], Cijk[256], Root[4];
 static double	SNPrate, alphaCoverage;
-static int		HEALTHY_ROOT, TUMOR_ROOT;
+static int		OUTGROUP_ROOT, INGROUP_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
 static int		TipNodeNum, IntNodeNum;
 static char		*maternalUserGenome, *paternalUserGenome;
@@ -176,7 +176,6 @@ static double	sumPos, meansumPos;
 
 /* File pointers */
 FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpMLhaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpLog, *fpUserTree, *fpUserGenome;
-
 
 
 #endif /* coaltumor_h */

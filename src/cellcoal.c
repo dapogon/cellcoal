@@ -18,7 +18,7 @@
 /*  cellcoal
 //  CellCoal
 //
-//  Created by David Posada on 01/06/16.
+//  Started by David Posada on 01/06/16.
 //  Copyright (c) 2016-2018 David Posada. All rights reserved.
 
 	Name:		CellCoal
@@ -80,6 +80,8 @@
 - VCF: GL is now G10; GL now follows VCF standards
 - variable ADO rates among sites and/or cells
 - transforming/healthytip branch lengths are not a function of the tumor MRCA / total depth
+- option for different taxa names for tumor/non-tumor scenarios
+ //FIXME: doing the above
  
 [TO-DOs]
  - at some point move data structure into cell structure
@@ -160,7 +162,9 @@ int main (int argc, char **argv)
     doPrintTree = NO;				/* whether to print the coalescent tree */
     doPrintTimes = NO;				/* whether to print coalescent times */
 	doPrintAncestors = NO;      	/* whether to print data for ancestral cells */
-	doNGS = NO;  	/* do not produce reads by default */
+	doNGS = NO;  					/* do not produce reads by default */
+	doTumorNames = NO;				/* use specific name for taxa in the tumor scenario */
+	stringPrecision = 12;			/* precision for taxa names */
 	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
 	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
 	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
@@ -196,9 +200,9 @@ int main (int argc, char **argv)
 	 noisy = 2: + replicate information,
 	 noisy = 3: + calculation status and event information
 	*/
-		
+
 	ReadParametersFromCommandLine (argc, argv);
-    if (argc < 2)
+	if (argc < 2)
         {
 		readingParameterFile = YES;
         if ((fp = freopen("parameters", "r", stdin)) != NULL)
@@ -206,15 +210,14 @@ int main (int argc, char **argv)
         else
             {
             fprintf (stderr, "\nERROR: No parameters specified (use command line or parameter file)");
-            PrintUsage();
+            PrintUsage(stderr);
             exit(-1);
             }
         }
 	else
 		readingParameterFile = NO;
-
-    start = clock();
-
+   start = clock();
+	
     if (noisy > 0)
         {
         PrintHeader(stderr);
@@ -297,7 +300,28 @@ int main (int argc, char **argv)
         dataSetsWithSNVs = 0;
         meansumPos = 0;
      #endif
- 
+	
+	/* set names for taxa */
+	if (doTumorNames == YES)
+		{
+		strcpy(inCellName, "tumcell");
+		strcpy(outCellName, "healthycell");
+		strcpy(inRootCellName, "tumoralroot");
+		strcpy(outRootCellName, "healthyroot");
+		stringPrecision = 12;
+		}
+	else
+		{
+		strcpy(inCellName, "cell");
+		strcpy(outCellName, "outgcell");
+		strcpy(inRootCellName, "ingrroot");
+		strcpy(outRootCellName, "outgroot");
+		stringPrecision = 9;
+		}
+	
+	if (doPrintIUPAChaplotypes == YES)
+		stringPrecision += 1;
+	
     /* set file dirs and names */
 	if (strlen(resultsDir) == 0)
 		strcpy(resultsDir, "Results");
@@ -373,8 +397,8 @@ int main (int argc, char **argv)
 		ReadUserGenome(fpUserGenome);
 		}
 
-	HEALTHY_ROOT = 2 * numCells;
-	TUMOR_ROOT = (2 * numCells) - 1;
+	OUTGROUP_ROOT = 2 * numCells;
+	INGROUP_ROOT = (2 * numCells) - 1;
 
 	if (doGeneticSignatures == YES && doSimulateData == YES)
 		PrepareGeneticSignatures();
@@ -1012,7 +1036,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
                 exit (-1);
                 }
 				
-            timeCA =  log (1 + RandomExponential (rateCA, seed) * periodGrowth[period] * 2. * Nbegin[period] *
+            timeCA =  log (1 + RandomExponential (rateCA, seed) * periodGrowth[period] * 2.0 * Nbegin[period] *
                            exp (-periodGrowth[period] * (currentTime - cumDuration[period-1]))) / periodGrowth[period]; /* time is kept in generations (scaled by 2N)  */
 				
             /*	When growth rate is very negative, coalescent time may be infinite
@@ -1041,7 +1065,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
         else
             {
-            timeCA = RandomExponential (rateCA, seed) * 2.0 * N; /* time is kept in 2N generations */
+            timeCA = RandomExponential (rateCA, seed) * 2.0 * N; /* time is kept in generations */
             if (doExponential == YES)
                 {
                 timeCA = log (exp(growthRate*currentTime) + growthRate * timeCA) / growthRate - currentTime;
@@ -1124,10 +1148,8 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
     } /* coalescent cell tree finished */
 	
-  	TMRCA = currentTime / (2.0 * N) ;  /* TMRCA is now in 2N coalescent generations */
+  	TMRCA = currentTime / (2.0 * N) ;  /* TMRCA is now is back in 2N coalescent generations */
 	coalTreeMRCA = r;
-	
-	//FIXME: proportional brnches
 	
     /* Connect the coalescent cell MRCA node with the healthy ancestral cell */
     if (noisy > 2)
@@ -1208,7 +1230,7 @@ void ReadUserGenome (FILE *fp)
 	if ((fpUserGenome = fopen(userGenomeFile, "r")) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't open user genome file \"%s\"\n", userGenomeFile);
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 
 	/* read the FASTA file */
@@ -1217,7 +1239,7 @@ void ReadUserGenome (FILE *fp)
 	if (maternalUserGenome == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read the user maternal genome");
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 	
 	fgets (header, MAX_LINE, fpUserGenome);
@@ -1225,14 +1247,14 @@ void ReadUserGenome (FILE *fp)
 	if (paternalUserGenome == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read the user paternal genome");
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 
 	/* check lengths */
 	if (strlen(maternalUserGenome) != strlen(paternalUserGenome))
 		{
 		fprintf (stderr, "\nERROR: maternal and paternal user genomes have different lengths");
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 
 	numSites = (int) strlen(maternalUserGenome) - 1;
@@ -1320,7 +1342,7 @@ static void ReadUserTree (FILE *fp)
 		if (!treeNodes[i].name)
 			{
 			fprintf (stderr, "Could not allocate the treeNodes[i].name structure\n");
-			PrintUsage();
+			PrintUsage(stderr);
 			}
 		}
 
@@ -1328,7 +1350,7 @@ static void ReadUserTree (FILE *fp)
 	if ((fpUserTree = fopen(userTreeFile, "r")) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't open user treefile \"%s\"\n", userTreeFile);
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 
 	/* read the tree string */
@@ -1336,7 +1358,7 @@ static void ReadUserTree (FILE *fp)
 	if (treeString == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read tree string");
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 	fclose(fpUserTree);
 	
@@ -1482,8 +1504,6 @@ static void ReadUserTree (FILE *fp)
         i++;
         } while (treeString[i] != ';');
 	
-	//FIXME: how to add transforming and healty if we do not know the current time, we will need to find the mean treeheight
-	
 	/* Connect the coalescent cell MRCA node with the outgroup ancestral cell */
 	p = coalTreeMRCA;
 	if (p->left != NULL && p->right != NULL)
@@ -1545,7 +1565,7 @@ static void ReadUserTree (FILE *fp)
 	if (treeNodes == NULL)
 		{
 		fprintf (stderr, "Could not reallocate treeNodes (%ld bytes)\n", numNodes * sizeof (TreeNode));
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 
 	fprintf (fpLog, "\n\nUser-defined tree: ");
@@ -1610,7 +1630,7 @@ static void		CheckTree (char *treeStr)
 			for (k=0; k<=i; k++)
 				fprintf (stderr,"%c", treeStr[k]);
 			fprintf (stderr," <- HERE");
-			PrintUsage();
+			PrintUsage(stderr);
 			}
 		
 		i++;
@@ -1620,12 +1640,12 @@ static void		CheckTree (char *treeStr)
 	if (numLeftPar != numRightPar)
 		{
 		fprintf (stderr, "Tree seems unbalanced (%d left and %d right parentheses)", numLeftPar, numRightPar);
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 	if (strrchr(treeString, ':') == NULL)
 		{
 		fprintf (stderr, "Tree does not have branch lengths");
-		PrintUsage();
+		PrintUsage(stderr);
 		}
 	}
 
@@ -1668,7 +1688,7 @@ void RelabelNodes (TreeNode *p)
 
 
 /**************** MakeTreeNonClock **************/
-/*	Introduce rate variation among lineages using gamma rate  */
+/*	Introduce rate variation among lineages using a gamma rate  */
 
 void MakeTreeNonClock (TreeNode *p, long int *seed)
     {
@@ -1852,16 +1872,16 @@ void AddGermlineVariation (long int *seed)
 				genome = PATERNAL;
 		
 			if (alphabet == BINARY)
-				data[genome][HEALTHY_ROOT][site] = 1;
+				data[genome][OUTGROUP_ROOT][site] = 1;
 			else // DNA mutation according to Mij matrix
 				{
-				current_state = data[genome][HEALTHY_ROOT][site];
+				current_state = data[genome][OUTGROUP_ROOT][site];
 				ran = RandomUniform(seed) * cumMij[current_state][3];
                 for (j=0; j<4; j++)
                     {
 					if (ran <= cumMij[current_state][j])
                         {
-                        data[genome][HEALTHY_ROOT][site] = j;
+                        data[genome][OUTGROUP_ROOT][site] = j;
                         break;
                         }
 					}
@@ -2255,7 +2275,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 		}
 
 	/* count trinucleotide frequencies in the healthy root genome */
-	CountTriNucFrequencies (data[genome][HEALTHY_ROOT], genome);
+	CountTriNucFrequencies (data[genome][OUTGROUP_ROOT], genome);
 /*
     totalBranchSum = 0;
     for (site=0; site<numSites; site++)
@@ -3338,8 +3358,10 @@ int CountTrueVariants ()
         {
 		for (cell=0; cell<numCells+1; cell++)
 			{
-			if ((data[MATERNAL][cell][site] != DELETION && data[MATERNAL][cell][site] != data[MATERNAL][HEALTHY_ROOT][site]) 	||
-			    (data[PATERNAL][cell][site] != DELETION && data[PATERNAL][cell][site] != data[PATERNAL][HEALTHY_ROOT][site]))
+			if ((data[MATERNAL][cell][site] != DELETION && data[MATERNAL][cell][site] != data[MATERNAL][OUTGROUP_ROOT
+][site]) 	||
+			    (data[PATERNAL][cell][site] != DELETION && data[PATERNAL][cell][site] != data[PATERNAL][OUTGROUP_ROOT
+][site]))
                 {
 				allSites[site].isVariant = YES;
 				variantSites[nVariants++] = site;
@@ -4600,8 +4622,10 @@ void PrintCATG (FILE *fp)
 
 	fprintf (fp,"%d %d\n",numCells+1, numSNVs);
 	for (i=0; i<numCells; i++)
-		fprintf (fp,"tumcell%04d  ", i+1);
-	fprintf (fp,"healthycell  ");
+		fprintf (fp,"%s%04d ", inCellName,i+1);
+
+	fprintf (fp,"%s ", outCellName);
+
 		
 	for (snv=0; snv<numSNVs; snv++)
 		{
@@ -5273,7 +5297,7 @@ void ListTimes (int position, FILE *fp)
  
         if (p->isHealthyTip == YES)
             fprintf (fp, "%12s   %4d   %4d  (%4d %4d %4d) |   %10.2lf      %10.2lf       %10.4lf\n",
-                     "healthyTip", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
+                     "outgroupTip", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
         else if (p->anc != NULL && p->left != NULL && p->right != NULL && p->anc->anc == NULL)
             fprintf (fp, "%12s   %4d   %4d  (%4d %4d %4d) |   %10.2lf      %10.2lf       %10.4lf\n",
                      "ingroupMRCA", Label(p), Index(p), Index(p->left), Index(p->right), Index(p->anc), p->time, p->length, p->branchLength);
@@ -5336,8 +5360,7 @@ static void PrintSiteInfo (FILE *fp, int i)
 	fprintf (fp, "\n readCountG = %d", allSites[i].readCountG);
 	fprintf (fp, "\n readCountT = %d", allSites[i].readCountT);
 	fprintf (fp, "\n rateMultiplier = %f", allSites[i].rateMultiplier);
-}
-
+	}
 
 /************************ PrintSNVGenotypes ***********************/
 /* Prints oberved/ML genotypes at variable sites (SNVs) to a file */
@@ -5351,8 +5374,7 @@ static void PrintSNVGenotypes (FILE *fp)
         fprintf (fp, "%d %d\n", numCells+1, numSNVs);
 		
     /* site information */
-    /* fprintf (fp, "%14s", ""); */
-	for (i=0; i<numSNVs; i++)
+ 	for (i=0; i<numSNVs; i++)
 		fprintf (fp, "%d ", SNVsites[i]+1);
     fseek (fp, -1, SEEK_CUR);
     fprintf (fp, "\n");
@@ -5363,13 +5385,13 @@ static void PrintSNVGenotypes (FILE *fp)
         for (i=0; i<numCells+1; i++)
             {
             if (i == numCells)
-				fprintf (fp,"healthycell ");
+				fprintf (fp,"%s ", outCellName);
 			else
 				{
 				if (doUserTree == NO)
-					fprintf (fp,"tumcell%04d ", i+1);
+					fprintf (fp,"%s%04d ", inCellName,i+1);
 				else
-					fprintf (fp,"%-12s", cellNames[i]);
+					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
 				}
 			for (j=0; j<numSNVs; j++)
 				{
@@ -5385,12 +5407,12 @@ static void PrintSNVGenotypes (FILE *fp)
 			
         if (doPrintAncestors == YES & doNGS == NO)
             {
-            fprintf (fp,"hearoot%04d ", i+1);
+            fprintf (fp,"%s ", outRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][HEALTHY_ROOT][SNVsites[j]]),WhichNuc(data[PATERNAL][HEALTHY_ROOT][SNVsites[j]]));
-            fprintf (fp,"\ntumroot%04d ", i+1);
+				fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][SNVsites[j]]),WhichNuc(data[PATERNAL][OUTGROUP_ROOT][SNVsites[j]]));
+            fprintf (fp,"\n%s ", inRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][TUMOR_ROOT][SNVsites[j]]),WhichNuc(data[PATERNAL][TUMOR_ROOT][SNVsites[j]]));
+				fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][SNVsites[j]]),WhichNuc(data[PATERNAL][INGROUP_ROOT][SNVsites[j]]));
             fprintf (fp,"\n");
             }
         }
@@ -5399,13 +5421,13 @@ static void PrintSNVGenotypes (FILE *fp)
         for (i=0; i<numCells+1; i++)
             {
 			if (i == numCells)
-				fprintf (fp,"healthycell ");
+				fprintf (fp,"%s ", outCellName);
 			else
 				{
 				if (doUserTree == NO)
-					fprintf (fp,"tumcell%04d ", i+1);
+					fprintf (fp,"%s%04d ", inCellName,i+1);
 				else
-					fprintf (fp,"%-12s", cellNames[i]);
+					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
 				}
 			for (j=0; j<numSNVs; j++)
 				fprintf (fp, " %c%c", WhichMut(data[MATERNAL][i][SNVsites[j]]),WhichMut(data[PATERNAL][i][SNVsites[j]]));
@@ -5414,12 +5436,12 @@ static void PrintSNVGenotypes (FILE *fp)
 			
         if (doPrintAncestors == YES)
             {
-			fprintf (fp,"hearoot%04d ", i+1);
+			fprintf (fp,"%s ", outRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %d%d", data[MATERNAL][HEALTHY_ROOT][SNVsites[j]],data[PATERNAL][HEALTHY_ROOT][SNVsites[j]]);
-			fprintf (fp,"\ntumroot%04d ", i+1);
+				fprintf (fp, " %d%d", data[MATERNAL][OUTGROUP_ROOT][SNVsites[j]],data[PATERNAL][OUTGROUP_ROOT][SNVsites[j]]);
+			fprintf (fp,"\n%s ", inRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %d%d", data[MATERNAL][TUMOR_ROOT][SNVsites[j]],data[PATERNAL][TUMOR_ROOT][SNVsites[j]]);
+				fprintf (fp, " %d%d", data[MATERNAL][INGROUP_ROOT][SNVsites[j]],data[PATERNAL][INGROUP_ROOT][SNVsites[j]]);
 			fprintf (fp,"\n");
             }
         }
@@ -5467,13 +5489,13 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				{
 				/* print haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycell  ");
+					fprintf (fp,"%s ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d  ", i+1);
+						fprintf (fp,"%s%04d ", inCellName,i+1);
 					else
-						fprintf (fp,"%-12s ", cellNames[i]);
+						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					{
@@ -5489,13 +5511,12 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			
 			if (doPrintAncestors == YES && doNGS == NO)
 				{
-				fprintf (fp,"hearoot%04d  ", i+1);
+				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][HEALTHY_ROOT][sites[j]],data[PATERNAL][HEALTHY_ROOT][sites[j]]));
-					
-				fprintf (fp,"\ntumroot%04d  ", i+1);
+					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][OUTGROUP_ROOT][sites[j]],data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][TUMOR_ROOT][sites[j]],data[PATERNAL][TUMOR_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][INGROUP_ROOT][sites[j]],data[PATERNAL][INGROUP_ROOT][sites[j]]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5505,13 +5526,13 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellm ");
+					fprintf (fp,"%sm  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dm ", i+1);
+						fprintf (fp,"%s%04dm  ", inCellName, i+1);
 					else
-						fprintf (fp,"m%-12s", cellNames[i]);
+						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					{
@@ -5526,13 +5547,13 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				
 				/* print paternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellp ");
+					fprintf (fp,"%sp  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dp ", i+1);
+						fprintf (fp,"%s%04dp  ", inCellName, i+1);
 					else
-						fprintf (fp,"p%-12s", cellNames[i]);
+						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					{
@@ -5548,19 +5569,19 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			
 			if (doPrintAncestors == YES && doNGS == NO)
 				{
-				fprintf (fp,"hearoot%04dm ", i+1);
+				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][HEALTHY_ROOT][sites[j]]));
-				fprintf (fp,"\nhearoot%04dp ", i+1);
+					fprintf (fp, "%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%sp  ", outRootCellName);
+
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][HEALTHY_ROOT][sites[j]]));
-					
-				fprintf (fp,"\ntumroot%04dm ", i+1);
+					fprintf (fp, "%c", WhichNuc(data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][TUMOR_ROOT][sites[j]]));
-				fprintf (fp,"\ntumroot%04dp ", i+1);
+					fprintf (fp, "%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][TUMOR_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichNuc(data[PATERNAL][INGROUP_ROOT][sites[j]]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5572,13 +5593,13 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			for (i=0; i<numCells+1; i++)
 				{
 				if (i == numCells)
-					fprintf (fp,"healthycell  ");
+					fprintf (fp,"%s ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d ", i+1);
+						fprintf (fp,"%s%04d ", inCellName,i+1);
 					else
-						fprintf (fp,"%-12s ", cellNames[i]);
+						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][i][sites[j]],data[PATERNAL][i][sites[j]]));
@@ -5587,13 +5608,12 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04d  ", i+1);
+				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][HEALTHY_ROOT][sites[j]],data[PATERNAL][HEALTHY_ROOT][sites[j]]));
-					
-				fprintf (fp,"\ntumroot%04d  ", i+1);
+					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][OUTGROUP_ROOT][sites[j]],data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][TUMOR_ROOT][sites[j]],data[PATERNAL][TUMOR_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][INGROUP_ROOT][sites[j]],data[PATERNAL][INGROUP_ROOT][sites[j]]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5603,13 +5623,13 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellm ");
+					fprintf (fp,"%sm  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dm ", i+1);
+						fprintf (fp,"%s%04dm  ", inCellName, i+1);
 					else
-						fprintf (fp,"m%-12s", cellNames[i]);
+						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][sites[j]]));
@@ -5617,35 +5637,33 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					
 				/* print paternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellp ");
+					fprintf (fp,"%sp  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dp ", i+1);
+						fprintf (fp,"%s%04dp  ", inCellName, i+1);
 					else
-						fprintf (fp,"p%-12s", cellNames[i]);
+						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][sites[j]]));
-					
 				fprintf (fp,"\n");
 				}
 
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04dm ", i+1);
+				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][HEALTHY_ROOT][sites[j]]));
-				fprintf (fp,"\nhearoot%04dp ", i+1);
+					fprintf (fp, "%c", WhichMut(data[MATERNAL][OUTGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][HEALTHY_ROOT][sites[j]]));
-					
-				fprintf (fp,"\ntumroot%04dm ", i+1);
+					fprintf (fp, "%c", WhichMut(data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][TUMOR_ROOT][sites[j]]));
-				fprintf (fp,"\ntumroot%04dp ", i+1);
+					fprintf (fp, "%c", WhichMut(data[MATERNAL][INGROUP_ROOT][sites[j]]));
+				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][TUMOR_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichMut(data[PATERNAL][INGROUP_ROOT][sites[j]]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5670,13 +5688,13 @@ static void PrintFullGenotypes (FILE *fp)
         for (i=0; i<numCells+1; i++)
             {
             if (i == numCells)
-                fprintf (fp,"healthycell ");
+                fprintf (fp,"%s ", outCellName);
 			else
 				{
 				if (doUserTree == NO)
-					fprintf (fp,"tumcell%04d ", i+1);
+					fprintf (fp,"%s%04d ", inCellName,i+1);
 				else
-					fprintf (fp,"%-12s", cellNames[i]);
+					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
 				}
 			for (j=0; j<numSites; j++)
 				{
@@ -5693,12 +5711,13 @@ static void PrintFullGenotypes (FILE *fp)
 		/* print ancestral sequences, but not for the NGS case */
         if (doPrintAncestors == YES && doNGS == NO)
             {
-            fprintf (fp,"hearoot%04d ", 0);
+            fprintf (fp,"%s ", outRootCellName);
             for (j=0; j<numSites; j++)
-				fprintf (fp, " %c%c",  WhichNuc(data[MATERNAL][HEALTHY_ROOT][j]), WhichNuc(data[PATERNAL][HEALTHY_ROOT][j]));
-            fprintf (fp,"\ntumroot%04d ", 0);
+				fprintf (fp, " %c%c",  WhichNuc(data[MATERNAL][OUTGROUP_ROOT][j]), WhichNuc(data[PATERNAL][OUTGROUP_ROOT][j]));
+            fprintf (fp,"\n%s ", inRootCellName);
+
             for (j=0; j<numSites; j++)
-                fprintf (fp, " %c%c",  WhichNuc(data[MATERNAL][TUMOR_ROOT][j]), WhichNuc(data[PATERNAL][TUMOR_ROOT][j]));
+                fprintf (fp, " %c%c",  WhichNuc(data[MATERNAL][INGROUP_ROOT][j]), WhichNuc(data[PATERNAL][INGROUP_ROOT][j]));
             fprintf (fp,"\n");
             }
         }
@@ -5707,13 +5726,13 @@ static void PrintFullGenotypes (FILE *fp)
         for (i=0; i<numCells+1; i++)
             {
             if (i == numCells)
-                fprintf (fp,"healthycell ");
+                fprintf (fp,"%s ", outCellName);
  			else
 				{
 				if (doUserTree == NO)
-					fprintf (fp,"tumcell%04d ", i+1);
+					fprintf (fp,"%s%04d ", inCellName,i+1);
 				else
-					fprintf (fp,"%-12s", cellNames[i]);
+					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
 				}
 			for (j=0; j<numSites; j++)
                 fprintf (fp, " %c%c", WhichMut(data[0][i][j]),WhichMut(data[1][i][j]));
@@ -5722,12 +5741,12 @@ static void PrintFullGenotypes (FILE *fp)
 			
         if (doPrintAncestors == YES)
             {
-            fprintf (fp,"hearoot%04d ", 0);
+            fprintf (fp,"%s ", outRootCellName);
             for (j=0; j<numSites; j++)
-                fprintf (fp, " %d%d", data[MATERNAL][HEALTHY_ROOT][j],data[PATERNAL][HEALTHY_ROOT][j]);
-            fprintf (fp,"\ntumroot%04d ", 0);
+                fprintf (fp, " %d%d", data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]);
+            fprintf (fp,"\n%s ", inRootCellName);
             for (j=0; j<numSites; j++)
-                fprintf (fp, " %d%d", data[MATERNAL][TUMOR_ROOT][j],data[PATERNAL][TUMOR_ROOT][j]);
+                fprintf (fp, " %d%d", data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]);
             fprintf (fp,"\n");
             }
 		}
@@ -5763,13 +5782,14 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				/* print IUPAC haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycell  ");
+					fprintf (fp,"%s ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d  ", i+1);
+						fprintf (fp,"%s%04d ", inCellName,i+1);
+
 					else
-						fprintf (fp,"%-12s ", cellNames[i]);
+						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					{
@@ -5785,13 +5805,12 @@ static void PrintFullHaplotypes (FILE *fp)
 
 			if (doPrintAncestors == YES && doNGS == NO)
 				{
-				fprintf (fp,"hearoot%04d  ", 0);
+				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][HEALTHY_ROOT][j],data[PATERNAL][HEALTHY_ROOT][j]));
-					
-				fprintf (fp,"\ntumroot%04d  ", 0);
+					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][TUMOR_ROOT][j],data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5801,13 +5820,14 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellm ");
+					fprintf (fp,"%sm  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dm ", i+1);
+						fprintf (fp,"%s%04dm  ", inCellName, i+1);
+
 					else
-						fprintf (fp,"m%-12s", cellNames[i]);
+						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 	
 				for (j=0; j<numSites; j++)
@@ -5823,13 +5843,13 @@ static void PrintFullHaplotypes (FILE *fp)
 				
 				/* print paternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellp ");
+					fprintf (fp,"%sp  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dp ", i+1);
+						fprintf (fp,"%s%04dp  ", inCellName, i+1);
 					else
-						fprintf (fp,"p%-12s", cellNames[i]);
+						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 
 				for (j=0; j<numSites; j++)
@@ -5846,19 +5866,18 @@ static void PrintFullHaplotypes (FILE *fp)
 
 			if (doPrintAncestors == YES && doNGS == NO)
 				{
-				fprintf (fp,"hearoot%04dm ", 0);
+				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][HEALTHY_ROOT][j]));
-				fprintf (fp,"\nhearoot%04dp ", 0);
-					for (j=0; j<numSites; j++)
-						fprintf (fp, "%c", WhichNuc(data[PATERNAL][HEALTHY_ROOT][j]));
-					
-				fprintf (fp,"\ntumroot%04dm ", 0);
+					fprintf (fp, "%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][TUMOR_ROOT][j]));
-				fprintf (fp,"\ntumroot%04dp ", 0);
+					fprintf (fp, "%c", WhichNuc(data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", inRootCellName);
+				for (j=0; j<numSites; j++)
+					fprintf (fp, "%c", WhichNuc(data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5870,13 +5889,14 @@ static void PrintFullHaplotypes (FILE *fp)
 			for (i=0; i<numCells+1; i++)
 				{
 				if (i == numCells)
-					fprintf (fp,"healthycell  ");
+					fprintf (fp,"%s ", outCellName);
+
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d ", i+1);
+						fprintf (fp,"%s%04d ", inCellName,i+1);
 					else
-						fprintf (fp,"%-12s ", cellNames[i]);
+						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][i][j],data[PATERNAL][i][j]));
@@ -5885,13 +5905,12 @@ static void PrintFullHaplotypes (FILE *fp)
 			
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04d  ", 0);
+				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][HEALTHY_ROOT][j],data[PATERNAL][HEALTHY_ROOT][j]));
-					
-				fprintf (fp,"\ntumroot%04d  ", 0);
+					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][TUMOR_ROOT][j],data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5901,13 +5920,13 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellm ");
+					fprintf (fp,"%sm  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dm ", i+1);
+						fprintf (fp,"%s%04dm  ", inCellName, i+1);
 					else
-						fprintf (fp,"m%-12s", cellNames[i]);
+						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][j]));
@@ -5915,13 +5934,13 @@ static void PrintFullHaplotypes (FILE *fp)
 					
 				/* print paternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellp ");
+					fprintf (fp,"%sp  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dp ", i+1);
+						fprintf (fp,"%s%04dp  ", inCellName, i+1);
 					else
-						fprintf (fp,"p%-12s", cellNames[i]);
+						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][j]));
@@ -5930,19 +5949,18 @@ static void PrintFullHaplotypes (FILE *fp)
 			
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04dm ", 0);
+				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][HEALTHY_ROOT][j]));
-				fprintf (fp,"\nhearoot%04dp ", 0);
+					fprintf (fp, "%c", WhichMut(data[MATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][HEALTHY_ROOT][j]));
-					
-				fprintf (fp,"\ntumroot%04dm ", 0);
+					fprintf (fp, "%c", WhichMut(data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][TUMOR_ROOT][j]));
-				fprintf (fp,"\ntumroot%04dp ", 0);
+					fprintf (fp, "%c", WhichMut(data[MATERNAL][INGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -5953,7 +5971,7 @@ static void PrintFullHaplotypes (FILE *fp)
 /* Prints observed/ML haplotypes for all sites (variable + invariable) to a file */
 
 static void PrintTrueFullHaplotypes (FILE *fp)
-{
+	{
 	int		 i, j;
 	
 	if (doPrintIUPAChaplotypes == NO)
@@ -5979,30 +5997,29 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				{
 				/* print IUPAC haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycell  ");
+					fprintf (fp,"%s ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d  ", i+1);
+						fprintf (fp,"%s%04d ", inCellName,i+1);
 					else
-						fprintf (fp,"%-12s ", cellNames[i]);
+						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					{
-						fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][i][j],data[PATERNAL][i][j]));
+					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][i][j],data[PATERNAL][i][j]));
 					}
 				fprintf (fp,"\n");
 				}
 			
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04d  ", 0);
+				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][HEALTHY_ROOT][j],data[PATERNAL][HEALTHY_ROOT][j]));
-				
-				fprintf (fp,"\ntumroot%04d  ", 0);
+					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][TUMOR_ROOT][j],data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -6012,15 +6029,14 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellm ");
+					fprintf (fp,"%sm  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dm ", i+1);
+						fprintf (fp,"%s%04dm  ", inCellName, i+1);
 					else
-						fprintf (fp,"m%-12s", cellNames[i]);
+						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
-				
 				for (j=0; j<numSites; j++)
 					{
 					fprintf (fp, "%c", WhichNuc(data[MATERNAL][i][j]));
@@ -6029,15 +6045,14 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				
 				/* print paternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellp ");
+					fprintf (fp,"%sp  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dp ", i+1);
+						fprintf (fp,"%s%04dp  ", inCellName, i+1);
 					else
-						fprintf (fp,"p%-12s", cellNames[i]);
+						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
-				
 				for (j=0; j<numSites; j++)
 					{
 					fprintf (fp, "%c", WhichNuc(data[PATERNAL][i][j]));
@@ -6047,19 +6062,18 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 			
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04dm ", 0);
+				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][HEALTHY_ROOT][j]));
-				fprintf (fp,"\nhearoot%04dp ", 0);
+					fprintf (fp, "%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][HEALTHY_ROOT][j]));
-				
-				fprintf (fp,"\ntumroot%04dm ", 0);
+					fprintf (fp, "%c", WhichNuc(data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][TUMOR_ROOT][j]));
-				fprintf (fp,"\ntumroot%04dp ", 0);
+					fprintf (fp, "%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -6071,28 +6085,27 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 			for (i=0; i<numCells+1; i++)
 				{
 				if (i == numCells)
-					fprintf (fp,"healthycell  ");
+					fprintf (fp,"%s ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04d ", i+1);
+						fprintf (fp,"%s%04d ", inCellName,i+1);
 					else
-						fprintf (fp,"%-12s ", cellNames[i]);
+						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][i][j],data[PATERNAL][i][j]));
 				fprintf (fp,"\n");
 				}
-			
+
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04d  ", 0);
+				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][HEALTHY_ROOT][j],data[PATERNAL][HEALTHY_ROOT][j]));
-				
-				fprintf (fp,"\ntumroot%04d  ", 0);
+					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][TUMOR_ROOT][j],data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
@@ -6102,13 +6115,13 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellm ");
+					fprintf (fp,"%sm  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dm ", i+1);
+						fprintf (fp,"%s%04dm  ", inCellName, i+1);
 					else
-						fprintf (fp,"m%-12s", cellNames[i]);
+						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][j]));
@@ -6116,13 +6129,13 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				
 				/* print paternal haplotype */
 				if (i == numCells)
-					fprintf (fp,"healthycellp ");
+					fprintf (fp,"%sp  ", outCellName);
 				else
 					{
 					if (doUserTree == NO)
-						fprintf (fp,"tumcell%04dp ", i+1);
+						fprintf (fp,"%s%04dp  ", inCellName, i+1);
 					else
-						fprintf (fp,"p%-12s", cellNames[i]);
+						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][j]));
@@ -6131,24 +6144,23 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 			
 			if (doPrintAncestors == YES)
 				{
-				fprintf (fp,"hearoot%04dm ", 0);
+				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][HEALTHY_ROOT][j]));
-				fprintf (fp,"\nhearoot%04dp ", 0);
+					fprintf (fp, "%c", WhichMut(data[MATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][HEALTHY_ROOT][j]));
-				
-				fprintf (fp,"\ntumroot%04dm ", 0);
+					fprintf (fp, "%c", WhichMut(data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][TUMOR_ROOT][j]));
-				fprintf (fp,"\ntumroot%04dp ", 0);
+					fprintf (fp, "%c", WhichMut(data[MATERNAL][INGROUP_ROOT][j]));
+				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][TUMOR_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(data[PATERNAL][INGROUP_ROOT][j]));
 				fprintf (fp,"\n");
 				}
 			}
 		}
-}
+	}
 
 
 
@@ -6467,10 +6479,11 @@ char WhichMut (int state)
 
 static void PrintHeader(FILE *fp)
     {
+	fprintf (fp, "\n\n-------------------------------------------------------------------\n");
     fprintf (fp,"Cell coalescent simulation - %s", PROGRAM_NAME);
     fprintf (fp,"  %s", VERSION_NUMBER);
-    fprintf (fp,"\n (c) 2018 David Posada - dposada@uvigo.es");
-    fprintf (fp,"\n__________________________________________________\n\n");
+    fprintf (fp,"\n (c) 2019 David Posada - dposada@uvigo.es");
+	fprintf (fp, "\n-------------------------------------------------------------------\n");
     }
 
 
@@ -6653,8 +6666,6 @@ static void	PrintRunInformation (FILE *fp)
 			if (numDataSets > 1)
 				fprintf (fp, "\n Variance number of CN-LOH events            =   %3.2f", varNumCNLOH);
 			}
-
-		}
  
 		if (genotypingError > 0 || doNGS == YES)
 			fprintf (fp, "\n\nNGS");
@@ -6709,6 +6720,7 @@ static void	PrintRunInformation (FILE *fp)
 			fprintf (fp, "\n Probability of untrue genotype calls         =   %3.2f", cumCountMLgenotypeErrors/numDataSets);
 			fprintf (fp, "\n   (see documentation)");
 			}
+		}
 	}
 
 /***************** PrintCommandLine **********************/
@@ -6799,49 +6811,130 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		/* Other */
 		if (doSimulateData == NO)
 			fprintf (fp, " -%d", 0);
+		if (doTumorNames == YES)
+			fprintf (fp, " -%c", 'W');
 		fprintf (fp, " -y%d -z%d -#%ld", noisy, numNodes, originalSeed);
 		}
 	}
+
+
+/***************************** PrintUsage *******************************/
+/* Prints a short description of program usage  */
+void PrintUsage(FILE *fp)
+{
+	PrintHeader(fp);
+    fprintf (fp, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
+    fprintf (fp, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -c# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # #  -G# -C# -V# -A# # # -E# -D# -R# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -0 -y# -z# -## -?]", PROGRAM_NAME_LOWERCASE);
+	fprintf (fp,"\n");
+
+    fprintf (fp,"\n-n: number of replicates (e.g. -n1000)");
+    fprintf (fp,"\n-s: sample size (# cells) (e.g. -s8)");
+    fprintf (fp,"\n-l: number of sites (e.g. -l500)");
+    fprintf (fp,"\n-e: effective population size (e.g. -e1000)");
+    fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
+    fprintf (fp, "\n    and the duration of the period in generations. (e.g. -d1 100 200 30000) (e.g. -d2 100 100 40000 1000 2000 20000)");
+	fprintf (fp,"\n-g: exponential growth rate (e.g. -g1e-5)");
+	fprintf (fp,"\n-k: transforming branch length (e.g. -u1e-2)");
+    fprintf (fp,"\n-q: healthy tip branch length (e.g. -q1e-6)");
+    fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages (e.g. -i0.5)");
+	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] (e.g. -b0)");
+	fprintf (fp,"\n-u: mutation rate (e.g. -u1e-6)");
+	fprintf (fp,"\n-d: deletion rate (e.g. -d1e-5)");
+	fprintf (fp,"\n-H: CNLOH rate (e.g. -H1e-5)");
+    fprintf (fp,"\n-j: fixed number of mutations (e.g. -j100)");
+    fprintf (fp,"\n-S: trinucleotide genetic signatures (e.g. -S2 3 0.8 13 0.2)");
+    fprintf (fp,"\n-m: alternative mutation model [0:ISMhap 1:Mk2 2:finiteDNA] [default mutation model is ISM diploid] (e.g. -m2)");
+    fprintf (fp,"\n-p: proportion of alternative model sites (e.g. -p0.1)");
+    fprintf (fp,"\n-w: alternative/default model relative mutation rate (e.g. -w1)");
+	fprintf (fp,"\n-c: germline SNP rate (e.g. -c1e-5)");
+	fprintf (fp,"\n-f: nucleotide base frequencies (e.g. -f0.4 0.3 0.2 0.1)");
+	fprintf (fp,"\n-t: transition/transversion ratio (e.g. -t2)");
+    fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites (e.g. -a0.2)");
+	fprintf (fp,"\n-r: mutation matrix ACGT x ACGT (e.g. -r0 1 2 3 1 0 4 5 2 4 0 1 3 5 1 0)");
+	fprintf (fp,"\n-G: genotyping error [no read counts] (e.g. -G0.01)");
+	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
+	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
+	fprintf (fp,"\n-I: allelic imbalance (e.g. -I0.5)");
+	fprintf (fp,"\n-D: allelic dropout (e.g. -D0.1)");
+	fprintf (fp,"\n-P: allelic dropout variation among sites (e.g. -P1)");
+	fprintf (fp,"\n-Q: allelic dropout variation among cells (e.g. -Q1)");
+	fprintf (fp,"\n-R: ADO/deletion haploid coverage reduction (e.g. -R0.5)");
+	fprintf (fp,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
+	fprintf (fp,"\n-E: sequencing error (e.g. -E0.001)");
+	fprintf (fp,"\n-B: doublet rate per cell (e.g. -B0.1)");
+	fprintf (fp,"\n-X: error matrix ACGT x ACGT (e.g. -X0 1 1 1 1 0 1 1 1 1 0 1 1 1 1 0)");
+
+    fprintf (fp,"\n-1: print SNV genotypes to a file (e.g. -1)");
+    fprintf (fp,"\n-2: print SNV haplotypes to a file (e.g. -2)");
+    fprintf (fp,"\n-3: print full genotypes to a file (e.g. -3)");
+    fprintf (fp,"\n-4: print full haplotypes to a file (e.g. -4)");
+    fprintf (fp,"\n-5: print ancestral genotypes (e.g. -5)");
+    fprintf (fp,"\n-6: print trees to a file (e.g. -6)");
+    fprintf (fp,"\n-7: print times to a file (e.g. -7)");
+    fprintf (fp,"\n-8: print read counts in CATG format (e.g. -8)");
+    fprintf (fp,"\n-9: print true SNV haplotypes to a file (e.g. -9)");
+	fprintf (fp,"\n-@: print ML haplotypes to a file (e.g. -@)");
+	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
+	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
+	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
+	fprintf (fp,"\n-T: user-tree file (e.g. -Susertree)");
+	fprintf (fp,"\n-0: simulate just the genealogies (e.g. -0)");
+	fprintf (fp,"\n-W: use tumor nomenclature for cells (e.g. -W)");
+	fprintf (fp,"\n-y: noisy (e.g. -y1)");
+    fprintf (fp,"\n      = 0: does not print anything");
+    fprintf (fp,"\n      = 1:  + simulation summary");
+    fprintf (fp,"\n      = 2:  + replicate information");
+    fprintf (fp,"\n      = 3: + calculation status and event information");
+    fprintf (fp,"\n-z: number of nodes to allocate (e.g. -z5000)");
+    fprintf (fp,"\n-#: seed (e.g. -#37864287)");
+    fprintf (fp,"\n-?: Print help");
+	
+    fprintf (fp,"\n\nDefaults: ");
+    PrintDefaults (fp);
+	fprintf (fp, "\n--------------------------------------------------------------------------------------------------------\n");
+	fprintf (fp,"\n...now exiting to system...\n\n");
+    exit(-1);
+}
 
 
 /***************** PrintDefaults **********************/
 /*	Prints the default settings */
 
 static void PrintDefaults (FILE *fp)
-    {
-    int		i;
-		
+	{
+	int		i;
+
 	/* Coalescent */
-    fprintf (fp,"\n-n: number of replicates =  %d", numDataSets);
-    fprintf (fp,"\n-s: sample size (# cells) =  %d", numCells);
-    fprintf (fp,"\n-l: number of sites =  %d", numSites);
-    fprintf (fp,"\n-e: effective population size =  %d", N);
-    fprintf (fp,"\n-g: growth rate =  %2.1e", growthRate);
-    fprintf (fp,"\n-h: number of demographic periods = %d", numPeriods);
- 	for (i=1; i<=numPeriods; i++)
-			fprintf (fp, "\n  period %d =  %d %d %d", i, Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
+	fprintf (fp,"\n-n: number of replicates =  %d", numDataSets);
+	fprintf (fp,"\n-s: sample size (# cells) =  %d", numCells);
+	fprintf (fp,"\n-l: number of sites =  %d", numSites);
+	fprintf (fp,"\n-e: effective population size =  %d", N);
+	fprintf (fp,"\n-h: number of demographic periods = %d", numPeriods);
+	for (i=1; i<=numPeriods; i++)
+		fprintf (fp, "\n  period %d =  %d %d %d", i, Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
+	fprintf (fp,"\n-g: exponential growth rate =  %2.1e", growthRate);
 
 	/* Post-coalescent */
 	fprintf (fp,"\n-k: transforming branch length ratio =  %2.1e", transformingBranchLengthRatio);
-    fprintf (fp,"\n-q: healthy tip branch length ratio =  %2.1e", healthyTipBranchLengthRatio);
-    fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages =  %6.4f", alphaBranches);
+	fprintf (fp,"\n-q: healthy tip branch length ratio =  %2.1e", healthyTipBranchLengthRatio);
+	fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages =  %6.4f", alphaBranches);
 	
 	/* Mutation model */
 	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] =  %d", alphabet);
 	fprintf (fp,"\n-u: mutation rate =  %2.1e", mutationRate);
 	fprintf (fp,"\n-d: deletion rate =  %2.1e", deletionRate);
 	fprintf (fp,"\n-H: CNLOH rate =  %2.1e", CNLOHrate);
-    fprintf (fp,"\n-j: fixed number of mutations =  %d", numFixedMutations);
-    fprintf (fp,"\n-S: number of trinucleotide genetic signature =  %d", numUserSignatures);
-    fprintf (fp,"\n-m: alternative mutation model =  %d", altModel);
-    fprintf (fp,"\n-p: proportion of alternative model sites =  %6.4f", propAltModelSites);
-    fprintf (fp,"\n-w: alternative/default model relative mutation rate =  %6.4f", nonISMRelMutRate);
+	fprintf (fp,"\n-j: fixed number of mutations =  %d", numFixedMutations);
+	fprintf (fp,"\n-S: number of trinucleotide genetic signature =  %d", numUserSignatures);
+	fprintf (fp,"\n-m: alternative mutation model =  %d", altModel);
+	fprintf (fp,"\n-p: proportion of alternative model sites =  %6.4f", propAltModelSites);
+	fprintf (fp,"\n-w: alternative/default model relative mutation rate =  %6.4f", nonISMRelMutRate);
 	fprintf (fp,"\n-c: germline SNP rate =  %2.1e", SNPrate);
 	fprintf (fp,"\n-f: nucleotide base frequencies = f%3.2f %3.2f %3.2f %3.2f", freq[0], freq[1], freq[2], freq[3]);
 	fprintf (fp,"\n-t: transition/transversion ratio =  %6.4f", titv);
-    fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites =  %6.4f", alphaSites);
+	fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites =  %6.4f", alphaSites);
 	fprintf (fp,"\n-r: mutation matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Mij[0][0], Mij[0][1], Mij[0][2], Mij[0][3], Mij[1][0], Mij[1][1], Mij[1][2], Mij[1][3],  Mij[2][0], Mij[2][1], Mij[2][2], Mij[2][3],  Mij[3][0], Mij[3][1], Mij[3][2], Mij[3][3]);
-
+	
 	/* NGS */
 	fprintf (fp,"\n-G: genotyping error =  %2.1e", genotypingError);
 	fprintf (fp,"\n-C: sequencing coverage =  %d", coverage);
@@ -6855,108 +6948,30 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
 	fprintf (fp,"\n-B: doublet rate per cell =  %2.1e", doubletRate);
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3], Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
-
-    /* Output */
-    fprintf (fp,"\n-1: print SNV genotypes to a file =  %d", doPrintSNVgenotypes);
-    fprintf (fp,"\n-2: print SNV haplotypes to a file =  %d", doPrintSNVhaplotypes);
-    fprintf (fp,"\n-3: print full genotypes to a file =  %d", doPrintFullGenotypes);
-    fprintf (fp,"\n-4: print full haplotypes to a file =  %d", doPrintFullHaplotypes);
-    fprintf (fp,"\n-5: print ancestral genotypes =  %d", doPrintAncestors);
-    fprintf (fp,"\n-6: print trees to a file =  %d", doPrintTree);
-    fprintf (fp,"\n-7: print times to a file =  %d", doPrintTimes);
-    fprintf (fp,"\n-8: print read counts in CATG format =  %d", doPrintCATG);
-    fprintf (fp,"\n-9: print true haplotypes to a file =  %d", doPrintTrueHaplotypes);
+	
+	/* Output */
+	fprintf (fp,"\n-1: print SNV genotypes to a file =  %d", doPrintSNVgenotypes);
+	fprintf (fp,"\n-2: print SNV haplotypes to a file =  %d", doPrintSNVhaplotypes);
+	fprintf (fp,"\n-3: print full genotypes to a file =  %d", doPrintFullGenotypes);
+	fprintf (fp,"\n-4: print full haplotypes to a file =  %d", doPrintFullHaplotypes);
+	fprintf (fp,"\n-5: print ancestral genotypes =  %d", doPrintAncestors);
+	fprintf (fp,"\n-6: print trees to a file =  %d", doPrintTree);
+	fprintf (fp,"\n-7: print times to a file =  %d", doPrintTimes);
+	fprintf (fp,"\n-8: print read counts in CATG format =  %d", doPrintCATG);
+	fprintf (fp,"\n-9: print true haplotypes to a file =  %d", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
 	fprintf (fp,"\n-o: results folder name =  %s", resultsDir);
 	fprintf (fp,"\n-T: user tree file name =  %s", userTreeFile);
 	fprintf (fp,"\n-U: user genome file name =  %s", userGenomeFile);
-
+	
 	/* Other */
 	fprintf (fp,"\n-0: simulate just the genealogies =  %d", doSimulateData);
+	fprintf (fp,"\n-W: use tumor nomenclature for cells =  %d", doTumorNames);
 	fprintf (fp,"\n-y: noisy = %d", noisy);
-    fprintf (fp,"\n-z: number of nodes to allocate = %d", numNodes);
-    fprintf (fp,"\n-#: seed = %ld", originalSeed);
- 	}
-
-/***************************** PrintUsage *******************************/
-/* Prints a short description of program usage  */
-void PrintUsage(void)
-{
-    fprintf (stderr, "\n\n--------------------------------------------------------------------------------------------------------\n");
-    fprintf (stderr, "%s", PROGRAM_NAME_UPPERCASE);
-    fprintf (stderr, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
-    fprintf (stderr, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -c# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # #  -G# -C# -V# -A# # # -E# -D# -R# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -0 -y# -z# -## -?]", PROGRAM_NAME);
-	
-    fprintf (stderr,"\n-n: number of replicates (e.g. -n1000)");
-    fprintf (stderr,"\n-s: sample size (# cells) (e.g. -s8)");
-    fprintf (stderr,"\n-l: number of sites (e.g. -l500)");
-    fprintf (stderr,"\n-e: effective population size (e.g. -e1000)");
-    fprintf (stderr,"\n-g: growth rate (e.g. -g1e-5)");
-    fprintf (stderr,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
-    fprintf (stderr, "\n    and the duration of the period in generations. (e.g. -d1 100 200 30000) (e.g. -d2 100 100 40000 1000 2000 20000)");
-	fprintf (stderr,"\n-k: transforming branch length (e.g. -u1e-2)");
-    fprintf (stderr,"\n-q: healthy tip branch length (e.g. -q1e-6)");
-    fprintf (stderr,"\n-i: shape of the gamma distribution for rate variation among lineages (e.g. -i0.5)");
-	fprintf (stderr,"\n-b: alphabet [0:binary 1:DNA] (e.g. -b0)");
-	fprintf (stderr,"\n-u: mutation rate (e.g. -u1e-6)");
-	fprintf (stderr,"\n-d: deletion rate (e.g. -d1e-5)");
-	fprintf (stderr,"\n-H: CNLOH rate (e.g. -H1e-5)");
-    fprintf (stderr,"\n-j: fixed number of mutations (e.g. -j100)");
-    fprintf (stderr,"\n-S: trinucleotide genetic signatures (e.g. -S2 3 0.8 13 0.2)");
-    fprintf (stderr,"\n-m: alternative mutation model [0:ISMhap 1:Mk2 2:finiteDNA] [default mutation model is ISM diploid] (e.g. -m2)");
-    fprintf (stderr,"\n-p: proportion of alternative model sites (e.g. -p0.1)");
-    fprintf (stderr,"\n-w: alternative/default model relative mutation rate (e.g. -w1)");
-	fprintf (stderr,"\n-c: germline SNP rate (e.g. -c1e-5)");
-	fprintf (stderr,"\n-f: nucleotide base frequencies (e.g. -f0.4 0.3 0.2 0.1)");
-	fprintf (stderr,"\n-t: transition/transversion ratio (e.g. -t2)");
-    fprintf (stderr,"\n-a: shape of the gamma distribution for rate variation among sites (e.g. -a0.2)");
-	fprintf (stderr,"\n-r: mutation matrix ACGT x ACGT (e.g. -r0 1 2 3 1 0 4 5 2 4 0 1 3 5 1 0)");
-	fprintf (stderr,"\n-G: genotyping error [no read counts] (e.g. -G0.01)");
-	fprintf (stderr,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
-	fprintf (stderr,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
-	fprintf (stderr,"\n-I: allelic imbalance (e.g. -I0.5)");
-	fprintf (stderr,"\n-D: allelic dropout (e.g. -D0.1)");
-	fprintf (stderr,"\n-P: allelic dropout variation among sites (e.g. -P1)");
-	fprintf (stderr,"\n-Q: allelic dropout variation among cells (e.g. -Q1)");
-	fprintf (stderr,"\n-R: ADO/deletion haploid coverage reduction (e.g. -R0.5)");
-	fprintf (stderr,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
-	fprintf (stderr,"\n-E: sequencing error (e.g. -E0.001)");
-	fprintf (stderr,"\n-B: doublet rate per cell (e.g. -B0.1)");
-	fprintf (stderr,"\n-X: error matrix ACGT x ACGT (e.g. -X0 1 1 1 1 0 1 1 1 1 0 1 1 1 1 0)");
-
-    fprintf (stderr,"\n-1: print SNV genotypes to a file (e.g. -1)");
-    fprintf (stderr,"\n-2: print SNV haplotypes to a file (e.g. -2)");
-    fprintf (stderr,"\n-3: print full genotypes to a file (e.g. -3)");
-    fprintf (stderr,"\n-4: print full haplotypes to a file (e.g. -4)");
-    fprintf (stderr,"\n-5: print ancestral genotypes (e.g. -5)");
-    fprintf (stderr,"\n-6: print trees to a file (e.g. -6)");
-    fprintf (stderr,"\n-7: print times to a file (e.g. -7)");
-    fprintf (stderr,"\n-8: print read counts in CATG format (e.g. -8)");
-    fprintf (stderr,"\n-9: print true SNV haplotypes to a file (e.g. -9)");
-	fprintf (stderr,"\n-@: print ML haplotypes to a file (e.g. -@)");
-	fprintf (stderr,"\n-v: print replicates in individual folders (e.g. -v)");
-	fprintf (stderr,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
-	fprintf (stderr,"\n-o: results folder name (e.g. -oresultsFolder)");
-	fprintf (stderr,"\n-T: user-tree file (e.g. -Susertree)");
-	fprintf (stderr,"\n-0: simulate just the genealogies (e.g. -0)");
-	fprintf (stderr,"\n-y: noisy (e.g. -y1)");
-    fprintf (stderr,"\n      = 0: does not print anything");
-    fprintf (stderr,"\n      = 1:  + simulation summary");
-    fprintf (stderr,"\n      = 2:  + replicate information");
-    fprintf (stderr,"\n      = 3: + calculation status and event information");
-    fprintf (stderr,"\n-z: number of nodes to allocate (e.g. -z5000)");
-    fprintf (stderr,"\n-#: seed (e.g. -#37864287)");
-    fprintf (stderr,"\n-?: Print help");
-	
-    fprintf (stderr,"\n\nDefaults: ");
-    PrintDefaults (stderr);
-	fprintf (stderr, "\n--------------------------------------------------------------------------------------------------------\n");
-	fprintf (stderr,"\n...now exiting to system...\n\n");
-    exit(-1);
-}
-
-
+	fprintf (fp,"\n-z: number of nodes to allocate = %d", numNodes);
+	fprintf (fp,"\n-#: seed = %ld", originalSeed);
+	}
 
 
 /***************** Index ***************/
@@ -7208,7 +7223,7 @@ double	RandomGamma (double shape, long int *seed)
     double gammaNumber = 0;
 	
     if (shape <= 0)
-        fprintf (stderr, "ERROR: problems with gamma variable generation, shape < 0");
+        fprintf (stderr, "!!! ERROR: problems with gamma variable generation, shape < 0");
     else if (shape < 1)
         gammaNumber = RandomGamma1 (shape, seed);
     else if (shape > 1)
@@ -7359,11 +7374,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
-	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
+	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 W y z #
  
  USED
 	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A B C D E   G H I       M     P Q R S T U V   X
+	A B C D E   G H I       M     P Q R S T U V W  X
 	0 1 2 3 4 5 6 7 8 9 #
 */
 static void ReadParametersFromCommandLine (int argc,char **argv)
@@ -7401,8 +7416,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 numDataSets = (int) argument;
                 if (numDataSets <1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of replicates (%d)\n\n", numDataSets);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of replicates (%d)\n\n", numDataSets);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 's':
@@ -7410,8 +7425,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 numCells = (int) argument;
                 if (numCells < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad sample size (%d)\n\n", numCells);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sample size (%d)\n\n", numCells);
+                    PrintUsage(stderr);
                     }
                 break;
             case 'l':
@@ -7419,8 +7434,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 numSites = (int) argument;
                 if (numSites<1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad sequence length (%d)\n\n", numSites);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sequence length (%d)\n\n", numSites);
+                    PrintUsage(stderr);
                     }
                 break;
             case 'e':
@@ -7428,23 +7443,23 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 N = (int) argument;
                 if (N < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad effective population size (%d)\n\n", N);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad effective population size (%d)\n\n", N);
+                    PrintUsage(stderr);
                     }
                 break;
              case 'g':
                 growthRate = atof(argv[i]);
                 if (growthRate < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad growth rate (%f)\n\n", growthRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad growth rate (%f)\n\n", growthRate);
+                    PrintUsage(stderr);
                     }
                 if (growthRate != 0)
                     {
                     doExponential = YES;
                     if (doDemographics == YES)
                         {
-                        fprintf (stderr, "PARAMETER ERROR: Cannot have both exponential (-g) and  demographics (-h)\n\n");
+                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (-g) and  demographics (-h)\n\n");
                         exit (-1);
                         }
                     }
@@ -7456,13 +7471,13 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					doDemographics = YES;
                 if (doDemographics == YES && doExponential == YES)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Cannot have both demographics periods (-h) and other demographics (-d)\n\n");
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both demographics periods (-h) and other demographics (-d)\n\n");
                     exit (-1);
                     }
                 if (numPeriods <= 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of periods (%d)\n\n", numPeriods);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of periods (%d)\n\n", numPeriods);
+                    PrintUsage(stderr);
                     }
                 Nbegin = 	(int *) calloc(numPeriods+1, sizeof(int));
                 Nend =		(int *) calloc(numPeriods+1, sizeof(int));
@@ -7470,7 +7485,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 periodGrowth =	(double *) calloc(numPeriods+1, sizeof(double));
                 if (Nbegin == NULL || Nend == NULL || cumDuration == NULL)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", numPeriods * sizeof(int));
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", numPeriods * sizeof(int));
                     exit (-1);
                     }
                 for (j=1; j<=numPeriods; j++)
@@ -7487,24 +7502,24 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 transformingBranchLengthRatio = atof(argv[i]);
               if (transformingBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLengthRatio);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLengthRatio);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'q':
                 healthyTipBranchLengthRatio = atof(argv[i]);
                 if (healthyTipBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLengthRatio);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLengthRatio);
+                    PrintUsage(stderr);
                     }
                 break;
              case 'i':
                 alphaBranches = atof(argv[i]);
                     if (alphaBranches <= 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad gamma alphaBranches shape (%f)\n\n", alphaBranches);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad gamma alphaBranches shape (%f)\n\n", alphaBranches);
+                    PrintUsage(stderr);
                     }
                 rateVarAmongLineages = YES;
                 break;
@@ -7513,32 +7528,32 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 alphabet = (int) argument;
                    if (alphabet < 0 || alphabet > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad alphabet (%d)\n\n", alphabet);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alphabet (%d)\n\n", alphabet);
+                    PrintUsage(stderr);
                     }
                break;
 			case 'u':
                 mutationRate = atof(argv[i]);
                 if (mutationRate < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad mutation rate (%f)\n\n", mutationRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad mutation rate (%f)\n\n", mutationRate);
+                    PrintUsage(stderr);
                     }
                 break;
             case 'd':
                 deletionRate = atof(argv[i]);
                 if (deletionRate < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad deletion rate (%f)\n\n", deletionRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad deletion rate (%f)\n\n", deletionRate);
+                    PrintUsage(stderr);
                     }
                 break;
             case 'H':
                 CNLOHrate = atof(argv[i]);
                 if (CNLOHrate < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad CNLOH rate (%f)\n\n", CNLOHrate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad CNLOH rate (%f)\n\n", CNLOHrate);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'j':
@@ -7546,14 +7561,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 numFixedMutations = (int) argument;
                 if (numFixedMutations <1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of fixed mutations (%d)\n\n", numFixedMutations);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of fixed mutations (%d)\n\n", numFixedMutations);
+                    PrintUsage(stderr);
                     }
                 doSimulateFixedNumMutations = YES;
                 if (propAltModelSites > 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: You cannot specify a fixed number of mutations if there is any non-ISM site. Set the proportion of non-ISM sites to zero\n\n");
-					PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: You cannot specify a fixed number of mutations if there is any non-ISM site. Set the proportion of non-ISM sites to zero\n\n");
+					PrintUsage(stderr);
                     }
                 break;
 			case 'S':
@@ -7561,15 +7576,15 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 numUserSignatures = (int) argument;
                 if (numUserSignatures < 1 || numUserSignatures > 30)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad  number of genetic signatures (%d), it has to be a single number between 1 and 30\n\n", numUserSignatures);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad  number of genetic signatures (%d), it has to be a single number between 1 and 30\n\n", numUserSignatures);
+                    PrintUsage(stderr);
                     }
                 doGeneticSignatures = YES;
 
 				if (alphabet == BINARY)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the the binary alphabet");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the the binary alphabet");
+					PrintUsage(stderr);
 					}
 
 				signatureWeight = (double*) calloc (numUserSignatures, sizeof(double));
@@ -7594,8 +7609,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					signatureWeight[j] = argument;
 					if (signatureWeight[j] <= 0)
 						{
-						fprintf (stderr, "PARAMETER ERROR: Bad signatureWeight (%f)\n\n", signatureWeight[j]);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad signatureWeight (%f)\n\n", signatureWeight[j]);
+						PrintUsage(stderr);
 						}
 					sum += signatureWeight[j];
 					}
@@ -7608,23 +7623,23 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 altModel = (int) argument;
                 if (altModel < 0 || altModel > 2)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad alternative mutation model (%d)\n\n", altModel);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alternative mutation model (%d)\n\n", altModel);
+                    PrintUsage(stderr);
                     }
 				if (alphabet == DNA && propAltModelSites > 0)
 					{
 					if (altModel == Mk)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The DNA alphabet and the model (%d) specified are incompatible", (int) argument);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The DNA alphabet and the model (%d) specified are incompatible", (int) argument);
+						PrintUsage(stderr);
 						}
 					}
 				else if (alphabet == BINARY && propAltModelSites > 0)
 					{
 					if (altModel == finiteDNA)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The binary alphabet and the model (%d) specified are incompatible", (int) argument);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The binary alphabet and the model (%d) specified are incompatible", (int) argument);
+						PrintUsage(stderr);
 						}
 					}
                break;
@@ -7632,28 +7647,28 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 propAltModelSites = atof(argv[i]);
                 if (propAltModelSites < 0 || propAltModelSites > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad proportion of alternative model sites (%f). It has to be between 0 and 1\n\n", propAltModelSites);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad proportion of alternative model sites (%f). It has to be between 0 and 1\n\n", propAltModelSites);
+                    PrintUsage(stderr);
                     }
 				if (propAltModelSites > 0 && altModel != ISMhap && doSimulateFixedNumMutations == YES)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: You cannot specify a proportion of non-ISM  sites bigger than zero if the number of mutations is fixed\n\n");
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: You cannot specify a proportion of non-ISM  sites bigger than zero if the number of mutations is fixed\n\n");
+                    PrintUsage(stderr);
                     }
  				if (alphabet == DNA && propAltModelSites > 0)
 					{
 					if (altModel == Mk)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The DNA alphabet and the alt model (%d) specified are incompatible", (int) altModel);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The DNA alphabet and the alt model (%d) specified are incompatible", (int) altModel);
+						PrintUsage(stderr);
 						}
 					}
 				else if (alphabet == BINARY && propAltModelSites > 0)
 					{
 					if (altModel == finiteDNA)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The binary alphabet and the alt model (%d) specified are incompatible", (int) altModel);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The binary alphabet and the alt model (%d) specified are incompatible", (int) altModel);
+						PrintUsage(stderr);
 						}
 					}
                break;
@@ -7661,16 +7676,16 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 nonISMRelMutRate = atof(argv[i]);
                 if (nonISMRelMutRate < 0 || nonISMRelMutRate > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad relative nonISM/ISM mutation rate (%f)\n\n", nonISMRelMutRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad relative nonISM/ISM mutation rate (%f)\n\n", nonISMRelMutRate);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'c':
                 SNPrate = atof(argv[i]);
                 if (SNPrate < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad germline SNP rate (%f)\n\n", SNPrate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad germline SNP rate (%f)\n\n", SNPrate);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'f':
@@ -7697,8 +7712,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 	        	titv = atof(argv[i]);
 				if (titv < 0)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad ti/tv (%f)\n\n", titv);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad ti/tv (%f)\n\n", titv);
+					PrintUsage(stderr);
 					}
 				else
 					{
@@ -7709,24 +7724,24 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					}
 				if (thereIsMij == YES)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
+					PrintUsage(stderr);
 					}
 				break;
 			case 'a':
                 alphaSites = atof(argv[i]);
                 if (alphaSites < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad gamma alphaSites shape (%f)\n\n", alphaSites);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad gamma alphaSites shape (%f)\n\n", alphaSites);
+                    PrintUsage(stderr);
                     }
                 rateVarAmongSites = YES;
                 break;
 			case 'r':
 				if (doHKY == YES)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
+					PrintUsage(stderr);
 					}
 					/*	AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT */
 					Mij[0][0]= atof(argv[i]);
@@ -7747,8 +7762,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					Mij[3][3] = atof(argv[++i]);
 					if (Mij[0][0] != 0  || Mij[1][1] != 0 || Mij[2][2] != 0 || Mij[3][3] != 0)
 						{
-						fprintf(stderr, "PARAMETER ERROR: Bad general rate matrix: diagonals should be 0 \n\n");
-						PrintUsage();
+						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad general rate matrix: diagonals should be 0 \n\n");
+						PrintUsage(stderr);
 						}
 					thereIsMij = YES;
 					if (CheckMatrixSymmetry (Mij) == YES)
@@ -7770,13 +7785,13 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				genotypingError = atof(argv[i]);
 				if (genotypingError < 0 || genotypingError > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad genotyping error (%f)\n\n", genotypingError);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad genotyping error (%f)\n\n", genotypingError);
+                    PrintUsage(stderr);
                     }
   				if (genotypingError > 0 && doNGS == YES)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					PrintUsage(stderr);
 					}
                break;
 			case 'C':
@@ -7784,23 +7799,23 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				coverage = (int) argument;
 				if (coverage < 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad coverage (%d)\n\n", coverage);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad coverage (%d)\n\n", coverage);
+					PrintUsage(stderr);
 					}
 				if (coverage > 0)
 					doNGS = YES;
 				if (genotypingError > 0 && doNGS == YES)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					PrintUsage(stderr);
 					}
 				break;
             case 'V':
                alphaCoverage = atof(argv[i]);
 				if (alphaCoverage <= 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad coverage dispersion (%f)\n\n", alphaCoverage);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad coverage dispersion (%f)\n\n", alphaCoverage);
+                    PrintUsage(stderr);
                     }
                 rateVarCoverage = YES;
 				break;
@@ -7810,34 +7825,34 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					simulateOnlyTwoTemplates = (int) atof(argv[++i]);
 				if (meanAmplificationError < 0 || meanAmplificationError > 1)
 					{
-					fprintf(stderr, "PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
-					PrintUsage();
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
+					PrintUsage(stderr);
 					}
 				if (varAmplificationError < 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
 					{
-					fprintf(stderr, "PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
-					PrintUsage();
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
+					PrintUsage(stderr);
 					}
 				if (simulateOnlyTwoTemplates < 0 || simulateOnlyTwoTemplates > 1)
 					{
-					fprintf(stderr, "PARAMETER ERROR: Bad simulateOnlyTwoTemplates error (%d); it has to be 0 (assume 2 templates) or 1 (assume 4 templates)", simulateOnlyTwoTemplates);
-					PrintUsage();
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad simulateOnlyTwoTemplates error (%d); it has to be 0 (assume 2 templates) or 1 (assume 4 templates)", simulateOnlyTwoTemplates);
+					PrintUsage(stderr);
 					}
 				break;
             case 'E':
                 sequencingError = atof(argv[i]);
 				if (sequencingError < 0 || sequencingError > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad sequencing error (%f)\n\n", sequencingError);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sequencing error (%f)\n\n", sequencingError);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'D':
                ADOrate = atof(argv[i]);
 				if (ADOrate < 0 ||ADOrate > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout (%f)\n\n", ADOrate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout (%f)\n\n", ADOrate);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'P':
@@ -7845,8 +7860,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				ADOvarAmongSites = YES;
 				if (alphaADOsites < 0 ||alphaADOsites > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout heterogeneity among sites (%f)\n\n", alphaADOsites);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout heterogeneity among sites (%f)\n\n", alphaADOsites);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'Q':
@@ -7854,32 +7869,32 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				ADOvarAmongCells = YES;
 				if (alphaADOcells < 0 ||alphaADOcells > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout heterogeneity among cells (%f)\n\n", alphaADOcells);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout heterogeneity among cells (%f)\n\n", alphaADOcells);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'I':
 				allelicImbalance = atof(argv[i]);
 				if (allelicImbalance < 0 || allelicImbalance > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad allelicImbalance (%f)\n\n", haploidCoverageReduction);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelicImbalance (%f)\n\n", haploidCoverageReduction);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'R':
 				haploidCoverageReduction = atof(argv[i]);
 				if (haploidCoverageReduction < 0 || haploidCoverageReduction > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad haploid coverage reduction (%f)\n\n", haploidCoverageReduction);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad haploid coverage reduction (%f)\n\n", haploidCoverageReduction);
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'B':
 				doubletRate = atof(argv[i]);
 				if (doubletRate < 0 ||  doubletRate > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad doublet rate (%f)\n\n", doubletRate);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad doublet rate (%f)\n\n", doubletRate);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'X':
@@ -7902,8 +7917,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					Eij[3][3] = atof(argv[++i]);
 					if (Eij[0][0] != 0  || Eij[1][1] != 0 || Eij[2][2] != 0 || Eij[3][3] != 0)
 						{
-						fprintf(stderr, "PARAMETER ERROR: Bad error matrix: diagonals should be 0 \n\n");
-						PrintUsage();
+						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad error matrix: diagonals should be 0 \n\n");
+						PrintUsage(stderr);
 						}
 				thereIsEij = YES;
 				break;
@@ -7932,8 +7947,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				doPrintCATG = YES;
    				if (doNGS == NO)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot print the CATG format when coverage is <= 0\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the CATG format when coverage is <= 0\n\n");
+					PrintUsage(stderr);
 					}
                break;
             case '9':
@@ -7965,13 +7980,16 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case '0':
                 doSimulateData = NO;
                 break;
-            case 'y':
+			case 'W':
+				doTumorNames = YES;
+			break;
+			case 'y':
                 argument = atof(argv[i]);
                 noisy = (int) argument;
                 if (noisy < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad noisy value (%d)\n\n", noisy);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad noisy value (%d)\n\n", noisy);
+                    PrintUsage(stderr);
                     }
                 break;
             case 'z':
@@ -7979,8 +7997,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 numNodes = (int) argument;
                 if (numNodes<1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of nodes (%d)\n\n", numNodes);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of nodes (%d)\n\n", numNodes);
+                    PrintUsage(stderr);
                     }
                 break;
             case '#':
@@ -7988,16 +8006,16 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 userSeed = (long int) argdouble;
                 if (userSeed < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad user seed for random number (%ld)\n\n", userSeed);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad user seed for random number (%ld)\n\n", userSeed);
+                    PrintUsage(stderr);
                     }
                 break;
 			case '?':
-                PrintUsage();
+                PrintUsage(stderr);
                 break;
             default :
-                fprintf (stderr, "PARAMETER ERROR: Incorrect parameter: %c\n\n", flag);
-                PrintUsage();
+                fprintf (stderr, "\n!!! PARAMETER ERROR: Incorrect parameter: %c\n\n", flag);
+                PrintUsage(stderr);
                 break;
         }
     }
@@ -8008,16 +8026,17 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 /***************************** ReadParametersFromFile *******************************/
 /*
  USED IN ORDER
- n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 y z #
+ n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 W y z #
  
  USED
  a b c d e f g h i j k l m n o p q r s t u v w x y z
- A B C D E   G H I       M     P Q R S T U V   X
+ A B C D E   G H I       M     P Q R S T U V W  X
  0 1 2 3 4 5 6 7 8 9 #
  */
 
+
 void ReadParametersFromFile ()
-{
+	{
     int		j;
     char 	ch;
     double	sumPi, sum;
@@ -8050,47 +8069,47 @@ void ReadParametersFromFile ()
             case 'n':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of replicates (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of replicates (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 numDataSets = (int) argument;
                 break;
             case 's':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad sample size (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sample size (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 numCells = (int) argument;
                 break;
             case 'l':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad sequence length (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sequence length (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 numSites = (int) argument;
                 break;
             case 'e':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad effective population size (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad effective population size (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 N = (int) argument;
                 break;
              case 'g':
                 if (fscanf(stdin, "%lf", &growthRate) !=1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad exponential growth rate (%f)\n\n", growthRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad exponential growth rate (%f)\n\n", growthRate);
+                    PrintUsage(stderr);
                     }
                 if (growthRate != 0)
                     {
                     doExponential = YES;
                     if (doDemographics == YES)
                         {
-                        fprintf (stderr, "PARAMETER ERROR: Cannot have both exponential (-b) and other demographics(-d)\n\n");
+                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (-b) and other demographics(-d)\n\n");
                         exit (-1);
                         }
                     }
@@ -8098,15 +8117,15 @@ void ReadParametersFromFile ()
              case 'h':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of periods (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of periods (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
 				numPeriods = (int) argument;
 				if (numPeriods > 0)
 					doDemographics = YES;
                 if (doDemographics == YES && doExponential == YES)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Cannot have both demographics periods (-d) and other demographics (-b)\n\n");
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both demographics periods (-d) and other demographics (-b)\n\n");
                     exit (-1);
                     }
 				Nbegin =	(int *) calloc(numPeriods+1, sizeof(int));
@@ -8115,7 +8134,7 @@ void ReadParametersFromFile ()
                 periodGrowth =	(double *) calloc(numPeriods+1, sizeof(double));
                 if (Nbegin == NULL || Nend == NULL || cumDuration == NULL)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", numPeriods * sizeof(int));
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", numPeriods * sizeof(int));
                     exit (-1);
                     }
                 for (j=1; j<=numPeriods; j++)
@@ -8131,81 +8150,81 @@ void ReadParametersFromFile ()
             case 'k':
                 if (fscanf(stdin, "%lf", &transformingBranchLengthRatio)!=1 || transformingBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLengthRatio);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad transforming branch length (%f)\n\n", transformingBranchLengthRatio);
+                    PrintUsage(stderr);
                     }
                  break;
             case 'q':
                 if (fscanf(stdin, "%lf", &healthyTipBranchLengthRatio)!=1 || healthyTipBranchLengthRatio < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLengthRatio);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad healthy tip branch length (%f)\n\n", healthyTipBranchLengthRatio);
+                    PrintUsage(stderr);
                     }
                 break;
             case 'i':
                     if (fscanf(stdin, "%lf", &alphaBranches)!=1 || alphaBranches <= 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad alphaBranches shape (%f)\n\n", alphaBranches);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alphaBranches shape (%f)\n\n", alphaBranches);
+                    PrintUsage(stderr);
                     }
                 rateVarAmongLineages = YES;
                break;
             case 'b':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 0  || argument > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad alphabet (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alphabet (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 alphabet = (int) argument;
                 break;
 			case 'u':
                 if (fscanf(stdin, "%lf", &mutationRate)!=1 || mutationRate < 0 || mutationRate > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad mutation rate (%f)\n\n", mutationRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad mutation rate (%f)\n\n", mutationRate);
+                    PrintUsage(stderr);
                     }
                 break;
  			case 'd':
                 if (fscanf(stdin, "%lf", &deletionRate)!=1 || deletionRate < 0 || deletionRate > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad deletion rate (%f)\n\n", deletionRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad deletion rate (%f)\n\n", deletionRate);
+                    PrintUsage(stderr);
                     }
                 break;
  			case 'H':
                 if (fscanf(stdin, "%lf", &CNLOHrate)!=1 || CNLOHrate < 0 || CNLOHrate > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad CNLOH rate (%f)\n\n", CNLOHrate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad CNLOH rate (%f)\n\n", CNLOHrate);
+                    PrintUsage(stderr);
                     }
                 break;
            case 'j':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of mutations (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of mutations (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 numFixedMutations = (int) argument;
                 doSimulateFixedNumMutations = YES;
                 if (propAltModelSites > 0 && altModel != ISMhap)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: You cannot specify a fixed number of mutations if there is any non-ISM  site. Set the proportion of non-ISM diploid sites to zero\n\n");
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: You cannot specify a fixed number of mutations if there is any non-ISM  site. Set the proportion of non-ISM diploid sites to zero\n\n");
+                    PrintUsage(stderr);
                     }
                 break;
 			case 'S':
 				if (fscanf(stdin, "%f", &argument) !=1 || argument < 1 || argument > 30)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad number of genetic signatures (%d), it has to be a single number between 1 and 30\n\n", (int) argument);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of genetic signatures (%d), it has to be a single number between 1 and 30\n\n", (int) argument);
+					PrintUsage(stderr);
 					}
 				numUserSignatures = (int) argument;
 				doGeneticSignatures = YES;
 
 				if (alphabet == BINARY)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the the binary alphabet");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the the binary alphabet");
+					PrintUsage(stderr);
 					}
 
 				signatureWeight = (double*) calloc (numUserSignatures, sizeof(double));
@@ -8230,8 +8249,8 @@ void ReadParametersFromFile ()
 					fscanf(stdin, "%lf", &signatureWeight[j]);
 					if (signatureWeight[j] <= 0)
 						{
-						fprintf (stderr, "PARAMETER ERROR: Bad signatureWeight (%f)\n\n", signatureWeight[j]);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad signatureWeight (%f)\n\n", signatureWeight[j]);
+						PrintUsage(stderr);
 						}
 					sum += signatureWeight[j];
 					}
@@ -8242,74 +8261,74 @@ void ReadParametersFromFile ()
             case 'm':
                   if (fscanf(stdin, "%f", &argument) !=1 || argument < 0 || argument > 2)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad alternative mutation model (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alternative mutation model (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 altModel = (int) argument;
 				if (alphabet == DNA && propAltModelSites > 0)
 					{
 					if (altModel == Mk)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The DNA alphabet and the model (%d) specified are incompatible", (int) argument);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The DNA alphabet and the model (%d) specified are incompatible", (int) argument);
+						PrintUsage(stderr);
 						}
 					}
 				else if (alphabet == BINARY && propAltModelSites > 0)
                     {
 					if (altModel == finiteDNA)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The binary alphabet and the model (%d) specified are incompatible", (int) argument);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The binary alphabet and the model (%d) specified are incompatible", (int) argument);
+						PrintUsage(stderr);
 						}
                     }
 				break;
             case 'p':
                 if (fscanf(stdin, "%lf", &propAltModelSites) !=1 || propAltModelSites < 0 || propAltModelSites > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad proportion of alternative model sites (%f)\n\n", propAltModelSites);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad proportion of alternative model sites (%f)\n\n", propAltModelSites);
+                    PrintUsage(stderr);
                     }
                 if (propAltModelSites > 0 && doSimulateFixedNumMutations == YES && altModel != ISMhap)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: You cannot specify a proportion of non-ISM diploid sites bigger than zero if the number of mutations is fixed\n\n");
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: You cannot specify a proportion of non-ISM diploid sites bigger than zero if the number of mutations is fixed\n\n");
+                    PrintUsage(stderr);
                     }
 				if (alphabet == DNA && propAltModelSites > 0)
 					{
 					if (altModel == Mk)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The DNA alphabet and the alt model (%d) specified are incompatible", (int) altModel);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The DNA alphabet and the alt model (%d) specified are incompatible", (int) altModel);
+						PrintUsage(stderr);
 						}
 					}
 				else if (alphabet == BINARY && propAltModelSites > 0)
                     {
 					if (altModel == finiteDNA)
 						{
-						fprintf (stderr, "PARAMETER ERROR: The binary alphabet and the alt model (%d) specified are incompatible", (int) altModel);
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: The binary alphabet and the alt model (%d) specified are incompatible", (int) altModel);
+						PrintUsage(stderr);
 						}
                     }
                 break;
             case 'w':
                 if (fscanf(stdin, "%lf", &nonISMRelMutRate)!=1 || nonISMRelMutRate < 0 || nonISMRelMutRate > 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad relative non-ISM/ISM mutation rate (%f)\n\n", nonISMRelMutRate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad relative non-ISM/ISM mutation rate (%f)\n\n", nonISMRelMutRate);
+                    PrintUsage(stderr);
                     }
                 break;
 		   case 'c':
                 if (fscanf(stdin, "%lf", &SNPrate)!=1 || SNPrate < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad germline SNP rate (%f)\n\n", SNPrate);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad germline SNP rate (%f)\n\n", SNPrate);
+                    PrintUsage(stderr);
                     }
                 break;
             case 'f':
                 if (fscanf(stdin, "%lf %lf %lf %lf", &freq[0], &freq[1], &freq[2], &freq[3])!=4)
                     {
-                    fprintf(stderr, "PARAMETER ERROR: Bad Base Frequencies\n\n");
-                    PrintUsage();
+                    fprintf(stderr, "\n!!! PARAMETER ERROR: Bad base frequencies (%lf %lf %lf %lf)\n", freq[0], freq[1], freq[2], freq[3]);
+                    PrintUsage(stderr);
                     }
                 else if (freq[0] == freq[1] == freq[2] == freq[3])
                     equalBaseFreq = YES;
@@ -8328,7 +8347,7 @@ void ReadParametersFromFile ()
 				if (fscanf(stdin, "%lf", &titv)!=1)
 					{
 					fprintf(stderr, "Bad ti/tv\n\n");
-					PrintUsage();
+					PrintUsage(stderr);
 					}
 				else
 					{
@@ -8339,23 +8358,23 @@ void ReadParametersFromFile ()
 					}
 				if (thereIsMij == YES)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
+					PrintUsage(stderr);
 					}
 				break;
  			case 'a':
                 if (fscanf(stdin, "%lf", &alphaSites)!=1 || alphaSites < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad alphaSites shape (%f)\n\n", alphaSites);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alphaSites shape (%f)\n\n", alphaSites);
+                    PrintUsage(stderr);
                     }
                 rateVarAmongSites = YES;
                 break;
 			case 'r':
 					if (doHKY == YES)
 						{
-						fprintf (stderr, "PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
-						PrintUsage();
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a mutation matrix (GTR model) and a ti/tv (HKY model) at the same time\n\n");
+						PrintUsage(stderr);
 						}
 					if (fscanf(stdin, "%lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf %lf  %lf %lf %lf %lf",
 							   &Mij[0][0], &Mij[0][1], &Mij[0][2], &Mij[0][3],
@@ -8363,14 +8382,14 @@ void ReadParametersFromFile ()
 							   &Mij[2][0], &Mij[2][1], &Mij[2][2], &Mij[2][3],
 							   &Mij[3][0], &Mij[3][1], &Mij[3][2], &Mij[3][3])!=16)
 						{
-						fprintf(stderr, "PARAMETER ERROR: Bad general rate matrix (-rx x x x x x x x x x x) (AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT)\n\n");
-						PrintUsage();
+						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad general rate matrix (-rx x x x x x x x x x x) (AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT)\n\n");
+						PrintUsage(stderr);
 						}
 					
 					if (Mij[0][0] != 0  || Mij[1][1] != 0 || Mij[2][2] != 0 || Mij[3][3] != 0)
 						{
-						fprintf(stderr, "PARAMETER ERROR: Bad general rate matrix: diagonals should be 0 \n\n");
-						PrintUsage();
+						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad general rate matrix: diagonals should be 0 \n\n");
+						PrintUsage(stderr);
 						}
 					thereIsMij = YES;
 					
@@ -8392,109 +8411,109 @@ void ReadParametersFromFile ()
 			case 'G':
 				if (fscanf(stdin, "%lf", &genotypingError) !=1 || genotypingError < 0 || genotypingError > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad genotyping error (%f)\n\n", genotypingError);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad genotyping error (%f)\n\n", genotypingError);
+					PrintUsage(stderr);
 					}
   				if (genotypingError > 0 && doNGS == YES)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					PrintUsage(stderr);
 					}
 				break;
 			case 'C':
 				if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad sequencing coverage (%d)\n\n", (int) coverage);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sequencing coverage (%d)\n\n", (int) coverage);
+					PrintUsage(stderr);
 					}
 				coverage = (int) argument;
 				if (coverage > 0)
 					doNGS = YES;
 				if (genotypingError > 0 && doNGS == YES)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					PrintUsage(stderr);
 					}
 				break;
             case 'V':
                     if (fscanf(stdin, "%lf", &alphaCoverage)!=1 || alphaCoverage <= 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad coverage dispersion (%f)\n\n", alphaCoverage);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad coverage dispersion (%f)\n\n", alphaCoverage);
+                    PrintUsage(stderr);
                     }
                 rateVarCoverage = YES;
 			break;
   			case 'A':
 				if (fscanf(stdin, "%lf %lf %d", &meanAmplificationError, &varAmplificationError, &simulateOnlyTwoTemplates) != 3)
 					{
-					fprintf(stderr, "PARAMETER ERROR: Bad mean/var/model amplification error (%f ; %f ; model=%d)\n\n", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
-					PrintUsage();
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/var/model amplification error (%f ; %f ; model=%d)\n\n", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
+					PrintUsage(stderr);
 					}
 				if (meanAmplificationError < 0 || meanAmplificationError > 1)
 					{
-					fprintf(stderr, "PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
-					PrintUsage();
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
+					PrintUsage(stderr);
 					}
 				if (varAmplificationError < 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
 					{
-					fprintf(stderr, "PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
-					PrintUsage();
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
+					PrintUsage(stderr);
 					}
 				if (simulateOnlyTwoTemplates != 0 && simulateOnlyTwoTemplates != 1)
 					{
-					fprintf(stderr, "PARAMETER ERROR: Bad simulateOnlyTwoTemplates error (%d); it has to be 0 (assume 4 templates) or 1 (assume 2 templates)", simulateOnlyTwoTemplates);
-					PrintUsage();
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad simulateOnlyTwoTemplates error (%d); it has to be 0 (assume 4 templates) or 1 (assume 2 templates)", simulateOnlyTwoTemplates);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'E':
 				if (fscanf(stdin, "%lf", &sequencingError) !=1 || sequencingError < 0 || sequencingError > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad sequencing error (%f)\n\n", sequencingError);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sequencing error (%f)\n\n", sequencingError);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'D':
 				if (fscanf(stdin, "%lf", &ADOrate) !=1 || ADOrate < 0 ||ADOrate > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout rate (%f)\n\n", ADOrate);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout rate (%f)\n\n", ADOrate);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'P':
 				if (fscanf(stdin, "%lf", &alphaADOsites) !=1 || alphaADOsites < 0 || alphaADOsites > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout hetereogeneity among sites (%f)\n\n", alphaADOsites);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout hetereogeneity among sites (%f)\n\n", alphaADOsites);
+					PrintUsage(stderr);
 					}
 				ADOvarAmongSites = YES;
 				break;
 			case 'Q':
 				if (fscanf(stdin, "%lf", &alphaADOcells) !=1 || alphaADOcells < 0 || alphaADOcells > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad allelic dropout hetereogeneity among cells (%f)\n\n", alphaADOcells);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout hetereogeneity among cells (%f)\n\n", alphaADOcells);
+					PrintUsage(stderr);
 					}
 				ADOvarAmongCells = YES;
 				break;
 			case 'I':
 				if (fscanf(stdin, "%lf", &allelicImbalance) !=1 || allelicImbalance < 0 || allelicImbalance > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad allelic imbalance (%f)\n\n", allelicImbalance);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic imbalance (%f)\n\n", allelicImbalance);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'R':
 				if (fscanf(stdin, "%lf", &haploidCoverageReduction) !=1 ||haploidCoverageReduction < 0 || haploidCoverageReduction > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad haploid coverage reduction (%f)\n\n", haploidCoverageReduction);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad haploid coverage reduction (%f)\n\n", haploidCoverageReduction);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'B':
 				if (fscanf(stdin, "%lf", &doubletRate) !=1 || doubletRate < 0 || doubletRate > 1)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Bad one allele coverage proportion (%f)\n\n", doubletRate);
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad one allele coverage proportion (%f)\n\n", doubletRate);
+					PrintUsage(stderr);
 					}
 				break;
 			case 'X':
@@ -8504,14 +8523,14 @@ void ReadParametersFromFile ()
 							   &Eij[2][0], &Eij[2][1], &Eij[2][2], &Eij[2][3],
 							   &Eij[3][0], &Eij[3][1], &Eij[3][2], &Eij[3][3])!=16)
 						{
-						fprintf(stderr, "PARAMETER ERROR: Bad  error matrix (-rx x x x x x x x x x x) (AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT)\n\n");
-						PrintUsage();
+						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad  error matrix (-rx x x x x x x x x x x) (AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT)\n\n");
+						PrintUsage(stderr);
 						}
 					
 					if (Eij[0][0] != 0  || Eij[1][1] != 0 || Eij[2][2] != 0 || Eij[3][3] != 0)
 						{
-						fprintf(stderr, "PARAMETER ERROR: Bad error matrix: diagonals should be 0 \n\n");
-						PrintUsage();
+						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad error matrix: diagonals should be 0 \n\n");
+						PrintUsage(stderr);
 						}
 					thereIsEij = YES;
 				break;
@@ -8540,8 +8559,8 @@ void ReadParametersFromFile ()
 				doPrintCATG = YES;
 				if (doNGS == NO)
 					{
-					fprintf (stderr, "PARAMETER ERROR: Cannot print the CATG format when reads are not simulated (coverage >0)\n\n");
-					PrintUsage();
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the CATG format when reads are not simulated (coverage >0)\n\n");
+					PrintUsage(stderr);
 					}
 				break;
 			case '9':
@@ -8602,37 +8621,40 @@ void ReadParametersFromFile ()
 			break;
 			case '0':
                 doSimulateData = NO;
-                break;
+			break;
+			case 'W':
+				doTumorNames = YES;
+			break;
             case 'y':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 0 || argument > 3)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad noisy value (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad noisy value (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 noisy = (int) argument;
                 break;
             case 'z':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad number of nodes (%d)\n\n", (int) argument);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of nodes (%d)\n\n", (int) argument);
+                    PrintUsage(stderr);
                     }
                 numNodes = (int) argument;
                 break;
 			case '#':
                 if (fscanf(stdin, "%lf", &argdouble) !=1 || argument < 0)
                     {
-                    fprintf (stderr, "PARAMETER ERROR: Bad seed (%ld)\n\n", (long int) argdouble);
-                    PrintUsage();
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad seed (%ld)\n\n", (long int) argdouble);
+                    PrintUsage(stderr);
                     }
                 userSeed = (long int) argdouble;
                 break;
-				case '?':
-                PrintUsage();
+			case '?':
+                PrintUsage(stderr);
 			break;
-            default :
-                fprintf (stderr, "PARAMETER ERROR: Incorrect parameter: %c\n\n", ch);
-                PrintUsage();
+            default:
+                fprintf (stderr, "\n!!! PARAMETER ERROR: Incorrect parameter: %c\n\n", ch);
+                PrintUsage(stderr);
                 break;
 			}
         ch=fgetc(stdin);
