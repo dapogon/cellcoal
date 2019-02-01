@@ -81,7 +81,7 @@
 - variable ADO rates among sites and/or cells
 - transforming/healthytip branch lengths are not a function of the tumor MRCA / total depth
 - option for different taxa names for tumor/non-tumor scenarios
- //FIXME: doing the above
+- fixed memory leaks and better printing for VCF (thanks to Alexey Kozlov)
  
 [TO-DOs]
  - at some point move data structure into cell structure
@@ -216,6 +216,7 @@ int main (int argc, char **argv)
         }
 	else
 		readingParameterFile = NO;
+   
    start = clock();
 	
     if (noisy > 0)
@@ -727,7 +728,11 @@ int main (int argc, char **argv)
 		
 		// free all the necessary stuff for this replicate
 		if (doUserTree == NO)
-			free (treeNodes);
+			{
+            for (i=0; i<numNodes; i++)
+	            free(treeNodes[i].name);
+	        free (treeNodes);
+	        }
 		
 		if (doPrintSeparateReplicates == YES)
 			{
@@ -745,7 +750,10 @@ int main (int argc, char **argv)
                     free (data[i][j]);
                 free (data[i]);
                 }
+ 
             free (data);
+            for (i=0; i<numSites; i++)
+              free(allSites[i].alternateAlleles);
             free (allSites);
             free (SNVsites);
 			free (variantSites);
@@ -784,7 +792,7 @@ int main (int argc, char **argv)
 		
 		if (doNGS == YES)
 			{
-			for (i=0; i<numCells; i++)
+			for (i=0; i<numCells+1; i++)
 				{
 				for (j=0; j<numSites; j++)
 					{
@@ -802,6 +810,7 @@ int main (int argc, char **argv)
 					free(cell[i].site[j].scaledGenLike);
 					free(cell[i].site[j].scaledGenLikeDoublet);
 					}
+                free(cell[i].site);
 				}
 			free (cell);
 			}
@@ -959,7 +968,7 @@ int main (int argc, char **argv)
 
 
 /************************* MakeCoalescenceTree  ************************/
-/*	Builds a genealogy  under the coalescent with exponential growth and no recombination */
+/*	Builds a genealogy  under the coalescent with exponential growth without recombination */
 
 void MakeCoalescenceTree(int numCells, int N, long int *seed)
 	{
@@ -1755,7 +1764,7 @@ void InitializeGenomes (TreeNode *p, long int *seed)
                     }
                 }
              }
-        else
+        else /* binary alphabet */
             for (site=0; site<numSites; site++)
                 data[MATERNAL][cell][site] = data[PATERNAL][cell][site] = 0;
 
@@ -4659,7 +4668,10 @@ void PrintVCF (FILE *fp)
 	int		maternalAllele, paternalAllele, referenceAllele;
 	int		trueMaternalAllele, truePaternalAllele;
 	int		maternalAlleleDoublet, paternalAlleleDoublet;
-	
+	char	*fmt = NULL;
+	char 	*fmt_f3_1 = "%3.1f";
+    char 	*fmt_comma_f3_1 = ",%3.1f";
+
 	/* print file header */
 	fprintf (fp,"##fileformat=VCFv4.3");
 	fprintf (fp,"\n##filedate=");
@@ -4715,9 +4727,9 @@ void PrintVCF (FILE *fp)
 			fprintf (fp,".");
 		else
 			{
-			for (k=0; k<allSites[j].numAltAlleles; k++)
-				fprintf (fp,"%c,", WhichNuc(allSites[j].alternateAlleles[k]));
-			fseek(fp, -1, SEEK_CUR); 	// get rid of the last comma
+			fprintf (fp,"%c", WhichNuc(allSites[j].alternateAlleles[0]));
+			for (k=1; k<allSites[j].numAltAlleles; k++)
+				fprintf (fp,",%c", WhichNuc(allSites[j].alternateAlleles[k]));
 			}
 
 		/* VFC: QUALITY */  /* Qphred probability that a SNV exists at this site; I will put missing info here */
@@ -4811,13 +4823,18 @@ void PrintVCF (FILE *fp)
 
 				/* VFC: FORMAT: G10 (all 10 genotype likelihoods) */
 				fprintf (fp, ":");
+                fmt = fmt_f3_1;
 				for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
-						fprintf (fp, "%3.1f,", cell[i].site[j].scaledGenLike[k][l]);
-				fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
+					{
+                    fprintf (fp, fmt, cell[i].site[j].scaledGenLike[k][l]);
+                    fmt = fmt_comma_f3_1;
+					}
+				//fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
 				/* VFC: FORMAT: GL (genotype likelihoods) */
 				fprintf (fp, ":");
+				fmt = fmt_f3_1;
 				for (k=0; k<=allSites[j].numAltAlleles; k++)
 					for (l=0; l<=k; l++)
 						{
@@ -4831,10 +4848,13 @@ void PrintVCF (FILE *fp)
 						else
 							a2 = allSites[j].alternateAlleles[l-1];
 						
-						fprintf (fp, "%3.1f,", cell[i].site[j].scaledGenLike[a1][a2]);
+//						fprintf (fp, "%3.1f,", cell[i].site[j].scaledGenLike[a1][a2]);
+                        fprintf (fp, fmt, cell[i].site[j].scaledGenLike[a1][a2]);
+                        fmt = fmt_comma_f3_1;
+
 					//fprintf (stderr, "\n gl[%c][%c] = %3.1f,", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].scaledGenLike[a1][a2]);
 						}
-					fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
+//					fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 				
 				
 				/* VFC: FORMAT: ML (maximum likelihood genotype) */
@@ -4869,13 +4889,18 @@ void PrintVCF (FILE *fp)
 				
 				/* VFC: FORMAT: G10 (genotype likelihoods) */
 				fprintf (fp, ":");
+                fmt = fmt_f3_1;
 				for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
-						fprintf (fp, "%3.1f,", cell[i].site[j].scaledGenLikeDoublet[k][l]);
-				fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
+					{
+                    fprintf (fp, fmt, cell[i].site[j].scaledGenLikeDoublet[k][l]);
+                    fmt = fmt_comma_f3_1;
+					}
+//				fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 				
 				/* VFC: FORMAT: GL (genotype likelihoods) */
 				fprintf (fp, ":");
+                fmt = fmt_f3_1;
 				for (k=0; k<=allSites[j].numAltAlleles; k++)
 					for (l=0; l<=k; l++)
 						{
@@ -4888,8 +4913,9 @@ void PrintVCF (FILE *fp)
 							a2 = allSites[j].referenceAllele;
 						else
 							a2 = allSites[j].alternateAlleles[l-1];
-						fprintf (fp, "%3.1f,", cell[i].site[j].scaledGenLikeDoublet[a1][a2]);
-							//fprintf (stderr, "\n gl[%c][%c] = %3.1f,", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].scaledGenLikeDoublet[a1][a2]);
+						fprintf (fp, fmt, cell[i].site[j].scaledGenLikeDoublet[a1][a2]);
+                        fmt = fmt_comma_f3_1;
+						//fprintf (stderr, "\n gl[%c][%c] = %3.1f,", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].scaledGenLikeDoublet[a1][a2]);
 						}
 				fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
@@ -6479,11 +6505,11 @@ char WhichMut (int state)
 
 static void PrintHeader(FILE *fp)
     {
-	fprintf (fp, "\n\n-------------------------------------------------------------------\n");
+	fprintf (fp, "\n\n______________________________________________________________________\n");
     fprintf (fp,"Cell coalescent simulation - %s", PROGRAM_NAME);
     fprintf (fp,"  %s", VERSION_NUMBER);
     fprintf (fp,"\n (c) 2019 David Posada - dposada@uvigo.es");
-	fprintf (fp, "\n-------------------------------------------------------------------\n");
+	fprintf (fp, "\n______________________________________________________________________\n");
     }
 
 
