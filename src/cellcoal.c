@@ -4753,17 +4753,35 @@ void PrintVCF (FILE *fp)
 			fprintf (fp,"%4.3f",0.0);
 		else
 			{
+			char *buffer = (char *) calloc(32, sizeof(char));
+			char *str = (char *) calloc(12, sizeof(char));
 			if (allSites[j].countA > 0 && referenceAllele != A)
-				fprintf (fp,"%4.3f,", (double) allSites[j].countA / allSites[j].countACGT);
+				{
+				sprintf (str,"%4.3f,", (double) allSites[j].countA / allSites[j].countACGT);
+				strcat(buffer, str);
+				}
 			if (allSites[j].countC > 0 && referenceAllele != C)
-				fprintf (fp,"%4.3f,", (double) allSites[j].countC / allSites[j].countACGT);
+				{
+				sprintf (str,"%4.3f,", (double) allSites[j].countC / allSites[j].countACGT);
+				strcat(buffer, str);
+				}
 			if (allSites[j].countG > 0 && referenceAllele != G)
-				fprintf (fp,"%4.3f,", (double) allSites[j].countG / allSites[j].countACGT);
+				{
+				sprintf (str,"%4.3f,", (double) allSites[j].countG / allSites[j].countACGT);
+				strcat(buffer, str);
+				}
 			if (allSites[j].countT > 0 && referenceAllele != T)
-				fprintf (fp,"%4.3f,", (double) allSites[j].countT / allSites[j].countACGT);
-			fseek(fp, -1, SEEK_CUR); 	/* get rid of the last comma */
+				{
+				sprintf (str,"%4.3f,", (double) allSites[j].countT / allSites[j].countACGT);
+				strcat(buffer, str);
+				}
+			buffer[strlen(buffer)-1] = '\0';
+			fprintf(fp, "%s", buffer);
+			free(buffer);
+			free (str);
+			//fseek(fp, -1, SEEK_CUR); 	/* get rid of the last comma */
 			}
-	
+
 		/* VFC: INFO : SOMATIC */
 		fprintf (fp, ";SOMATIC");
 		
@@ -4917,7 +4935,7 @@ void PrintVCF (FILE *fp)
                         fmt = fmt_comma_f3_1;
 						//fprintf (stderr, "\n gl[%c][%c] = %3.1f,", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].scaledGenLikeDoublet[a1][a2]);
 						}
-				fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
+				//fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
 				/* VFC: FORMAT: ML (maximum likelihood genotype) */
 				if (cell[i].site[j].numReadsDoublet > 0)
@@ -5400,9 +5418,10 @@ static void PrintSNVGenotypes (FILE *fp)
         fprintf (fp, "%d %d\n", numCells+1, numSNVs);
 		
     /* site information */
- 	for (i=0; i<numSNVs; i++)
-		fprintf (fp, "%d ", SNVsites[i]+1);
-    fseek (fp, -1, SEEK_CUR);
+	fprintf (fp, "%d", SNVsites[0]+1);
+	for (i=1; i<numSNVs; i++)
+		fprintf (fp, " %d", SNVsites[i]+1);
+    //fseek (fp, -1, SEEK_CUR);
     fprintf (fp, "\n");
 	k=0;
 	
@@ -5502,9 +5521,10 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 		}
 		
     /* site information */
-	for (i=0; i<numSNVs; i++)
-		fprintf (fp, "%d ", sites[i]+1);
-	fseek(fp, -1, SEEK_CUR);
+	fprintf (fp, "%d", sites[0]+1);
+	for (i=1; i<numSNVs; i++)
+		fprintf (fp, " %d", sites[i]+1);
+	//fseek(fp, -1, SEEK_CUR);
 	fprintf (fp, "\n");
 
     if (alphabet == DNA)
