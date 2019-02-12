@@ -18,8 +18,7 @@
 /*  cellcoal
 //  CellCoal
 //
-//  Started by David Posada on 01/06/16.
-//  Copyright (c) 2016-2018 David Posada. All rights reserved.
+//  Copyright (c) 2016-2019 David Posada. All rights reserved.
 
 	Name:		CellCoal
 	Purpose:	To simulate the clonal neutral evolution of single cells (for example within a tumor)
@@ -82,6 +81,7 @@
 - transforming/healthytip branch lengths are not a function of the tumor MRCA / total depth
 - option for different taxa names for tumor/non-tumor scenarios
 - fixed memory leaks and better printing for VCF (thanks to Alexey Kozlov)
+- fixed ISM binary models so germline sites can also accumulate somatic mutations
  
 [TO-DOs]
  - at some point move data structure into cell structure
@@ -246,13 +246,13 @@ int main (int argc, char **argv)
         a2 += 1.0/(double)pow(i,2);
         }
     theta = 4.0 * N * mutationRate * 2.0 * numSites * ((1.0-propAltModelSites) + nonISMRelMutRate*propAltModelSites);
-    expNumMU = theta * a ;
+    expNumMU = theta * a;
     expVarNumMU =  theta * a + pow(theta,2) * a2;
     expTMRCA = 2 * (1 - 1.0/numCells) /* 2.0 * N */;
     expVarTMRCA = 0;
     for (i=2; i<=numCells; i++)
-        expVarTMRCA += /*4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
-    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs= cumNumSNVsSq = cumCountMLgenotypeErrors = 0;
+        expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
+    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = cumCountMLgenotypeErrors = 0;
     zeroSNVs = cumTMRCA = cumTMRCASq = 0;
 		
     altModelMutationRate = mutationRate*nonISMRelMutRate;
@@ -378,16 +378,12 @@ int main (int argc, char **argv)
 	sprintf(File,"%s/%s", resultsDir, settingsFile);
 	PrintCommandLine (fpLog, argc, argv);
  
-	/* Read user treefile  */
+	/* Read user treefile */
 	if (doUserTree == YES)
 		{
 		if (noisy > 2)
 			fprintf (stderr, "\n>> Reading user tree ...");
 		ReadUserTree(fpUserTree);
-		//fprintf(stderr,"\nreading tree mean depth = %6.4f", coalTreeMRCA->meanDepth);
-		//numTips = 0;
-		//fprintf(stderr,"\nmeandepth = %6.4f (numTips = %d)\n", SumTreeHeights(coalTreeMRCA,0, &numTips) / numTips, numTips);
-		//exit(0);
 		}
 
 	/* Read user genomefile  */
@@ -1283,7 +1279,7 @@ void ReadUserGenome (FILE *fp)
 
 
 /********************************** ReadUserTree ***********************************/
-/* Reads a rooted phyogenetic tree of the tumor sample with branch lengths in Newick format */
+/* Reads a rooted phyogenetic tree with branch lengths in Newick format */
 static void ReadUserTree (FILE *fp)
 	{
 	int			taxonNumber, numDigits;
@@ -2031,7 +2027,6 @@ void SimulateISM (TreeNode *p, int genome, int doISMhaploid, long int *seed)
         allSites[modelSites[i]].branchSum = SumBranches (healthyRoot);
         totalBranchSum += allSites[modelSites[i]].branchSum;
         }
-
 */
 
 	totalBranchSum = totalTreeLength * numModelSites;
@@ -2143,11 +2138,16 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
                 {
                 if (data[genome][anccell][site] == 0)  /* checking all this might be excessive */
                     data[genome][cell][site] = 1;
-				else if (data[genome][anccell][site] == 1)  //FIXME: if this is a germline mutation??
+				else if (data[genome][anccell][site] == 1)
                     {
-                    fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d cannot mutate twice under the ISM model", site, genome, cell);
-                    exit(-1);
-                    }
+					if (allSites[site].isSNP == YES) // this is a germline mutation
+						data[genome][cell][site] = 0;
+					else
+						{
+						fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d cannot mutate twice under the ISM model", site, genome, cell);
+                    	exit(-1);
+						}
+					}
                 else
                     {
                     fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model", site, genome, anccell, data[genome][anccell][site]);
@@ -4698,13 +4698,11 @@ void PrintVCF (FILE *fp)
 		fprintf (fp,"\ttumcell%04d", i+1);
 	fprintf (fp,"\thealthycell");
 
-	//print only apparent SNVs
+	/* print only apparent SNVs */
 	for (snv=0; snv<numSNVs; snv++)
 		{
 		j = SNVsites[snv];
-
-		//for (j=0; j<numSites; j++){
-
+		
 		/* VFC: CHROMOSOME */
 		fprintf (fp,"\n%d", 1);
 		
@@ -4749,38 +4747,15 @@ void PrintVCF (FILE *fp)
 
 		/* VFC: INFO: AF (alternate allele frequencies) */
 		fprintf (fp, ";AF=");
-		if (allSites[j].isSNV == NO)
-			fprintf (fp,"%4.3f",0.0);
-		else
-			{
-			char *buffer = (char *) calloc(32, sizeof(char));
-			char *str = (char *) calloc(12, sizeof(char));
-			if (allSites[j].countA > 0 && referenceAllele != A)
-				{
-				sprintf (str,"%4.3f,", (double) allSites[j].countA / allSites[j].countACGT);
-				strcat(buffer, str);
-				}
-			if (allSites[j].countC > 0 && referenceAllele != C)
-				{
-				sprintf (str,"%4.3f,", (double) allSites[j].countC / allSites[j].countACGT);
-				strcat(buffer, str);
-				}
-			if (allSites[j].countG > 0 && referenceAllele != G)
-				{
-				sprintf (str,"%4.3f,", (double) allSites[j].countG / allSites[j].countACGT);
-				strcat(buffer, str);
-				}
-			if (allSites[j].countT > 0 && referenceAllele != T)
-				{
-				sprintf (str,"%4.3f,", (double) allSites[j].countT / allSites[j].countACGT);
-				strcat(buffer, str);
-				}
-			buffer[strlen(buffer)-1] = '\0';
-			fprintf(fp, "%s", buffer);
-			free(buffer);
-			free (str);
-			//fseek(fp, -1, SEEK_CUR); 	/* get rid of the last comma */
-			}
+		if (allSites[j].countA > 0 && referenceAllele != A)
+			fprintf (fp,"%4.3f,", (double) allSites[j].countA / allSites[j].countACGT);
+		if (allSites[j].countC > 0 && referenceAllele != C)
+			fprintf (fp,"%4.3f,", (double) allSites[j].countC / allSites[j].countACGT);
+		if (allSites[j].countG > 0 && referenceAllele != G)
+			fprintf (fp,"%4.3f,", (double) allSites[j].countG / allSites[j].countACGT);
+		if (allSites[j].countT > 0 && referenceAllele != T)
+			fprintf (fp,"%4.3f,", (double) allSites[j].countT / allSites[j].countACGT);
+		fseek(fp, -1, SEEK_CUR); 	/* get rid of the last comma */
 
 		/* VFC: INFO : SOMATIC */
 		fprintf (fp, ";SOMATIC");
@@ -5266,12 +5241,6 @@ void PrepareSeparateFiles(int replicate)
 	}
 
 
-
-/***************************** ReadUserTree  *********************************/
-/*	Reads a tree in Newick format, rooted or unroored, binary, and
-with or without branch lengths */
-
-
 /**************** Print Trees ***************/
 /*  Print trees to treefile in Newick format */
 
@@ -5421,7 +5390,6 @@ static void PrintSNVGenotypes (FILE *fp)
 	fprintf (fp, "%d", SNVsites[0]+1);
 	for (i=1; i<numSNVs; i++)
 		fprintf (fp, " %d", SNVsites[i]+1);
-    //fseek (fp, -1, SEEK_CUR);
     fprintf (fp, "\n");
 	k=0;
 	
@@ -5524,7 +5492,6 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 	fprintf (fp, "%d", sites[0]+1);
 	for (i=1; i<numSNVs; i++)
 		fprintf (fp, " %d", sites[i]+1);
-	//fseek(fp, -1, SEEK_CUR);
 	fprintf (fp, "\n");
 
     if (alphabet == DNA)
@@ -5619,7 +5586,6 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][sites[j]]));
 				fprintf (fp,"\n%sp  ", outRootCellName);
-
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichNuc(data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
 				fprintf (fp,"\n%sm  ", inRootCellName);
