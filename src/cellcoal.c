@@ -82,6 +82,7 @@
 - option for different taxa names for tumor/non-tumor scenarios
 - fixed memory leaks and better printing for VCF (thanks to Alexey Kozlov)
 - fixed ISM binary models so germline sites can also accumulate somatic mutations
+- new implementation of the 2-template model that corrects the genotype likelihoods
  
 [TO-DOs]
  - at some point move data structure into cell structure
