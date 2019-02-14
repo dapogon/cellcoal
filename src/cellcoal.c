@@ -184,8 +184,8 @@ int main (int argc, char **argv)
 	genotypingError = 0;			/* add errors directly in the genotypes */
 	SNPrate = 0.0;					/* germline variation rate for rooth healthy genome */
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
-	varAmplificationError = 0;  	/* variance of beta distribution for WGA errors */
-	simulateOnlyTwoTemplates = NO;	/* whether simualate maximum of two templates after single-cell amplification, or there can be all four */
+	varAmplificationError = 0.000001;  	/* variance of beta distribution for WGA errors */
+	simulateOnlyTwoTemplates = NO;	/* whether simulating maximum of two templates after single-cell amplification, or there can be all four */
 	haploidCoverageReduction = 0.5; /* proportion of reads produced when a single allele is present */
 	allelicImbalance = 0.5;			/* proportion of maternal/ paternal reads */
 	doubletRate = 0.0;				/* no doublets by default */
@@ -4218,14 +4218,20 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		paternalAllele = c->paternalAllele = C;
 		thereIsMaternalAllele = c->thereIsMaternalAllele = YES;
 		thereIsPaternalAllele = c->thereIsPaternalAllele = YES;
-		readCount[A] = 50;
-		readCount[C] = 40;
-		readCount[G] = 20;
-		readCount[T] = 10;
-		numReads = c->numReads = 120;
-		sequencingError = 0.1;
-		maternalSiteAmplificationError = c->maternalSiteAmplificationError = 0.000;
-		paternalSiteAmplificationError = c->paternalSiteAmplificationError = 0.000;
+		readCount[A] = 76;
+		readCount[C] = 71;
+		readCount[G] = 6;
+		readCount[T] = 6;
+
+		readCount[A] = 3;
+		readCount[C] = 2;
+		readCount[G] = 0;
+		readCount[T] = 0;
+
+		numReads = c->numReads = readCount[A] + readCount[C] + readCount[G] + readCount[T];
+		sequencingError = 0.0;
+		maternalSiteAmplificationError = c->maternalSiteAmplificationError = 0.125;
+		paternalSiteAmplificationError = c->paternalSiteAmplificationError = 0.125;
 
 		/* reinitialize ngsEij  */
 		for (k=0; k<4; k++)
@@ -4287,7 +4293,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 							genLike[a1][a2] += readCount[k] * no_allele_for_read;
 						else
 							genLike[a1][a2] += readCount[k] * heterozygote_for_read;
-							//fprintf (stderr, "\nread=%c gl[%c][%c] = %lf", WhichNuc(k), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+							//fprintf (stderr, "\nGATK read=%c gl[%c][%c] = %lf", WhichNuc(k), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
 						}
 					}
 				}
@@ -4300,12 +4306,11 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			fprintf (stderr,"\npatAmpError = %f", paternalSiteAmplificationError);
 			for (a1=0; a1<4; a1++)
 				for (a2=a1; a2<4; a2++)
-					fprintf (stderr, "\n(1)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+					fprintf (stderr, "\n(GATK)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
 			fprintf (stderr, "\n");
 			}
 		} // model 0
 	
-
 	
 	/************************** MODEL 1 (4-templates) *************************************/
 	/* MODEL 1 (4-templates): genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with all 4 templates */
@@ -4324,9 +4329,9 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 							{
 							pReadGivenA1 += ampEijmat[a1][template] * ngsEij[template][read];
 							pReadGivenA2 += ampEijpat[a2][template] * ngsEij[template][read];
-								//fprintf (stderr, "\n ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ", WhichNuc(a1), WhichNuc(template), ampEijmat[a1][template], WhichNuc(a2), WhichNuc(template), ngsEij[template][read]);
+							//fprintf (stderr, "\n ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ", WhichNuc(a1), WhichNuc(template), ampEijmat[a1][template], WhichNuc(a2), WhichNuc(template), ngsEij[template][read]);
 							}
-						genLike[a1][a2] += readCount[read] * log10(pReadGivenA1*0.5 + pReadGivenA2*0.5);
+						genLike[a1][a2] += readCount[read] * log10 (allelicImbalance * pReadGivenA1 + (1.0-allelicImbalance) * pReadGivenA2);
 						}
 						//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2],pReadGivenA1,pReadGivenA2);
 					}
@@ -4340,42 +4345,43 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			fprintf (stderr,"\npatAmpError = %f", paternalSiteAmplificationError);
 			for (a1=0; a1<4; a1++)
 				for (a2=a1; a2<4; a2++)
-					fprintf (stderr, "\n(2)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+					fprintf (stderr, "\n(4T)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
 			fprintf (stderr, "\n");
 			}
 		} //model 1
-
 	
 	/************************** MODEL 2 (2-templates) *************************************/
 	/* MODEL 2 (2-templates): genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with up to 2 templates */
-	/* this calculation seems OK but I cannot say I am 100% sure */
 	if (simulateOnlyTwoTemplates == YES && (maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0))
 		{
 		for (a1=0; a1<4; a1++) //a1 is maternal
 			for (a2=a1; a2<4; a2++) //a2 is paternal
 				{
 				genLike[a1][a2] = -0.0;
-				for (template1=0; template1<4; template1++)
-					if (template1 != a1)
+				//fprintf (stderr, "\n");
+				for (read=0; read<4; read++)
+					if (readCount[read] > 0)
 						{
+						pReadGivenA1 = 0;
+						pReadGivenA2 = 0;
+						for (template1=0; template1<4; template1++)
+							if (template1 != a1)
+								{
+								pReadGivenA1 += Eij[a1][template1]/cumEij[a1][3] * ((1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
+								//fprintf (stderr, "\nread=%c t=[%c][%c] p1=%lf Eijmat[%c][%c]=%lf", WhichNuc(read), WhichNuc(a1), WhichNuc(template1), pReadGivenA1, WhichNuc(a1), WhichNuc(template1), Eij[a1][template1]/cumEij[a1][3]);
+								}
 						for (template2=0; template2<4; template2++)
 							if (template2 != a2)
 								{
-								for (read=0; read<4; read++)
-									{
-									if (readCount[read] > 0)
-										{
-										pReadGivenA1 = (1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + ampEijmat[a1][template1] * ngsEij[template1][read];
-										pReadGivenA2 = (1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + ampEijpat[a2][template2] * ngsEij[template2][read];
-										if (pReadGivenA1 > 0 || pReadGivenA2 >0)
-											genLike[a1][a2] += Eij[a1][template1]/cumEij[a1][3] * Eij[a2][template2]/cumEij[a2][3] * readCount[read] * log10(pReadGivenA1*0.5 + pReadGivenA2*0.5);
-											//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)  ampEijmat[%c][%c]=%lf  ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ngsEij[%c]][%c]=%lf", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2],pReadGivenA1,pReadGivenA2,
-											//WhichNuc(a1), WhichNuc(template1), ampEijmat[a1][template1], WhichNuc(a2), WhichNuc(template2), ampEijmat[a2][template2], WhichNuc(a1), WhichNuc(template1), ngsEij[template1][read], WhichNuc(a2), WhichNuc(template2), ngsEij[template2][read]);
-										}
-									}
+								pReadGivenA2 += Eij[a2][template2]/cumEij[a2][3] * ((1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
+								//fprintf (stderr, "\nread=%c t=[%c][%c] p2=%lf Eijpat[%c][%c]=%lf", WhichNuc(read), WhichNuc(a2), WhichNuc(template2), pReadGivenA2, WhichNuc(a2), WhichNuc(template2), Eij[a2][template2]/cumEij[a2][3]);
 								}
-						}
-				}
+
+						if (pReadGivenA1 > 0 || pReadGivenA2 > 0)
+							genLike[a1][a2] += readCount[read]  * log10(allelicImbalance * pReadGivenA1 + (1.0 - allelicImbalance) * pReadGivenA2);
+								//fprintf (stderr, "\ngl[%c][%c] = %lf (p1=%lf p2=%lf)", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2], pReadGivenA1, pReadGivenA2);
+						}//read
+					} //a1,a2
 		
 		if (debug_GL == YES)
 			{
@@ -4385,11 +4391,11 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			fprintf (stderr,"\npatAmpError = %f", paternalSiteAmplificationError);
 			for (a1=0; a1<4; a1++)
 				for (a2=a1; a2<4; a2++)
-					fprintf (stderr, "\n(3)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
+					fprintf (stderr, "\n(2Tb)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2]);
 			fprintf (stderr, "\n");
 			}
-		} // model 2
-
+		} // model 2b
+	
 	/* find max log10 likelihood  */
 	maxLike = genLike[A][A];
 	MLmatAllele = MLpatAllele = A;
@@ -4401,7 +4407,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 				MLmatAllele = a1;
 				MLpatAllele = a2;
 				}
-
+	
 	/* rescale to likelihood ratios */
 	for (a1=0; a1<4; a1++)
 		for (a2=a1; a2<4; a2++)
@@ -6711,13 +6717,18 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n  [coverage follows a Poisson distribution]");
 			fprintf (fp, "\n Allelic imbalance                            =   %-3.2f", allelicImbalance);
 			fprintf (fp, "\n Haploid coverage reduction                   =   %-3.2f", haploidCoverageReduction);
-			fprintf (fp, "\n Amplification error");
-			if (simulateOnlyTwoTemplates == YES)
-				fprintf (fp, " (2-template model)");
+			if (meanAmplificationError == 0)
+				fprintf (fp, "\n Amplification error                          =   %2.1e", meanAmplificationError);
 			else
-				fprintf (fp, " (4-template model)");
-			fprintf (fp, "\n  Mean                                        =   %2.1e", meanAmplificationError);
-			fprintf (fp, "\n  Variance                                    =   %2.1e", varAmplificationError);
+				{
+				fprintf (fp, "\n Amplification error");
+				if (simulateOnlyTwoTemplates == YES)
+					fprintf (fp, " (2-template model)");
+				else
+					fprintf (fp, " (4-template model)");
+				fprintf (fp, "\n  Mean                                        =   %2.1e", meanAmplificationError);
+				fprintf (fp, "\n  Variance                                    =   %2.1e", varAmplificationError);
+				}
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
 			fprintf (fp, "\n Doublet rate per cell                        =   %-3.2f", doubletRate);
 
@@ -7194,15 +7205,18 @@ int RandomNegativeBinomial (double mean, double dispersion, long int *seed)
 An algorithm for generating beta variates B(α,β) is to generate X/(X + Y), where X is a gamma variate with parameters (α, 1) and Y is an independent gamma variate with parameters (β, 1).[53]
 From Numerical Recipes 3rd Edition: The Art of Scientific Computing. 2007. Press et al. ISBN-13: 978-0521880688
 
-
+note that the variance has to be > 0
 */
+
 double RandomBeta (double mean, double var, long int *seed)
 	{
-	double shape1, shape2, gamma1, gamma2, randBeta;
+	double sample_size, shape1, shape2, gamma1, gamma2, randBeta;
 	
 	/* assuming variance < mean (1-mean) */
-	shape1 = mean * ((mean*(1.0-mean)/var) - 1.0);
-	shape2 = (1.0-mean) * ((mean*(1.0-mean)/var) - 1.0);
+	sample_size = (mean * (1.0 - mean) / var) - 1.0;
+	
+	shape1 = mean * sample_size;
+	shape2 = (1.0 - mean) * sample_size;
 	
 	gamma1 = RandomGamma(shape1, seed);
 	gamma2 = RandomGamma(shape2, seed);
@@ -7840,9 +7854,9 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
 					PrintUsage(stderr);
 					}
-				if (varAmplificationError < 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
+				if (varAmplificationError <= 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
 					{
-					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance amplification error (%f); it has to be > 0 and < mean*(1-mean)\n\n", varAmplificationError);
 					PrintUsage(stderr);
 					}
 				if (simulateOnlyTwoTemplates < 0 || simulateOnlyTwoTemplates > 1)
@@ -8466,9 +8480,9 @@ void ReadParametersFromFile ()
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
 					PrintUsage(stderr);
 					}
-				if (varAmplificationError < 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
+				if (varAmplificationError <= 0 || (meanAmplificationError > 0 && varAmplificationError >= (meanAmplificationError * (1.0 - meanAmplificationError))))
 					{
-					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance amplification error (%f); it has to be < mean*(1-mean)\n\n", meanAmplificationError);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance amplification error (%f); it has to be >0 and < mean*(1-mean)\n\n", varAmplificationError);
 					PrintUsage(stderr);
 					}
 				if (simulateOnlyTwoTemplates != 0 && simulateOnlyTwoTemplates != 1)
