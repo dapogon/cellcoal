@@ -85,10 +85,10 @@
 - new implementation of the 2-template model that corrects the genotype likelihoods
  
 [TO-DOs]
- - at some point move data structure into cell structure
-- dated tips (maybe)
-- population structure (maybe)
-- change random number generator ?
+- move data structure into cell structure (optional)
+- dated tips (optional)
+- population structure (optional)
+- change random number generator (optional)
 
 [MODELS implemented]
 0:ISM_01
@@ -115,17 +115,18 @@ int main (int argc, char **argv)
 		
     /* Default settings */
     numDataSets = 10;			/* the number of samples to simulate */
-    numCells = 8;				/* number of cells in each data set */
+    numCells = 7;				/* number of cells in each data set */
     ploidy = 2;                 /* we assume diploid genomes */
-    numSites = 200;				/* number of sites (markers, loci) to simulate = length of the chromosomes */
+    numSites = 1000;				/* number of sites (markers, loci) to simulate = length of the chromosomes */
     N = 1000;					/* effective population size */
     numPeriods = 0;				/* number of distinct demographic periods */
     doDemographics = NO;		/* whether to implement demographics */
     doExponential = NO;			/* whether to do exponential growth */
-    growthRate = 0;				/* rate for the exponential population growth */
+    growthRate = 1.0e-5;		/* rate for the exponential population growth */
     mutationRate = 1.0e-7;		/* nucleotide mutation rate per site per generation */
+	SNPrate = 0.0;				/* germline variation rate for rooth healthy genome */
 	rateVarAmongLineages = NO;	/* modify rate variation among branches  (to non-clock) */
-    alphabet = BINARY;          /* alphabet 0/1 or DNA") */
+    alphabet = DNA;          	/* alphabet 0/1 or DNA */
     altModel = 0;				/* by default the alternative model will be ISM haploid */
     propAltModelSites = 0;		/* proportion of sites that will mutate according to alternative model */
     nonISMRelMutRate = 1.0;		/* relative rate alternative/default model for sites */
@@ -155,12 +156,12 @@ int main (int argc, char **argv)
 	doSimulateFixedNumMutations = NO;	/* whether to simulate a fixed number of mutations */
 	doUserTree = NO;				/* whether to assume a user tree instead od making the coalescent */
 	doUserGenome = NO;				/* whether to use a user genome instead of a simulated one */
-    doPrintSNVgenotypes = NO;		/* whether to print SNVs */
+    doPrintSNVgenotypes = YES;		/* whether to print SNVs */
     doPrintSNVhaplotypes = NO;  	/* whether to print haplotypes */
-    doPrintTrueHaplotypes = NO;  	/* whether to print haplotypes without errors */
+    doPrintTrueHaplotypes = NO;  	/* whether to print the true haplotypes s */
     doPrintFullHaplotypes = NO;		/* whether to print sequences */
     doPrintFullGenotypes = NO;		/* whether to print all genotypes (variable + invariable) */
-    doPrintTree = NO;				/* whether to print the coalescent tree */
+    doPrintTree = YES;				/* whether to print the coalescent tree */
     doPrintTimes = NO;				/* whether to print coalescent times */
 	doPrintAncestors = NO;      	/* whether to print data for ancestral cells */
 	doNGS = NO;  					/* do not produce reads by default */
@@ -172,8 +173,8 @@ int main (int argc, char **argv)
 	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
 	doGeneticSignatures = NO;		/* whether to use a genetic signature to model trinucleotide mutations */
 	numUserSignatures = 0;			/* by default we do not use a genetic signature */
-	transformingBranchLengthRatio = 1.0; /* ratio of the transforming branch length compare to the tumor MRCA length */
-	healthyTipBranchLengthRatio = 0.0; 	/* ratio the branch leading to the healthy cell to the (tumor MRCA + transfoming branch) length*/
+	transformingBranchLengthRatio = 0.5; /* ratio of the transforming branch length compare to the tumor MRCA length */
+	healthyTipBranchLengthRatio = 1.0; 	/* ratio the branch leading to the healthy cell to the (tumor MRCA + transfoming branch) length*/
  	coverage = 0;					/* NGS  depth for read counts */
 	rateVarCoverage = NO;			/* there is coverage dispersion */
 	ADOrate = 0;					/* allelic dropout */
@@ -183,14 +184,13 @@ int main (int argc, char **argv)
 	alphaADOcells = infinity;		/* alpha shape allelic dropout heterogeneity among cells */
 	sequencingError = 0;			/* NGS error rate */
 	genotypingError = 0;			/* add errors directly in the genotypes */
-	SNPrate = 0.0;					/* germline variation rate for rooth healthy genome */
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
 	varAmplificationError = 0.000001;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simulating maximum of two templates after single-cell amplification, or there can be all four */
 	haploidCoverageReduction = 0.5; /* proportion of reads produced when a single allele is present */
 	allelicImbalance = 0.5;			/* proportion of maternal/ paternal reads */
 	doubletRate = 0.0;				/* no doublets by default */
-	numNodes = 3000;            	/* initial number of nodes allocated to build the coalescent trees */
+	numNodes = 1000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
     userSeed = 0;					/* seed entered by the user */
 	noisy = 1;						/* level of information to be printed in the screen (see below) */
@@ -239,7 +239,8 @@ int main (int argc, char **argv)
    		}
 	
     /* initialize a few variables */
-    a = 0;
+	numNodes = 2 * numCells + 1;
+	a = 0;
     a2 = 0;
     for (i=1; i<numCells; i++) /* ignoring outgroup (healthy cell) */
         {
@@ -5058,65 +5059,65 @@ void PrepareGlobalFiles(int argc, char **argv)
 
    if (doPrintSNVgenotypes == YES)
         {
-        fprintf (fpSNVgenotypes, "%s - ",PROGRAM_NAME);
+       /*fprintf (fpSNVgenotypes, "%s - ",PROGRAM_NAME);
         PrintDate (fpSNVgenotypes);
         fprintf (fpSNVgenotypes, "SNV genotypes\n");
-        PrintCommandLine (fpSNVgenotypes, argc, argv);
-        fprintf (fpSNVgenotypes,"\n%d\n", numDataSets);
+        PrintCommandLine (fpSNVgenotypes, argc, argv);*/
+        fprintf (fpSNVgenotypes,"%d\n", numDataSets);
         }
 
     if (doPrintSNVhaplotypes == YES)
         {
-        fprintf (fpSNVhaplotypes, "%s - ",PROGRAM_NAME);
+        /*fprintf (fpSNVhaplotypes, "%s - ",PROGRAM_NAME);
         PrintDate (fpSNVhaplotypes);
         fprintf (fpSNVhaplotypes, "SNV haplotypes\n");
-        PrintCommandLine (fpSNVhaplotypes, argc, argv);
-        fprintf (fpSNVhaplotypes,"\n%d\n", numDataSets);
+        PrintCommandLine (fpSNVhaplotypes, argc, argv);*/
+        fprintf (fpSNVhaplotypes,"%d\n", numDataSets);
         }
 
      if (doPrintTrueHaplotypes == YES)
         {
-        fprintf (fpTrueHaplotypes, "%s - ",PROGRAM_NAME);
+        /*fprintf (fpTrueHaplotypes, "%s - ",PROGRAM_NAME);
         PrintDate (fpTrueHaplotypes);
         fprintf (fpTrueHaplotypes, "True haplotypes\n");
-        PrintCommandLine (fpTrueHaplotypes, argc, argv);
-        fprintf (fpTrueHaplotypes,"\n%d\n", numDataSets);
+        PrintCommandLine (fpTrueHaplotypes, argc, argv);*/
+        fprintf (fpTrueHaplotypes,"%d\n", numDataSets);
         }
 
    if (doPrintFullGenotypes == YES)
         {
-        fprintf (fpFullGenotypes, "%s - ",PROGRAM_NAME);
+        /*fprintf (fpFullGenotypes, "%s - ",PROGRAM_NAME);
         PrintDate (fpFullGenotypes);
         fprintf (fpFullGenotypes, "Full genotypes\n");
-        PrintCommandLine (fpFullGenotypes, argc, argv);
-        fprintf (fpFullGenotypes,"\n%d\n", numDataSets);
+        PrintCommandLine (fpFullGenotypes, argc, argv);*/
+        fprintf (fpFullGenotypes,"%d\n", numDataSets);
         }
 
     if (doPrintFullHaplotypes == YES)
         {
-        fprintf (fpFullHaplotypes, "%s - ",PROGRAM_NAME);
+        /*fprintf (fpFullHaplotypes, "%s - ",PROGRAM_NAME);
         PrintDate (fpFullHaplotypes);
         fprintf (fpFullHaplotypes, "Full haplotypes\n");
-        PrintCommandLine (fpFullHaplotypes, argc, argv);
-        fprintf (fpFullHaplotypes,"\n%d\n", numDataSets);
+        PrintCommandLine (fpFullHaplotypes, argc, argv);*/
+        fprintf (fpFullHaplotypes,"%d\n", numDataSets);
         }
 
 	if (doNGS == YES)
         {
-        fprintf (fpVCF, "%s - ",PROGRAM_NAME);
+        /*fprintf (fpVCF, "%s - ",PROGRAM_NAME);
         PrintDate (fpVCF);
         fprintf (fpVCF, "Read counts and genotype likelihoods\n");
-        PrintCommandLine (fpVCF, argc, argv);
-        fprintf (fpVCF,"\n%d\n", numDataSets);
+        PrintCommandLine (fpVCF, argc, argv);*/
+        fprintf (fpVCF,"%d\n", numDataSets);
         }
 
 	if (doPrintCATG == YES)
         {
-        fprintf (fpCATG, "%s - ",PROGRAM_NAME);
+        /*fprintf (fpCATG, "%s - ",PROGRAM_NAME);
         PrintDate (fpCATG);
         fprintf (fpCATG, "Read counts\n");
-        PrintCommandLine (fpCATG, argc, argv);
-        fprintf (fpCATG,"\n%d\n", numDataSets);
+        PrintCommandLine (fpCATG, argc, argv);*/
+        fprintf (fpCATG,"%d\n", numDataSets);
         }
 	}
 
@@ -5383,7 +5384,7 @@ static void PrintSiteInfo (FILE *fp, int i)
 	}
 
 /************************ PrintSNVGenotypes ***********************/
-/* Prints oberved/ML genotypes at variable sites (SNVs) to a file */
+/* Prints observed/ML genotypes at variable sites (SNVs) to a file */
 static void PrintSNVGenotypes (FILE *fp)
     {
     int		i, j, k;
@@ -5468,7 +5469,7 @@ static void PrintSNVGenotypes (FILE *fp)
      }
 
 /***************************** PrintSNVHaplotypes *******************************/
-/* Prints observed/ML haplotypes at variable sites (SNVs), to a file */
+/* Prints obsserved/ML haplotypes at variable sites (SNVs), to a file */
 
 static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
     {
@@ -6211,30 +6212,43 @@ This is what we do:
  A/G => R
  A/T => W
  A/_ => a
+ A/- => a
  
  C/A => M
  C/C => C
  C/G => S
  C/T => Y
  C/_ => c
-
+ C/- => c
+ 
  G/A => R
  G/C => S
  G/G => G
  G/T => K
  G/_ => g
-
+ G/- => g
+ 
  T/A => W
  T/C => Y
  T/G => K
  T/T => T
  T/_ => t
+ T/- => t
 
  _/A => a
  _/C => c
  _/G => g
  _/T => t
  _/_ => -
+ _/- => -
+
+
+ -/A => a
+ -/C => c
+ -/G => g
+ -/T => t
+ -/_ => -
+ -/- => -
 
  */
 
@@ -6250,7 +6264,7 @@ char WhichIUPAC (int allele1, int allele2)
 			return ('R');
 		else if (allele2 == 3)	//AT
 			return ('W');
-		else if (allele2 == ADO)	//A?
+		else if (allele2 == ADO)	//A_
 			return ('a');
 		else if (allele2 == DELETION)	//A–
 			return ('a');
@@ -6310,17 +6324,17 @@ char WhichIUPAC (int allele1, int allele2)
 		}
 	else if (allele1 == ADO)
 		{
-		if (allele2 == 0)		//?A
+		if (allele2 == 0)		//_A
 			return ('a');
-		else if (allele2 == 1)	//?C
+		else if (allele2 == 1)	//_C
 			return ('c');
-		else if (allele2 == 2)	//?G
+		else if (allele2 == 2)	//_G
 			return ('g');
-		else if (allele2 == 3)	//?T
+		else if (allele2 == 3)	//_T
 			return ('t');
-		else if (allele2 == ADO)	//??
+		else if (allele2 == ADO)	//__
 			return ('-');
-		else if (allele2 == DELETION)	//?-
+		else if (allele2 == DELETION)	//_-
 			return ('-');
 		else
 			return ('N');
@@ -6335,7 +6349,7 @@ char WhichIUPAC (int allele1, int allele2)
 			return ('g');
 		else if (allele2 == 3)	//-T
 			return ('t');
-		else if (allele2 == ADO)	//-?
+		else if (allele2 == ADO)	//-_
 			return ('-');
 		else if (allele2 == DELETION)	//--
 			return ('-');
@@ -6498,11 +6512,11 @@ char WhichMut (int state)
 
 static void PrintHeader(FILE *fp)
     {
-	fprintf (fp, "\n\n______________________________________________________________________\n");
+	fprintf (fp, "______________________________________________________________________\n\n");
     fprintf (fp,"Cell coalescent simulation - %s", PROGRAM_NAME);
     fprintf (fp,"  %s", VERSION_NUMBER);
-    fprintf (fp,"\n (c) 2019 David Posada - dposada@uvigo.es");
-	fprintf (fp, "\n______________________________________________________________________\n");
+    fprintf (fp,"\n(c) 2019 David Posada - dposada@uvigo.es");
+	fprintf (fp, "\n______________________________________________________________________\n\n");
     }
 
 
@@ -6716,8 +6730,8 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n Coverage dispersion (alpha)                  =   %-3.2f", alphaCoverage);
 			else
 				fprintf (fp, "\n  [coverage follows a Poisson distribution]");
-			fprintf (fp, "\n Allelic imbalance                            =   %-3.2f", allelicImbalance);
-			fprintf (fp, "\n Haploid coverage reduction                   =   %-3.2f", haploidCoverageReduction);
+			fprintf (fp, "\n Maternal allelic imbalance                   =   %-3.2f", allelicImbalance);
+			fprintf (fp, "\n Haploid coverage                             =   %-3.2f", haploidCoverageReduction);
 			if (meanAmplificationError == 0)
 				fprintf (fp, "\n Amplification error                          =   %2.1e", meanAmplificationError);
 			else
@@ -6735,7 +6749,7 @@ static void	PrintRunInformation (FILE *fp)
 
 			if (thereIsEij == YES)
 				{
-				fprintf (fp, "\n  NGS error rate matrix                       =   %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]);
+				fprintf (fp, "\n NGS error rate matrix                        =   %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]);
 				fprintf (fp, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3]);
 				fprintf (fp, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3]);
 				fprintf (fp, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
@@ -6771,6 +6785,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 
 		/* Mutation model */
 		fprintf (fp, " -b%d", alphabet);
+		fprintf (fp, " -c%2.1e", SNPrate);
 		fprintf (fp, " -u%2.1e", mutationRate);
 		fprintf (fp, " -d%2.1e", deletionRate);
 		fprintf (fp, " -H%2.1e", CNLOHrate);
@@ -6781,7 +6796,6 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -m%d", altModel);
 		fprintf (fp, " -p%6.4f", propAltModelSites);
 		fprintf (fp, " -w%6.4f", nonISMRelMutRate);
-		fprintf (fp, " -c%2.1e", SNPrate);
 		fprintf (fp, " -f%3.2f %3.2f %3.2f %3.2f", freq[0], freq[1], freq[2], freq[3]);
 		fprintf (fp, " -t%6.4f", titv);
 		fprintf (fp, " -a%6.4f", alphaSites);
@@ -6833,11 +6847,9 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 			fprintf (fp, " -U%s", userGenomeFile);
 
 		/* Other */
-		if (doSimulateData == NO)
-			fprintf (fp, " -%d", 0);
 		if (doTumorNames == YES)
 			fprintf (fp, " -%c", 'W');
-		fprintf (fp, " -y%d -z%d -#%ld", noisy, numNodes, originalSeed);
+		fprintf (fp, " -y%d -#%ld", noisy, originalSeed);
 		}
 	}
 
@@ -6848,21 +6860,22 @@ void PrintUsage(FILE *fp)
 {
 	PrintHeader(fp);
     fprintf (fp, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
-    fprintf (fp, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -c# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # #  -G# -C# -V# -A# # # -E# -D# -R# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -0 -y# -z# -## -?]", PROGRAM_NAME_LOWERCASE);
+	fprintf (fp, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -c# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # # -G# -C# -V# -I# -D# -P# -Q# -R# -A# # # -E# -B# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -W# -y# -## -?]", PROGRAM_NAME_LOWERCASE);
 	fprintf (fp,"\n");
 
     fprintf (fp,"\n-n: number of replicates (e.g. -n1000)");
     fprintf (fp,"\n-s: sample size (# cells) (e.g. -s8)");
     fprintf (fp,"\n-l: number of sites (e.g. -l500)");
     fprintf (fp,"\n-e: effective population size (e.g. -e1000)");
-    fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
-    fprintf (fp, "\n    and the duration of the period in generations. (e.g. -d1 100 200 30000) (e.g. -d2 100 100 40000 1000 2000 20000)");
 	fprintf (fp,"\n-g: exponential growth rate (e.g. -g1e-5)");
+   fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
+    fprintf (fp, "\n    and the duration of the period in generations. (e.g. -d1 100 200 30000) (e.g. -d2 100 100 40000 1000 2000 20000)");
 	fprintf (fp,"\n-k: transforming branch length (e.g. -u1e-2)");
     fprintf (fp,"\n-q: healthy tip branch length (e.g. -q1e-6)");
     fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages (e.g. -i0.5)");
 	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] (e.g. -b0)");
-	fprintf (fp,"\n-u: mutation rate (e.g. -u1e-6)");
+	fprintf (fp,"\n-c: germline SNP rate (e.g. -c1e-5)");
+	fprintf (fp,"\n-u: somatic mutation rate (e.g. -u1e-6)");
 	fprintf (fp,"\n-d: deletion rate (e.g. -d1e-5)");
 	fprintf (fp,"\n-H: CNLOH rate (e.g. -H1e-5)");
     fprintf (fp,"\n-j: fixed number of mutations (e.g. -j100)");
@@ -6870,7 +6883,6 @@ void PrintUsage(FILE *fp)
     fprintf (fp,"\n-m: alternative mutation model [0:ISMhap 1:Mk2 2:finiteDNA] [default mutation model is ISM diploid] (e.g. -m2)");
     fprintf (fp,"\n-p: proportion of alternative model sites (e.g. -p0.1)");
     fprintf (fp,"\n-w: alternative/default model relative mutation rate (e.g. -w1)");
-	fprintf (fp,"\n-c: germline SNP rate (e.g. -c1e-5)");
 	fprintf (fp,"\n-f: nucleotide base frequencies (e.g. -f0.4 0.3 0.2 0.1)");
 	fprintf (fp,"\n-t: transition/transversion ratio (e.g. -t2)");
     fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites (e.g. -a0.2)");
@@ -6878,7 +6890,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-G: genotyping error [no read counts] (e.g. -G0.01)");
 	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
 	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
-	fprintf (fp,"\n-I: allelic imbalance (e.g. -I0.5)");
+	fprintf (fp,"\n-I: maternal allelic imbalance (e.g. -I0.5)");
 	fprintf (fp,"\n-D: allelic dropout (e.g. -D0.1)");
 	fprintf (fp,"\n-P: allelic dropout variation among sites (e.g. -P1)");
 	fprintf (fp,"\n-Q: allelic dropout variation among cells (e.g. -Q1)");
@@ -6897,19 +6909,17 @@ void PrintUsage(FILE *fp)
     fprintf (fp,"\n-7: print times to a file (e.g. -7)");
     fprintf (fp,"\n-8: print read counts in CATG format (e.g. -8)");
     fprintf (fp,"\n-9: print true SNV haplotypes to a file (e.g. -9)");
-	fprintf (fp,"\n-@: print ML haplotypes to a file (e.g. -@)");
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
 	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
-	fprintf (fp,"\n-T: user-tree file (e.g. -Susertree)");
-	fprintf (fp,"\n-0: simulate just the genealogies (e.g. -0)");
+	fprintf (fp,"\n-T: user-tree file (e.g. -Tusertree)");
+	fprintf (fp,"\n-U: user genome (e.g. -Uusergenome)");
 	fprintf (fp,"\n-W: use tumor nomenclature for cells (e.g. -W)");
 	fprintf (fp,"\n-y: noisy (e.g. -y1)");
     fprintf (fp,"\n      = 0: does not print anything");
     fprintf (fp,"\n      = 1:  + simulation summary");
     fprintf (fp,"\n      = 2:  + replicate information");
     fprintf (fp,"\n      = 3: + calculation status and event information");
-    fprintf (fp,"\n-z: number of nodes to allocate (e.g. -z5000)");
     fprintf (fp,"\n-#: seed (e.g. -#37864287)");
     fprintf (fp,"\n-?: Print help");
 	
@@ -7400,14 +7410,15 @@ int CheckMatrixSymmetry(double matrix[4][4])
 
 /******************** ReadParametersFromCommandLine **************************/
 /*
- USED IN ORDER
-	n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 W y z #
- 
- USED
-	a b c d e f g h i j k l m n o p q r s t u v w x y z
-	A B C D E   G H I       M     P Q R S T U V W  X
-	0 1 2 3 4 5 6 7 8 9 #
+USED IN ORDER
+n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
+
+USED
+a b c d e f g h i j k l m n o p q r s t u v w x y
+A B C D E   G H I       M     P Q R S T U V W  X
+1 2 3 4 5 6 7 8 9 #
 */
+
 static void ReadParametersFromCommandLine (int argc,char **argv)
 {
     int		i, j;
@@ -8004,9 +8015,9 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					strcpy(userGenomeFile,argv[i]);
 				doUserGenome = YES;
 			break;
-			case '0':
+			/*case '0':
                 doSimulateData = NO;
-                break;
+                break;*/
 			case 'W':
 				doTumorNames = YES;
 			break;
@@ -8019,7 +8030,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     PrintUsage(stderr);
                     }
                 break;
-            case 'z':
+            /*case 'z':
                 argument = atof(argv[i]);
                 numNodes = (int) argument;
                 if (numNodes<1)
@@ -8027,7 +8038,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of nodes (%d)\n\n", numNodes);
                     PrintUsage(stderr);
                     }
-                break;
+                break;*/
             case '#':
                 argdouble = atof(argv[i]);
                 userSeed = (long int) argdouble;
@@ -8053,12 +8064,12 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 /***************************** ReadParametersFromFile *******************************/
 /*
  USED IN ORDER
- n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U 0 W y z #
+ n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
  
  USED
- a b c d e f g h i j k l m n o p q r s t u v w x y z
+ a b c d e f g h i j k l m n o p q r s t u v w x y
  A B C D E   G H I       M     P Q R S T U V W  X
- 0 1 2 3 4 5 6 7 8 9 #
+ 1 2 3 4 5 6 7 8 9 #
  */
 
 
@@ -8371,9 +8382,9 @@ void ReadParametersFromFile ()
                     }
                 break;
 			case 't':
-				if (fscanf(stdin, "%lf", &titv)!=1)
+				if (fscanf(stdin, "%lf", &titv)!=1 || titv <= 0)
 					{
-					fprintf(stderr, "Bad ti/tv\n\n");
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad ti/tv (%f)\n\n", titv);
 					PrintUsage(stderr);
 					}
 				else
@@ -8390,7 +8401,7 @@ void ReadParametersFromFile ()
 					}
 				break;
  			case 'a':
-                if (fscanf(stdin, "%lf", &alphaSites)!=1 || alphaSites < 0)
+                if (fscanf(stdin, "%lf", &alphaSites)!=1 || alphaSites <= 0)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alphaSites shape (%f)\n\n", alphaSites);
                     PrintUsage(stderr);
@@ -8539,7 +8550,7 @@ void ReadParametersFromFile ()
 			case 'B':
 				if (fscanf(stdin, "%lf", &doubletRate) !=1 || doubletRate < 0 || doubletRate > 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad one allele coverage proportion (%f)\n\n", doubletRate);
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad double rate (%f)\n\n", doubletRate);
 					PrintUsage(stderr);
 					}
 				break;
@@ -8646,9 +8657,9 @@ void ReadParametersFromFile ()
 					}
 				doUserGenome = YES;
 			break;
-			case '0':
+			/*case '0':
                 doSimulateData = NO;
-			break;
+			break;*/
 			case 'W':
 				doTumorNames = YES;
 			break;
@@ -8660,13 +8671,13 @@ void ReadParametersFromFile ()
                     }
                 noisy = (int) argument;
                 break;
-            case 'z':
+            /*case 'z':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of nodes (%d)\n\n", (int) argument);
                     PrintUsage(stderr);
                     }
-                numNodes = (int) argument;
+                numNodes = (int) argument;*/
                 break;
 			case '#':
                 if (fscanf(stdin, "%lf", &argdouble) !=1 || argument < 0)
