@@ -115,9 +115,9 @@ int main (int argc, char **argv)
 		
     /* Default settings */
     numDataSets = 10;			/* the number of samples to simulate */
-    numCells = 7;				/* number of cells in each data set */
+    numCells = 8;				/* number of ingrou cells in each data set */
     ploidy = 2;                 /* we assume diploid genomes */
-    numSites = 1000;				/* number of sites (markers, loci) to simulate = length of the chromosomes */
+    numSites = 1000;			/* number of sites (markers, loci) to simulate = length of the genome */
     N = 1000;					/* effective population size */
     numPeriods = 0;				/* number of distinct demographic periods */
     doDemographics = NO;		/* whether to implement demographics */
@@ -135,16 +135,16 @@ int main (int argc, char **argv)
 	titv = 0.5;					/* transition/transversion rate ratio */
 	thereIsMij = NO;			/* mutation rate matrix*/
 	Mij[0][0] = Mij[1][1] = Mij[2][2] = Mij[3][3] = 0;  /* mutation probabilities */
-	Mij[0][1] = Mij[0][2] = Mij[0][3] = 1.0/3;
-	Mij[1][0] = Mij[1][2] = Mij[1][3] = 1.0/3;
-	Mij[2][0] = Mij[2][1] = Mij[2][3] = 1.0/3;
-	Mij[3][0] = Mij[3][1] = Mij[3][2] = 1.0/3;
+	Mij[0][1] = Mij[0][2] = Mij[0][3] = 1.0;
+	Mij[1][0] = Mij[1][2] = Mij[1][3] = 1.0;
+	Mij[2][0] = Mij[2][1] = Mij[2][3] = 1.0;
+	Mij[3][0] = Mij[3][1] = Mij[3][2] = 1.0;
 	thereIsEij = NO;			/* error rate matrix*/
 	Eij[0][0] = Eij[1][1] = Eij[2][2] = Eij[3][3] = 0;  /* sequencing error probabilities */
-	Eij[0][1] = Eij[0][2] = Eij[0][3] = 1.0/3;
-	Eij[1][0] = Eij[1][2] = Eij[1][3] = 1.0/3;
-	Eij[2][0] = Eij[2][1] = Eij[2][3] = 1.0/3;
-	Eij[3][0] = Eij[3][1] = Eij[3][2] = 1.0/3;
+	Eij[0][1] = Eij[0][2] = Eij[0][3] = 1.0;
+	Eij[1][0] = Eij[1][2] = Eij[1][3] = 1.0;
+	Eij[2][0] = Eij[2][1] = Eij[2][3] = 1.0;
+	Eij[3][0] = Eij[3][1] = Eij[3][2] = 1.0;
 	doJC = YES;
 	doHKY = NO;
 	doGTR = NO;
@@ -6755,8 +6755,7 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 				}
 			
-			fprintf (fp, "\n Probability of untrue genotype calls         =   %3.2f", cumCountMLgenotypeErrors/numDataSets);
-			fprintf (fp, "\n   (see documentation)");
+			//fprintf (fp, "\n Probability of untrue genotype calls         =   %3.2f\n   (see documentation)", cumCountMLgenotypeErrors/numDataSets);
 			}
 		}
 	}
@@ -6943,10 +6942,10 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-s: sample size (# cells) =  %d", numCells);
 	fprintf (fp,"\n-l: number of sites =  %d", numSites);
 	fprintf (fp,"\n-e: effective population size =  %d", N);
-	fprintf (fp,"\n-h: number of demographic periods = %d", numPeriods);
+	fprintf (fp,"\n-g: exponential growth rate =  %2.1e", growthRate);	fprintf (fp,"\n-h: number of demographic periods = %d", numPeriods);
 	for (i=1; i<=numPeriods; i++)
 		fprintf (fp, "\n  period %d =  %d %d %d", i, Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
-	fprintf (fp,"\n-g: exponential growth rate =  %2.1e", growthRate);
+
 
 	/* Post-coalescent */
 	fprintf (fp,"\n-k: transforming branch length ratio =  %2.1e", transformingBranchLengthRatio);
@@ -6955,6 +6954,7 @@ static void PrintDefaults (FILE *fp)
 	
 	/* Mutation model */
 	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] =  %d", alphabet);
+	fprintf (fp,"\n-c: germline SNP rate =  %2.1e", SNPrate);
 	fprintf (fp,"\n-u: mutation rate =  %2.1e", mutationRate);
 	fprintf (fp,"\n-d: deletion rate =  %2.1e", deletionRate);
 	fprintf (fp,"\n-H: CNLOH rate =  %2.1e", CNLOHrate);
@@ -6963,7 +6963,6 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-m: alternative mutation model =  %d", altModel);
 	fprintf (fp,"\n-p: proportion of alternative model sites =  %6.4f", propAltModelSites);
 	fprintf (fp,"\n-w: alternative/default model relative mutation rate =  %6.4f", nonISMRelMutRate);
-	fprintf (fp,"\n-c: germline SNP rate =  %2.1e", SNPrate);
 	fprintf (fp,"\n-f: nucleotide base frequencies = f%3.2f %3.2f %3.2f %3.2f", freq[0], freq[1], freq[2], freq[3]);
 	fprintf (fp,"\n-t: transition/transversion ratio =  %6.4f", titv);
 	fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites =  %6.4f", alphaSites);
@@ -6995,15 +6994,19 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-9: print true haplotypes to a file =  %d", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
-	fprintf (fp,"\n-o: results folder name =  %s", resultsDir);
+	if (strlen(userTreeFile) == 0)
+		strcpy(userTreeFile, "none");
 	fprintf (fp,"\n-T: user tree file name =  %s", userTreeFile);
+	if (strlen(userGenomeFile) == 0)
+		strcpy(userGenomeFile, "none");
 	fprintf (fp,"\n-U: user genome file name =  %s", userGenomeFile);
-	
+	if (strlen(resultsDir) == 0)
+		strcpy(resultsDir, "Results");
+	fprintf (fp,"\n-o: results folder name =  %s", resultsDir);
+
 	/* Other */
-	fprintf (fp,"\n-0: simulate just the genealogies =  %d", doSimulateData);
 	fprintf (fp,"\n-W: use tumor nomenclature for cells =  %d", doTumorNames);
 	fprintf (fp,"\n-y: noisy = %d", noisy);
-	fprintf (fp,"\n-z: number of nodes to allocate = %d", numNodes);
 	fprintf (fp,"\n-#: seed = %ld", originalSeed);
 	}
 

@@ -9,8 +9,8 @@
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 
 [GENEALOGY MODIFIERS]
-	[root branch length ratio] [k0.1]
-	[outgroup branch length ratio] [q0.2]
+	[root branch length ratio] [k0.5]
+	[outgroup branch length ratio] [q1,0]
 	[rate variation among branches] [i1]
 
 [MUTATION MODEL]
@@ -78,10 +78,11 @@
 [OTHER]
 	[tumor labels] [W]
 	[noisy]	[y1]
-	[seed] [#1542634309] [if no seed is specified, the current time will be used as seed]
+	[seed] [#1509] [if no seed is specified, the current time will be used as seed]
 
 	[noisy = 0: does not print anything
 	 noisy = 1: + simulation summary, 
 	 noisy = 2: + replicate information, 
 	 noisy = 3: + calculation status and event information]
 
+gg
