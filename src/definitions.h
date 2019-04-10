@@ -15,7 +15,7 @@
 #define VERSION_NUMBER          "version 0.2.0"
 
 #define	MAX_NAME                120
-#define	MAX_LINE                3500
+#define	MAX_LINE                500000
 #define	MAX_GENOME              1000000
 #define	NO                      0
 #define	YES                     1

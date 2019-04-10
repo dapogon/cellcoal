@@ -596,14 +596,6 @@ int main (int argc, char **argv)
 			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 			numSNVs = CountTrueVariants();
 
-			/* print reference haplotypes without errors */
-			if (doPrintTrueHaplotypes == YES)
-				{
-  				if (doPrintSeparateReplicates == NO)
-					fprintf (fpTrueHaplotypes, "[#%d]\n", dataSetNum+1);
-                PrintTrueFullHaplotypes(fpTrueHaplotypes);
-				}
-
 			/* copy true genotypes before doing ADO but after CNLOH and deletion */
 			for (i=0; i<numCells+1; i++)
 				for (j=0; j<numSites; j++)
@@ -611,6 +603,14 @@ int main (int argc, char **argv)
 					cell[i].site[j].trueMaternalAllele = data[MATERNAL][i][j];
 					cell[i].site[j].truePaternalAllele = data[PATERNAL][i][j];
 					}
+
+			/* print reference haplotypes without errors */
+			if (doPrintTrueHaplotypes == YES)
+				{
+  				if (doPrintSeparateReplicates == NO)
+					fprintf (fpTrueHaplotypes, "[#%d]\n", dataSetNum+1);
+                PrintTrueFullHaplotypes(fpTrueHaplotypes);
+				}
 
 			/* do alellic dropout */
 			if (ADOrate > 0)
@@ -742,15 +742,35 @@ int main (int argc, char **argv)
 		
         if (doSimulateData == YES)
             {
-            for (i=0; i<ploidy; i++)
+			/* close file pointers for separate replicate file */
+			if (doPrintSeparateReplicates == YES)
+				{
+				if (doPrintSNVgenotypes == YES)
+					fclose(fpSNVgenotypes);
+				if (doPrintFullGenotypes == YES)
+					fclose(fpFullGenotypes);
+				if (doPrintSNVhaplotypes == YES)
+					fclose(fpSNVhaplotypes);
+				if (doPrintFullHaplotypes == YES)
+					fclose(fpFullHaplotypes);
+				if (doPrintTrueHaplotypes == YES)
+					fclose(fpTrueHaplotypes);
+				if (doNGS == YES)
+					fclose(fpVCF);
+				if (doPrintCATG == YES)
+					fclose(fpCATG);
+				}
+ 
+			/* free data structures */
+			for (i=0; i<ploidy; i++)
                 {
                 for (j=0; j<2*numCells+1; j++)
                     free (data[i][j]);
                 free (data[i]);
                 }
- 
-            free (data);
-            for (i=0; i<numSites; i++)
+			free (data);
+			
+			for (i=0; i<numSites; i++)
               free(allSites[i].alternateAlleles);
             free (allSites);
             free (SNVsites);
@@ -767,24 +787,6 @@ int main (int argc, char **argv)
 					}
 				free (triNucleotideMaternal);
 				free (triNucleotidePaternal);
-				}
-
-			if (doPrintSeparateReplicates == YES)
-				{
-				if (doPrintSNVgenotypes == YES)
-					fclose(fpSNVgenotypes);
-				if (doPrintFullGenotypes == YES)
-					fclose(fpFullGenotypes);
-				if (doPrintSNVhaplotypes == YES)
-					fclose(fpSNVhaplotypes);
-				if (doPrintTrueHaplotypes == YES)
-					fclose(fpTrueHaplotypes);
-				if (doPrintFullHaplotypes == YES)
-					fclose(fpFullHaplotypes);
-				if (doNGS == YES)
-					fclose(fpVCF);
-				if (doPrintCATG == YES)
-					fclose(fpCATG);
 				}
 			}
 		
@@ -829,6 +831,30 @@ int main (int argc, char **argv)
     varNumDEL = (1.0 / (double) (numDataSets-1)) * (cumNumDELSq - pow(cumNumDEL,2) / (double) numDataSets);
 	varTMRCA = (1.0 / (double) (numDataSets-1)) * (cumTMRCASq - pow(cumTMRCA,2) / (double) numDataSets);
 
+	/* close file pointers */
+	if (doPrintSeparateReplicates == NO)
+		{
+		if (doPrintSNVgenotypes == YES)
+			fclose(fpSNVgenotypes);
+		if (doPrintFullGenotypes == YES)
+			fclose(fpFullGenotypes);
+		if (doPrintSNVhaplotypes == YES)
+			fclose(fpSNVhaplotypes);
+		if (doPrintFullHaplotypes == YES)
+			fclose(fpFullHaplotypes);
+		if (doPrintTrueHaplotypes == YES)
+			fclose(fpTrueHaplotypes);
+		if (doNGS == YES)
+			fclose(fpVCF);
+		if (doPrintCATG == YES)
+			fclose(fpCATG);
+		if (doPrintTree == YES)
+			fclose(fpTrees);
+		if (doPrintTimes == YES)
+			fclose(fpTimes);
+		}
+
+	
     if (noisy > 0)
         {
         /* if (noisy < 2)
@@ -842,89 +868,80 @@ int main (int argc, char **argv)
 		PrintRunInformation (fpLog);
 	
 		fprintf (stdout, "\n\n\nOutput files are in folder \"%s\":", resultsDir);
-        if (doPrintTree == YES)
+		
+		if (doPrintTree == YES)
             {
             fprintf (stdout, "\n Tree printed to file \"%s\"", treeFile);
-			if (doPrintSeparateReplicates == NO)
-				fclose(fpTrees);
-			else
+			if (doPrintSeparateReplicates == YES)
 				fprintf (stdout, " in folder \"%s\"", treeDir);
 	
 			}
-        if (doPrintTimes == YES)
+ 
+		if (doPrintTimes == YES)
             {
             fprintf (stdout, "\n Times printed to file \"%s\"", timesFile);
-			if (doPrintSeparateReplicates == NO)
-				fclose(fpTimes);
-			else
+			if (doPrintSeparateReplicates == YES)
 				fprintf (stdout, " in folder \"%s\"", timesDir);
             }
-			
+
+		
         if (doSimulateData == YES)
             {
             if (doPrintSNVgenotypes == YES)
                 {
                 fprintf (stdout, "\n SNV genotypes printed to file \"%s\"", SNVgenotypesFile);
-				if (doPrintSeparateReplicates == NO)
-					fclose(fpSNVgenotypes);
-			else
-				fprintf (stdout, " in folder \"%s\"", SNVgenotypesDir);
+				if (doPrintSeparateReplicates == YES)
+					fprintf (stdout, " in folder \"%s\"", SNVgenotypesDir);
                }
-            if (doPrintFullGenotypes == YES)
+ 
+			if (doPrintFullGenotypes == YES)
                 {
                 fprintf (stdout, "\n Full genotypes printed to file \"%s\"", fullGenotypesFile);
- 				if (doPrintSeparateReplicates == NO)
-					fclose(fpFullGenotypes);
-				else
+ 				if (doPrintSeparateReplicates == YES)
 					fprintf (stdout, " in folder \"%s\"", fullGenotypesDir);
                 }
-            if (doPrintSNVhaplotypes == YES)
+ 
+			if (doPrintSNVhaplotypes == YES)
                 {
 				if (doPrintIUPAChaplotypes == YES)
 					fprintf (stdout, "\n SNV haplotypes (IUPAC codes) printed to file \"%s\"", SNVhaplotypesFile);
 				else
 					fprintf (stdout, "\n SNV haplotypes printed to file \"%s\"", SNVhaplotypesFile);
- 				if (doPrintSeparateReplicates == NO)
-					fclose(fpSNVhaplotypes);
-				else
+ 				if (doPrintSeparateReplicates == YES)
 					fprintf (stdout, " in folder \"%s\"", SNVhaplotypesDir);
                 }
-            if (doPrintTrueHaplotypes == YES)
-                {
-				if (doPrintIUPAChaplotypes == YES)
-					fprintf (stdout, "\n True haplotypes (IUPAC codes) printed to file \"%s\"", trueHaplotypesFile);
-				else
-					fprintf (stdout, "\n True haplotypes printed to file \"%s\"", trueHaplotypesFile);
- 				if (doPrintSeparateReplicates == NO)
-					fclose(fpTrueHaplotypes);
-				else
-					fprintf (stdout, " in folder \"%s\"", trueHaplotypesDir);
-                }
-          if (doPrintFullHaplotypes == YES)
+
+			if (doPrintFullHaplotypes == YES)
                 {
   				if (doPrintIUPAChaplotypes == YES)
 					fprintf (stdout, "\n Full haplotypes (IUPAC codes) printed to file \"%s\"", fullHaplotypesFile);
  				else
 					fprintf (stdout, "\n Full haplotypes printed to file \"%s\"", fullHaplotypesFile);
- 				if (doPrintSeparateReplicates == NO)
-					fclose(fpFullHaplotypes);
-				else
+ 				if (doPrintSeparateReplicates == YES)
 					fprintf (stdout, " in folder \"%s\"", fullHaplotypesDir);
                 }
+
+			if (doPrintTrueHaplotypes == YES)
+				{
+				if (doPrintIUPAChaplotypes == YES)
+					fprintf (stdout, "\n True haplotypes (IUPAC codes) printed to file \"%s\"", trueHaplotypesFile);
+				else
+					fprintf (stdout, "\n True haplotypes printed to file \"%s\"", trueHaplotypesFile);
+				if (doPrintSeparateReplicates == YES)
+					fprintf (stdout, " in folder \"%s\"", trueHaplotypesDir);
+				}
+
 			if (doNGS == YES)
                 {
                 fprintf (stdout, "\n Genotype likelihoods printed to file \"%s\"", VCFfile);
- 				if (doPrintSeparateReplicates == NO)
-					fclose(fpVCF);
-				else
+ 				if (doPrintSeparateReplicates == YES)
 					fprintf (stdout, " in folder \"%s\"", VCFdir);
                 }
+
 			if (doPrintCATG == YES)
                 {
                 fprintf (stdout, "\n Read counts printed to file \"%s\"", CATGfile);
- 				if (doPrintSeparateReplicates == NO)
-					fclose(fpCATG);
-				else
+ 				if (doPrintSeparateReplicates == YES)
 					fprintf (stdout, " in folder \"%s\"", CATGdir);
                 }
            }
@@ -940,7 +957,7 @@ int main (int argc, char **argv)
         fprintf (stdout, "\n MeansumPos = %4.2f  (expected (L/2) = %4.2f)\n\n", meansumPos / (double) dataSetsWithSNVs, numSites/2.0);
     #endif
 	
-	//free pending stuff
+	/* free pending stuff */
 	free (CommandLine);
 	free (cellNames);
 	free (triMutationsCounter);
@@ -1317,13 +1334,13 @@ static void ReadUserTree (FILE *fp)
         }
 	
 	/* allocate space for cellNames */
-    cellNames = (char **) calloc(numNodes, sizeof(char *));
+    cellNames = (char **) calloc(numCells, sizeof(char *));
     if (!cellNames)
         {
-        fprintf (stderr, "Could not allocate cellNames (%ld)\n", numNodes * sizeof(char *));
+        fprintf (stderr, "Could not allocate cellNames (%ld)\n", numCells * sizeof(char *));
         exit (-1);
         }
-   for (i=0; i<numNodes; i++)
+   for (i=0; i<numCells; i++)
 	   {
 	   cellNames[i] = (char *) calloc(MAX_NAME, sizeof(char));
 	   if (!cellNames[i])
@@ -3268,7 +3285,7 @@ void AllelicDropout (long int *seed)
 				if (RandomUniform(seed) < alleleADOrate[i][j])
 					{
 					data[MATERNAL][i][j] = ADO;
-					allSites[i].hasADO = YES;
+					allSites[j].hasADO = YES;
 					}
 				}
 			if (data[PATERNAL][i][j] != DELETION)
@@ -3276,7 +3293,7 @@ void AllelicDropout (long int *seed)
 				if (RandomUniform(seed) < alleleADOrate[i][j])
 					{
 					data[PATERNAL][i][j] = ADO;
-					allSites[i].hasADO = YES;
+					allSites[j].hasADO = YES;
 					}
 				}
 			}
@@ -5075,15 +5092,6 @@ void PrepareGlobalFiles(int argc, char **argv)
         fprintf (fpSNVhaplotypes,"%d\n", numDataSets);
         }
 
-     if (doPrintTrueHaplotypes == YES)
-        {
-        /*fprintf (fpTrueHaplotypes, "%s - ",PROGRAM_NAME);
-        PrintDate (fpTrueHaplotypes);
-        fprintf (fpTrueHaplotypes, "True haplotypes\n");
-        PrintCommandLine (fpTrueHaplotypes, argc, argv);*/
-        fprintf (fpTrueHaplotypes,"%d\n", numDataSets);
-        }
-
    if (doPrintFullGenotypes == YES)
         {
         /*fprintf (fpFullGenotypes, "%s - ",PROGRAM_NAME);
@@ -5101,6 +5109,15 @@ void PrepareGlobalFiles(int argc, char **argv)
         PrintCommandLine (fpFullHaplotypes, argc, argv);*/
         fprintf (fpFullHaplotypes,"%d\n", numDataSets);
         }
+
+	if (doPrintTrueHaplotypes == YES)
+		{
+		/*fprintf (fpTrueHaplotypes, "%s - ",PROGRAM_NAME);
+		 PrintDate (fpTrueHaplotypes);
+		 fprintf (fpTrueHaplotypes, "True haplotypes\n");
+		 PrintCommandLine (fpTrueHaplotypes, argc, argv);*/
+		fprintf (fpTrueHaplotypes,"%d\n", numDataSets);
+		}
 
 	if (doNGS == YES)
         {
@@ -5910,7 +5927,6 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				if (i == numCells)
 					fprintf (fp,"%s ", outCellName);
-
 				else
 					{
 					if (doUserTree == NO)
@@ -6404,7 +6420,7 @@ char WhichConsensusBinary (int allele1, int allele2)
 			return ('2');
 		else if (allele2 == ADO)	//1?
 			return ('2');
-		else if (allele2 == DELETION)	//0-
+		else if (allele2 == DELETION)	//1-
 			return ('2');
 		else
 			return ('N');
