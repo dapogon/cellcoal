@@ -85,6 +85,7 @@
 - new implementation of the 2-template model that corrects the genotype likelihoods
  
 [TO-DOs]
+- add new signatures
 - move data structure into cell structure (optional)
 - dated tips (optional)
 - population structure (optional)

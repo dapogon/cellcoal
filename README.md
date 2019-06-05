@@ -1,6 +1,6 @@
 # CellCoal
-Coalescent simulation of somatic cells  
-(c) 2018 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
+Coalescent simulation of somatic cell samples  
+(c) 2018, 2019 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
 
 ## About CellCoal
 CellCoal simulates the somatic evolution of single-cells. CellCoal generates a coalescent tree and can simulate a sample of diploid genomes from somatic cells –no recombination– from a growing population, together with a another cell as outgroup. For example a growing tumor population together with a healthy cell as outgroup. CellCoal implements multiple mutations models (0/1, DNA, infinite and finite site models, deletion, copy-neutral LOH, 30 cancer signatures) and is able to generate read counts and genotype likelihoods considering allelic dropout, sequencing and amplification error, plus doublet cells.
@@ -16,5 +16,5 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 ## Citation
 
-- If you use CellCoal, please cite: Posada D. (2018) *CellCoal: coalescent simulation of single-cell genomes*. <https://github.com/dapogon/cellcoal>
+- If you use CellCoal, please cite: Posada D. (2019) *CellCoal: coalescent simulation of single-cell genomes*. <https://github.com/dapogon/cellcoal>
 
