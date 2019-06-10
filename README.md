@@ -1,5 +1,6 @@
-# CellCoal
+## CellCoal
 CellCoal: coalescent simulation of single-cell NGS genotypes 
+
 (c)2019 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
 
 ## About CellCoal
@@ -11,7 +12,7 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 2. Compile: type make. The program should compile without much problem in Linux/MacOSX. The makefile is provided for the gcc compiler.
 
-3. Run: type ./cellcoal. Arguments will be read from a parameter file called `parameters`. Alternatively, arguments can be entered directly in the command line.
+3. Run: type ./cellcoal. Arguments will be read from a parameter file called `parameters`. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
 
 
 ## Citation

@@ -83,6 +83,7 @@
 - fixed memory leaks and better printing for VCF (thanks to Alexey Kozlov)
 - fixed ISM binary models so germline sites can also accumulate somatic mutations
 - new implementation of the 2-template model that corrects the genotype likelihoods
+- can use custom name for parameter file
  
 [TO-DOs]
 - add new signatures
@@ -193,7 +194,8 @@ int main (int argc, char **argv)
 	doubletRate = 0.0;				/* no doublets by default */
 	numNodes = 1000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
-    userSeed = 0;					/* seed entered by the user */
+	doSpecificParameterFile = NO;	/* by default do not use a custom parameter file */
+	userSeed = 0;					/* seed entered by the user */
 	noisy = 1;						/* level of information to be printed in the screen (see below) */
 
 	/*
@@ -203,15 +205,16 @@ int main (int argc, char **argv)
 	 noisy = 3: + calculation status and event information
 	*/
 
+	strcpy(parameterFile, "parameters");
 	ReadParametersFromCommandLine (argc, argv);
-	if (argc < 2)
+	if (argc < 2 || doSpecificParameterFile == YES)
         {
 		readingParameterFile = YES;
-        if ((fp = freopen("parameters", "r", stdin)) != NULL)
+        if ((fp = freopen(parameterFile, "r", stdin)) != NULL)
             ReadParametersFromFile();
         else
             {
-            fprintf (stderr, "\nERROR: No parameters specified (use command line or parameter file)");
+			fprintf (stderr, "\nERROR: Could not open parameter file: %s\n", parameterFile);
             PrintUsage(stderr);
             exit(-1);
             }
@@ -6560,7 +6563,8 @@ static void	PrintRunInformation (FILE *fp)
     int		i;
 		
     fprintf (fp, "\n\nRun settings\n------------");
-    if (noisy > 1)
+	fprintf (fp, "\n[Parameter file = %s]\n", parameterFile);
+	if (noisy > 1)
 		fprintf (fp, "\n[Assumptions in brackets]\n");
     fprintf (fp, "\n Seed                                         =   %-3ld", originalSeed);
     fprintf (fp, "\n Number replicate data sets                   =   %-3d",  numDataSets);
@@ -6876,15 +6880,16 @@ void PrintUsage(FILE *fp)
 {
 	PrintHeader(fp);
     fprintf (fp, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
-	fprintf (fp, "\n\nUsage: %s [-n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -c# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # # -G# -C# -V# -I# -D# -P# -Q# -R# -A# # # -E# -B# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -W# -y# -## -?]", PROGRAM_NAME_LOWERCASE);
+	fprintf (fp, "\n\nUsage: %s [-FTXT -n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -c# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # # -G# -C# -V# -I# -D# -P# -Q# -R# -A# # # -E# -B# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -TTXT -UTXT -W# -y# -## -?]", PROGRAM_NAME_LOWERCASE);
 	fprintf (fp,"\n");
 
-    fprintf (fp,"\n-n: number of replicates (e.g. -n1000)");
+	fprintf (fp,"\n-F: user-defined parameter file (e.g. -Fmyparameters)");
+	fprintf (fp,"\n-n: number of replicates (e.g. -n1000)");
     fprintf (fp,"\n-s: sample size (# cells) (e.g. -s8)");
     fprintf (fp,"\n-l: number of sites (e.g. -l500)");
     fprintf (fp,"\n-e: effective population size (e.g. -e1000)");
 	fprintf (fp,"\n-g: exponential growth rate (e.g. -g1e-5)");
-   fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
+    fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
     fprintf (fp, "\n    and the duration of the period in generations. (e.g. -d1 100 200 30000) (e.g. -d2 100 100 40000 1000 2000 20000)");
 	fprintf (fp,"\n-k: transforming branch length (e.g. -u1e-2)");
     fprintf (fp,"\n-q: healthy tip branch length (e.g. -q1e-6)");
@@ -6953,6 +6958,8 @@ void PrintUsage(FILE *fp)
 static void PrintDefaults (FILE *fp)
 	{
 	int		i;
+
+	fprintf (fp,"\n-F: parameter file =  %s", "parameters");
 
 	/* Coalescent */
 	fprintf (fp,"\n-n: number of replicates =  %d", numDataSets);
@@ -7431,11 +7438,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
 USED IN ORDER
-n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
+F n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
 
 USED
 a b c d e f g h i j k l m n o p q r s t u v w x y
-A B C D E   G H I       M     P Q R S T U V W  X
+A B C D E F G H I       M     P Q R S T U V W X
 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -7469,6 +7476,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			
         switch (flag)
 			{
+			/* specifying a specific parameter file */
+			case 'F':
+				ch = *argv[i];
+				if(!isspace(ch))
+					strcpy(parameterFile,argv[i]);
+				i = argc;
+				doSpecificParameterFile = YES;
+				break;
 			case 'n':
                 argument = atof(argv[i]);
                 numDataSets = (int) argument;
@@ -8088,7 +8103,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
  
  USED
  a b c d e f g h i j k l m n o p q r s t u v w x y
- A B C D E   G H I       M     P Q R S T U V W  X
+ A B C D E F G H I       M     P Q R S T U V W  X
  1 2 3 4 5 6 7 8 9 #
  */
 

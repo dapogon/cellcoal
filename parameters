@@ -1,5 +1,5 @@
 [PARAMETER FILE for CellCoal] [text in brackets will be ignored]
-	
+
 [COALESCENT]
 	[number of replicates] n1
 	[number of cells] s20
