@@ -408,7 +408,7 @@ int main (int argc, char **argv)
 
     for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
         {
-        numCA = numMU = numDEL = numProposedMU = TMRCA = numSNVmaternal = 0;
+        numCA = numMU = numDEL = numCNLOH = numProposedMU = TMRCA = numSNVmaternal = 0;
 
 		if (doPrintSeparateReplicates == YES)
 			PrepareSeparateFiles(dataSetNum);
@@ -645,8 +645,9 @@ int main (int argc, char **argv)
 				fprintf (stderr, "\nData set %d",dataSetNum+1);
 				fprintf (stderr, "\nNumber of coalescence events   =   %d", numCA);
 				fprintf (stderr, "\nNumber of mutational events    =   %d", numMU);
-				fprintf (stderr, "\nNumber of SNVs                 =   %d\n\n", numSNVs);
+				fprintf (stderr, "\nNumber of SNVs                 =   %d", numSNVs);
 				fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
+				fprintf (stderr, "\nNumber of cnLOH events         =   %d\n\n", numCNLOH);
 				}
 
 			if (doPrintSNVgenotypes == YES && numSNVs > 0) /* we only print replicates with variation */
@@ -6718,7 +6719,7 @@ static void	PrintRunInformation (FILE *fp)
 			fprintf (fp, "\n CN-LOH rate                                  =   %2.1e", CNLOHrate);
 			fprintf (fp, "\n Mean number of CN-LOH events                 =   %3.2f", meanNumCNLOH);
 			if (numDataSets > 1)
-				fprintf (fp, "\n Variance number of CN-LOH events            =   %3.2f", varNumCNLOH);
+				fprintf (fp, "\n Variance number of CN-LOH events             =   %3.2f", varNumCNLOH);
 			}
  
 		if (genotypingError > 0 || doNGS == YES)
@@ -6791,8 +6792,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, "Command line arguments (some might not affect) = %s", CommandLine);
 	else
 		{
-		fprintf (fp, "Parameter file arguments (some might not affect) = ");
-		
+		fprintf (fp, "Parameter file [\"%s\"] arguments (some might not affect) = ", parameterFile);
+
 		/* Coalescent */
 		fprintf (fp, " -n%d -s%d -l%d -e%d -g%2.1e -h%d", numDataSets, numCells, numSites, N, growthRate, numPeriods);
 		for (i=1; i<=numPeriods; i++)
@@ -7656,7 +7657,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 
 				if (alphabet == BINARY)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the the binary alphabet");
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the binary alphabet");
 					PrintUsage(stderr);
 					}
 
@@ -8296,7 +8297,7 @@ void ReadParametersFromFile ()
 
 				if (alphabet == BINARY)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the the binary alphabet");
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Trinucleotide signatures cannot be simulated with the binary alphabet");
 					PrintUsage(stderr);
 					}
 
