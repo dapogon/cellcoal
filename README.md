@@ -10,9 +10,9 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 1. Download: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the "Code" tab you will see a section call "release". Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-1.0.0). You should see now a folder called cellcoal-x.y.z. Move into the folder to compile and run the program.
 
-2. Compile: type make. The program should compile without much problem in Linux/MacOSX. The makefile is provided for the gcc compiler.
+2. Compile: type `make`. The program should compile without much problem in Linux/MacOSX. The makefile is provided for the gcc compiler.
 
-3. Run: type ./cellcoal. Arguments will be read from a parameter file called `parameters`. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
+3. Run: type `./cellcoal`. Arguments will be read from a parameter file called *parameters*. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
 
 
 ## Citation
