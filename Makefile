@@ -1,4 +1,5 @@
 PROG = cellcoal
+DASH = -
 VERSION = 1.0.0
 SRCDIR = src
 OBJDIR = out
@@ -15,9 +16,9 @@ LIBS = -lm
 
 CPPFLAGS += -D_XOPEN_SOURCE=500
 
-all: $(BINDIR)/$(PROG)$(VERSION)
+all: $(BINDIR)/$(PROG)-$(VERSION)
 
-$(BINDIR)/$(PROG)$(VERSION) : $(OBJS)
+$(BINDIR)/$(PROG)-$(VERSION) : $(OBJS)
 	mkdir -p $(BINDIR)
 	$(CC) $(LDFLAGS) -o $@ $+ $(LIBS)
 
