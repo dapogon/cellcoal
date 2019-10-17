@@ -120,7 +120,7 @@
 		D59362F91E22A28E0019EF0C /* Project object */ = {
 			isa = PBXProject;
 			attributes = {
-				LastUpgradeCheck = 1020;
+				LastUpgradeCheck = 1110;
 				ORGANIZATIONNAME = "David Posada";
 				TargetAttributes = {
 					D59363001E22A28E0019EF0C = {
@@ -269,6 +269,7 @@
 		D59363091E22A28E0019EF0C /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
 				"INFOPLIST_FILE[sdk=*]" = "";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
@@ -277,6 +278,7 @@
 		D593630A1E22A28E0019EF0C /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
+				CODE_SIGN_IDENTITY = "-";
 				PRODUCT_NAME = "$(TARGET_NAME)";
 			};
 			name = Release;

@@ -152,7 +152,7 @@ static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij;
 static double	*periodGrowth, growthRate, birthRate, deathRate;
 static double	meanGenotypingError, varGenotypingError, sequencingError;
-static double	coverage, ADOrate, alphaADOcells, alphaADOsites, ADOvarAmongSites, ADOvarAmongCells, allelicImbalance, haploidCoverageReduction;
+static double	coverage, ADOrate, alphaADOcells, alphaADOsites, ADOvarAmongSites, ADOvarAmongCells, meanAllelicImbalance, varAllelicImbalance, haploidCoverageReduction;
 static double	meanAmplificationError, varAmplificationError, doubletRate;
 static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;

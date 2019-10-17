@@ -93,7 +93,8 @@ Version 1.1.0
 - changed the coalescent time scale from 2N to N
 - implemented the Othsuki and Innan 2017 TPB coalescent parameterization with birth and death rates
 - genotyping error is now sampled from a Beta distribution
- 
+- allelic imbalance is now sampled from a Beta distribution
+
  
 [TO-DOs]
 - add new signatures
@@ -203,7 +204,8 @@ int main (int argc, char **argv)
 	varAmplificationError = 0.000001;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simulating maximum of two templates after single-cell amplification, or there can be all four */
 	haploidCoverageReduction = 0.5; /* proportion of reads produced when a single allele is present */
-	allelicImbalance = 0.5;			/* proportion of maternal/ paternal reads */
+	meanAllelicImbalance = 0.5;		/* beta mean proportion of maternal/ paternal reads */
+	varAllelicImbalance = 0.01;		/* beta var proportion of maternal/ paternal reads */
 	doubletRate = 0.0;				/* no doublets by default */
 	numNodes = 1000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
@@ -4015,7 +4017,8 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	int		readsLeft, badReads;
 	double	cumProb;
 	double	uniform, goodTemplateProb, badTemplateProb, noSeqError;
-
+	double 	allelicImbalance;
+	
 	readCount = c->readCount;
 	
 	thereIsMaternalAllele = YES;
@@ -4039,6 +4042,10 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	goodTemplate = -9;
 	maternalSiteAmplificationError = 0;
 	paternalSiteAmplificationError = 0;
+	
+	
+	/* sample maternal allelic imbalance for this genotype */
+	allelicImbalance = RandomBetaMeanVar(meanAllelicImbalance, varAllelicImbalance, seed);
 	
 	/* number of reads will follow a Poisson or a Negative Binomial distribution (overdispersed coverage) around mean coverage, and are randomly assigned to maternal/paternal chromosome */
 	numMaternalReads = 0;
@@ -4427,7 +4434,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 							pReadGivenA2 += ampEijpat[a2][template] * ngsEij[template][read];
 							//fprintf (stderr, "\n ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ", WhichNuc(a1), WhichNuc(template), ampEijmat[a1][template], WhichNuc(a2), WhichNuc(template), ngsEij[template][read]);
 							}
-						genLike[a1][a2] += readCount[read] * log10 (allelicImbalance * pReadGivenA1 + (1.0-allelicImbalance) * pReadGivenA2);
+						genLike[a1][a2] += readCount[read] * log10 (meanAllelicImbalance * pReadGivenA1 + (1.0-meanAllelicImbalance) * pReadGivenA2);
 						}
 						//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), genLike[a1][a2],pReadGivenA1,pReadGivenA2);
 					}
@@ -4474,7 +4481,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 								}
 
 						if (pReadGivenA1 > 0 || pReadGivenA2 > 0)
-							genLike[a1][a2] += readCount[read]  * log10(allelicImbalance * pReadGivenA1 + (1.0 - allelicImbalance) * pReadGivenA2);
+							genLike[a1][a2] += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
 								//fprintf (stderr, "\ngl[%c][%c] = %lf (p1=%lf p2=%lf)", WhichNuc(a1), WhichNuc(a2), genLike[a1][a2], pReadGivenA1, pReadGivenA2);
 						}//read
 					} //a1,a2
@@ -6832,7 +6839,9 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n Coverage dispersion (alpha)                  =   %-3.2f", alphaCoverage);
 			else
 				fprintf (fp, "\n  [coverage follows a Poisson distribution]");
-			fprintf (fp, "\n Maternal allelic imbalance                   =   %-3.2f", allelicImbalance);
+			fprintf (fp, "\n Maternal allelic imbalance");
+			fprintf (fp, "\n  Mean                                        =   %2.1e", meanAllelicImbalance);
+			fprintf (fp, "\n  Variance                                    =   %2.1e", varAllelicImbalance);
 			fprintf (fp, "\n Haploid coverage                             =   %-3.2f", haploidCoverageReduction);
 			if (meanAmplificationError == 0)
 				fprintf (fp, "\n Amplification error                          =   %2.1e", meanAmplificationError);
@@ -6905,7 +6914,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -G%2.1e %2.1e", meanGenotypingError, varGenotypingError);
 		fprintf (fp, " -C%3.2f", coverage);
 		fprintf (fp, " -V%6.4f", alphaCoverage);
-		fprintf (fp, " -I%2.1e", allelicImbalance);
+		fprintf (fp, " -I%2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
 		fprintf (fp, " -D%2.1e", ADOrate);
 		fprintf (fp, " -P%2.1e", alphaADOsites);
 		fprintf (fp, " -Q%2.1e", alphaADOcells);
@@ -7080,7 +7089,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-G: genotyping error: mean, var =  %2.1e %2.1e", meanGenotypingError, varGenotypingError);
 	fprintf (fp,"\n-C: sequencing coverage =  %3.2f", coverage);
 	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
-	fprintf (fp,"\n-I: allelic imbalance =  %2.1e", allelicImbalance);
+	fprintf (fp,"\n-I: allelic imbalance =  %2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
 	fprintf (fp,"\n-D: allelic dropout =  %2.1e", ADOrate);
 	fprintf (fp,"\n-P: allelic dropout variation among sites =  %2.1e", ADOvarAmongSites);
 	fprintf (fp,"\n-Q: allelic dropout cariation among cells=  %2.1e", ADOvarAmongCells);
@@ -8094,11 +8103,17 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					PrintUsage(stderr);
 					}
 				break;
-			case 'I':
-				allelicImbalance = atof(argv[i]);
-				if (allelicImbalance < 0 || allelicImbalance > 1)
+   			case 'I':
+					meanAllelicImbalance = atof(argv[i]);
+					varAllelicImbalance = atof(argv[++i]);
+				if (meanAllelicImbalance < 0 || meanAllelicImbalance > 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelicImbalance (%f)\n\n", haploidCoverageReduction);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean allelic imbalance (%f)\n\n", meanAllelicImbalance);
+					PrintUsage(stderr);
+					}
+				if (varAllelicImbalance <= 0 || (meanAllelicImbalance > 0 && varAllelicImbalance >= (meanAllelicImbalance * (1.0 - meanAllelicImbalance))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance allelic imbalance (%f); it has to be > 0 and < mean*(1-mean)\n\n", varAllelicImbalance);
 					PrintUsage(stderr);
 					}
 				break;
@@ -8758,9 +8773,19 @@ void ReadParametersFromFile ()
 				ADOvarAmongCells = YES;
 				break;
 			case 'I':
-				if (fscanf(stdin, "%lf", &allelicImbalance) !=1 || allelicImbalance < 0 || allelicImbalance > 1)
+				if (fscanf(stdin, "%lf %lf", &meanAllelicImbalance, &varAllelicImbalance) != 2)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic imbalance (%f)\n\n", allelicImbalance);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/var/model allelic imbalance (%f ; %f)\n\n", meanAllelicImbalance, varAllelicImbalance);
+					PrintUsage(stderr);
+					}
+				if (meanAllelicImbalance < 0 || meanAllelicImbalance > 1)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean allelic imbalance (%f)\n\n", meanAllelicImbalance);
+					PrintUsage(stderr);
+					}
+				if (varAllelicImbalance <= 0 || (meanAllelicImbalance > 0 && varAllelicImbalance >= (meanAllelicImbalance * (1.0 - meanAllelicImbalance))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance allelic imbalance error (%f); it has to be >0 and < mean*(1-mean)\n\n", varAllelicImbalance);
 					PrintUsage(stderr);
 					}
 				break;
