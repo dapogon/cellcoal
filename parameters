@@ -1,25 +1,27 @@
 [PARAMETER FILE for CellCoal] [text in brackets will be ignored]
 
 [COALESCENT]
-	[number of replicates] n10
-	[number of cells] s20
+	[number of replicates] n2
+	[number of cells] s40
 	[number of sites] l1000
-	[effective population size] e10000
+	[effective population size] e1000
 	[demographics] [h2 1000 100 40000 200 30000 20000]
-	[exponential growth rate] g1e-4 [ln2=0.6931 max]
+	[exponential growth rate] [g0.9]
+	[birth rate] K2
+	[death rate] L0.3
 
 [GENEALOGY MODIFIERS]
-	[root branch length ratio] [k0.1]
-	[outgroup branch length ratio] [q0.2]
+	[root branch length ratio] k0
+	[outgroup branch length ratio] q0
 	[rate variation among branches] [i1]
 
 [MUTATION MODEL]
-	[alphabet binary:0 DNA:1] b1
+	[alphabet binary:0 DNA:1] b0
 	[germline SNP rate] [c0.00001]
-	[somatic mutation rate] u1e-5
+	[somatic mutation rate] u1e-6
 	[CN_LOH rate] [H1e-5]
 	[deletion rate] [d1e-6]
-	[fixed number of mutations - ISM] j10
+	[fixed number of mutations - ISM] j1
 	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
 	 [default mutation model is ISM diploid]	
 	[alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] m0
@@ -44,16 +46,16 @@
 								  0.04 0.12 0.03 0.00]
 
 [NGS PARAMETERS]
-	[genotyping error; no reads] G0.1
-	[sequencing coverage; reads simulated] [C100]
+	[genotyping error; no reads] G0.1 0.01
+	[sequencing coverage; reads simulated] [C10]
 	[coverage overdispersion] [V5]
 	[mat/pat allelic imbalance] [I0.5]	
-	[ADO:allelic dropout] D0.5
+	[ADO:allelic dropout] [D0.1]
 	  [ADO variation among sites] [P1.0]
 	  [ADO variation among cells] [Q1.0]
 	[haploid coverage] [R0.5]	
-	[amplification error] [A0.0 0.00 0]
-	[sequencing error] [E0.00]
+	[amplification error] [A0.05 0.01 0]
+	[sequencing error] [E0.2]
 	[doublet rate per cell] [B0.0]
 	[error matrix ACGT x ACGT] [X0 1 1 1
 								 1 0 1 1
@@ -61,11 +63,11 @@
 								 1 1 1 0]
 [OUTPUT]
 	[print SNV genotypes] 1
-	[print SNV haplotypes] 2
+	[print SNV haplotypes] [2]
 	[print full genotypes] 3
-	[print full haplotypes] 4
+	[print full haplotypes] [4]
 	[print root ancestors] [5]
-	[print trees] 6
+	[print trees] [6]
 	[print times] [7]
 	[print CATG] [8]
 	[print true haplotypes] 9
@@ -78,10 +80,9 @@
 [OTHER]
 	[use tumor nomenclature for cells] [W]
 	[noisy]	y1
-	[seed] #1542634305 [if no seed is specified, the current time will be used as seed]
+	[seed] [#1542634305] [if no seed is specified, the current time will be used as seed]
 
 	[noisy = 0: does not print anything
 	 noisy = 1: + simulation summary, 
-	 noisy = 2: + replicate information, 
-	noisy = 3: + calculation status and event information]
-
+	 noisy = 2: + replicate information + expectations, 
+	 noisy = 3: + calculation status and event information]

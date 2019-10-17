@@ -84,6 +84,16 @@
 - fixed ISM binary models so germline sites can also accumulate somatic mutations
 - new implementation of the 2-template model that corrects the genotype likelihoods
 - can use custom name for parameter file
+
+
+Version 1.0.0 (20/06/2019)
+- allow for non integer sequencing coverage
+
+Version 1.1.0
+- changed the coalescent time scale from 2N to N
+- implemented the Othsuki and Innan 2017 TPB coalescent parameterization with birth and death rates
+- genotyping error is now sampled from a Beta distribution
+ 
  
 [TO-DOs]
 - add new signatures
@@ -124,8 +134,10 @@ int main (int argc, char **argv)
     numPeriods = 0;				/* number of distinct demographic periods */
     doDemographics = NO;		/* whether to implement demographics */
     doExponential = NO;			/* whether to do exponential growth */
-    growthRate = 1.0e-5;		/* rate for the exponential population growth */
-    mutationRate = 1.0e-7;		/* nucleotide mutation rate per site per generation */
+    growthRate = 1.0e-3;		/* rate for the exponential population growth */
+	birthRate = 1;				/* birth rate in the Ohtuski and Innan 2017 coalescent model*/
+	deathRate = 0;				/* death rate in the Ohtuski and Innan 2017 coalescent model*/
+   	mutationRate = 1.0e-7;		/* nucleotide mutation rate per site per generation */
 	SNPrate = 0.0;				/* germline variation rate for rooth healthy genome */
 	rateVarAmongLineages = NO;	/* modify rate variation among branches  (to non-clock) */
     alphabet = DNA;          	/* alphabet 0/1 or DNA */
@@ -158,12 +170,12 @@ int main (int argc, char **argv)
 	doSimulateFixedNumMutations = NO;	/* whether to simulate a fixed number of mutations */
 	doUserTree = NO;				/* whether to assume a user tree instead od making the coalescent */
 	doUserGenome = NO;				/* whether to use a user genome instead of a simulated one */
-    doPrintSNVgenotypes = YES;		/* whether to print SNVs */
+    doPrintSNVgenotypes = NO;		/* whether to print SNVs */
     doPrintSNVhaplotypes = NO;  	/* whether to print haplotypes */
     doPrintTrueHaplotypes = NO;  	/* whether to print the true haplotypes s */
     doPrintFullHaplotypes = NO;		/* whether to print sequences */
     doPrintFullGenotypes = NO;		/* whether to print all genotypes (variable + invariable) */
-    doPrintTree = YES;				/* whether to print the coalescent tree */
+    doPrintTree = NO;				/* whether to print the coalescent tree */
     doPrintTimes = NO;				/* whether to print coalescent times */
 	doPrintAncestors = NO;      	/* whether to print data for ancestral cells */
 	doNGS = NO;  					/* do not produce reads by default */
@@ -185,7 +197,8 @@ int main (int argc, char **argv)
 	alphaADOsites = infinity;		/* alpha shape allelic dropout heterogeneity among sites */
 	alphaADOcells = infinity;		/* alpha shape allelic dropout heterogeneity among cells */
 	sequencingError = 0;			/* NGS error rate */
-	genotypingError = 0;			/* add errors directly in the genotypes */
+	meanGenotypingError = 0;		/* mean of beta distribution for errors added directly in the genotypes */
+	varGenotypingError = 0.000001;  /* variance of beta distribution for genotype errors */
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
 	varAmplificationError = 0.000001;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simulating maximum of two templates after single-cell amplification, or there can be all four */
@@ -251,14 +264,14 @@ int main (int argc, char **argv)
         a += 1.0/(double)i;
         a2 += 1.0/(double)pow(i,2);
         }
-    theta = 4.0 * N * mutationRate * 2.0 * numSites * ((1.0-propAltModelSites) + nonISMRelMutRate*propAltModelSites);
+    theta = 2.0 * N * mutationRate * 2.0 * numSites * ((1.0-propAltModelSites) + nonISMRelMutRate*propAltModelSites);
     expNumMU = theta * a;
     expVarNumMU =  theta * a + pow(theta,2) * a2;
     expTMRCA = 2 * (1 - 1.0/numCells) /* 2.0 * N */;
     expVarTMRCA = 0;
     for (i=2; i<=numCells; i++)
         expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
-    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = cumCountMLgenotypeErrors = 0;
+    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = cumCountMLgenotypeErrors = cumCountCalledGenotypes = 0;
     zeroSNVs = cumTMRCA = cumTMRCASq = 0;
 		
     altModelMutationRate = mutationRate*nonISMRelMutRate;
@@ -287,6 +300,16 @@ int main (int argc, char **argv)
 			}
 		}
 
+	if (doOthsukiInnanCoal == YES)
+		{
+		growthRate = birthRate - deathRate;
+		if (growthRate < 0)
+			{
+			fprintf (stderr, "\n!!! PARAMETER ERROR: the birth rate (%f) should be bigger than the death rate %f)", birthRate, deathRate);
+			PrintUsage(stderr);
+			}
+		}
+	
     /* Set seed and spin wheels of pseudorandom number generator */
     /* seed = (unsigned int) clock();*/
     if (userSeed > 0)
@@ -621,7 +644,7 @@ int main (int argc, char **argv)
 				AllelicDropout(&seed);
 	
 			/* introduce errors directly in the genotypes */
-			if (genotypingError > 0)
+			if (meanGenotypingError > 0)
 				GenotypeError(&seed);
 	
 			/* generate NGS read counts */
@@ -639,7 +662,7 @@ int main (int argc, char **argv)
 
 			if (numSNVs == 0)
                 zeroSNVs++;
-
+		
 			if (noisy > 1)
 				{
 				fprintf (stderr, "\nData set %d",dataSetNum+1);
@@ -728,6 +751,11 @@ int main (int argc, char **argv)
 		if (noisy > 2)
 			for (i=0; i<numSites; i++)
 				PrintSiteInfo (stderr, i);
+	
+		
+#ifdef COUNT_ML_GENOTYPE_ERRORS
+		CountMLGenotypingErrors();
+#endif
 		
 		// free all the necessary stuff for this replicate
 		if (doUserTree == NO)
@@ -954,12 +982,14 @@ int main (int argc, char **argv)
             fprintf (stdout, "\n\n\nNo output data files");
         }
 
+	
+
 	#ifdef CHECK_MUT_DISTRIBUTION
-        fprintf (stdout,"\n\nChecking distribution of mutations");
-        fprintf (stdout,"\n Avg # sites with  0 mutant alelles = %6.2f  (Exp = %6.2f)",(double)MutCount[0]/numDataSets, numSites-expNumMU);
-        for (i=1; i<numCells; i++)
-            fprintf (stdout,"\n Avg # sites with %2d mutant alelles = %6.2f  (Exp = %6.2f)",i,(double) MutCount[i]/numDataSets, theta/i);
-        fprintf (stdout, "\n MeansumPos = %4.2f  (expected (L/2) = %4.2f)\n\n", meansumPos / (double) dataSetsWithSNVs, numSites/2.0);
+	fprintf (stdout,"\n\nChecking distribution of mutations");
+	fprintf (stdout,"\n Avg # sites with  0 mutant alelles = %6.2f  (Exp = %6.2f)",(double)MutCount[0]/numDataSets, numSites-expNumMU);
+	for (i=1; i<numCells; i++)
+		fprintf (stdout,"\n Avg # sites with %2d mutant alelles = %6.2f  (Exp = %6.2f)",i,(double) MutCount[i]/numDataSets, theta/i);
+	fprintf (stdout, "\n MeansumPos = %4.2f  (expected (L/2) = %4.2f)\n\n", meansumPos / (double) dataSetsWithSNVs, numSites/2.0);
     #endif
 	
 	/* free pending stuff */
@@ -975,7 +1005,13 @@ int main (int argc, char **argv)
 		}
 	
     secs = (double)(clock() - start) / CLOCKS_PER_SEC;
-		
+
+#ifdef COUNT_ML_GENOTYPE_ERRORS
+	fprintf (stdout, "\n\n Mean probability for untrue genotype calls   =   %3.2f", cumCountMLgenotypeErrors/numDataSets);
+	fprintf (stdout, "\n Proportion of SNV genotypes called           =   %3.2f\n", cumCountCalledGenotypes/numDataSets);
+#endif
+	
+
     if (noisy > 0)
         {
         printf("\n\n_________________________________________________________________");
@@ -1094,7 +1130,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
         else
             {
-            timeCA = RandomExponential (rateCA, seed) * 2.0 * N; /* time is kept in generations */
+            timeCA = RandomExponential (rateCA, seed) * N; /* time is kept in N generations */
             if (doExponential == YES)
                 {
                 timeCA = log (exp(growthRate*currentTime) + growthRate * timeCA) / growthRate - currentTime;
@@ -1112,7 +1148,25 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
                     exit (-1);
                     }
                 }
-            }
+			else if (doOthsukiInnanCoal == YES)
+				{
+				timeCA = RandomExponential (rateCA * 2.0 * birthRate, seed) * N;
+				timeCA = log (exp(growthRate*currentTime) + growthRate * timeCA) / growthRate - currentTime;
+
+				/*	When growth rate is very negative, coalescent time may be infinite
+				 this results in log (-x) => timCA = NaN. We have to exit
+				 the program
+				 */
+				if (isnan(timeCA) == YES)
+					{
+					fprintf (stderr, "\nERROR: Coalescent time (%f) is infinite ", timeCA);
+					fprintf (stderr, "\n       This might suggest that the exponential growth rate is too negative");
+					fprintf (stderr, "\n       and the coalescent time is therefore infinite.");
+					fprintf (stderr, "\n       Try a smaller value");
+					exit (-1);
+					}
+				}
+}
 			
         eventTime = timeCA;
 			
@@ -1177,7 +1231,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
     } /* coalescent cell tree finished */
 	
-  	TMRCA = currentTime / (2.0 * N) ;  /* TMRCA is now is back in 2N coalescent generations */
+  	TMRCA = currentTime / N ;  /* TMRCA is now is back in N coalescent generations */
 	coalTreeMRCA = r;
 	
     /* Connect the coalescent cell MRCA node with the healthy ancestral cell */
@@ -1607,7 +1661,7 @@ static void ReadUserTree (FILE *fp)
 /***************** CheckTree *******************/
 /*  Checks for an error in the input tree string
 	Prints message when there is an error in the
-	tree and prints correct part of the tree */
+	tree and prints the correct part of the tree */
 static void		CheckTree (char *treeStr)
 	{
 	int		i, k;
@@ -3260,7 +3314,8 @@ void AllelicDropout (long int *seed)
 	for (i=0; i<numCells+1; i++)
 		for (j=0; j<numSites; j++)
 			alleleADOrate[i][j] = alleleADOrateMean;
-	
+
+	//FIXME: CANNOT DO GAMMA FOR PROBS!
 	if (ADOvarAmongCells == YES)
 		for (i=0; i<numCells+1; i++)
 			{
@@ -3325,10 +3380,9 @@ void AllelicDropout (long int *seed)
 
 void GenotypeError (long int *seed)
 	{
-	int i,j;
-	double alleleError;
+	int 	i,j;
+	double	genotypingError, alleleError;
 	
-	alleleError = 1.0 - sqrt (1.0 -  genotypingError);
 	
 	if (alphabet == DNA)
 		{
@@ -3336,6 +3390,9 @@ void GenotypeError (long int *seed)
 			{
 			for (j=0; j<numSites; j++)
 				{
+				genotypingError = RandomBetaMeanVar(meanGenotypingError, varGenotypingError, seed);
+				alleleError = 1.0 - sqrt (1.0 -  genotypingError);
+
 				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
 					data[MATERNAL][i][j] = ChooseUniformState (Eij[data[MATERNAL][i][j]], seed);
@@ -3355,6 +3412,8 @@ void GenotypeError (long int *seed)
 			{
 			for (j=0; j<numSites; j++)
 				{
+				genotypingError = RandomBetaMeanVar(meanGenotypingError, varGenotypingError, seed);
+				alleleError = 1.0 - sqrt (1.0 -  genotypingError);
 				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
 					if (data[MATERNAL][i][j] == 0)
@@ -3477,6 +3536,57 @@ int CountAllelesInObservedGenotypes ()
 			}
 		}
 	return nSNVs;
+	}
+
+
+
+/************************* CountMLGenotypingErrors  ************************/
+/*
+ Counts how many SNV genotypes are called wrongly
+*/
+
+void CountMLGenotypingErrors()
+	{
+	int			i, j, snv, equalGenotypes, countCalledGenotypes, countMLgenotypeErrors;
+	int			trueMaternalAllele, truePaternalAllele, MLmatAllele, MLpatAllele;
+	CellSiteStr *c;
+
+	countMLgenotypeErrors = 0;
+	countCalledGenotypes = 0;
+	for (i=0; i<numCells+1; i++)
+		{
+		for (snv=0; snv<numSNVs; snv++)
+			{
+			j = SNVsites[snv];
+			c = &cell[i].site[j];
+			trueMaternalAllele = c->trueMaternalAllele;
+			truePaternalAllele = c->truePaternalAllele;
+			if (cell[i].hasDoublet == NO)
+				{
+				MLmatAllele = c->MLmatAllele;
+				MLpatAllele = c->MLpatAllele;
+				}
+			else
+				{
+				MLmatAllele = c->MLmatAlleleDoublet;
+				MLpatAllele = c->MLpatAlleleDoublet;
+				}
+			
+			if (MLmatAllele == MISSING)
+				equalGenotypes = YES;
+			else
+				{
+				countCalledGenotypes++;
+				equalGenotypes = CompareGenotypes (trueMaternalAllele, truePaternalAllele, MLmatAllele, MLpatAllele);
+				}
+			
+			if (equalGenotypes == NO)
+				countMLgenotypeErrors++;
+			}
+		}
+
+	cumCountCalledGenotypes += countCalledGenotypes / ((numCells+1) * numSNVs * 1.0);
+	cumCountMLgenotypeErrors += countMLgenotypeErrors/(1.0*countCalledGenotypes);
 	}
 
 
@@ -3749,12 +3859,10 @@ void AllocateCellStructure()
 
 void GenerateReadCounts (long int *seed)
 	{
-	int			i, j, equalGenotypes, countCalledGenotypes;
+	int			i, j;
 	int			countReadsA, countReadsC, countReadsG, countReadsT;
 	int			numAltAlleles;
-	int			trueMaternalAllele, truePaternalAllele, MLmatAllele, MLpatAllele;
 	double		*probs, **ngsEij, **ampEijmat, **ampEijpat;
-	CellSiteStr *c;
 
 	countReadsA = countReadsC = countReadsG = countReadsT = 0;
 
@@ -3882,42 +3990,6 @@ void GenerateReadCounts (long int *seed)
 		allSites[j].readCountACGT = countReadsA + countReadsC + countReadsG + countReadsT;
 		}
 
-	/* count ML genotyping errors */
-	countMLgenotypeErrors = 0;
-	countCalledGenotypes = 0;
-	for (i=0; i<numCells+1; i++)
-		{
-		for (j=0; j<numSites; j++)
-			{
-			c = &cell[i].site[j];
-			trueMaternalAllele = c->trueMaternalAllele;
-			truePaternalAllele = c->truePaternalAllele;
-			if (cell[i].hasDoublet == NO)
-				{
-				MLmatAllele = c->MLmatAllele;
-				MLpatAllele = c->MLpatAllele;
-				}
-			else
-				{
-				MLmatAllele = c->MLmatAlleleDoublet;
-				MLpatAllele = c->MLpatAlleleDoublet;
-				}
-
-			if (MLmatAllele == MISSING)
-				equalGenotypes = YES;
-			else
-				{
-				countCalledGenotypes++;
-				equalGenotypes = CompareGenotypes (trueMaternalAllele, truePaternalAllele, MLmatAllele, MLpatAllele);
-				}
-
-			if (equalGenotypes == NO)
-				countMLgenotypeErrors++;
-			}
-		}
-			
-	cumCountMLgenotypeErrors += countMLgenotypeErrors/(1.0*countCalledGenotypes);
-
 	free (probs);
 	free (ngsEij);
 	free (ampEijmat);
@@ -4029,8 +4101,8 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
 		if (meanAmplificationError > 0)
 			{
-			maternalSiteAmplificationError = RandomBeta(meanAmplificationError, varAmplificationError, seed);
-			paternalSiteAmplificationError = RandomBeta(meanAmplificationError, varAmplificationError, seed);
+			maternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
+			paternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
 			}
 		
 		/* initialize ampEijmat */
@@ -6567,6 +6639,7 @@ static void	PrintRunInformation (FILE *fp)
 	fprintf (fp, "\n[Parameter file = %s]\n", parameterFile);
 	if (noisy > 1)
 		fprintf (fp, "\n[Assumptions in brackets]\n");
+	fprintf (fp, "\nGeneral");
     fprintf (fp, "\n Seed                                         =   %-3ld", originalSeed);
     fprintf (fp, "\n Number replicate data sets                   =   %-3d",  numDataSets);
     fprintf (fp, "\n Number of cells                              =   %-3d",  numCells);
@@ -6579,7 +6652,13 @@ static void	PrintRunInformation (FILE *fp)
     fprintf (fp, "\n Effective population size                    =   %-3d",  N);
     if (doExponential == YES)
         fprintf (fp, "\n Exponential growth rate                      =   %2.1e", growthRate);
-    else if (doDemographics == YES)
+	if (doOthsukiInnanCoal == YES)
+		{
+		fprintf (fp, "\n Cell birth rate                              =   %2.1e", birthRate);
+		fprintf (fp, "\n Cell death rate                              =   %2.1e", deathRate);
+		fprintf (fp, "\n Exponential growth rate                      =   %2.1e", growthRate);
+		}
+	else if (doDemographics == YES)
         {
         fprintf (fp, "\n Period   Nbegin     Nend    Duration    Growth rate");
         for (i=1; i<=numPeriods; i++)
@@ -6590,16 +6669,15 @@ static void	PrintRunInformation (FILE *fp)
 		fprintf (fp, "\n\nUser tree file                                =   %s", userTreeFile);
 	else
 		{
-		fprintf (fp, "\n\nCoalescent");
-	   // fprintf (fp, "\n Mean number of coalescence events            =   %3.2f", meanNumCA);
-		fprintf (fp, "\n Mean time to the MRCA (2N generations)       =   %3.2f", meanTMRCA);
+		fprintf (fp, "\n\nGenealogy");
+		fprintf (fp, "\n Mean time to the MRCA (Ne generations)       =   %6.4f", meanTMRCA);
 		if (noisy > 1)
-			fprintf (fp, "\n Exp time to the MRCA [constant Ne]           =   %3.2f", expTMRCA);
+			fprintf (fp, "\n Exp time to the MRCA [constant Ne]           =   %6.4f", expTMRCA);
 		if (numDataSets > 1)
 			{
-			fprintf (fp, "\n Variance time MRCA                           =   %3.2f", varTMRCA);
+			fprintf (fp, "\n Variance time MRCA                           =   %6.4f", varTMRCA);
 			if (noisy > 1)
-				fprintf (fp, "\n Exp variance time MRCA [constant Ne]         =   %3.2f", expVarTMRCA);
+				fprintf (fp, "\n Exp variance time MRCA [constant Ne]         =   %6.4f", expVarTMRCA);
 			}
 	 
 		if (rateVarAmongLineages == YES)
@@ -6722,14 +6800,16 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n Variance number of CN-LOH events             =   %3.2f", varNumCNLOH);
 			}
  
-		if (genotypingError > 0 || doNGS == YES)
+		if (meanGenotypingError > 0 || doNGS == YES)
 			fprintf (fp, "\n\nNGS");
 		else
 			fprintf (fp, "\n\nNGS genotype errors/read counts are not being simulated");
 		
-		if (genotypingError > 0)
+		if (meanGenotypingError > 0)
 			{
-			fprintf (fp, "\n Genotype error                               =   %2.1e", genotypingError);
+			fprintf (fp, "\n Genotype error ");
+			fprintf (fp, "\n  Mean                                       =   %2.1e", meanGenotypingError);
+			fprintf (fp, "\n  Variance                                   =   %2.1e", varGenotypingError);
 			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
 			}
 		if (ADOrate > 0)
@@ -6747,7 +6827,7 @@ static void	PrintRunInformation (FILE *fp)
 	
 		if (doNGS == YES)
 			{
-			fprintf (fp, "\n Sequencing coverage                          =   %dX", coverage);
+			fprintf (fp, "\n Sequencing coverage                          =   %-3.2fX", coverage);
 			if (rateVarCoverage == YES)
 				fprintf (fp, "\n Coverage dispersion (alpha)                  =   %-3.2f", alphaCoverage);
 			else
@@ -6776,8 +6856,6 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3]);
 				fprintf (fp, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 				}
-			
-			//fprintf (fp, "\n Probability of untrue genotype calls         =   %3.2f\n   (see documentation)", cumCountMLgenotypeErrors/numDataSets);
 			}
 		}
 	}
@@ -6795,7 +6873,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, "Parameter file [\"%s\"] arguments (some might not affect) = ", parameterFile);
 
 		/* Coalescent */
-		fprintf (fp, " -n%d -s%d -l%d -e%d -g%2.1e -h%d", numDataSets, numCells, numSites, N, growthRate, numPeriods);
+		fprintf (fp, " -n%d -s%d -l%d -e%d -g%2.1e -K%2.1e -L%2.1e -h%d", numDataSets, numCells, numSites, N, growthRate, birthRate, deathRate, numPeriods);
 		for (i=1; i<=numPeriods; i++)
 			fprintf (fp, " %d %d %d", Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
 
@@ -6824,8 +6902,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		, Mij[1][0], Mij[1][1], Mij[1][2], Mij[1][3],  Mij[2][0], Mij[2][1], Mij[2][2], Mij[2][3],  Mij[3][0], Mij[3][1], Mij[3][2], Mij[3][3]);
 
 		/* NGS */
-		fprintf (fp, " -G%2.1e", genotypingError);
-		fprintf (fp, " -C%d", coverage);
+		fprintf (fp, " -G%2.1e %2.1e", meanGenotypingError, varGenotypingError);
+		fprintf (fp, " -C%3.2f", coverage);
 		fprintf (fp, " -V%6.4f", alphaCoverage);
 		fprintf (fp, " -I%2.1e", allelicImbalance);
 		fprintf (fp, " -D%2.1e", ADOrate);
@@ -6890,7 +6968,9 @@ void PrintUsage(FILE *fp)
     fprintf (fp,"\n-l: number of sites (e.g. -l500)");
     fprintf (fp,"\n-e: effective population size (e.g. -e1000)");
 	fprintf (fp,"\n-g: exponential growth rate (e.g. -g1e-5)");
-    fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
+	fprintf (fp,"\n-K: cell birth rate (e.g. -K1)");
+	fprintf (fp,"\n-L: cell death rate (e.g. -L0.001)");
+   	fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
     fprintf (fp, "\n    and the duration of the period in generations. (e.g. -d1 100 200 30000) (e.g. -d2 100 100 40000 1000 2000 20000)");
 	fprintf (fp,"\n-k: transforming branch length (e.g. -u1e-2)");
     fprintf (fp,"\n-q: healthy tip branch length (e.g. -q1e-6)");
@@ -6967,7 +7047,10 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-s: sample size (# cells) =  %d", numCells);
 	fprintf (fp,"\n-l: number of sites =  %d", numSites);
 	fprintf (fp,"\n-e: effective population size =  %d", N);
-	fprintf (fp,"\n-g: exponential growth rate =  %2.1e", growthRate);	fprintf (fp,"\n-h: number of demographic periods = %d", numPeriods);
+	fprintf (fp,"\n-g: exponential growth rate =  %2.1e", growthRate);
+	fprintf (fp,"\n-K: cell birth rate =  %2.1e", birthRate);
+	fprintf (fp,"\n-L: cell death rate =  %2.1e", deathRate);
+	fprintf (fp,"\n-h: number of demographic periods = %d", numPeriods);
 	for (i=1; i<=numPeriods; i++)
 		fprintf (fp, "\n  period %d =  %d %d %d", i, Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
 
@@ -6994,15 +7077,15 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-r: mutation matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Mij[0][0], Mij[0][1], Mij[0][2], Mij[0][3], Mij[1][0], Mij[1][1], Mij[1][2], Mij[1][3],  Mij[2][0], Mij[2][1], Mij[2][2], Mij[2][3],  Mij[3][0], Mij[3][1], Mij[3][2], Mij[3][3]);
 	
 	/* NGS */
-	fprintf (fp,"\n-G: genotyping error =  %2.1e", genotypingError);
-	fprintf (fp,"\n-C: sequencing coverage =  %d", coverage);
+	fprintf (fp,"\n-G: genotyping error: mean, var =  %2.1e %2.1e", meanGenotypingError, varGenotypingError);
+	fprintf (fp,"\n-C: sequencing coverage =  %3.2f", coverage);
 	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
 	fprintf (fp,"\n-I: allelic imbalance =  %2.1e", allelicImbalance);
 	fprintf (fp,"\n-D: allelic dropout =  %2.1e", ADOrate);
 	fprintf (fp,"\n-P: allelic dropout variation among sites =  %2.1e", ADOvarAmongSites);
 	fprintf (fp,"\n-Q: allelic dropout cariation among cells=  %2.1e", ADOvarAmongCells);
 	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
-	fprintf (fp,"\n-A: amplification error, var, 2-template model =  %2.1e, %2.1e, %d)", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
+	fprintf (fp,"\n-A: amplification error: mean, var, 2-template model =  %2.1e, %2.1e, %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
 	fprintf (fp,"\n-B: doublet rate per cell =  %2.1e", doubletRate);
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3], Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
@@ -7239,6 +7322,26 @@ int RandomNegativeBinomial (double mean, double dispersion, long int *seed)
 
 
 /**************************** RandomBeta *************************/
+/*	Generates a beta random number given shape1 and shape2
+
+An algorithm for generating beta variates B(α,β) is to generate X/(X + Y), where X is a gamma variate with parameters (α, 1) and Y is an independent gamma variate with parameters (β, 1).[53]
+From Numerical Recipes 3rd Edition: The Art of Scientific Computing. 2007. Press et al. ISBN-13: 978-0521880688
+
+*/
+
+double RandomBeta (double alpha, double beta, long int *seed)
+	{
+	double gamma1, gamma2, randBeta;
+	
+	gamma1 = RandomGamma(alpha, seed);
+	gamma2 = RandomGamma(beta, seed);
+	randBeta = gamma1 / (gamma1 + gamma2);
+
+	return randBeta;
+	}
+
+
+/**************************** RandomBetaMeanVar *************************/
 /*	Generates a beta random number given mean and variance
 
 An algorithm for generating beta variates B(α,β) is to generate X/(X + Y), where X is a gamma variate with parameters (α, 1) and Y is an independent gamma variate with parameters (β, 1).[53]
@@ -7247,7 +7350,7 @@ From Numerical Recipes 3rd Edition: The Art of Scientific Computing. 2007. Press
 note that the variance has to be > 0
 */
 
-double RandomBeta (double mean, double var, long int *seed)
+double RandomBetaMeanVar (double mean, double var, long int *seed)
 	{
 	double sample_size, shape1, shape2, gamma1, gamma2, randBeta;
 	
@@ -7439,11 +7542,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
 USED IN ORDER
-F n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
+F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
 
 USED
 a b c d e f g h i j k l m n o p q r s t u v w x y
-A B C D E F G H I       M     P Q R S T U V W X
+A B C D E F G H I   K L M     P Q R S T U V W X
 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -7531,21 +7634,60 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 if (growthRate != 0)
                     {
                     doExponential = YES;
-                    if (doDemographics == YES)
+                    if (doDemographics == YES || doOthsukiInnanCoal == YES)
                         {
-                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (-g) and  demographics (-h)\n\n");
+                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (-g) and other demographics (-h, -K, -L)\n\n");
                         exit (-1);
                         }
                     }
                 break;
-             case 'h':
+			case 'K':
+				birthRate = atof(argv[i]);
+				if (birthRate < 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad birth rate (%f)\n\n", birthRate);
+					PrintUsage(stderr);
+					}
+				if (birthRate != 0)
+					{
+					doOthsukiInnanCoal = YES;
+					if (doDemographics == YES || doExponential == YES)
+						{
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both birth rate (-K) and exponential (-g) or demographics (-h)\n\n");
+						exit (-1);
+						}
+					}
+				break;
+			case 'L':
+				deathRate = atof(argv[i]);
+				if (deathRate < 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad death rate (%f)\n\n", deathRate);
+					PrintUsage(stderr);
+					}
+				if (deathRate < birthRate)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad death rate (%f), it should be smaller than the birth rate (%f)\n\n", deathRate, birthRate);
+					PrintUsage(stderr);
+					}
+				if (deathRate != 0)
+					{
+					doOthsukiInnanCoal = YES;
+					if (doDemographics == YES || doExponential == YES)
+						{
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both death rate (-L) and exponential (-g) or demographics (-h)\n\n");
+						exit (-1);
+						}
+					}
+				break;
+			case 'h':
 				argument = atof(argv[i]);
                 numPeriods = (int) argument;
 				if (numPeriods > 0)
 					doDemographics = YES;
-                if (doDemographics == YES && doExponential == YES)
+                if (doExponential == YES || doOthsukiInnanCoal == YES)
                     {
-                    fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both demographics periods (-h) and other demographics (-d)\n\n");
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both demographics periods (-h) and other types of growth (-g, -K, -L)\n\n");
                     exit (-1);
                     }
                 if (numPeriods <= 0)
@@ -7855,30 +7997,35 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 						doGTnR = YES;
 						}
 				break;
-			case 'G':
-				genotypingError = atof(argv[i]);
-				if (genotypingError < 0 || genotypingError > 1)
-                    {
-                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad genotyping error (%f)\n\n", genotypingError);
-                    PrintUsage(stderr);
-                    }
-  				if (genotypingError > 0 && doNGS == YES)
+   			case 'G':
+					meanGenotypingError = atof(argv[i]);
+					varGenotypingError = atof(argv[++i]);
+				if (meanGenotypingError < 0 || meanGenotypingError > 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean genotyping error (%f)\n\n", meanGenotypingError);
 					PrintUsage(stderr);
 					}
-               break;
+  				if (meanGenotypingError > 0 && doNGS == YES)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a mean genotyping error at the same time\n\n");
+					PrintUsage(stderr);
+					}
+				if (varGenotypingError <= 0 || (meanGenotypingError > 0 && varGenotypingError >= (meanGenotypingError * (1.0 - meanGenotypingError))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance genotyping error (%f); it has to be > 0 and < mean*(1-mean)\n\n", varGenotypingError);
+					PrintUsage(stderr);
+					}
+				break;
 			case 'C':
-				argument = atof(argv[i]);
-				coverage = (int) argument;
+				coverage = atof(argv[i]);
 				if (coverage < 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad coverage (%d)\n\n", coverage);
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad coverage (%f)\n\n", coverage);
 					PrintUsage(stderr);
 					}
 				if (coverage > 0)
 					doNGS = YES;
-				if (genotypingError > 0 && doNGS == YES)
+				if (meanGenotypingError > 0 && doNGS == YES)
 					{
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
 					PrintUsage(stderr);
@@ -8100,11 +8247,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 /***************************** ReadParametersFromFile *******************************/
 /*
  USED IN ORDER
- n s l e g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
+ F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
  
  USED
  a b c d e f g h i j k l m n o p q r s t u v w x y
- A B C D E F G H I       M     P Q R S T U V W  X
+ A B C D E F G H I   K L M     P Q R S T U V W X
  1 2 3 4 5 6 7 8 9 #
  */
 
@@ -8172,8 +8319,8 @@ void ReadParametersFromFile ()
                     }
                 N = (int) argument;
                 break;
-             case 'g':
-                if (fscanf(stdin, "%lf", &growthRate) !=1)
+			case 'g':
+                if (fscanf(stdin, "%lf", &growthRate) !=1 || growthRate < 0)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad exponential growth rate (%f)\n\n", growthRate);
                     PrintUsage(stderr);
@@ -8181,14 +8328,51 @@ void ReadParametersFromFile ()
                 if (growthRate != 0)
                     {
                     doExponential = YES;
-                    if (doDemographics == YES)
+                    if (doDemographics == YES || doOthsukiInnanCoal == YES)
                         {
-                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (-b) and other demographics(-d)\n\n");
+                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (-b) and other demographics(-h, -K, -L)\n\n");
                         exit (-1);
                         }
                     }
                 break;
-             case 'h':
+			case 'K':
+				if (fscanf(stdin, "%lf", &birthRate) !=1 || birthRate < 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad birth rate (%f)\n\n", birthRate);
+					PrintUsage(stderr);
+					}
+				if (birthRate != 0)
+					{
+					doOthsukiInnanCoal = YES;
+					if (doDemographics == YES || doExponential == YES)
+						{
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both birth rate (-K) and exponential (-b) or demographics(-h)\n\n");
+						exit (-1);
+						}
+					}
+				break;
+			case 'L':
+				if (fscanf(stdin, "%lf", &deathRate) !=1 || deathRate < 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad death rate (%f)\n\n", deathRate);
+					PrintUsage(stderr);
+					}
+				if (deathRate > birthRate)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad death rate (%f), cannot be larger than the birth rate\n\n", deathRate);
+					PrintUsage(stderr);
+					}
+				if (deathRate != 0)
+					{
+					doOthsukiInnanCoal = YES;
+					if (doDemographics == YES || doExponential == YES)
+						{
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both death rate (-L) and exponential (-b) or demographics(-h)\n\n");
+						exit (-1);
+						}
+					}
+				break;
+			case 'h':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of periods (%d)\n\n", (int) argument);
@@ -8482,28 +8666,32 @@ void ReadParametersFromFile ()
 						doGTnR = YES;
 						}
 					break;
-			case 'G':
-				if (fscanf(stdin, "%lf", &genotypingError) !=1 || genotypingError < 0 || genotypingError > 1)
+  			case 'G':
+				if (fscanf(stdin, "%lf %lf", &meanGenotypingError, &varGenotypingError) != 2)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad genotyping error (%f)\n\n", genotypingError);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/var/model genotyping error (%f ; %f)\n\n", meanGenotypingError, varAmplificationError);
 					PrintUsage(stderr);
 					}
-  				if (genotypingError > 0 && doNGS == YES)
+				if (meanGenotypingError < 0 || meanGenotypingError > 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean genotyping error (%f)\n\n", meanGenotypingError);
+					PrintUsage(stderr);
+					}
+				if (varGenotypingError <= 0 || (meanGenotypingError > 0 && varGenotypingError >= (meanGenotypingError * (1.0 - meanGenotypingError))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance genotyping error (%f); it has to be >0 and < mean*(1-mean)\n\n", varGenotypingError);
 					PrintUsage(stderr);
 					}
 				break;
 			case 'C':
-				if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
+				if (fscanf(stdin, "%lf", &coverage) !=1 || argument < 0)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sequencing coverage (%d)\n\n", (int) coverage);
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sequencing coverage (%f)\n\n", coverage);
 					PrintUsage(stderr);
 					}
-				coverage = (int) argument;
 				if (coverage > 0)
 					doNGS = YES;
-				if (genotypingError > 0 && doNGS == YES)
+				if (meanGenotypingError > 0 && doNGS == YES)
 					{
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
 					PrintUsage(stderr);
