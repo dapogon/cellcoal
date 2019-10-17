@@ -2,13 +2,13 @@
 
 [COALESCENT]
 	[number of replicates] n2
-	[number of cells] s40
+	[number of cells] s10
 	[number of sites] l1000
-	[effective population size] e1000
+	[effective population size] e10000
 	[demographics] [h2 1000 100 40000 200 30000 20000]
-	[exponential growth rate] [g0.9]
-	[birth rate] K2
-	[death rate] L0.3
+	[exponential growth rate] [g0.2]
+	[birth rate] [K1]
+	[death rate] [L0.3]
 
 [GENEALOGY MODIFIERS]
 	[root branch length ratio] k0
@@ -16,16 +16,16 @@
 	[rate variation among branches] [i1]
 
 [MUTATION MODEL]
-	[alphabet binary:0 DNA:1] b0
+	[alphabet binary:0 DNA:1] b1
 	[germline SNP rate] [c0.00001]
-	[somatic mutation rate] u1e-6
+	[somatic mutation rate] u1e-7
 	[CN_LOH rate] [H1e-5]
 	[deletion rate] [d1e-6]
-	[fixed number of mutations - ISM] j1
+	[fixed number of mutations - ISM] [j1]
 	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
 	 [default mutation model is ISM diploid]	
-	[alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] m0
-	[proportion of alternative model sites] p0
+	[alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] m2
+	[proportion of alternative model sites] p1
 	[alternative/default model relative mutation rate] [w1]
 	[base frequencies]	[f0.3 0.2 0.2 0.3]
 	[transition/transversion ratio] [t1.7]
@@ -46,10 +46,10 @@
 								  0.04 0.12 0.03 0.00]
 
 [NGS PARAMETERS]
-	[genotyping error; no reads] G0.1 0.01
-	[sequencing coverage; reads simulated] [C10]
+	[genotyping error; no reads] [G0.1 0.01]
+	[sequencing coverage; reads simulated] C100
 	[coverage overdispersion] [V5]
-	[mat/pat allelic imbalance] [I0.5]	
+	[mat/pat allelic imbalance] I0.9 0.01	
 	[ADO:allelic dropout] [D0.1]
 	  [ADO variation among sites] [P1.0]
 	  [ADO variation among cells] [Q1.0]
