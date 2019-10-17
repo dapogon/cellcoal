@@ -94,6 +94,7 @@ Version 1.1.0
 - implemented the Othsuki and Innan 2017 TPB coalescent parameterization with birth and death rates
 - genotyping error is now sampled from a Beta distribution
 - allelic imbalance is now sampled from a Beta distribution
+- ADO can now be fixed or  sampled from a Beta distribution
 
  
 [TO-DOs]
@@ -192,11 +193,11 @@ int main (int argc, char **argv)
 	healthyTipBranchLengthRatio = 1.0; 	/* ratio the branch leading to the healthy cell to the (tumor MRCA + transfoming branch) length*/
  	coverage = 0;					/* NGS  depth for read counts */
 	rateVarCoverage = NO;			/* there is coverage dispersion */
-	ADOrate = 0;					/* allelic dropout */
-	ADOvarAmongSites = NO;     		/* ADO variation among different sites along the genome */
-	ADOvarAmongCells = NO;     		/* ADO variation among different cells */
-	alphaADOsites = infinity;		/* alpha shape allelic dropout heterogeneity among sites */
-	alphaADOcells = infinity;		/* alpha shape allelic dropout heterogeneity among cells */
+	fixedADOrate = 0;				/* allelic dropout */
+	meanADOcell = 0;     			/* mean of beta distribution for ADO expected for a cell */
+	varADOcell = 0.000001;     		/* var of beta distribution for ADO expected for a cell */
+	meanADOsite = 0;				/* mean of beta distribution for ADO expected for a site */
+	varADOsite = 0.000001; ;		/* var of beta distribution for ADO expected for a site */
 	sequencingError = 0;			/* NGS error rate */
 	meanGenotypingError = 0;		/* mean of beta distribution for errors added directly in the genotypes */
 	varGenotypingError = 0.000001;  /* variance of beta distribution for genotype errors */
@@ -642,7 +643,7 @@ int main (int argc, char **argv)
 				}
 
 			/* do alellic dropout */
-			if (ADOrate > 0)
+			if (fixedADOrate > 0 || meanADOcell > 0 || meanADOsite > 0)
 				AllelicDropout(&seed);
 	
 			/* introduce errors directly in the genotypes */
@@ -3280,8 +3281,8 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 /*
  Remove alleles from single chromosomes at a given ADO rate per genotype
 
- We assume that ADOrate is the product of the allele dropout rate as follows:
- A = genotype ADO; a = allele error
+ We assume that ADOe is the product of the allele dropout rate as follows:
+ A = genotype ADO; a = allele ADO
  A = 2a - a^2
  a = 1 - sqrt(1-A)
 */
@@ -3289,11 +3290,9 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
-	double alleleADOrateMean, alleleADOrateMod;
+	double alleleADOrateMean, alleleADOrateCell, alleleADOrateSite;
 	double **alleleADOrate;
 	
-	// calculate ADO rate for a given allele
-	alleleADOrateMean = 1.0 - sqrt (1.0 -  ADOrate);
 
 	/* allocate space for the ADO rates */
 	alleleADOrate = (double**) calloc (numCells+1, sizeof(double**));
@@ -3312,28 +3311,37 @@ void AllelicDropout (long int *seed)
 			}
 		}
 
-	// sample rate modifiers
-	for (i=0; i<numCells+1; i++)
-		for (j=0; j<numSites; j++)
-			alleleADOrate[i][j] = alleleADOrateMean;
-
-	//FIXME: CANNOT DO GAMMA FOR PROBS!
-	if (ADOvarAmongCells == YES)
+	// fixed ADO rate
+	if (meanADOcell == 0 && meanADOsite == 0)
+		{
+		alleleADOrateMean = 1.0 - sqrt (1.0 -  fixedADOrate);
+		for (i=0; i<numCells+1; i++)
+			for (j=0; j<numSites; j++)
+				alleleADOrate[i][j] = alleleADOrateMean;
+		}
+	else // variable ADO rates
+		{
 		for (i=0; i<numCells+1; i++)
 			{
-			alleleADOrateMod = RandomGamma (alphaADOcells, seed) / alphaADOcells;
+			if (meanADOcell > 0)
+				alleleADOrateCell = RandomBetaMeanVar(meanADOcell, varADOcell, seed);
+			else
+				alleleADOrateCell = 0;
+			
 			for (j=0; j<numSites; j++)
-				alleleADOrate[i][j] *= alleleADOrateMod;
+				{
+				if (meanADOsite > 0)
+					alleleADOrateSite = RandomBetaMeanVar(meanADOsite, varADOsite, seed);
+				else
+					alleleADOrateSite = 0;
+				alleleADOrate[i][j] = alleleADOrateCell + alleleADOrateSite - (alleleADOrateCell * alleleADOrateSite);
+				alleleADOrate[i][j] = 1.0 - sqrt (1.0 - alleleADOrate[i][j]); // at the allele level
+				}
 			}
-	if (ADOvarAmongSites == YES)
-		for (j=0; j<numSites; j++)
-			{
-			alleleADOrateMod = RandomGamma (alphaADOsites, seed) / alphaADOsites;
-			for (i=0; i<numCells+1; i++)
-				alleleADOrate[i][j] *= alleleADOrateMod;
-			}
-/*
-	for (i=0; i<numCells+1; i++)
+		}
+	
+
+/*	for (i=0; i<numCells+1; i++)
 		for (j=0; j<numSites; j++)
 			fprintf (stderr, "\ncell %d  site %d  alleleADOrate[i][j] = %6.4f", i+1, j+1, alleleADOrate[i][j]);
 */
@@ -3368,6 +3376,87 @@ void AllelicDropout (long int *seed)
 	}
 
 
+/*
+void AllelicDropoutGamma (long int *seed)
+	{
+	int i,j;
+	double alleleADOrateMean, alleleADOrateMod;
+	double **alleleADOrate;
+	
+	// calculate ADO rate for a given allele
+	alleleADOrateMean = 1.0 - sqrt (1.0 -  ADOrate);
+
+	// allocate space for the ADO rates
+	alleleADOrate = (double**) calloc (numCells+1, sizeof(double**));
+	if (!alleleADOrate)
+		{
+		fprintf (stderr, "Could not allocate the alleleADOrate structure\n");
+		exit (-1);
+		}
+	for (i=0; i<numCells+1; i++)
+		{
+		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double*));
+		if (!alleleADOrate[i])
+			{
+			fprintf (stderr, "Could not allocate the alleleADOrate[i] structure\n");
+			exit (-1);
+			}
+		}
+
+	// sample rate modifiers
+	for (i=0; i<numCells+1; i++)
+		for (j=0; j<numSites; j++)
+			alleleADOrate[i][j] = alleleADOrateMean;
+
+	if (ADOvarAmongCells == YES)
+		for (i=0; i<numCells+1; i++)
+			{
+			alleleADOrateMod = RandomGamma (alphaADOcells, seed) / alphaADOcells;
+			for (j=0; j<numSites; j++)
+				alleleADOrate[i][j] *= alleleADOrateMod;
+			}
+	if (ADOvarAmongSites == YES)
+		for (j=0; j<numSites; j++)
+			{
+			alleleADOrateMod = RandomGamma (alphaADOsites, seed) / alphaADOsites;
+			for (i=0; i<numCells+1; i++)
+				alleleADOrate[i][j] *= alleleADOrateMod;
+			}
+
+//	for (i=0; i<numCells+1; i++)
+//		for (j=0; j<numSites; j++)
+//			fprintf (stderr, "\ncell %d  site %d  alleleADOrate[i][j] = %6.4f", i+1, j+1, alleleADOrate[i][j]);
+
+	
+	for (i=0; i<numCells+1; i++)
+		{
+		for (j=0; j<numSites; j++)
+			{
+			if (data[MATERNAL][i][j] != DELETION)
+				{
+				if (RandomUniform(seed) < alleleADOrate[i][j])
+					{
+					data[MATERNAL][i][j] = ADO;
+					allSites[j].hasADO = YES;
+					}
+				}
+			if (data[PATERNAL][i][j] != DELETION)
+				{
+				if (RandomUniform(seed) < alleleADOrate[i][j])
+					{
+					data[PATERNAL][i][j] = ADO;
+					allSites[j].hasADO = YES;
+					}
+				}
+			}
+		}
+	
+	// free allele ADO rates
+	for (i=0; i<numCells+1; i++)
+		free(alleleADOrate[i]);
+	free(alleleADOrate);
+	}
+*/
 
 /********************* GenotypeError  ************************/
 /*
@@ -6815,23 +6904,26 @@ static void	PrintRunInformation (FILE *fp)
 		if (meanGenotypingError > 0)
 			{
 			fprintf (fp, "\n Genotype error ");
-			fprintf (fp, "\n  Mean                                       =   %2.1e", meanGenotypingError);
-			fprintf (fp, "\n  Variance                                   =   %2.1e", varGenotypingError);
+			fprintf (fp, "\n  mean                                       =   %2.1e", meanGenotypingError);
+			fprintf (fp, "\n  variance                                   =   %2.1e", varGenotypingError);
 			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
 			}
-		if (ADOrate > 0)
+
+		if (fixedADOrate> 0)
+			fprintf (fp, "\n Alellic dropout fixed                       =   %2.1e", fixedADOrate);
+		if (meanADOcell > 0)
 			{
-			fprintf (fp, "\n Alellic dropout                              =   %2.1e", ADOrate);
-			if (ADOvarAmongSites == YES)
-				fprintf (fp, "\n  ADO variation among sites (alpha)           =   %2.1e", alphaADOsites);
-			else
-				fprintf (fp, "\n  ADO is constant among sites");
-			if (ADOvarAmongCells == YES)
-				fprintf (fp, "\n  ADO variation among cells (alpha)           =   %2.1e", alphaADOcells);
-			else
-				fprintf (fp, "\n  ADO is constant among cells");
+			fprintf (fp, "\n Alellic dropout per cell");
+			fprintf (fp, "\n  mean                                       =   %2.1e", meanADOcell);
+			fprintf (fp, "\n  variance                                   =   %2.1e", varADOcell);
 			}
-	
+		if (meanADOsite > 0)
+			{
+			fprintf (fp, "\n Alellic dropout per site");
+			fprintf (fp, "\n  mean                                       =   %2.1e", meanADOsite);
+			fprintf (fp, "\n  variance                                   =   %2.1e", varADOsite);
+			}
+
 		if (doNGS == YES)
 			{
 			fprintf (fp, "\n Sequencing coverage                          =   %-3.2fX", coverage);
@@ -6840,8 +6932,8 @@ static void	PrintRunInformation (FILE *fp)
 			else
 				fprintf (fp, "\n  [coverage follows a Poisson distribution]");
 			fprintf (fp, "\n Maternal allelic imbalance");
-			fprintf (fp, "\n  Mean                                        =   %2.1e", meanAllelicImbalance);
-			fprintf (fp, "\n  Variance                                    =   %2.1e", varAllelicImbalance);
+			fprintf (fp, "\n  mean                                        =   %2.1e", meanAllelicImbalance);
+			fprintf (fp, "\n  variance                                    =   %2.1e", varAllelicImbalance);
 			fprintf (fp, "\n Haploid coverage                             =   %-3.2f", haploidCoverageReduction);
 			if (meanAmplificationError == 0)
 				fprintf (fp, "\n Amplification error                          =   %2.1e", meanAmplificationError);
@@ -6852,8 +6944,8 @@ static void	PrintRunInformation (FILE *fp)
 					fprintf (fp, " (2-template model)");
 				else
 					fprintf (fp, " (4-template model)");
-				fprintf (fp, "\n  Mean                                        =   %2.1e", meanAmplificationError);
-				fprintf (fp, "\n  Variance                                    =   %2.1e", varAmplificationError);
+				fprintf (fp, "\n  mean                                        =   %2.1e", meanAmplificationError);
+				fprintf (fp, "\n  variance                                    =   %2.1e", varAmplificationError);
 				}
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
 			fprintf (fp, "\n Doublet rate per cell                        =   %-3.2f", doubletRate);
@@ -6915,9 +7007,9 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -C%3.2f", coverage);
 		fprintf (fp, " -V%6.4f", alphaCoverage);
 		fprintf (fp, " -I%2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
-		fprintf (fp, " -D%2.1e", ADOrate);
-		fprintf (fp, " -P%2.1e", alphaADOsites);
-		fprintf (fp, " -Q%2.1e", alphaADOcells);
+		fprintf (fp, " -D%2.1e", fixedADOrate);
+		fprintf (fp, " -P%2.1e %2.1e", meanADOcell, varADOcell);
+		fprintf (fp, " -Q%2.1e %2.1e", meanADOsite, varADOsite);
 		fprintf (fp, " -R%2.1e", haploidCoverageReduction);
 		fprintf (fp, " -A%2.1e %2.1e %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 		fprintf (fp, " -E%2.1e", sequencingError);
@@ -7090,9 +7182,9 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-C: sequencing coverage =  %3.2f", coverage);
 	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
 	fprintf (fp,"\n-I: allelic imbalance =  %2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
-	fprintf (fp,"\n-D: allelic dropout =  %2.1e", ADOrate);
-	fprintf (fp,"\n-P: allelic dropout variation among sites =  %2.1e", ADOvarAmongSites);
-	fprintf (fp,"\n-Q: allelic dropout cariation among cells=  %2.1e", ADOvarAmongCells);
+	fprintf (fp,"\n-D: fixed allelic dropout (ADO) =  %2.1e", fixedADOrate);
+	fprintf (fp,"\n-P: ADO per cell  =  %2.1e %2.1e", meanADOcell, varADOcell);
+	fprintf (fp,"\n-Q: ADO per site=  %2.1e %2.1e", meanADOsite, varADOsite);
 	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
 	fprintf (fp,"\n-A: amplification error: mean, var, 2-template model =  %2.1e, %2.1e, %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
@@ -7335,9 +7427,8 @@ int RandomNegativeBinomial (double mean, double dispersion, long int *seed)
 
 An algorithm for generating beta variates B(α,β) is to generate X/(X + Y), where X is a gamma variate with parameters (α, 1) and Y is an independent gamma variate with parameters (β, 1).[53]
 From Numerical Recipes 3rd Edition: The Art of Scientific Computing. 2007. Press et al. ISBN-13: 978-0521880688
-
 */
-
+/*
 double RandomBeta (double alpha, double beta, long int *seed)
 	{
 	double gamma1, gamma2, randBeta;
@@ -7348,7 +7439,7 @@ double RandomBeta (double alpha, double beta, long int *seed)
 
 	return randBeta;
 	}
-
+*/
 
 /**************************** RandomBetaMeanVar *************************/
 /*	Generates a beta random number given mean and variance
@@ -8007,8 +8098,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 						}
 				break;
    			case 'G':
-					meanGenotypingError = atof(argv[i]);
-					varGenotypingError = atof(argv[++i]);
+				meanGenotypingError = atof(argv[i]);
+				varGenotypingError = atof(argv[++i]);
 				if (meanGenotypingError < 0 || meanGenotypingError > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean genotyping error (%f)\n\n", meanGenotypingError);
@@ -8078,32 +8169,47 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 break;
 			case 'D':
-               ADOrate = atof(argv[i]);
-				if (ADOrate < 0 ||ADOrate > 1)
+              fixedADOrate = atof(argv[i]);
+				if (fixedADOrate < 0 || fixedADOrate > 1)
                     {
-                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout (%f)\n\n", ADOrate);
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Bad fixed allelic dropout (%f)\n\n", fixedADOrate);
                     PrintUsage(stderr);
                     }
-                break;
-			case 'P':
-				alphaADOsites = atof(argv[i]);
-				ADOvarAmongSites = YES;
-				if (alphaADOsites < 0 ||alphaADOsites > 1)
+                if (meanADOcell > 0 || meanADOsite > 0)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout heterogeneity among sites (%f)\n\n", alphaADOsites);
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Fixed ADO cannot be specified at the same time as variable ADO\n\n");
+					PrintUsage(stderr);
+					}
+				break;
+			case 'P':
+				meanADOcell = atof(argv[i]);
+				varADOcell = atof(argv[++i]);
+				if (meanADOcell < 0 || meanADOcell > 1)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per cell (%f)\n\n", meanADOcell);
+					PrintUsage(stderr);
+					}
+				if (varADOcell <= 0 || (meanADOcell > 0 && varADOcell >= (meanADOcell * (1.0 - meanADOcell))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per cell (%f); it has to be > 0 and < mean*(1-mean)\n\n", varADOcell);
 					PrintUsage(stderr);
 					}
 				break;
 			case 'Q':
-				alphaADOcells = atof(argv[i]);
-				ADOvarAmongCells = YES;
-				if (alphaADOcells < 0 ||alphaADOcells > 1)
+				meanADOsite = atof(argv[i]);
+				varADOsite = atof(argv[++i]);
+				if (meanADOsite < 0 || meanADOsite > 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout heterogeneity among cells (%f)\n\n", alphaADOcells);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per site (%f)\n\n", meanADOsite);
+					PrintUsage(stderr);
+					}
+				if (varADOsite <= 0 || (meanADOsite > 0 && varADOsite >= (meanADOsite * (1.0 - meanADOsite))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per site (%f); it has to be > 0 and < mean*(1-mean)\n\n", varADOsite);
 					PrintUsage(stderr);
 					}
 				break;
-   			case 'I':
+			case 'I':
 					meanAllelicImbalance = atof(argv[i]);
 					varAllelicImbalance = atof(argv[++i]);
 				if (meanAllelicImbalance < 0 || meanAllelicImbalance > 1)
@@ -8684,7 +8790,7 @@ void ReadParametersFromFile ()
   			case 'G':
 				if (fscanf(stdin, "%lf %lf", &meanGenotypingError, &varGenotypingError) != 2)
 					{
-					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/var/model genotyping error (%f ; %f)\n\n", meanGenotypingError, varAmplificationError);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/var genotyping error (%f ; %f)\n\n", meanGenotypingError, varGenotypingError);
 					PrintUsage(stderr);
 					}
 				if (meanGenotypingError < 0 || meanGenotypingError > 1)
@@ -8750,27 +8856,50 @@ void ReadParametersFromFile ()
 					}
 				break;
 			case 'D':
-				if (fscanf(stdin, "%lf", &ADOrate) !=1 || ADOrate < 0 ||ADOrate > 1)
+				if (fscanf(stdin, "%lf", &fixedADOrate) !=1 || fixedADOrate< 0 || fixedADOrate > 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout rate (%f)\n\n", ADOrate);
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad fixed allelic dropout rate (%f)\n\n", fixedADOrate);
+					PrintUsage(stderr);
+					}
+				if (meanADOcell > 0 && meanADOsite > 0)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: ADO has to be either fixed or variable per cell/site, cannot be both");
 					PrintUsage(stderr);
 					}
 				break;
-			case 'P':
-				if (fscanf(stdin, "%lf", &alphaADOsites) !=1 || alphaADOsites < 0 || alphaADOsites > 1)
+  			case 'P':
+				if (fscanf(stdin, "%lf %lf", &meanADOcell, &varADOcell) != 2)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout hetereogeneity among sites (%f)\n\n", alphaADOsites);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/variance ADO per cell (%f ; %f)\n\n", meanADOcell, varADOcell);
 					PrintUsage(stderr);
 					}
-				ADOvarAmongSites = YES;
+				if (meanADOcell < 0 || meanADOcell > 1)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per cell (%f)\n\n", meanADOcell);
+					PrintUsage(stderr);
+					}
+				if (varADOcell <= 0 || (meanADOcell > 0 && varADOcell >= (meanADOcell * (1.0 - meanADOcell))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per cell (%f); it has to be >0 and < mean*(1-mean)\n\n", varADOcell);
+					PrintUsage(stderr);
+					}
 				break;
-			case 'Q':
-				if (fscanf(stdin, "%lf", &alphaADOcells) !=1 || alphaADOcells < 0 || alphaADOcells > 1)
+  			case 'Q':
+				if (fscanf(stdin, "%lf %lf", &meanADOsite, &varADOsite) != 2)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad allelic dropout hetereogeneity among cells (%f)\n\n", alphaADOcells);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/variance ADO per site (%f ; %f)\n\n", meanADOsite, varADOsite);
 					PrintUsage(stderr);
 					}
-				ADOvarAmongCells = YES;
+				if (meanADOsite < 0 || meanADOsite > 1)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per site (%f)\n\n", meanADOsite);
+					PrintUsage(stderr);
+					}
+				if (varADOsite <= 0 || (meanADOsite > 0 && varADOsite >= (meanADOsite * (1.0 - meanADOsite))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per site (%f); it has to be >0 and < mean*(1-mean)\n\n", varADOsite);
+					PrintUsage(stderr);
+					}
 				break;
 			case 'I':
 				if (fscanf(stdin, "%lf %lf", &meanAllelicImbalance, &varAllelicImbalance) != 2)
