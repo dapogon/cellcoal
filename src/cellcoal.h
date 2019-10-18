@@ -152,7 +152,7 @@ static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalBaseFreq, alphabet, thereIsMij, thereIsEij;
 static double	*periodGrowth, growthRate, birthRate, deathRate;
 static double	meanGenotypingError, varGenotypingError, sequencingError;
-static double	fixedADOrate, meanADOcell, varADOcell, meanADOsite, varADOsite;
+static double	fixedADOrate, doADOcell, meanADOcell, varADOcell, doADOsite, meanADOsite, varADOsite;
 static double	meanAllelicImbalance, varAllelicImbalance;
 static double	coverage, haploidCoverageReduction;
 static double	meanAmplificationError, varAmplificationError, doubletRate;

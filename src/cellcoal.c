@@ -85,16 +85,15 @@
 - new implementation of the 2-template model that corrects the genotype likelihoods
 - can use custom name for parameter file
 
-
 Version 1.0.0 (20/06/2019)
 - allow for non integer sequencing coverage
 
-Version 1.1.0
+Version 1.1.0 (18/10/2019)
 - changed the coalescent time scale from 2N to N
 - implemented the Othsuki and Innan 2017 TPB coalescent parameterization with birth and death rates
 - genotyping error is now sampled from a Beta distribution
 - allelic imbalance is now sampled from a Beta distribution
-- ADO can now be fixed or  sampled from a Beta distribution
+- ADO can now be fixed or sampled from a Beta distribution, and can vary per cell and/or site
 
  
 [TO-DOs]
@@ -194,6 +193,8 @@ int main (int argc, char **argv)
  	coverage = 0;					/* NGS  depth for read counts */
 	rateVarCoverage = NO;			/* there is coverage dispersion */
 	fixedADOrate = 0;				/* allelic dropout */
+	doADOcell = NO;					/* ADO does not change per cell by default */
+	doADOsite = NO;					/* ADO does not change per site by default */
 	meanADOcell = 0;     			/* mean of beta distribution for ADO expected for a cell */
 	varADOcell = 0.000001;     		/* var of beta distribution for ADO expected for a cell */
 	meanADOsite = 0;				/* mean of beta distribution for ADO expected for a site */
@@ -643,7 +644,7 @@ int main (int argc, char **argv)
 				}
 
 			/* do alellic dropout */
-			if (fixedADOrate > 0 || meanADOcell > 0 || meanADOsite > 0)
+			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
 				AllelicDropout(&seed);
 	
 			/* introduce errors directly in the genotypes */
@@ -3312,7 +3313,7 @@ void AllelicDropout (long int *seed)
 		}
 
 	// fixed ADO rate
-	if (meanADOcell == 0 && meanADOsite == 0)
+	if (doADOcell == NO && doADOsite == NO)
 		{
 		alleleADOrateMean = 1.0 - sqrt (1.0 -  fixedADOrate);
 		for (i=0; i<numCells+1; i++)
@@ -3323,14 +3324,14 @@ void AllelicDropout (long int *seed)
 		{
 		for (i=0; i<numCells+1; i++)
 			{
-			if (meanADOcell > 0)
+			if (doADOcell == YES)
 				alleleADOrateCell = RandomBetaMeanVar(meanADOcell, varADOcell, seed);
 			else
 				alleleADOrateCell = 0;
 			
 			for (j=0; j<numSites; j++)
 				{
-				if (meanADOsite > 0)
+				if (doADOsite == YES)
 					alleleADOrateSite = RandomBetaMeanVar(meanADOsite, varADOsite, seed);
 				else
 					alleleADOrateSite = 0;
@@ -6909,15 +6910,15 @@ static void	PrintRunInformation (FILE *fp)
 			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
 			}
 
-		if (fixedADOrate> 0)
+		if (fixedADOrate > 0)
 			fprintf (fp, "\n Alellic dropout fixed                       =   %2.1e", fixedADOrate);
-		if (meanADOcell > 0)
+		if (doADOcell == YES)
 			{
 			fprintf (fp, "\n Alellic dropout per cell");
 			fprintf (fp, "\n  mean                                       =   %2.1e", meanADOcell);
 			fprintf (fp, "\n  variance                                   =   %2.1e", varADOcell);
 			}
-		if (meanADOsite > 0)
+		if (doADOsite == YES)
 			{
 			fprintf (fp, "\n Alellic dropout per site");
 			fprintf (fp, "\n  mean                                       =   %2.1e", meanADOsite);
@@ -8194,6 +8195,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per cell (%f); it has to be > 0 and < mean*(1-mean)\n\n", varADOcell);
 					PrintUsage(stderr);
 					}
+				doADOcell = YES;
 				break;
 			case 'Q':
 				meanADOsite = atof(argv[i]);
@@ -8208,6 +8210,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per site (%f); it has to be > 0 and < mean*(1-mean)\n\n", varADOsite);
 					PrintUsage(stderr);
 					}
+				doADOsite = YES;
 				break;
 			case 'I':
 					meanAllelicImbalance = atof(argv[i]);
@@ -8883,6 +8886,7 @@ void ReadParametersFromFile ()
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per cell (%f); it has to be >0 and < mean*(1-mean)\n\n", varADOcell);
 					PrintUsage(stderr);
 					}
+				doADOcell = YES;
 				break;
   			case 'Q':
 				if (fscanf(stdin, "%lf %lf", &meanADOsite, &varADOsite) != 2)
@@ -8900,6 +8904,7 @@ void ReadParametersFromFile ()
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per site (%f); it has to be >0 and < mean*(1-mean)\n\n", varADOsite);
 					PrintUsage(stderr);
 					}
+				doADOsite = YES;
 				break;
 			case 'I':
 				if (fscanf(stdin, "%lf %lf", &meanAllelicImbalance, &varAllelicImbalance) != 2)
