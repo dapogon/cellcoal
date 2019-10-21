@@ -94,7 +94,7 @@ Version 1.1.0 (18/10/2019)
 - genotyping error is now sampled from a Beta distribution
 - allelic imbalance is now sampled from a Beta distribution
 - ADO can now be fixed or sampled from a Beta distribution, and can vary per cell and/or site
-
+- doublet error is now sampled from a Beta distribution
  
 [TO-DOs]
 - add new signatures
@@ -201,14 +201,15 @@ int main (int argc, char **argv)
 	varADOsite = 0.000001; ;		/* var of beta distribution for ADO expected for a site */
 	sequencingError = 0;			/* NGS error rate */
 	meanGenotypingError = 0;		/* mean of beta distribution for errors added directly in the genotypes */
-	varGenotypingError = 0.000001;  /* variance of beta distribution for genotype errors */
+	varGenotypingError = 0.0001;  /* variance of beta distribution for genotype errors */
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
-	varAmplificationError = 0.000001;  	/* variance of beta distribution for WGA errors */
+	varAmplificationError = 0.0001;  	/* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simulating maximum of two templates after single-cell amplification, or there can be all four */
 	haploidCoverageReduction = 0.5; /* proportion of reads produced when a single allele is present */
 	meanAllelicImbalance = 0.5;		/* beta mean proportion of maternal/ paternal reads */
-	varAllelicImbalance = 0.01;		/* beta var proportion of maternal/ paternal reads */
-	doubletRate = 0.0;				/* no doublets by default */
+	varAllelicImbalance = 0.0001;	/* beta var proportion of maternal/ paternal reads */
+	meanDoubletRate = 0;			/* mean of beta distribution for doublet errors */
+	varDoubletRate = 0.00001;		/* variance of beta distribution for doublet errors */
 	numNodes = 1000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
 	doSpecificParameterFile = NO;	/* by default do not use a custom parameter file */
@@ -4039,7 +4040,7 @@ void GenerateReadCounts (long int *seed)
 		}
 
 	/* add doublets and reads from them */
-	if (doubletRate > 0)
+	if (meanDoubletRate > 0)
 		MakeDoublets(probs, ngsEij, ampEijmat, ampEijpat, seed);
 
 	/* count alternate alleles in total reads */
@@ -4640,15 +4641,18 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 	int		debug_DL;
 	int		MLmatAllele, MLpatAllele;
 	double	maxLike;
+	double	doubletRate;
 	CellStr celldoublet;
 
 	debug_DL = NO;
 	if (debug_DL == YES)
 		fprintf(stderr,"\n\n\n********Doublet read counts and likelihoods");
 
+		
 	/* choose whether a tumor cell will become a doublet */
 	for (c1=0; c1<numCells;c1++)
 		{
+		doubletRate = RandomBetaMeanVar(meanDoubletRate, varDoubletRate, seed);
 		if (RandomUniform(seed) < doubletRate)
 			{
 			cell[c1].hasDoublet = YES;
@@ -6915,14 +6919,14 @@ static void	PrintRunInformation (FILE *fp)
 		if (doADOcell == YES)
 			{
 			fprintf (fp, "\n Alellic dropout per cell");
-			fprintf (fp, "\n  mean                                       =   %2.1e", meanADOcell);
-			fprintf (fp, "\n  variance                                   =   %2.1e", varADOcell);
+			fprintf (fp, "\n  mean                                        =   %2.1e", meanADOcell);
+			fprintf (fp, "\n  variance                                    =   %2.1e", varADOcell);
 			}
 		if (doADOsite == YES)
 			{
 			fprintf (fp, "\n Alellic dropout per site");
-			fprintf (fp, "\n  mean                                       =   %2.1e", meanADOsite);
-			fprintf (fp, "\n  variance                                   =   %2.1e", varADOsite);
+			fprintf (fp, "\n  mean                                        =   %2.1e", meanADOsite);
+			fprintf (fp, "\n  variance                                    =   %2.1e", varADOsite);
 			}
 
 		if (doNGS == YES)
@@ -6949,7 +6953,9 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n  variance                                    =   %2.1e", varAmplificationError);
 				}
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
-			fprintf (fp, "\n Doublet rate per cell                        =   %-3.2f", doubletRate);
+			fprintf (fp, "\n Doublet rate per cell");
+			fprintf (fp, "\n  mean                                        =   %2.1e", meanDoubletRate);
+			fprintf (fp, "\n  variance                                    =   %2.1e", varDoubletRate);
 
 			if (thereIsEij == YES)
 				{
@@ -7014,7 +7020,7 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -R%2.1e", haploidCoverageReduction);
 		fprintf (fp, " -A%2.1e %2.1e %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 		fprintf (fp, " -E%2.1e", sequencingError);
-		fprintf (fp, " -B%2.1e", doubletRate);
+		fprintf (fp, " -B%2.1e %2.1e", meanDoubletRate, varDoubletRate);
 		fprintf (fp, " -X%3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]
 		, Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 
@@ -7184,12 +7190,12 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
 	fprintf (fp,"\n-I: allelic imbalance =  %2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
 	fprintf (fp,"\n-D: fixed allelic dropout (ADO) =  %2.1e", fixedADOrate);
-	fprintf (fp,"\n-P: ADO per cell  =  %2.1e %2.1e", meanADOcell, varADOcell);
-	fprintf (fp,"\n-Q: ADO per site=  %2.1e %2.1e", meanADOsite, varADOsite);
+	fprintf (fp,"\n-P: ADO per cell mean, var  =  %2.1e %2.1e", meanADOcell, varADOcell);
+	fprintf (fp,"\n-Q: ADO per site mean, var =  %2.1e %2.1e", meanADOsite, varADOsite);
 	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
 	fprintf (fp,"\n-A: amplification error: mean, var, 2-template model =  %2.1e, %2.1e, %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
-	fprintf (fp,"\n-B: doublet rate per cell =  %2.1e", doubletRate);
+	fprintf (fp,"\n-B: doublet rate per cell; mean, var =  %2.1e, %2.1e", meanDoubletRate, varDoubletRate);
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3], Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 	
 	/* Output */
@@ -8235,10 +8241,16 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 break;
 			case 'B':
-				doubletRate = atof(argv[i]);
-				if (doubletRate < 0 ||  doubletRate > 1)
+					meanDoubletRate = atof(argv[i]);
+					varDoubletRate = atof(argv[++i]);
+				if (meanDoubletRate < 0 || meanDoubletRate > 1)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad doublet rate (%f)\n\n", doubletRate);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean doublet rate (%f)\n\n", meanDoubletRate);
+					PrintUsage(stderr);
+					}
+				if (varDoubletRate <= 0 || (meanDoubletRate > 0 && varDoubletRate >= (meanDoubletRate * (1.0 - meanDoubletRate))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance doublet rate (%f); it has to be > 0 and < mean*(1-mean)\n\n", varAllelicImbalance);
 					PrintUsage(stderr);
 					}
 				break;
@@ -8931,9 +8943,19 @@ void ReadParametersFromFile ()
 					}
 				break;
 			case 'B':
-				if (fscanf(stdin, "%lf", &doubletRate) !=1 || doubletRate < 0 || doubletRate > 1)
+				if (fscanf(stdin, "%lf %lf", &meanDoubletRate, &varDoubletRate) != 2)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad double rate (%f)\n\n", doubletRate);
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean/var/ doublet rate (%f ; %f)\n\n", meanDoubletRate, varDoubletRate);
+					PrintUsage(stderr);
+					}
+				if (meanDoubletRate < 0 || meanDoubletRate > 1)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean doublet rate (%f)\n\n", meanDoubletRate);
+					PrintUsage(stderr);
+					}
+				if (varAllelicImbalance <= 0 || (meanDoubletRate > 0 && varDoubletRate >= (meanDoubletRate * (1.0 - meanDoubletRate))))
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance doublet rate error (%f); it has to be >0 and < mean*(1-mean)\n\n", varAllelicImbalance);
 					PrintUsage(stderr);
 					}
 				break;

@@ -155,7 +155,7 @@ static double	meanGenotypingError, varGenotypingError, sequencingError;
 static double	fixedADOrate, doADOcell, meanADOcell, varADOcell, doADOsite, meanADOsite, varADOsite;
 static double	meanAllelicImbalance, varAllelicImbalance;
 static double	coverage, haploidCoverageReduction;
-static double	meanAmplificationError, varAmplificationError, doubletRate;
+static double	meanAmplificationError, varAmplificationError, meanDoubletRate, varDoubletRate;
 static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
 static double	Rmat[6], NRmat[12], Cijk[256], Root[4];

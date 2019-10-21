@@ -32,12 +32,10 @@
 		D5287AB4210F2EEF00E19545 /* eigen.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = eigen.h; sourceTree = "<group>"; };
 		D5287AB5210F2EEF00E19545 /* cellcoal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cellcoal.c; sourceTree = "<group>"; };
 		D5287AB6210F2EEF00E19545 /* definitions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = definitions.h; sourceTree = "<group>"; };
-		D544EF4F22AE9660004AA945 /* cellcoal.manual.v1.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = cellcoal.manual.v1.pdf; sourceTree = "<group>"; };
 		D59363011E22A28E0019EF0C /* CellCoal */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CellCoal; sourceTree = BUILT_PRODUCTS_DIR; };
 		D5BB89472114674100F07B05 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		D5F0500C20EE5291008E8029 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		D5F17F0F22AE8EF700B65546 /* index.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
-		D5F17F1022AE8EF700B65546 /* cellcoal.manual.v1.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = cellcoal.manual.v1.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -88,8 +86,6 @@
 			isa = PBXGroup;
 			children = (
 				D5F17F0F22AE8EF700B65546 /* index.html */,
-				D5F17F1022AE8EF700B65546 /* cellcoal.manual.v1.html */,
-				D544EF4F22AE9660004AA945 /* cellcoal.manual.v1.pdf */,
 			);
 			path = docs;
 			sourceTree = "<group>";
