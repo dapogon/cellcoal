@@ -8,7 +8,7 @@
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 	[exponential growth rate] [g0.2]
 	[birth rate] [K1]
-	[death rate] [L0.3]
+	[death rate] [L0.1]
 
 [GENEALOGY MODIFIERS]
 	[root branch length ratio] k0

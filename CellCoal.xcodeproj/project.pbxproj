@@ -32,6 +32,13 @@
 		D5287AB4210F2EEF00E19545 /* eigen.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = eigen.h; sourceTree = "<group>"; };
 		D5287AB5210F2EEF00E19545 /* cellcoal.c */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.c; path = cellcoal.c; sourceTree = "<group>"; };
 		D5287AB6210F2EEF00E19545 /* definitions.h */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = sourcecode.c.h; path = definitions.h; sourceTree = "<group>"; };
+		D52CB6CD236087B600CF9BC6 /* usertree.0001 */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = usertree.0001; sourceTree = "<group>"; };
+		D52CB6CE236087B600CF9BC6 /* parameters.GTR.reads */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.GTR.reads; sourceTree = "<group>"; };
+		D52CB6CF236087B600CF9BC6 /* usergenome.fas */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = usergenome.fas; sourceTree = "<group>"; };
+		D52CB6D0236087B600CF9BC6 /* parameters.signature.noreads */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.signature.noreads; sourceTree = "<group>"; };
+		D52CB6D1236087B600CF9BC6 /* parameters.ISM.binary */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.ISM.binary; sourceTree = "<group>"; };
+		D52CB6D2236087B600CF9BC6 /* parameters.ISM.usergenome */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.ISM.usergenome; sourceTree = "<group>"; };
+		D52CB6D3236087B600CF9BC6 /* parameters.JC.usertree */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.JC.usertree; sourceTree = "<group>"; };
 		D59363011E22A28E0019EF0C /* CellCoal */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CellCoal; sourceTree = BUILT_PRODUCTS_DIR; };
 		D5BB89472114674100F07B05 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		D5F0500C20EE5291008E8029 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
@@ -63,6 +70,20 @@
 			path = src;
 			sourceTree = "<group>";
 		};
+		D52CB6CC236087B600CF9BC6 /* examples */ = {
+			isa = PBXGroup;
+			children = (
+				D52CB6CD236087B600CF9BC6 /* usertree.0001 */,
+				D52CB6CE236087B600CF9BC6 /* parameters.GTR.reads */,
+				D52CB6CF236087B600CF9BC6 /* usergenome.fas */,
+				D52CB6D0236087B600CF9BC6 /* parameters.signature.noreads */,
+				D52CB6D1236087B600CF9BC6 /* parameters.ISM.binary */,
+				D52CB6D2236087B600CF9BC6 /* parameters.ISM.usergenome */,
+				D52CB6D3236087B600CF9BC6 /* parameters.JC.usertree */,
+			);
+			path = examples;
+			sourceTree = "<group>";
+		};
 		D59362F81E22A28E0019EF0C = {
 			isa = PBXGroup;
 			children = (
@@ -71,6 +92,7 @@
 				D5BB89472114674100F07B05 /* .gitignore */,
 				D5D7CCB722AE896900EE2D15 /* docs */,
 				D59363021E22A28E0019EF0C /* Products */,
+				D52CB6CC236087B600CF9BC6 /* examples */,
 			);
 			sourceTree = "<group>";
 		};
