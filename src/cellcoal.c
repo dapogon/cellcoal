@@ -196,20 +196,21 @@ int main (int argc, char **argv)
 	doADOcell = NO;					/* ADO does not change per cell by default */
 	doADOsite = NO;					/* ADO does not change per site by default */
 	meanADOcell = 0;     			/* mean of beta distribution for ADO expected for a cell */
-	varADOcell = 0.000001;     		/* var of beta distribution for ADO expected for a cell */
+	varADOcell = 1.0e-06;     		/* var of beta distribution for ADO expected for a cell */
 	meanADOsite = 0;				/* mean of beta distribution for ADO expected for a site */
-	varADOsite = 0.000001; ;		/* var of beta distribution for ADO expected for a site */
+	varADOsite = 1.0e-06; ;			/* var of beta distribution for ADO expected for a site */
 	sequencingError = 0;			/* NGS error rate */
 	meanGenotypingError = 0;		/* mean of beta distribution for errors added directly in the genotypes */
-	varGenotypingError = 0.0001;  /* variance of beta distribution for genotype errors */
+	varGenotypingError = 1.0e-06;   /* variance of beta distribution for genotype errors */
 	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
-	varAmplificationError = 0.0001;  	/* variance of beta distribution for WGA errors */
+	varAmplificationError = 1.0e-06; /* variance of beta distribution for WGA errors */
 	simulateOnlyTwoTemplates = NO;	/* whether simulating maximum of two templates after single-cell amplification, or there can be all four */
 	haploidCoverageReduction = 0.5; /* proportion of reads produced when a single allele is present */
+	doAllelicImbalance = NO;		/* by default there is no allelic imbalance */
 	meanAllelicImbalance = 0.5;		/* beta mean proportion of maternal/ paternal reads */
-	varAllelicImbalance = 0.0001;	/* beta var proportion of maternal/ paternal reads */
+	varAllelicImbalance = 1.0e-06;	/* beta var proportion of maternal/ paternal reads */
 	meanDoubletRate = 0;			/* mean of beta distribution for doublet errors */
-	varDoubletRate = 0.00001;		/* variance of beta distribution for doublet errors */
+	varDoubletRate = 1.0e-06;		/* variance of beta distribution for doublet errors */
 	numNodes = 1000;            	/* initial number of nodes allocated to build the coalescent trees */
 	seed = time(NULL); 				/* seed for random numbers */
 	doSpecificParameterFile = NO;	/* by default do not use a custom parameter file */
@@ -4136,8 +4137,11 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	
 	
 	/* sample maternal allelic imbalance for this genotype */
-	allelicImbalance = RandomBetaMeanVar(meanAllelicImbalance, varAllelicImbalance, seed);
-	
+	if (doAllelicImbalance == YES)
+		allelicImbalance = RandomBetaMeanVar(meanAllelicImbalance, varAllelicImbalance, seed);
+	else
+		allelicImbalance = 0.5;
+
 	/* number of reads will follow a Poisson or a Negative Binomial distribution (overdispersed coverage) around mean coverage, and are randomly assigned to maternal/paternal chromosome */
 	numMaternalReads = 0;
 	numPaternalReads = 0;
@@ -6901,62 +6905,63 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n Variance number of CN-LOH events             =   %3.2f", varNumCNLOH);
 			}
  
-		if (meanGenotypingError > 0 || doNGS == YES)
-			fprintf (fp, "\n\nNGS");
-		else
-			fprintf (fp, "\n\nNGS genotype errors/read counts are not being simulated");
-		
-		if (meanGenotypingError > 0)
-			{
-			fprintf (fp, "\n Genotype error ");
-			fprintf (fp, "\n  mean                                       =   %2.1e", meanGenotypingError);
-			fprintf (fp, "\n  variance                                   =   %2.1e", varGenotypingError);
-			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
-			}
-
+		fprintf (fp, "\n\nSingle-cell WGA");
+		if (fixedADOrate == 0 & doADOcell == NO & doADOsite == NO)
+			fprintf (fp, "\n Alellic dropout                              =   %2.1f", fixedADOrate);
 		if (fixedADOrate > 0)
-			fprintf (fp, "\n Alellic dropout fixed                       =   %2.1e", fixedADOrate);
+			fprintf (fp, "\n Alellic dropout fixed                        =   %2.1e", fixedADOrate);
 		if (doADOcell == YES)
-			{
-			fprintf (fp, "\n Alellic dropout per cell");
-			fprintf (fp, "\n  mean                                        =   %2.1e", meanADOcell);
-			fprintf (fp, "\n  variance                                    =   %2.1e", varADOcell);
-			}
+			fprintf (fp, "\n Alellic dropout per cell (mean, var)         =   %2.1e, %2.1e", meanADOcell, varADOcell);
 		if (doADOsite == YES)
-			{
-			fprintf (fp, "\n Alellic dropout per site");
-			fprintf (fp, "\n  mean                                        =   %2.1e", meanADOsite);
-			fprintf (fp, "\n  variance                                    =   %2.1e", varADOsite);
-			}
+			fprintf (fp, "\n Alellic dropout per site (mean, var)         =   %2.1e, %2.1e", meanADOsite, varADOsite);
 
 		if (doNGS == YES)
 			{
-			fprintf (fp, "\n Sequencing coverage                          =   %-3.2fX", coverage);
-			if (rateVarCoverage == YES)
-				fprintf (fp, "\n Coverage dispersion (alpha)                  =   %-3.2f", alphaCoverage);
+			if (doAllelicImbalance == YES)
+				fprintf (fp, "\n Maternal allelic imbalance (mean, var)       =   %2.1e, %2.1e", meanAllelicImbalance, varAllelicImbalance);
 			else
-				fprintf (fp, "\n  [coverage follows a Poisson distribution]");
-			fprintf (fp, "\n Maternal allelic imbalance");
-			fprintf (fp, "\n  mean                                        =   %2.1e", meanAllelicImbalance);
-			fprintf (fp, "\n  variance                                    =   %2.1e", varAllelicImbalance);
-			fprintf (fp, "\n Haploid coverage                             =   %-3.2f", haploidCoverageReduction);
-			if (meanAmplificationError == 0)
-				fprintf (fp, "\n Amplification error                          =   %2.1e", meanAmplificationError);
+				fprintf (fp, "\n Maternal allelic imbalance                   =   %2.1f", meanAllelicImbalance);
+
+			if (meanAmplificationError > 0)
+				{
+				fprintf (fp, "\n Amplification error ");
+				if (simulateOnlyTwoTemplates == YES)
+					fprintf (fp, "\n  (2-template model)");
+				else
+					fprintf (fp, "\n  (4-template model)");
+				fprintf (fp, " (mean, var)              =   %2.1e, %2.1e", meanAmplificationError, varAmplificationError);
+				}
+			else
+				fprintf (fp, "\n Amplification error                          =   %2.1f", meanAmplificationError);
+
+			if (meanDoubletRate > 0)
+				fprintf (fp, "\n Doublet rate per cell (mean, var)            =   %2.1e, %2.1e", meanDoubletRate, varDoubletRate);
+			else
+				fprintf (fp, "\n Doublet rate per cell                        =   %2.1f", meanDoubletRate);
+			}
+		if (meanGenotypingError == 0 && doNGS == NO)
+			fprintf (fp, "\n\nNGS genotype errors/read counts are not being simulated");
+
+		if (meanGenotypingError > 0)
+			{
+			fprintf (fp, "\n\nGenotyping");
+			fprintf (fp, "\n Genotype error (mean, var)                   =   %2.1e, %2.1e", meanGenotypingError, varGenotypingError);
+			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
+			}
+
+		fprintf (fp, "\n\nNGS");
+		if (doNGS == YES)
+			{
+			if (rateVarCoverage == NO)
+				fprintf (fp, "\n Sequencing coverage (Poisson)                =   %-3.2fX", coverage);
 			else
 				{
-				fprintf (fp, "\n Amplification error");
-				if (simulateOnlyTwoTemplates == YES)
-					fprintf (fp, " (2-template model)");
-				else
-					fprintf (fp, " (4-template model)");
-				fprintf (fp, "\n  mean                                        =   %2.1e", meanAmplificationError);
-				fprintf (fp, "\n  variance                                    =   %2.1e", varAmplificationError);
+				fprintf (fp, "\n Sequencing coverage (Negative binomial)");
+				fprintf (fp, "\n  mean                                        =   %-3.2fX", coverage);
+				fprintf (fp, "\n  dispersion (alpha)                          =   %-3.2f", alphaCoverage);
 				}
+			fprintf (fp, "\n Haploid coverage reduction                   =   %-3.2f", haploidCoverageReduction);
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
-			fprintf (fp, "\n Doublet rate per cell");
-			fprintf (fp, "\n  mean                                        =   %2.1e", meanDoubletRate);
-			fprintf (fp, "\n  variance                                    =   %2.1e", varDoubletRate);
-
 			if (thereIsEij == YES)
 				{
 				fprintf (fp, "\n NGS error rate matrix                        =   %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]);
@@ -6965,6 +6970,9 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n                                                  %3.2f %3.2f %3.2f %3.2f", Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 				}
 			}
+		else
+			fprintf (fp, "\n No sequencing reads were produced");
+
 		}
 	}
 
@@ -7009,18 +7017,22 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -r%3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Mij[0][0], Mij[0][1], Mij[0][2], Mij[0][3]
 		, Mij[1][0], Mij[1][1], Mij[1][2], Mij[1][3],  Mij[2][0], Mij[2][1], Mij[2][2], Mij[2][3],  Mij[3][0], Mij[3][1], Mij[3][2], Mij[3][3]);
 
-		/* NGS */
-		fprintf (fp, " -G%2.1e %2.1e", meanGenotypingError, varGenotypingError);
-		fprintf (fp, " -C%3.2f", coverage);
-		fprintf (fp, " -V%6.4f", alphaCoverage);
-		fprintf (fp, " -I%2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
+		/* scWGA */
 		fprintf (fp, " -D%2.1e", fixedADOrate);
 		fprintf (fp, " -P%2.1e %2.1e", meanADOcell, varADOcell);
 		fprintf (fp, " -Q%2.1e %2.1e", meanADOsite, varADOsite);
-		fprintf (fp, " -R%2.1e", haploidCoverageReduction);
+		fprintf (fp, " -I%2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
 		fprintf (fp, " -A%2.1e %2.1e %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
-		fprintf (fp, " -E%2.1e", sequencingError);
 		fprintf (fp, " -B%2.1e %2.1e", meanDoubletRate, varDoubletRate);
+
+		/* GENOTYPING */
+		fprintf (fp, " -G%2.1e %2.1e", meanGenotypingError, varGenotypingError);
+
+		/* NGS */
+		fprintf (fp, " -C%3.2f", coverage);
+		fprintf (fp, " -V%6.4f", alphaCoverage);
+		fprintf (fp, " -R%2.1e", haploidCoverageReduction);
+		fprintf (fp, " -E%2.1e", sequencingError);
 		fprintf (fp, " -X%3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]
 		, Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 
@@ -7097,17 +7109,20 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-t: transition/transversion ratio (e.g. -t2)");
     fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites (e.g. -a0.2)");
 	fprintf (fp,"\n-r: mutation matrix ACGT x ACGT (e.g. -r0 1 2 3 1 0 4 5 2 4 0 1 3 5 1 0)");
-	fprintf (fp,"\n-G: genotyping error [no read counts] (e.g. -G0.01)");
-	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
-	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
-	fprintf (fp,"\n-I: maternal allelic imbalance (e.g. -I0.5)");
+
 	fprintf (fp,"\n-D: allelic dropout (e.g. -D0.1)");
 	fprintf (fp,"\n-P: allelic dropout variation among sites (e.g. -P1)");
 	fprintf (fp,"\n-Q: allelic dropout variation among cells (e.g. -Q1)");
-	fprintf (fp,"\n-R: ADO/deletion haploid coverage reduction (e.g. -R0.5)");
+	fprintf (fp,"\n-I: maternal allelic imbalance (e.g. -I0.5)");
 	fprintf (fp,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
-	fprintf (fp,"\n-E: sequencing error (e.g. -E0.001)");
 	fprintf (fp,"\n-B: doublet rate per cell (e.g. -B0.1)");
+
+	fprintf (fp,"\n-G: genotyping error [no read counts] (e.g. -G0.01)");
+
+	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
+	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
+	fprintf (fp,"\n-R: ADO/deletion haploid coverage reduction (e.g. -R0.5)");
+	fprintf (fp,"\n-E: sequencing error (e.g. -E0.001)");
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT (e.g. -X0 1 1 1 1 0 1 1 1 1 0 1 1 1 1 0)");
 
     fprintf (fp,"\n-1: print SNV genotypes to a file (e.g. -1)");
@@ -7184,18 +7199,22 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites =  %6.4f", alphaSites);
 	fprintf (fp,"\n-r: mutation matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Mij[0][0], Mij[0][1], Mij[0][2], Mij[0][3], Mij[1][0], Mij[1][1], Mij[1][2], Mij[1][3],  Mij[2][0], Mij[2][1], Mij[2][2], Mij[2][3],  Mij[3][0], Mij[3][1], Mij[3][2], Mij[3][3]);
 	
-	/* NGS */
-	fprintf (fp,"\n-G: genotyping error: mean, var =  %2.1e %2.1e", meanGenotypingError, varGenotypingError);
-	fprintf (fp,"\n-C: sequencing coverage =  %3.2f", coverage);
-	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
-	fprintf (fp,"\n-I: allelic imbalance =  %2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
+	/* scWGA */
 	fprintf (fp,"\n-D: fixed allelic dropout (ADO) =  %2.1e", fixedADOrate);
 	fprintf (fp,"\n-P: ADO per cell mean, var  =  %2.1e %2.1e", meanADOcell, varADOcell);
 	fprintf (fp,"\n-Q: ADO per site mean, var =  %2.1e %2.1e", meanADOsite, varADOsite);
-	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
+	fprintf (fp,"\n-I: allelic imbalance =  %2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
 	fprintf (fp,"\n-A: amplification error: mean, var, 2-template model =  %2.1e, %2.1e, %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
-	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
 	fprintf (fp,"\n-B: doublet rate per cell; mean, var =  %2.1e, %2.1e", meanDoubletRate, varDoubletRate);
+
+	/* GENOTYPING */
+	fprintf (fp,"\n-G: genotyping error: mean, var =  %2.1e %2.1e", meanGenotypingError, varGenotypingError);
+
+	/* NGS */
+	fprintf (fp,"\n-C: sequencing coverage =  %3.2f", coverage);
+	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
+	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
+	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3], Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
 	
 	/* Output */
@@ -8201,6 +8220,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per cell (%f); it has to be > 0 and < mean*(1-mean)\n\n", varADOcell);
 					PrintUsage(stderr);
 					}
+				if (fixedADOrate > 0)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: ADO has to be either fixed or variable per cell/site, cannot be both");
+					PrintUsage(stderr);
+					}
 				doADOcell = YES;
 				break;
 			case 'Q':
@@ -8214,6 +8238,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				if (varADOsite <= 0 || (meanADOsite > 0 && varADOsite >= (meanADOsite * (1.0 - meanADOsite))))
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per site (%f); it has to be > 0 and < mean*(1-mean)\n\n", varADOsite);
+					PrintUsage(stderr);
+					}
+				if (fixedADOrate > 0)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: ADO has to be either fixed or variable per cell/site, cannot be both");
 					PrintUsage(stderr);
 					}
 				doADOsite = YES;
@@ -8231,6 +8260,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance allelic imbalance (%f); it has to be > 0 and < mean*(1-mean)\n\n", varAllelicImbalance);
 					PrintUsage(stderr);
 					}
+				doAllelicImbalance = YES;
 				break;
 			case 'R':
 				haploidCoverageReduction = atof(argv[i]);
@@ -8876,7 +8906,7 @@ void ReadParametersFromFile ()
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad fixed allelic dropout rate (%f)\n\n", fixedADOrate);
 					PrintUsage(stderr);
 					}
-				if (meanADOcell > 0 && meanADOsite > 0)
+				if (meanADOcell > 0 || meanADOsite > 0)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: ADO has to be either fixed or variable per cell/site, cannot be both");
 					PrintUsage(stderr);
@@ -8898,6 +8928,11 @@ void ReadParametersFromFile ()
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per cell (%f); it has to be >0 and < mean*(1-mean)\n\n", varADOcell);
 					PrintUsage(stderr);
 					}
+				if (fixedADOrate > 0)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: ADO has to be either fixed or variable per cell/site, cannot be both");
+					PrintUsage(stderr);
+					}
 				doADOcell = YES;
 				break;
   			case 'Q':
@@ -8914,6 +8949,11 @@ void ReadParametersFromFile ()
 				if (varADOsite <= 0 || (meanADOsite > 0 && varADOsite >= (meanADOsite * (1.0 - meanADOsite))))
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance ADO per site (%f); it has to be >0 and < mean*(1-mean)\n\n", varADOsite);
+					PrintUsage(stderr);
+					}
+				if (fixedADOrate > 0)
+					{
+					fprintf(stderr, "\n!!! PARAMETER ERROR: ADO has to be either fixed or variable per cell/site, cannot be both");
 					PrintUsage(stderr);
 					}
 				doADOsite = YES;
@@ -8934,6 +8974,7 @@ void ReadParametersFromFile ()
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance allelic imbalance error (%f); it has to be >0 and < mean*(1-mean)\n\n", varAllelicImbalance);
 					PrintUsage(stderr);
 					}
+				doAllelicImbalance = YES;
 				break;
 			case 'R':
 				if (fscanf(stdin, "%lf", &haploidCoverageReduction) !=1 ||haploidCoverageReduction < 0 || haploidCoverageReduction > 1)

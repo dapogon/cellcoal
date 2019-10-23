@@ -153,7 +153,7 @@ static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, equalB
 static double	*periodGrowth, growthRate, birthRate, deathRate;
 static double	meanGenotypingError, varGenotypingError, sequencingError;
 static double	fixedADOrate, doADOcell, meanADOcell, varADOcell, doADOsite, meanADOsite, varADOsite;
-static double	meanAllelicImbalance, varAllelicImbalance;
+static double	doAllelicImbalance, meanAllelicImbalance, varAllelicImbalance;
 static double	coverage, haploidCoverageReduction;
 static double	meanAmplificationError, varAmplificationError, meanDoubletRate, varDoubletRate;
 static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;

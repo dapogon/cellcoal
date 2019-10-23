@@ -45,18 +45,22 @@
 								  0.68 0.02 0.00 0.11 
 								  0.04 0.12 0.03 0.00]
 
-[NGS PARAMETERS]
+[scWGA PARAMETERS]
+	[fixed allelic dropout (ADO)] [D0.1]
+	[ADO per cell] P0.2 0.01
+	[ADO per site] Q0.3 0.000001
+	[maternal allelic imbalance] [I0.5 0.01]
+	[amplification error] A0.05 0.01 0
+	[doublet rate per cell] B0.1 0.01
+
+[GENOTYPING PARAMETERS]
 	[genotyping error; no reads] [G0.1 0.01]
+
+[NGS PARAMETERS]
 	[sequencing coverage; reads simulated] C100
 	[coverage overdispersion] [V5]
-	[maternal allelic imbalance] I0.5 0.01	
-	[fixed allelic dropout (ADO)] [D0.1]
-	[ADO per cell] P0.2 0.000001
-	[ADO per site] Q0.3 0.000001
-	[haploid coverage] [R0.5]	
-	[amplification error] [A0.05 0.01 0]
-	[sequencing error] [E0.2]
-	[doublet rate per cell] B0.1 0.01
+	[haploid coverage] [R0.5]
+	[sequencing error] E0.2
 	[error matrix ACGT x ACGT] [X0 1 1 1
 								 1 0 1 1
 								 1 1 0 1
