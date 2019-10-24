@@ -121,15 +121,15 @@ typedef struct csite
 	int		maternalAllele, paternalAllele;
 	int		thereIsMaternalAllele, thereIsPaternalAllele;
 	double  maternalSiteAmplificationError, paternalSiteAmplificationError;
-	double	**genLike;
-	double	**scaledGenLike;
+	double	**logGL;
+	double	**normLogGL;
 	int		MLmatAllele;
 	int		MLpatAllele;
 	int		numReadsDoublet;
 	int		*readCountDoublet;
 	int		maternalAlleleDoublet, paternalAlleleDoublet;
-	double	**genLikeDoublet;
-	double	**scaledGenLikeDoublet;
+	double	**logGLdoublet;
+	double	**normLogGLdoublet;
 	int		MLmatAlleleDoublet;
 	int		MLpatAlleleDoublet;
 	}
