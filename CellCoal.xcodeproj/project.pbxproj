@@ -40,6 +40,7 @@
 		D52CB6D2236087B600CF9BC6 /* parameters.ISM.usergenome */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.ISM.usergenome; sourceTree = "<group>"; };
 		D52CB6D3236087B600CF9BC6 /* parameters.JC.usertree */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.JC.usertree; sourceTree = "<group>"; };
 		D59363011E22A28E0019EF0C /* CellCoal */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CellCoal; sourceTree = BUILT_PRODUCTS_DIR; };
+		D5B4013D23D748110098111E /* .gitattributes */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = .gitattributes; sourceTree = "<group>"; };
 		D5BB89472114674100F07B05 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
 		D5E28D3823D73EB500D017AD /* cellcoal.manual.v1.1.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = cellcoal.manual.v1.1.html; sourceTree = "<group>"; };
 		D5E28D3923D73EB500D017AD /* cellcoal.manual.v1.1.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = cellcoal.manual.v1.1.pdf; sourceTree = "<group>"; };
@@ -92,6 +93,7 @@
 				D5287AAF210F2EEF00E19545 /* src */,
 				D5F0500C20EE5291008E8029 /* README.md */,
 				D5BB89472114674100F07B05 /* .gitignore */,
+				D5B4013D23D748110098111E /* .gitattributes */,
 				D5D7CCB722AE896900EE2D15 /* docs */,
 				D59363021E22A28E0019EF0C /* Products */,
 				D52CB6CC236087B600CF9BC6 /* examples */,
