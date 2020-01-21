@@ -21,5 +21,5 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 - If you use CellCoal, please cite: Posada D. (2020) *CellCoal: coalescent simulation of single-cell NGS genotypes*. <https://github.com/dapogon/cellcoal>
 
 ## Manual
-A detailed manual is available in <a href="https://dapogon.github.io/cellcoal/" target="_blank">html</a> or in <a href="https://dapogon.github.io/cellcoal/cellcoal.manual.pdf" target="_blank">pdf</a>.
+A detailed manual is available in <a href="https://dapogon.github.io/cellcoal/" target="_blank">html</a> or in <a href="https://dapogon.github.io/cellcoal/cellcoal.manual.v1.1.pdf" target="_blank">pdf</a>.
 

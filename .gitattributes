@@ -1,0 +1,7 @@
+.git*           		export-ignore
+.CellCoal.xcodeproj		export-ignore
+.bin/           		export-ignore
+.CellCoal.xcodeproj/	export-ignore
+.DerivedData/			export-ignore
+.stuff/					export-ignore
+.out/					export-ignore
