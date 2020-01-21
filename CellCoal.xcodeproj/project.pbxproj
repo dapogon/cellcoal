@@ -39,10 +39,10 @@
 		D52CB6D1236087B600CF9BC6 /* parameters.ISM.binary */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.ISM.binary; sourceTree = "<group>"; };
 		D52CB6D2236087B600CF9BC6 /* parameters.ISM.usergenome */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.ISM.usergenome; sourceTree = "<group>"; };
 		D52CB6D3236087B600CF9BC6 /* parameters.JC.usertree */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text; path = parameters.JC.usertree; sourceTree = "<group>"; };
-		D52CB6D42360AC2400CF9BC6 /* cellcoal.manual.v1.html */ = {isa = PBXFileReference; fileEncoding = 4; lastKnownFileType = text.html; path = cellcoal.manual.v1.html; sourceTree = "<group>"; };
-		D52CB6D52360AC2400CF9BC6 /* cellcoal.manual.v1.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = cellcoal.manual.v1.pdf; sourceTree = "<group>"; };
 		D59363011E22A28E0019EF0C /* CellCoal */ = {isa = PBXFileReference; explicitFileType = "compiled.mach-o.executable"; includeInIndex = 0; path = CellCoal; sourceTree = BUILT_PRODUCTS_DIR; };
 		D5BB89472114674100F07B05 /* .gitignore */ = {isa = PBXFileReference; lastKnownFileType = text; path = .gitignore; sourceTree = "<group>"; };
+		D5E28D3823D73EB500D017AD /* cellcoal.manual.v1.1.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = cellcoal.manual.v1.1.html; sourceTree = "<group>"; };
+		D5E28D3923D73EB500D017AD /* cellcoal.manual.v1.1.pdf */ = {isa = PBXFileReference; lastKnownFileType = image.pdf; path = cellcoal.manual.v1.1.pdf; sourceTree = "<group>"; };
 		D5F0500C20EE5291008E8029 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = SOURCE_ROOT; };
 		D5F17F0F22AE8EF700B65546 /* index.html */ = {isa = PBXFileReference; lastKnownFileType = text.html; path = index.html; sourceTree = "<group>"; };
 /* End PBXFileReference section */
@@ -109,9 +109,9 @@
 		D5D7CCB722AE896900EE2D15 /* docs */ = {
 			isa = PBXGroup;
 			children = (
+				D5E28D3823D73EB500D017AD /* cellcoal.manual.v1.1.html */,
+				D5E28D3923D73EB500D017AD /* cellcoal.manual.v1.1.pdf */,
 				D5F17F0F22AE8EF700B65546 /* index.html */,
-				D52CB6D42360AC2400CF9BC6 /* cellcoal.manual.v1.html */,
-				D52CB6D52360AC2400CF9BC6 /* cellcoal.manual.v1.pdf */,
 			);
 			path = docs;
 			sourceTree = "<group>";

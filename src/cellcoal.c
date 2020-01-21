@@ -91,10 +91,10 @@ Version 1.0.0 (20/06/2019)
 Version 1.1.0 (18/10/2019)
 - changed the coalescent time scale from 2N to N
 - implemented the Othsuki and Innan 2017 TPB coalescent parameterization with birth and death rates
-- genotyping error is now sampled from a Beta distribution
-- allelic imbalance is now sampled from a Beta distribution
-- ADO can now be fixed or sampled from a Beta distribution, and can vary per cell and/or site
-- doublet error is now sampled from a Beta distribution
+- genotyping error is now sampled from a Beta-binomial distribution
+- allelic imbalance is now sampled from a Beta-binomial distribution
+- ADO can now be fixed or sampled from a Beta-binomial distribution, and can vary per cell and/or site
+- doublet error is now sampled from a Beta-binomial distribution
 - added PL, and also non-normalized versions of G10, GL and PL, to VCF
 - compute genotype likelihoods taking into account ADO
 - improve genotype likelihood calculations
@@ -130,11 +130,11 @@ int main (int argc, char **argv)
     float 		start, secs;
 		
     /* Default settings */
-    numDataSets = 10;			/* the number of samples to simulate */
-    numCells = 8;				/* number of ingrou cells in each data set */
+    numDataSets = 50;			/* the number of samples to simulate */
+    numCells = 20;				/* number of ingroup cells in each data set */
     ploidy = 2;                 /* we assume diploid genomes */
-    numSites = 1000;			/* number of sites (markers, loci) to simulate = length of the genome */
-    N = 1000;					/* effective population size */
+    numSites = 1000;			/* number of sites to simulate = length of the genome */
+    N = 10000;					/* effective population size */
     numPeriods = 0;				/* number of distinct demographic periods */
     doDemographics = NO;		/* whether to implement demographics */
     doExponential = NO;			/* whether to do exponential growth */
@@ -182,7 +182,7 @@ int main (int argc, char **argv)
     doPrintTree = NO;				/* whether to print the coalescent tree */
     doPrintTimes = NO;				/* whether to print coalescent times */
 	doPrintAncestors = NO;      	/* whether to print data for ancestral cells */
-	doNGS = NO;  					/* do not produce reads by default */
+	doNGS = YES;  					/* produce reads by default */
 	doTumorNames = NO;				/* use specific name for taxa in the tumor scenario */
 	stringPrecision = 12;			/* precision for taxa names */
 	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
@@ -193,7 +193,7 @@ int main (int argc, char **argv)
 	numUserSignatures = 0;			/* by default we do not use a genetic signature */
 	transformingBranchLengthRatio = 0.5; /* ratio of the transforming branch length compare to the tumor MRCA length */
 	healthyTipBranchLengthRatio = 1.0; 	/* ratio the branch leading to the healthy cell to the (tumor MRCA + transfoming branch) length*/
- 	coverage = 0;					/* NGS  depth for read counts */
+ 	coverage = 5;					/* NGS  depth for read counts */
 	rateVarCoverage = NO;			/* there is coverage dispersion */
 	fixedADOrate = 0;				/* allelic dropout */
 	thereisADO = NO;				/* allelic dropout flag */
@@ -3610,12 +3610,12 @@ int CountAllelesInObservedGenotypes ()
 	}
 
 
+#ifdef COUNT_ML_GENOTYPE_ERRORS
 
 /************************* CountMLGenotypingErrors  ************************/
 /*
  Counts how many SNV genotypes are called wrongly
 */
-
 void CountMLGenotypingErrors()
 	{
 	int			i, j, equalGenotypes, countCalledGenotypes, countMLgenotypeErrors;
@@ -3627,9 +3627,9 @@ void CountMLGenotypingErrors()
 	countCalledGenotypes = 0;
 	for (i=0; i<numCells+1; i++)
 		{
-	/*	for (snv=0; snv<numSNVs; snv++) // otherwise, with low coverage, increasing amplification error increases accuracy, as it results in many SNVS where most cells do not contain errors...
-			{
-			j = SNVsites[snv];*/
+	//	for (snv=0; snv<numSNVs; snv++) // otherwise, with low coverage, increasing amplification error increases accuracy, as it results in many SNVS where most cells do not contain errors...
+			//{
+			//j = SNVsites[snv];*/
 		for (j=0; j<numSites; j++)
 			{
 			c = &cell[i].site[j];
@@ -3699,7 +3699,7 @@ int CompareGenotypes (int a1, int a2, int b1, int b2)
 	return equal;
 	}
 
-
+#endif
 
 
 /************************* CountAllelesInMLGenotypes  ************************/
@@ -6969,7 +6969,7 @@ static void PrintHeader(FILE *fp)
 	fprintf (fp, "______________________________________________________________________\n\n");
     fprintf (fp,"Cell coalescent simulation - %s", PROGRAM_NAME);
     fprintf (fp,"  %s", VERSION_NUMBER);
-    fprintf (fp,"\n(c) 2019 David Posada - dposada@uvigo.es");
+    fprintf (fp,"\n(c) 2020 David Posada - dposada@uvigo.es");
 	fprintf (fp, "\n______________________________________________________________________\n\n");
     }
 

@@ -72,7 +72,6 @@
 
 #define COUNT_ML_GENOTYPE_ERRORS
 #undef COUNT_ML_GENOTYPE_ERRORS
-#define COUNT_ML_GENOTYPE_ERRORS
 
 
 typedef struct tnode

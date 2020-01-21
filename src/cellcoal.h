@@ -112,9 +112,11 @@ static int		RemoveDir(char *path);
 static int 		CheckMatrixSymmetry(double matrix[4][4]);
 static void 	RecordTriNucObservation(TriNucStr *trin, int site);
 static void 	RemoveTriNucObservation(TriNucStr *trin, int site);
-static int		CompareGenotypes (int a1, int a2, int b1, int b2);
-static void		CountMLGenotypingErrors (void);
 static void		AllocateCellStructure (void);
+#ifdef COUNT_ML_GENOTYPE_ERRORS
+	static int		CompareGenotypes (int a1, int a2, int b1, int b2);
+	static void		CountMLGenotypingErrors (void);
+#endif
 
 extern int 		EigenREV (double Root[], double Cijk[]);
 extern void		PrepareGeneticSignatures(void);
