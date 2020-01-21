@@ -1,4 +1,5 @@
 .git*           		export-ignore
+.CellCoal*				export-ignore
 .CellCoal.xcodeproj		export-ignore
 .bin/           		export-ignore
 .CellCoal.xcodeproj/	export-ignore

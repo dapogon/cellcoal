@@ -1,0 +1,61 @@
+______________________________________________________________________
+
+Cell coalescent simulation - CellCoal  version 1.1.0
+(c) 2020 David Posada - dposada@uvigo.es
+______________________________________________________________________
+
+Tue Jan 21 13:10:50 2020
+Parameter file ["parameters"] arguments (some might not affect) =  -n10 -s20 -l1000 -e10000 -g1.0e-03 -K1.0e+00 -L0.0e+00 -h0 -k5.0e-01 -q1.0e+00 -i999999.0000 -b1 -c0.0e+00 -u1.0e-07 -d0.0e+00 -H0.0e+00 -j0 -S0 -m0 -p0.0000 -w1.0000 -f0.25 0.25 0.25 0.25 -t0.5000 -a999999.0000 -r0.00 1.00 1.00 1.00  1.00 0.00 1.00 1.00 1.00 1.00 0.00 1.00 1.00 1.00 1.00 0.00 -D0.0e+00 -P0.0e+00 1.0e-06 -Q0.0e+00 1.0e-06 -I5.0e-01 1.0e-06 -A0.0e+00 1.0e-06 0 -B0.0e+00 1.0e-06 -G0.0e+00 1.0e-06 -C5.00 -V999999.0000 -R5.0e-01 -E0.0e+00 -X0.00 1.00 1.00 1.00 1.00 0.00 1.00 1.00 1.00 1.00 0.00 1.00 1.00 1.00 1.00 0.00 -1 -6 -oresults -y1 -#1579608650
+
+Run settings
+------------
+[Parameter file = parameters]
+
+General
+ Seed                                         =   1579608650
+ Number replicate data sets                   =   10 
+ Number of cells                              =   20 
+ Number of genomic sites                      =   1000
+
+Demographics
+ Effective population size                    =   10000
+ Exponential growth rate                      =   1.0e-03
+
+Genealogy
+ Mean time to the MRCA (Ne generations)       =   0.3019
+ Variance time MRCA                           =   0.0026
+ No rate variation among branches
+
+User-defined branches
+ Transforming branch length ratio             =   5.0e-01
+ Healthy tip branch length ratio              =   1.0e+00
+
+Mutation models
+ Character alphabet                           =   DNA
+ All sites evolving under the ISM diploid
+
+SNV rates
+ Mutation rate                                =   1.0e-07
+ Population mutation parameter (4Nu2L)        =   4.00
+ Mean number of mutation events               =   4.90
+ Variance number of mutation events           =   9.21
+ Mean number of SNVs                          =   4.40
+ Variance number of SNVs                      =   7.38
+ Proportion of reps without SNV sites         =   0.10
+
+Single-cell WGA
+ Alellic dropout                              =   0.0
+ Maternal allelic imbalance                   =   0.5
+ Amplification error                          =   0.0
+ Doublet rate per cell                        =   0.0
+
+NGS
+ Sequencing coverage (Poisson)                =   5.00X
+ Haploid coverage reduction                   =   0.50
+ Sequencing error                             =   0.0e+00
+
+
+Output files are in folder "results":
+ Tree printed to file "trees"
+ SNV genotypes printed to file "snv_gen"
+ Genotype likelihoods (GATK model) printed to file "vcf"
