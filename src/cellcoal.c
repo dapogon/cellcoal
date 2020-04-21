@@ -98,6 +98,9 @@ Version 1.1.0 (18/10/2019)
 - added PL, and also non-normalized versions of G10, GL and PL, to VCF
 - compute genotype likelihoods taking into account ADO
 - improve genotype likelihood calculations
+ 
+ Version 1.1.1 (21/04/2020)
+- print tumor/non-tumor labels in trees
 
 [TO-DOs]
 - add new signatures
@@ -5724,12 +5727,14 @@ void WriteTree (TreeNode *p, FILE *fp)
         {
         if(p->isHealthyTip == YES)
             {
-            fprintf (fp, "healthycell:%8.6f",p->branchLength);
-            }
+           // fprintf (fp, "healthycell:%8.6f",p->branchLength);
+			fprintf (fp, "%s:%8.6f",outCellName, p->branchLength);
+			}
         else if (p->left == NULL && p->right == NULL)
             {
 			if (doUserTree == NO)
-				fprintf (fp, "tumcell%04d:%8.6f", Index(p),p->branchLength);
+				//fprintf (fp, "tumcell%04d:%8.6f", Index(p),p->branchLength);
+				fprintf (fp, "%s%04d:%8.6f", inCellName, Index(p),p->branchLength);
 			else
 				fprintf (fp, "%s:%8.6f", p->name,p->branchLength);
             }

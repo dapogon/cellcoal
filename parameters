@@ -1,9 +1,9 @@
 [PARAMETER FILE for CellCoal] [text in brackets will be ignored]
 
 [COALESCENT]
-	[number of replicates] n10
-	[number of cells] s20
-	[number of sites] l1000
+	[number of replicates] n1
+	[number of cells] s10
+	[number of sites] l100
 	[effective population size] e10000
 	[demographics] [h2 1000 100 40000 200 30000 20000]
 	[exponential growth rate] g1e-3
@@ -18,13 +18,13 @@
 [MUTATION MODEL]
 	[alphabet binary:0 DNA:1] b1
 	[germline SNP rate] [c0.00001]
-	[somatic mutation rate] u1e-7
+	[somatic mutation rate] [u1e-7]
 	[CN_LOH rate] [H1e-5]
 	[deletion rate] [d1e-6]
-	[fixed number of mutations - ISM] [j1] [j100]
+	[fixed number of mutations - ISM] [j1] j100
 	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
 	 [default mutation model is ISM diploid]	
-	[alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] [m1]
+	[alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] [m0]
 	[proportion of alternative model sites] [p1] p0
 	[alternative/default model relative mutation rate] [w1]
 	[base frequencies]	[f0.3 0.2 0.2 0.3]
@@ -52,7 +52,7 @@
 	[genotyping error; no reads] [G0.1 0.01]
 
 [NGS PARAMETERS]
-	[sequencing coverage; reads simulated] C5
+	[sequencing coverage; reads simulated] C100
 	[coverage dispersion] [V5]
 	[haploid coverage] [R0.5]
 	[sequencing error] [E0.001]
@@ -62,16 +62,16 @@
 								 1 1 1 0]
 [OUTPUT]
 	[print SNV genotypes] 1
-	[print SNV haplotypes] [2]
+	[print SNV haplotypes] 2
 	[print full genotypes] [3]
 	[print full haplotypes] [4]
-	[print root ancestors] [5]
+	[print root ancestors] 5
 	[print trees] 6
 	[print times] [7]
 	[print CATG] [8]
 	[print true haplotypes] [9]
 	[print replicates in individual folders] [v]
-	[print consensus IUPAC haplotypes] [x]
+	[print consensus IUPAC haplotypes] x
 	[results folder name] oresults
 	[user tree file] [Tusertree.0001]
 	[user genome file] [Uusergenome.fas]
