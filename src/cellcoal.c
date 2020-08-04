@@ -8473,16 +8473,12 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean genotyping error (%f)\n\n", meanGenotypingError);
 					PrintUsage(stderr);
 					}
-  				if (meanGenotypingError > 0 && doNGS == YES)
-					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a mean genotyping error at the same time\n\n");
-					PrintUsage(stderr);
-					}
 				if (varGenotypingError <= 0 || (meanGenotypingError > 0 && varGenotypingError >= (meanGenotypingError * (1.0 - meanGenotypingError))))
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance genotyping error (%f); it has to be > 0 and < mean*(1-mean)\n\n", varGenotypingError);
 					PrintUsage(stderr);
 					}
+				doNGS = NO;
 				break;
 			case 'C':
 				coverage = atof(argv[i]);
@@ -9194,6 +9190,7 @@ void ReadParametersFromFile ()
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad variance genotyping error (%f); it has to be >0 and < mean*(1-mean)\n\n", varGenotypingError);
 					PrintUsage(stderr);
 					}
+				doNGS = NO;
 				break;
 			case 'C':
 				if (fscanf(stdin, "%lf", &coverage) !=1 || argument < 0)
