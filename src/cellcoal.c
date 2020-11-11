@@ -101,7 +101,11 @@ Version 1.1.0 (18/10/2019)
  
  Version 1.1.1 (21/04/2020)
 - print tumor/non-tumor labels in trees
-
+ 
+ Version 1.2 (11/11/2020)
+- print PILEUP format
+ 
+ 
 [TO-DOs]
 - add new signatures
 - move data structure into cell structure (optional)
@@ -189,6 +193,7 @@ int main (int argc, char **argv)
 	doTumorNames = NO;				/* use specific name for taxa in the tumor scenario */
 	stringPrecision = 12;			/* precision for taxa names */
 	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
+	doPrintPILEUP = NO;				/* whether to print read counts for SNVs in PILEUP format*/
 	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
 	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
 	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
@@ -266,6 +271,7 @@ int main (int argc, char **argv)
 		doPrintAncestors = NO;
 		doNGS = NO;
 		doPrintCATG = NO;
+		doPrintPILEUP = NO;
    		}
 	
     /* initialize a few variables */
@@ -383,7 +389,8 @@ int main (int argc, char **argv)
 	strcpy(MLhaplotypesDir, "ML_haplotypes_dir");
     strcpy(fullGenotypesDir, "full_genotypes_dir");
     strcpy(CATGdir, "catg_dir");
-    strcpy(VCFdir, "vcf_dir");
+	strcpy(PILEUPdir, "pileup_dir");
+	strcpy(VCFdir, "vcf_dir");
 	
 	strcpy(SNVgenotypesFile, "snv_gen");
     strcpy(SNVhaplotypesFile, "snv_hap");
@@ -398,7 +405,8 @@ int main (int argc, char **argv)
 	if (strlen(userGenomeFile) == 0)
 		strcpy(userGenomeFile, "usergenome");
     strcpy(CATGfile, "catg");
-    strcpy(VCFfile, "vcf");
+	strcpy(PILEUPfile, "pileup");
+	strcpy(VCFfile, "vcf");
     strcpy(logFile, "log");
 	strcpy(settingsFile, "log");
  
@@ -734,6 +742,13 @@ int main (int argc, char **argv)
 						if (doPrintSeparateReplicates == NO)
 							fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
 						}
+
+					if (doPrintPILEUP == YES)
+						{
+						PrintPILEUP(fpPILEUP);
+						if (doPrintSeparateReplicates == NO)
+							fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+						}
 					}
 				}
 			} //simdata
@@ -814,6 +829,8 @@ int main (int argc, char **argv)
 					fclose(fpVCF);
 				if (doPrintCATG == YES)
 					fclose(fpCATG);
+				if (doPrintPILEUP == YES)
+					fclose(fpPILEUP);
 				}
  
 			/* free data structures */
@@ -907,6 +924,8 @@ int main (int argc, char **argv)
 			fclose(fpVCF);
 		if (doPrintCATG == YES)
 			fclose(fpCATG);
+		if (doPrintPILEUP == YES)
+			fclose(fpPILEUP);
 		if (doPrintTree == YES)
 			fclose(fpTrees);
 		if (doPrintTimes == YES)
@@ -5046,6 +5065,118 @@ void PrintCATG (FILE *fp)
 	}
 
 
+/********************* PrintPILEUP  ************************/
+/**	PILEUP output format with read counts
+	http://samtools.sourceforge.net/pileup.shtml
+ 
+ seq1 272 T 24  ,.$.....,,.,.,...,,,.,..^+. <<<+;<<<<<<<<<<<=<;<;7<&
+ seq1 273 T 23  ,.....,,.,.,...,,,.,..A <<<;<<<<<<<<<3<=<<<;<<+
+ seq1 274 T 23  ,.$....,,.,.,...,,,.,...    7<7;<;<<<<<<<<<=<;<;<<6
+ seq1 275 A 23  ,$....,,.,.,...,,,.,...^l.  <+;9*<<<<<<<<<=<<:;<<<<
+ seq1 276 G 22  ...T,,.,.,...,,,.,....  33;+<<7=7<<7<&<<1;<<6<
+ seq1 277 T 22  ....,,.,.,.C.,,,.,..G.  +7<;<<<<<<<&<=<<:;<<&<
+ seq1 278 G 23  ....,,.,.,...,,,.,....^k.   %38*<<;<7<<7<=<<<;<<<<<
+ seq1 279 C 23  A..T,,.,.,...,,,.,..... ;75&<<<<<<<<<=<<<9<<:<<
+ where each line consists of
+ chromosome,		1-based coordinate, 		reference base, 		the number of reads covering the site, 		read bases  		base qualities.
+ 
+ 
+ At the read base column, a dot stands for a match to the reference base on the forward strand, a comma for a match on the reverse strand, `ACGTN' for a mismatch on the forward strand and `acgtn' for a mismatch on the reverse strand. A pattern `\+[0-9]+[ACGTNacgtn]+' indicates there is an insertion between this reference position and the next reference position.
+ 
+ The byte representing quality runs from 0x21 (lowest quality; '!' in ASCII) to 0x7e (highest quality; '~' in ASCII). Here are the quality value characters in left-to-right increasing order of quality (ASCII):
+
+ */
+void PrintPILEUP (FILE *fp)
+	{
+	int		i, j, k, snv;
+	int		referenceAllele;
+	
+	for (snv=0; snv<numSNVs; snv++)
+		{
+		j = SNVsites[snv];
+
+		/* PILEUP: CHROMOSOME */
+		fprintf (fp,"%d", 1);
+		
+		/* PILEUP: POSITION */
+		fprintf (fp,"\t%d", j+1);
+
+		/* PILEUP: REFERENCE allele(s) => healthy root alleles */
+		referenceAllele = allSites[j].referenceAllele;
+		fprintf (fp,"\t%c", WhichNuc(referenceAllele));
+		
+		for (i=0; i<numCells+1; i++)
+			{
+			/* PILEUP: NUMBER OF READS */
+			fprintf (fp, "\t%d\t", cell[i].site[j].numReads);
+			
+			/* PILEUP: READ BASES */
+			if (allSites[j].countA > 0)
+				{
+				if (referenceAllele != A)
+					for (k=0; k<cell[i].site[j].readCount[A]; k++)
+						fprintf (fp, "A");
+				else
+					for (k=0; k<cell[i].site[j].readCount[A]; k++)
+						fprintf (fp, ".");
+				}
+			
+			if (allSites[j].countC > 0)
+				{
+				if (referenceAllele != C)
+					for (k=0; k<cell[i].site[j].readCount[C]; k++)
+						fprintf (fp, "C");
+				else
+					for (k=0; k<cell[i].site[j].readCount[C]; k++)
+						fprintf (fp, ".");
+				}
+
+			if (allSites[j].countG > 0)
+				{
+				if (referenceAllele != G)
+					for (k=0; k<cell[i].site[j].readCount[G]; k++)
+						fprintf (fp, "G");
+				else
+					for (k=0; k<cell[i].site[j].readCount[G]; k++)
+						fprintf (fp, ".");
+				}
+
+			if (allSites[j].countT > 0)
+				{
+				if (referenceAllele != T)
+					for (k=0; k<cell[i].site[j].readCount[T]; k++)
+						fprintf (fp, "T");
+				else
+					for (k=0; k<cell[i].site[j].readCount[T]; k++)
+						fprintf (fp, ".");
+				}
+
+			if (allSites[j].countN > 0)
+				{
+				if (referenceAllele != N)
+					for (k=0; k<allSites[j].countN; k++)
+						fprintf (fp, "N");
+				else
+					for (k=0; k<allSites[j].countN; k++)
+						fprintf (fp, ".");
+				}
+
+			fprintf (fp, "\t");
+			
+			/* PILEUP: READ QUALITIES */  /* put always highest quality */
+			for (k=0; k<cell[i].site[j].numReads; k++)
+				fprintf (fp, "~");
+				}
+	
+		fprintf (fp,"\n");
+
+		}
+		
+	fprintf (fp,"\n");
+	}
+
+
+
 /********************* PrintVCF  ************************/
 /**	VCF output format with read counts
 */
@@ -5514,6 +5645,16 @@ void PrepareGlobalFiles(int argc, char **argv)
                 }
             }
 
+		if (doPrintPILEUP == YES)
+			{
+			sprintf(File,"%s/%s", resultsDir, PILEUPfile);
+			if ((fpPILEUP = fopen(File, "w")) == NULL)
+				{
+				fprintf (stderr, "Can't open \"%s\"\n", File);
+				exit(-1);
+				}
+			}
+
        }
 
    if (doPrintSNVgenotypes == YES)
@@ -5578,6 +5719,15 @@ void PrepareGlobalFiles(int argc, char **argv)
         PrintCommandLine (fpCATG, argc, argv);*/
         fprintf (fpCATG,"%d\n", numDataSets);
         }
+
+	if (doPrintPILEUP == YES)
+		{
+		/*fprintf (fpPILEUP, "%s - ",PROGRAM_NAME);
+		PrintDate (fpPILEUP);
+		fprintf (fpPILEUP, "Read counts\n");
+		PrintCommandLine (fpPILEUP, argc, argv);*/
+		fprintf (fpPILEUP,"%d\n", numDataSets);
+		}
 	}
 
 
@@ -5704,6 +5854,19 @@ void PrepareSeparateFiles(int replicate)
                 exit(-1);
                 }
             }
+
+		/* contains reads counts for every SNV and cell */
+		if (doPrintPILEUP == YES)
+			{
+			sprintf(File,"%s/%s", resultsDir, PILEUPdir);
+			mkdir(File,S_IRWXU);
+			sprintf(File,"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
+			if ((fpPILEUP = fopen(File, "w")) == NULL)
+				{
+				fprintf (stderr, "Can't open \"%s\"\n", File);
+				exit(-1);
+				}
+			}
         }
 	}
 
@@ -7308,9 +7471,16 @@ static void	PrintRunInformation (FILE *fp)
 
 			   if (doPrintCATG == YES)
 				   {
-				   fprintf (fp, "\n Read counts printed to file \"%s\"", CATGfile);
+				   fprintf (fp, "\n Read counts printed in CATG format to file \"%s\"", CATGfile);
 				   if (doPrintSeparateReplicates == YES)
 					   fprintf (fp, " in folder \"%s\"", CATGdir);
+				   }
+
+			   if (doPrintPILEUP == YES)
+				   {
+				   fprintf (fp, "\n Read counts printed in PILEUP format to file \"%s\"", PILEUPfile);
+				   if (doPrintSeparateReplicates == YES)
+					   fprintf (fp, " in folder \"%s\"", PILEUPdir);
 				   }
 			  }
 		   else
@@ -7395,8 +7565,10 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 			fprintf (fp, " -%d", 7);
 		if (doPrintCATG == YES)
 			fprintf (fp, " -%d", 8);
-		if (doPrintTrueHaplotypes == YES)
+		if (doPrintPILEUP == YES)
 			fprintf (fp, " -%d", 9);
+		if (doPrintTrueHaplotypes == YES)
+			fprintf (fp, " -%c", 'Y');
 		if (doPrintSeparateReplicates == YES)
 			fprintf (fp, " -%c", 'v');
 		if (doPrintIUPAChaplotypes == YES)
@@ -7421,7 +7593,7 @@ void PrintUsage(FILE *fp)
 {
 	PrintHeader(fp);
     fprintf (fp, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
-	fprintf (fp, "\n\nUsage: %s [-FTXT -n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -c# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # # -G# -C# -V# -I# -D# -P# -Q# -R# -A# # # -E# -B# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -v -x -oTXT -TTXT -UTXT -W# -y# -## -?]", PROGRAM_NAME_LOWERCASE);
+	fprintf (fp, "\n\nUsage: %s [-FTXT -n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -c# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # # -G# -C# -V# -I# -D# -P# -Q# -R# -A# # # -E# -B# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -Y -v -x -oTXT -TTXT -UTXT -W# -y# -## -?]", PROGRAM_NAME_LOWERCASE);
 	fprintf (fp,"\n");
 
 	fprintf (fp,"\n-F: user-defined parameter file (e.g. -Fmyparameters)");
@@ -7475,7 +7647,8 @@ void PrintUsage(FILE *fp)
     fprintf (fp,"\n-6: print trees to a file (e.g. -6)");
     fprintf (fp,"\n-7: print times to a file (e.g. -7)");
     fprintf (fp,"\n-8: print read counts in CATG format (e.g. -8)");
-    fprintf (fp,"\n-9: print true SNV haplotypes to a file (e.g. -9)");
+	fprintf (fp,"\n-9: print read counts in PILEUP format (e.g. -9)");
+    fprintf (fp,"\n-Y: print true SNV haplotypes to a file (e.g. -Y)");
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
 	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
@@ -7568,7 +7741,8 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-6: print trees to a file =  %d", doPrintTree);
 	fprintf (fp,"\n-7: print times to a file =  %d", doPrintTimes);
 	fprintf (fp,"\n-8: print read counts in CATG format =  %d", doPrintCATG);
-	fprintf (fp,"\n-9: print true haplotypes to a file =  %d", doPrintTrueHaplotypes);
+	fprintf (fp,"\n-9: print read counts in PILEUP format =  %d", doPrintPILEUP);
+	fprintf (fp,"\n-Y: print true haplotypes to a file =  %c", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
 	if (strlen(userTreeFile) == 0)
@@ -8010,11 +8184,11 @@ int CheckMatrixSymmetry(double matrix[4][4])
 /******************** ReadParametersFromCommandLine **************************/
 /*
 USED IN ORDER
-F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
+F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 Y v x o T U  W y  #
 
 USED
 a b c d e f g h i j k l m n o p q r s t u v w x y
-A B C D E F G H I   K L M     P Q R S T U V W X
+A B C D E F G H I   K L M     P Q R S T U V W X Y
 1 2 3 4 5 6 7 8 9 #
 */
 
@@ -8680,7 +8854,15 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					PrintUsage(stderr);
 					}
                break;
-            case '9':
+			case '9':
+				doPrintPILEUP = YES;
+				if (doNGS == NO)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the PILEUP format when coverage is <= 0\n\n");
+					PrintUsage(stderr);
+						}
+				break;
+           case 'Y':
                 doPrintTrueHaplotypes = YES;
                 break;
  			case 'v':
@@ -8751,15 +8933,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 }
 
 
-
 /***************************** ReadParametersFromFile *******************************/
 /*
  USED IN ORDER
- F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 v x o T U  W y  #
+ F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 Y v x o T U W y #
  
  USED
  a b c d e f g h i j k l m n o p q r s t u v w x y
- A B C D E F G H I   K L M     P Q R S T U V W X
+ A B C D E F G H I   K L M     P Q R S T U V W X Y
  1 2 3 4 5 6 7 8 9 #
  */
 
@@ -9395,6 +9576,14 @@ void ReadParametersFromFile ()
 					}
 				break;
 			case '9':
+				doPrintPILEUP = YES;
+				if (doNGS == NO)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the PILEUP format when reads are not simulated (coverage >0)\n\n");
+					PrintUsage(stderr);
+					}
+				break;
+			case 'Y':
                 doPrintTrueHaplotypes = YES;
 				break;
 			case 'v':
