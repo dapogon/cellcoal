@@ -12,7 +12,7 @@
 #define PROGRAM_NAME            "CellCoal"
 #define PROGRAM_NAME_UPPERCASE	"CELLCOAL"
 #define PROGRAM_NAME_LOWERCASE	"cellcoal"
-#define VERSION_NUMBER          "version 1.2"
+#define VERSION_NUMBER          "version 1.2.0"
 
 #define	MAX_NAME                120
 #define	MAX_LINE                500000
@@ -71,7 +71,7 @@
 #undef PRINT_TRIMUTCOUNTER
 
 #define COUNT_ML_GENOTYPE_ERRORS
-#undef COUNT_ML_GENOTYPE_ERRORS
+//#undef COUNT_ML_GENOTYPE_ERRORS
 
 
 typedef struct tnode
