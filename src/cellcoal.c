@@ -107,7 +107,7 @@ Version 1.1.0 (18/10/2019)
 - return 0 after execution
  
  Version 1.2.0 (22/01/2021)
-- When amplification errors for maternal and paternal sites are distinct calculate first the likelihood for the phased genotypes and then combine them to obtain the likelihood for the unphased genotypes
+- calculate genotype likelihoods for the phased genotypes and then combine them to obtain the likelihood for the unphased genotypes (important when amplification errors for maternal and paternal sites are distinct)
  
 [TO-DOs]
 - add new signatures
@@ -4386,12 +4386,13 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 
 /* ******************** GenotypeLikelihoods  ************************/
 /*
- Calculate genotype likelihoods for a given site and cell given the simulated reads
+ Calculate genotype likelihoods (GLs) for a given site and cell given the simulated reads
  according to three different models
  
  **	Genotype likelihoods can be calculated given the read counts and the sequencing error
  (see Korneliussen 2013 BMCBioinf)
 
+ Calculations are done GLs for all 16 phased genotypes, as different errors can occurs for maternal and paternal alleles, so the phase matters. But then we will report the GLs for the 10 unphased genotypes
  00 01 02 03 11 12 13 22 23 33
  AA AC AG AT CC CG CT GG GT TT
  */
@@ -4411,7 +4412,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	double	**logGL, **normLogGL;
 	double 	MLmatAllele, MLpatAllele;
 	double	alleleDropoutRate;
-	long double	term1, term2, term3, maxterm, num1, num2, num3;
+	long double	term1, term2, term3, maxterm, num1, num2, num3, number1, number2;
 	double 	**GL;
 
 	/* allocate GL */
@@ -4442,17 +4443,18 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	maternalSiteAmplificationError = c->maternalSiteAmplificationError;
 	paternalSiteAmplificationError = c->paternalSiteAmplificationError;
 
+	//!!!!: debug GL
 	debug_GL = NO;
 	fix_parameters = NO;
 	if (fix_parameters == YES)
 		{
-		maternalAllele = c->maternalAllele = G;
-		paternalAllele = c->paternalAllele = G;
+		maternalAllele = c->maternalAllele = A;
+		paternalAllele = c->paternalAllele = A;
 		thereIsMaternalAllele = c->thereIsMaternalAllele = YES;
 		thereIsPaternalAllele = c->thereIsPaternalAllele = YES;
-		readCount[A] = 0;
+		readCount[A] = 20;
 		readCount[C] = 0;
-		readCount[G] = 9;
+		readCount[G] = 0;
 		readCount[T] = 0;
 
 		alleleDropoutRate = 0.2;
@@ -4460,12 +4462,12 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		doADOcell = NO;
 		doADOsite = NO;
 		fixedADOrate = alleleDropoutRate;
-		doGATK_ADO = YES;
+		//doGATK_ADO = YES;
 		
 		simulateOnlyTwoTemplates = NO;
 		numReads = c->numReads = readCount[A] + readCount[C] + readCount[G] + readCount[T];
 		sequencingError = 0.0;
-		maternalSiteAmplificationError = c->maternalSiteAmplificationError = 0.0;
+		maternalSiteAmplificationError = c->maternalSiteAmplificationError = 0.2;
 		paternalSiteAmplificationError = c->paternalSiteAmplificationError = 0.0;
 
 		/* reinitialize ngsEij  */
@@ -4657,19 +4659,21 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	b = read
 
 	p1 = p(b_i|A1)
-	p2 = p(read i|A2)
+	p2 = p(b_i|A2)
 	where p(b_i|A) is defined by the specific amplification model (GATK, 2T or 4T)
 	
-	p(D|G=A1,A2) = (1-ADO) * M[1/2 p1 + 1/2 p2] + ADO/2 * M[p1] + ADO/2 * M[p2]
+	P(D|G=A1,A2) = (1-ADO) * M[1/2 p1 + 1/2 p2] + ADO/2 * M[p1] + ADO/2 * M[p2]
  
 	term1 = M[1/2 p1 + 1/2 p2]
 	term2 = M[p1]
 	term3 = M[p2]
+ 
+	M is the product over reads
 */
 	if (doGATK_ADO == YES || do4T_ADO == YES || do2T_ADO == YES)
 		{
-		for (a1=0; a1<4; a1++) //a1 is maternal
-			for (a2=0; a2<4; a2++) //a2 is paternal
+		for (a1=0; a1<4; a1++) /* a1 is maternal; a2 is paternal */
+			for (a2=0; a2<4; a2++)
 				{
 				logGL[a1][a2] = 0.0;
 				term1 = term2 = term3 = maxterm = 0.0;
@@ -4703,77 +4707,71 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 								}
 							}
 						
-						if (a1 == a2) // => M [p(b|A)]
-							logGL[a1][a2] += readCount[read] * log10 (pReadGivenA1);
+						/* M [p(b|A)] */
+						if (alleleDropoutRate == 0)
+							{
+							term1 += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
+							}
+						else if (alleleDropoutRate == 1)
+							{
+							term2 += readCount[read] * log10(pReadGivenA1);
+							term3 += readCount[read] * log10(pReadGivenA2);
+							}
 						else
 							{
-							if (alleleDropoutRate == 0)
-								{
-								term1 += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
-								}
-							else if (alleleDropoutRate == 1)
-								{
-								term2 += readCount[read] * log10(pReadGivenA1);
-								term3 += readCount[read] * log10(pReadGivenA2);
-								}
-							else
-								{
-								term1 += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
-								term2 += readCount[read] * log10(pReadGivenA1);
-								term3 += readCount[read] * log10(pReadGivenA2);
-								}
+							term1 += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
+							term2 += readCount[read] * log10(pReadGivenA1);
+							term3 += readCount[read] * log10(pReadGivenA2);
 							}
+							
 						}
-					//fprintf (stderr, "\n***read=%c count=%3d gl[%c][%c] = %lf  logGL[%c][%c] = %lf (p1=%lf p2=%lf), term1=%Lf term3=%Lf term3=%Lf", WhichNuc(read), readCount[read], WhichNuc(a1), WhichNuc(a2), GL[a1][a2],  WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], pReadGivenA1,pReadGivenA2, term1, term2, term3);
+					//fprintf (stderr, "\n***read=%c count=%3d gl[%c][%c] = %lf  logGL[%c][%c] = %lf (p1=%e p2=%e), term1=%Lf term2=%Lf term3=%Lf", WhichNuc(read), readCount[read], WhichNuc(a1), WhichNuc(a2), GL[a1][a2],  WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], pReadGivenA1,pReadGivenA2, term1, term2, term3);
 					} // reads
-	
-				if (a1 != a2)
+				
+				/* compute log sum exp; first find maximum term */
+				if (alleleDropoutRate == 0)
+					maxterm = term1;
+				else if (alleleDropoutRate == 1)
 					{
-					/* compute log sum exp; first find maximum term */
-					if (alleleDropoutRate == 0)
-						maxterm = term1;
-					else if (alleleDropoutRate == 1)
-						{
+					maxterm = term2;
+					if (term3 > maxterm)
+						maxterm = term3;
+					}
+				else
+					{
+					maxterm = term1;
+					if (term2 > maxterm)
 						maxterm = term2;
-						if (term3 > maxterm)
-							maxterm = term3;
-						}
-					else
-						{
-						maxterm = term1;
-						if (term2 > maxterm)
-							maxterm = term2;
-						if (term3 > maxterm)
-							maxterm = term3;
-						}
-					
-					if (alleleDropoutRate == 0)
-						num1 = (1.0 - alleleDropoutRate) * pow(10.0,term1-maxterm);
-					else if (alleleDropoutRate == 1)
-						{
-						num2 = alleleDropoutRate * meanAllelicImbalance * pow(10.0,term2-maxterm);
-						num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * pow(10.0,term3-maxterm);;
-						}
-					else
-						{
-						num1 = (1.0 - alleleDropoutRate) * pow(10.0,term1-maxterm);
-						num2 = alleleDropoutRate * meanAllelicImbalance * pow(10.0,term2-maxterm);
-						num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * pow(10.0,term3-maxterm);;
-						}
-		
-					GL[a1][a2] = num1 + num2 + num3;
-
-					if (isnan(GL[a1][a2]) == NO)
-						logGL[a1][a2] = maxterm + log10(GL[a1][a2]);
-					else
-						logGL[a1][a2] = -INFINITY;
+					if (term3 > maxterm)
+						maxterm = term3;
 					}
 				
-				/*fprintf (stderr, "\nterm1,2,3 | max = %Lf %Lf %Lf | %Lf", term1, term2, term3, maxterm);
+				if (alleleDropoutRate == 0)
+					num1 = (1.0 - alleleDropoutRate) * pow(10.0,term1-maxterm);
+				else if (alleleDropoutRate == 1)
+					{
+					num2 = alleleDropoutRate * meanAllelicImbalance * pow(10.0,term2-maxterm);
+					num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * pow(10.0,term3-maxterm);;
+					}
+				else
+					{
+					num1 = (1.0 - alleleDropoutRate) * pow(10.0,term1-maxterm);
+					num2 = alleleDropoutRate * meanAllelicImbalance * pow(10.0,term2-maxterm);
+					num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * pow(10.0,term3-maxterm);;
+					}
+	
+				GL[a1][a2] = num1 + num2 + num3;
+
+				if (isnan(GL[a1][a2]) == NO)
+					logGL[a1][a2] = maxterm + log10(GL[a1][a2]);
+				else
+					logGL[a1][a2] = -INFINITY;
+				/*
+				fprintf (stderr, "\nterm1,2,3  = %Lf %Lf %Lf  | max = %Lf", term1, term2, term3, maxterm);
 				fprintf (stderr, "\nnum1,2,3 = %Lf %Lf %Lf", num1, num2, num3);
 				fprintf (stderr, "\nGL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), GL[a1][a2]);
-				fprintf (stderr, "\nlogGL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), logGL[a1][a2]);*/
-				 
+				fprintf (stderr, "\nlogGL[%c][%c] = %lf\n", WhichNuc(a1), WhichNuc(a2), logGL[a1][a2]);
+				*/
 				} // genotypes
 		
 		if (debug_GL == YES)
@@ -4787,11 +4785,6 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			for (a1=0; a1<4; a1++)
 				for (a2=0; a2<4; a2++) //a2 is paternal
 					fprintf (stderr, "\n(general)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), logGL[a1][a2]);
-			/*for (a1=0; a1<4; a1++)
-				for (a2=0; a2<4; a2++)
-					fprintf (stderr, "\n(4Tado)GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), GL[a1][a2]);
-			 */
-			fprintf (stderr, "\n");
 			}
 		} //model general
 
@@ -4800,11 +4793,13 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	/* obtain unphased GLs by combining GLs from both phases -only heterozygotes */
 	for (a1=0; a1<4; a1++)
 		for (a2=a1+1; a2<4; a2++)
-		{
-		num1 = 0.5 * pow(10.0,logGL[a1][a2]);
-		num2 = 0.5 * pow(10.0,logGL[a2][a1]);
-		logGL[a1][a2] = logGL[a2][a1] = log10(num1 + num2);
-		}
+			if (logGL[a1][a2] != logGL[a2][a1])
+				{
+				number1 = 0.5 * pow(10.0,logGL[a1][a2]);
+				number2 = 0.5 * pow(10.0,logGL[a2][a1]);
+				logGL[a1][a2] = logGL[a2][a1] = log10(number1 + number2);
+				//fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
+				}
 
 	if (debug_GL == YES)
 		{
@@ -4842,6 +4837,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			for (a2=0; a2<4; a2++)
 				fprintf (stderr, "\nunphased_norm_log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), normLogGL[a1][a2]);
 		fprintf (stderr, "\n");
+		exit(1);
 		}
 /*
 	if (debug_GL == YES)
@@ -5336,16 +5332,14 @@ void PrintVCF (FILE *fp)
 						fprintf (fp,"%d", l+1);
 						break;
 						}
-
-						//!!!!: WARNING message to remove?
-						if (l == allSites[j].numAltAlleles - 1)
+					
+						//!!!: WARNING ML allele not in ALT/REF
+						/*if (l == allSites[j].numAltAlleles - 1)
 						{
-						fprintf (fp,"-");
-						//fprintf (stderr,"\nWARNING: ML maternal allele is not in the ALT or REF set of reads [cell %d site %d]", i+1, j+1);
-						//exit(-1);
-	
-						/*
-						 fprintf (stderr,"\ncell %d site %d: %c%c", i+1, j+1, WhichNuc(trueMaternalAllele), WhichNuc(trueMaternalAllele));
+						fprintf (fp,"?");
+						fprintf (stderr,"\nWARNING: ML maternal allele is not in the ALT or REF set of reads [cell %d site %d]", i+1, j+1);
+						
+						fprintf (stderr,"\ncell %d site %d: %c%c", i+1, j+1, WhichNuc(trueMaternalAllele), WhichNuc(trueMaternalAllele));
 						fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d",   cell[i].site[j].readCount[A],  cell[i].site[j].readCount[C],  cell[i].site[j].readCount[G],  cell[i].site[j].readCount[T]);
 						fprintf (stderr,"\nsequencing error = %f",sequencingError);
 						fprintf (stderr,"\nmatAmpError = %f", cell[i].site[j].maternalSiteAmplificationError);
@@ -5354,8 +5348,8 @@ void PrintVCF (FILE *fp)
 							for (a2=a1; a2<4; a2++)
 								fprintf (stderr, "\n(4T)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].logGL[a1][a2]);
 						fprintf (stderr, "\n");
-						 */
-						}
+						 
+						} */
 					 
 					}
 				}
@@ -5374,15 +5368,13 @@ void PrintVCF (FILE *fp)
 						break;
 						}
 	
-					//!!!!: WARNING message to remove?
-					 if (l == allSites[j].numAltAlleles - 1)
+					//!!!: WARNING ML allele not in ALT/REF
+					/* if (l == allSites[j].numAltAlleles - 1)
 						{
-						fprintf (fp,"-");
-						//fprintf (stderr,"\nWARNING: ML paternal allele is not in the ALT or REF set of reads [cell %d site %d]", i+1, j+1);
-						//exit(-1);
+						fprintf (fp,"?");
+						fprintf (stderr,"\nWARNING: ML paternal allele is not in the ALT or REF set of reads [cell %d site %d]", i+1, j+1);
 						
-						/*
-						 fprintf (stderr,"\ncell %d site %d: %c%c", i+1, j+1, WhichNuc(trueMaternalAllele), WhichNuc(trueMaternalAllele));
+						fprintf (stderr,"\ncell %d site %d: %c%c", i+1, j+1, WhichNuc(trueMaternalAllele), WhichNuc(trueMaternalAllele));
 						fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d",   cell[i].site[j].readCount[A],  cell[i].site[j].readCount[C],  cell[i].site[j].readCount[G],  cell[i].site[j].readCount[T]);
 						fprintf (stderr,"\nsequencing error = %f",sequencingError);
 						fprintf (stderr,"\nmatAmpError = %f", cell[i].site[j].maternalSiteAmplificationError);
@@ -5391,8 +5383,8 @@ void PrintVCF (FILE *fp)
 							for (a2=a1; a2<4; a2++)
 								fprintf (stderr, "\n(4T)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].logGL[a1][a2]);
 						fprintf (stderr, "\n");
-						 */
-						}
+						 
+						} */
 					}
 				}
 	
