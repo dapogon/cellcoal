@@ -71,7 +71,7 @@
 #undef PRINT_TRIMUTCOUNTER
 
 #define COUNT_ML_GENOTYPE_ERRORS
-//#undef COUNT_ML_GENOTYPE_ERRORS
+#undef COUNT_ML_GENOTYPE_ERRORS
 
 
 typedef struct tnode

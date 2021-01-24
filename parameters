@@ -1,87 +1,93 @@
 [PARAMETER FILE for CellCoal] [text in brackets will be ignored]
-
+    
 [COALESCENT]
-	[number of replicates] n1
-	[number of cells] s4
-	[number of sites] l10
-	[effective population size] e10000
-	[demographics] [h2 1000 100 40000 200 30000 20000]
-	[exponential growth rate] g1e-3
-	[birth rate] [K1]
-	[death rate] [L0.1]
+    [number of replicates] n50
+    [number of cells] s10
+    [number of sites] l1000
+    [effective population size] e10000
+    [demographics] [h2 1000 100 40000 200 30000 20000]
+    [exponential growth rate] g1e-5 [ln2=0.6931 max]
+    [birth rate] [K1]
+    [death rate] [L0.1]
 
 [GENEALOGY MODIFIERS]
-	[root branch length ratio] k0.5
-	[outgroup branch length ratio] q1.0
-	[rate variation among branches] [i1]
+    [root branch length ratio] k0.5
+    [outgroup branch length ratio] q0
+    [rate variation among branches] [i1]
 
 [MUTATION MODEL]
-	[alphabet binary:0 DNA:1] b1
-	[germline SNP rate] [c0.00001]
-	[somatic mutation rate] [u1e-7]
-	[CN_LOH rate] [H1e-5]
-	[deletion rate] [d1e-6]
-	[fixed number of mutations - ISM] [j1] j4
-	[trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
-	 [default mutation model is ISM diploid]	
-	[alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] [m0]
-	[proportion of alternative model sites] [p1] p0
-	[alternative/default model relative mutation rate] [w1]
-	[base frequencies]	[f0.3 0.2 0.2 0.3]
-	[transition/transversion ratio] [t1.7]
-	[rate variation among sites] [a1.0]
-	[mutation matrix ACGT x ACGT] [r0 1 1 1
-									1 0 1 1
-									1 1 0 1
-									1 1 1 0]
+    [alphabet binary:0 DNA:1] b1
+    [germline SNP rate] [c0.00001]
+    [somatic mutation rate] u1e-6
+    [CN_LOH rate] [H1e-5]
+    [deletion rate] [d1e-6]
+    [fixed number of mutations - ISM] [j100]
+    [trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
+     [default mutation model is ISM diploid]    
+    [alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] [m2]
+    [proportion of alternative model sites] p0
+    [alternative/default model relative mutation rate] [w1]
+    [base frequencies]  f0.3 0.2 0.2 0.3
+    [transition/transversion ratio] [t1.7]
+    [rate variation among sites] [a1.0]
+    [mutation matrix ACGT x ACGT] r0 1 1 1
+                                    1 0 1 1
+                                    1 1 0 1
+                                    1 1 1 0
 
-								 [r0.00 0.03 0.12 0.04 
-								  0.11 0.00 0.02 0.68 
-								  0.68 0.02 0.00 0.11 
-								  0.04 0.12 0.03 0.00]
-[scWGA PARAMETERS]
-	[fixed allelic dropout (ADO)] [D0.1]
-	[ADO per cell] [P0.2 0.01]
-	[ADO per site] [Q0.3 0.000001]
-	[maternal allelic imbalance] [I0.5 0.01]
-	[amplification error] [A0.001 0.0005 1]
-	[doublet rate per cell] [B0.1 0.01]
+                                [r0 1 2 3
+                                  1 0 4 5
+                                  2 4 0 1
+                                  3 5 1 0]
+
+                                 [r0.00 0.03 0.12 0.04 
+                                  0.11 0.00 0.02 0.68 
+                                  0.68 0.02 0.00 0.11 
+                                  0.04 0.12 0.03 0.00]
 
 [GENOTYPING PARAMETERS]
-	[genotyping error; no reads] [G0.1 0.01]
+    [genotyping error; no reads] [G0.1 0.01]
+
+[scWGA PARAMETERS]
+    [fixed allelic dropout (ADO)] [D0.2]
+    [ADO per cell] [P0.1 0.01]
+    [ADO per site] [Q0.2 0.01]
+    [maternal allelic imbalance] [I0.5 0.01]
+    [amplification error] [A0.1 0.001 0]
+    [doublet rate per cell] [B0.02 0.01]
 
 [NGS PARAMETERS]
-	[sequencing coverage; reads simulated] C10
-	[coverage dispersion] [V5]
-	[haploid coverage] [R0.5]
-	[sequencing error] [E0.001]
-	[error matrix ACGT x ACGT] [X0 1 1 1
-								 1 0 1 1
-								 1 1 0 1
-								 1 1 1 0]
+    [sequencing coverage; reads simulated] C5
+    [coverage overdispersion] V5
+    [haploid coverage] [R0.5]   
+    [sequencing error] E0.01
+    [error matrix ACGT x ACGT] [X0 1 1 1
+                                 1 0 1 1
+                                 1 1 0 1
+                                 1 1 1 0]
 [OUTPUT]
-	[print SNV genotypes] 1
-	[print SNV haplotypes] 2
-	[print full genotypes] 3
-	[print full haplotypes] 4
-	[print root ancestors] 5
-	[print trees] 6
-	[print times] [7]
-	[print CATG] [8]
-	[print CATG] 9
-	[print true haplotypes] Y
-	[print replicates in individual folders] v
-	[print consensus IUPAC haplotypes] x
-	[results folder name] oresults
-	[user tree file] [Ttrees.0001]
-	[user genome file] [Uusergenome.fas]
-	
+    [print SNV genotypes] 1
+    [print SNV haplotypes] 2
+    [print full genotypes] 3
+    [print full haplotypes] 4
+    [print root ancestors] [5]
+    [print trees] [6]
+    [print times] [7]
+    [print CATG] [8]
+ 	[print PILEUP] [9]
+	[print true haplotypes] [Y]
+    [print replicates in individual folders] v
+    [print consensus IUPAC haplotypes] [x]
+    [results folder name] oresults
+    [user tree file] [Tusertree.0001]
+    [user genome file] [Uusergenome.fas]
+    
 [OTHER]
-	[use tumor nomenclature for cells] W
-	[noisy]	y1
-	[seed] [#1542634305] [if no seed is specified, the current time will be used as seed]
+    [use tumor nomenclature for cells] [W]
+    [noisy] y1
+    [seed] [#1610625271] [if no seed is specified, the current time will be used as seed]
 
-	[noisy = 0: does not print anything
-	 noisy = 1: + simulation summary, 
-	 noisy = 2: + replicate information + expectations, 
-	 noisy = 3: + calculation status and event information]
+    [noisy = 0: does not print anything
+     noisy = 1: + simulation summary, 
+     noisy = 2: + replicate information, 
+     noisy = 3: + calculation status and event information]
