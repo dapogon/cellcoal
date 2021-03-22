@@ -45,6 +45,9 @@
 								  0.68 0.02 0.00 0.11 
 								  0.04 0.12 0.03 0.00]
 
+[GENOTYPING PARAMETERS]
+	[genotyping error; no reads] [G0.1 0.01]
+
 [scWGA PARAMETERS]
 	[fixed allelic dropout (ADO)] D0.2
 	[ADO per cell] [P0.1 0.01]
@@ -52,11 +55,6 @@
 	[maternal allelic imbalance] [I0.5 0.01]
 	[amplification error] A0.1 0.01 0
 	[doublet rate per cell] [B0.1 0.01]
-
-
-[GENOTYPING PARAMETERS]
-	[genotyping error; no reads] [G0.1 0.01]
-
 
 [NGS PARAMETERS]
 	[sequencing coverage; reads simulated] C60
@@ -75,10 +73,11 @@
 	[print root ancestors] [5]
 	[print trees] 6
 	[print times] [7]
-	[print CATG] [8]
-	[print true haplotypes] [9]
-	[print replicates in individual folders] v
-	[print consensus IUPAC haplotypes] [x]
+    [print CATG] [8]
+    [print PILEUP] [9]
+    [print true haplotypes] Y
+    [print consensus IUPAC sequences] [x]
+    [print replicates in individual folders] v
 	[results folder name] oresults_GTR_reads
 	[user tree file] [Tusertree.0001]
 	[user genome file] [Uusergenome.fas]
@@ -92,4 +91,3 @@
 	 noisy = 1: + simulation summary, 
 	 noisy = 2: + replicate information, 
 	 noisy = 3: + calculation status and event information]
-

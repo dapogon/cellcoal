@@ -109,6 +109,11 @@ Version 1.1.0 (18/10/2019)
  Version 1.2.0 (22/01/2021)
 - calculate genotype likelihoods for the phased genotypes and then combine them to obtain the likelihood for the unphased genotypes (important when amplification errors for maternal and paternal sites are distinct)
  
+ Version 1.2.1 (22/03/2021)
+ - improved memory allocation
+ - print all likelihoods for doublets also
+ - update example parameter files
+ 
 [TO-DOs]
 - add new signatures
 - move data structure into cell structure (optional)
@@ -4448,16 +4453,16 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	fix_parameters = NO;
 	if (fix_parameters == YES)
 		{
-		maternalAllele = c->maternalAllele = A;
-		paternalAllele = c->paternalAllele = A;
+		maternalAllele = c->maternalAllele = T;
+		paternalAllele = c->paternalAllele = T;
 		thereIsMaternalAllele = c->thereIsMaternalAllele = YES;
 		thereIsPaternalAllele = c->thereIsPaternalAllele = YES;
-		readCount[A] = 20;
+		readCount[A] = 0;
 		readCount[C] = 0;
 		readCount[G] = 0;
-		readCount[T] = 0;
+		readCount[T] = 10;
 
-		alleleDropoutRate = 0.2;
+		alleleDropoutRate = 0.8;
 		thereisADO = YES;
 		doADOcell = NO;
 		doADOsite = NO;
@@ -4466,9 +4471,9 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		
 		simulateOnlyTwoTemplates = NO;
 		numReads = c->numReads = readCount[A] + readCount[C] + readCount[G] + readCount[T];
-		sequencingError = 0.0;
-		maternalSiteAmplificationError = c->maternalSiteAmplificationError = 0.2;
-		paternalSiteAmplificationError = c->paternalSiteAmplificationError = 0.0;
+		sequencingError = 0.01;
+		maternalSiteAmplificationError = c->maternalSiteAmplificationError = 0;
+		paternalSiteAmplificationError = c->paternalSiteAmplificationError = 0;
 
 		/* reinitialize ngsEij  */
 		for (k=0; k<4; k++)
@@ -4653,7 +4658,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	
 
 /* ************************* MODEL GENERAL *************************************/
-/* MODEL: genotype log10 likelihoods according to the observed reads, assuming a single sequencing error independent of the nucleotides involved, amplification errors and ADO
+/* MODEL: genotype log10 likelihoods according to the observed reads, assuming a single sequencing error independent of the nucleotides involved, amplification errors and ADO. Note that ADO does not change the likelihoods
 
 	M = multiply over reads
 	b = read
@@ -4788,7 +4793,6 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			}
 		} //model general
 
-	free (GL);
 
 	/* obtain unphased GLs by combining GLs from both phases -only heterozygotes */
 	for (a1=0; a1<4; a1++)
@@ -4837,7 +4841,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			for (a2=0; a2<4; a2++)
 				fprintf (stderr, "\nunphased_norm_log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), normLogGL[a1][a2]);
 		fprintf (stderr, "\n");
-		exit(1);
+		//exit(1);
 		}
 /*
 	if (debug_GL == YES)
@@ -4863,6 +4867,12 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	c->MLmatAllele = MLmatAllele;
 	c->MLpatAllele = MLpatAllele;
 
+	for (k=0; k<4; k++)
+		free(GL[k]);
+	free (GL);
+
+	//exit(1);
+
 }
 
 /********************* MakeDoublets  ************************/
@@ -4880,13 +4890,13 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 	int		MLmatAllele, MLpatAllele;
 	double	maxLike;
 	double	doubletRate;
+	long double number1, number2;
 	CellStr celldoublet;
 
 	debug_DL = NO;
 	if (debug_DL == YES)
 		fprintf(stderr,"\n\n\n********Doublet read counts and likelihoods");
 
-		
 	/* choose whether a tumor cell will become a doublet */
 	for (c1=0; c1<numCells;c1++)
 		{
@@ -5000,12 +5010,26 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 					fprintf (stderr, "\n");
 					}
 
-				/* normalize doublet genotype likelihood to the maximum likelihood and assign ML alleles */
+				
+				
+				/* obtain unphased GLs by combining GLs from both phases -only heterozygotes */
+				   for (k=0; k<4; k++)
+					   for (l=k+1; l<4; l++)
+						   if (cell[c1].site[j].logGLdoublet[k][l] != cell[c1].site[j].logGLdoublet[l][k])
+							   {
+							   number1 = 0.5 * pow(10.0,cell[c1].site[j].logGLdoublet[k][l]);
+							   number2 = 0.5 * pow(10.0,cell[c1].site[j].logGLdoublet[l][k]);
+							   cell[c1].site[j].logGLdoublet[k][l] = cell[c1].site[j].logGLdoublet[l][k] = log10(number1 + number2);
+							   //fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
+							   }
+
+				
+				
 				/* find max log10 doublet likelihood  */
 				maxLike = cell[c1].site[j].logGLdoublet[A][A];
 				MLmatAllele = MLpatAllele = A;
 				for (k=0; k<4; k++)
-					for (l=0; l<4; l++)
+					for (l=k; l<4; l++)
 						if (cell[c1].site[j].logGLdoublet[k][l] > maxLike)
 							{
 							maxLike = cell[c1].site[j].logGLdoublet[k][l];
@@ -5013,10 +5037,14 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 							MLpatAllele = l;
 							}
 
+				
 				/* normalize to likelihood ratios */
 				for (k=0; k<4; k++)
-					for (l=0; l<4; l++)
-						cell[c1].site[j].normLogGLdoublet[k][l] = cell[c1].site[j].logGLdoublet[k][l] - maxLike;
+					for (l=k; l<4; l++)
+					{
+					cell[c1].site[j].normLogGLdoublet[k][l] = cell[c1].site[j].logGLdoublet[k][l] - maxLike;
+					cell[c1].site[j].normLogGLdoublet[l][k] = cell[c1].site[j].normLogGLdoublet[k][l];
+					}
 						
 				cell[c1].site[j].MLmatAlleleDoublet = MLmatAllele;
 				cell[c1].site[j].MLpatAlleleDoublet = MLpatAllele;
@@ -5044,6 +5072,9 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 				}
 			} // if we do doublet for c1
 		} //c1
+	
+	//exit(1);
+
 	}
 
 
@@ -5407,7 +5438,7 @@ void PrintVCF (FILE *fp)
 					}
 				//fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
-				/* VFC: FORMAT: G10N (all 10 genotype likelihoods) */
+				/* VFC: FORMAT: G10N (all 10 normalized genotype likelihoods) */
 				fprintf (fp, ":");
                 fmt = fmt_f_2;
 				for (k=0; k<4; k++)
@@ -5416,7 +5447,6 @@ void PrintVCF (FILE *fp)
                     fprintf (fp, fmt, cell[i].site[j].normLogGL[k][l]);
 					fmt = fmt_comma_f_2;
 					}
-				//fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
 				/* VFC: FORMAT: GL (log10 genotype likelihoods) */
 				fprintf (fp, ":");
@@ -5534,18 +5564,46 @@ void PrintVCF (FILE *fp)
 				/* VFC: FORMAT: RC (read counts ACGT) */
 				fprintf (fp,":%d,%d,%d,%d",  cell[i].site[j].readCountDoublet[A], cell[i].site[j].readCountDoublet[C], cell[i].site[j].readCountDoublet[G], cell[i].site[j].readCountDoublet[T]);
 				
-				/* VFC: FORMAT: G10 (genotype likelihoods) */
+				/* VFC: FORMAT: G10 (all 10 genotype likelihoods) */
 				fprintf (fp, ":");
                 fmt = fmt_f_2;
 				for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
 					{
-                    fprintf (fp, fmt, cell[i].site[j].normLogGLdoublet[k][l]);
+                    fprintf (fp, fmt, cell[i].site[j].logGLdoublet[k][l]);
 					fmt = fmt_comma_f_2;
 					}
-//				fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
-				
-				/* VFC: FORMAT: GL (genotype likelihoods) */
+
+				/* VFC: FORMAT: G10N (all 10 genotype likelihoods) */
+				fprintf (fp, ":");
+				fmt = fmt_f_2;
+				for (k=0; k<4; k++)
+					for (l=k; l<4; l++)
+					{
+					fprintf (fp, fmt, cell[i].site[j].normLogGLdoublet[k][l]);
+					fmt = fmt_comma_f_2;
+					}
+
+				/* VFC: FORMAT: GL (log 10 genotype likelihoods) */
+				fprintf (fp, ":");
+				fmt = fmt_f_2;
+				for (k=0; k<=allSites[j].numAltAlleles; k++)
+					for (l=0; l<=k; l++)
+						{
+						if (k == 0)
+							a1 = allSites[j].referenceAllele;
+						else
+							a1 = allSites[j].alternateAlleles[k-1];
+						
+						if (l == 0)
+							a2 = allSites[j].referenceAllele;
+						else
+							a2 = allSites[j].alternateAlleles[l-1];
+						fprintf (fp, fmt, cell[i].site[j].logGLdoublet[a1][a2]);
+						fmt = fmt_comma_f_2;
+						}
+
+				/* VFC: FORMAT: GLN (normalized log 10 genotype likelihoods) */
 				fprintf (fp, ":");
 				fmt = fmt_f_2;
 				for (k=0; k<=allSites[j].numAltAlleles; k++)
@@ -5562,10 +5620,55 @@ void PrintVCF (FILE *fp)
 							a2 = allSites[j].alternateAlleles[l-1];
 						fprintf (fp, fmt, cell[i].site[j].normLogGLdoublet[a1][a2]);
 						fmt = fmt_comma_f_2;
-						//fprintf (stderr, "\n gl[%c][%c] = %3.1f,", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].normLogGLdoublet[a1][a2]);
 						}
-				//fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
 
+				
+				/* VFC: FORMAT: PL (phred-scale genotype likelihoods) */
+				fprintf (fp, ":");
+				fmt = fmt_d;
+				for (k=0; k<=allSites[j].numAltAlleles; k++)
+					for (l=0; l<=k; l++)
+						{
+						if (k == 0)
+							a1 = allSites[j].referenceAllele;
+						else
+							a1 = allSites[j].alternateAlleles[k-1];
+
+						if (l == 0)
+							a2 = allSites[j].referenceAllele;
+						else
+							a2 = allSites[j].alternateAlleles[l-1];
+						
+						if (isinf(cell[i].site[j].logGL[a1][a2]) == YES)
+							fprintf (fp, fmt, cell[i].site[j].logGLdoublet[a1][a2]);
+						else
+							fprintf (fp, fmt, (int)round(10*cell[i].site[j].logGLdoublet[a1][a2]));
+						fmt = fmt_comma_d;
+						}
+
+				/* VFC: FORMAT: PLN (normalized phred-scale genotype likelihoods) */
+				fprintf (fp, ":");
+				fmt = fmt_d;
+				for (k=0; k<=allSites[j].numAltAlleles; k++)
+					for (l=0; l<=k; l++)
+						{
+						if (k == 0)
+							a1 = allSites[j].referenceAllele;
+						else
+							a1 = allSites[j].alternateAlleles[k-1];
+
+						if (l == 0)
+							a2 = allSites[j].referenceAllele;
+						else
+							a2 = allSites[j].alternateAlleles[l-1];
+						
+						if (isinf(cell[i].site[j].logGL[a1][a2]) == YES)
+							fprintf (fp, fmt, cell[i].site[j].normLogGLdoublet[a1][a2]);
+						else
+							fprintf (fp, fmt, (int)round(10*cell[i].site[j].normLogGLdoublet[a1][a2]));
+						fmt = fmt_comma_d;
+						}
+				
 				/* VFC: FORMAT: ML (maximum likelihood genotype) */
 				if (cell[i].site[j].numReadsDoublet > 0)
 					{
@@ -8278,7 +8381,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			
         switch (flag)
 			{
-			/* specifying a specific parameter file */
+			/* user-defined parameter file */
 			case 'F':
 				ch = *argv[i];
 				if(!isspace(ch))
@@ -8298,7 +8401,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case 's':
                 argument = atof(argv[i]);
                 numCells = (int) argument;
-                if (numCells < 1)
+                if (numCells < 2)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sample size (%d)\n\n", numCells);
                     PrintUsage(stderr);
@@ -9041,7 +9144,7 @@ void ReadParametersFromFile ()
                 numDataSets = (int) argument;
                 break;
             case 's':
-                if (fscanf(stdin, "%f", &argument) !=1 || argument < 1)
+                if (fscanf(stdin, "%f", &argument) !=1 || argument < 2)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad sample size (%d)\n\n", (int) argument);
                     PrintUsage(stderr);
