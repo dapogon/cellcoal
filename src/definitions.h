@@ -12,14 +12,14 @@
 #define PROGRAM_NAME            "CellCoal"
 #define PROGRAM_NAME_UPPERCASE	"CELLCOAL"
 #define PROGRAM_NAME_LOWERCASE	"cellcoal"
-#define VERSION_NUMBER          "version 1.2.1"
+#define VERSION_NUMBER          "version 1.3.0"
 
 #define	MAX_NAME                120
 #define	MAX_LINE                500000
 #define	MAX_GENOME              1000000
 #define	NO                      0
 #define	YES                     1
-#define	infinity                999999
+#define	infinity                99999
 #define	MATERNAL                0
 #define	PATERNAL                1
 #define BINARY                  0

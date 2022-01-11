@@ -1,9 +1,9 @@
 [PARAMETER FILE for CellCoal] [text in brackets will be ignored]
     
 [COALESCENT]
-    [number of replicates] n10
-    [number of cells] s9
-    [number of sites] l1000
+    [number of replicates] n1
+    [number of ingroup cells] s20
+    [number of sites] l10000
     [effective population size] e1000
     [demographics] [h2 1000 100 40000 200 30000 20000]
     [exponential growth rate] g1e-5 [ln2=0.6931 max]
@@ -11,23 +11,25 @@
     [death rate] [L0.1]
 
 [GENEALOGY MODIFIERS]
-    [root branch length ratio] k0.5
+    [root branch length ratio] k0.2
     [outgroup branch length ratio] q1
     [rate variation among branches] [i1]
-
+	[tree rate switches] N1 3
+	
+	
 [MUTATION MODEL]
     [alphabet binary:0 DNA:1] b1
     [germline SNP rate] [c0.00001]
-    [somatic mutation rate] [u1e-6]
+    [somatic mutation rate] u1e-5
     [CN_LOH rate] [H1e-5]
     [deletion rate] [d1e-6]
-    [fixed number of mutations - ISM] j100
+    [fixed number of mutations - ISM] [j1000]
     [trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
      [default mutation model is ISM diploid]    
-    [alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] [m2]
-    [proportion of alternative model sites] p0
+    [alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] m2
+    [proportion of alternative model sites] p1
     [alternative/default model relative mutation rate] [w1]
-    [base frequencies]  f0.3 0.2 0.2 0.3
+    [base frequencies] f0.3 0.2 0.2 0.3
     [transition/transversion ratio] [t1.7]
     [rate variation among sites] [a1.0]
     [mutation matrix ACGT x ACGT] r0 1 1 1
@@ -49,16 +51,16 @@
     [genotyping error; no reads] [G0.1 0.01]
 
 [scWGA PARAMETERS]
-    [fixed allelic dropout (ADO)] D0.01
+    [fixed allelic dropout (ADO)] [D0.01]
     [ADO per cell] [P0.1 0.01]
     [ADO per site] [Q0.2 0.01]
     [maternal allelic imbalance] [I0.5 0.01]
-    [amplification error] A0.0003 0.0001 0
+    [amplification error] [A0.0003 0.0001 0]
     [doublet rate per cell] [B0.02 0.01]
 
 [NGS PARAMETERS]
-    [sequencing coverage; reads simulated] C20
-    [coverage overdispersion] V5
+    [sequencing coverage; reads simulated] [C20]
+    [coverage overdispersion] [V5]
     [haploid coverage] [R0.5]   
     [sequencing error] [E0.01]
     [error matrix ACGT x ACGT] [X0 1 1 1
@@ -76,18 +78,19 @@
     [print CATG] [8]
     [print PILEUP] [9]
     [print true haplotypes] Y
-    [print consensus IUPAC sequences] [x]
+    [print consensus IUPAC sequences] x
     [print replicates in individual folders] v
     [results folder name] oresults
     [user tree file] [Tusertree.0001]
     [user genome file] [Uusergenome.fas]
     
 [OTHER]
-    [use tumor nomenclature for cells] [W]
-    [noisy] y1
-    [seed] #16106252 [if no seed is specified, the current time will be used as seed]
+    [use tumor nomenclature for cells] W
+    [noisy] y2
+    [seed] [#16106252] [if no seed is specified, the current time will be used as seed]
 
     [noisy = 0: does not print anything
      noisy = 1: + simulation summary, 
      noisy = 2: + replicate information, 
      noisy = 3: + calculation status and event information]
+     

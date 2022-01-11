@@ -18,7 +18,7 @@
 /*  cellcoal
 //  CellCoal
 //
-//  Copyright (c) 2016-2020 David Posada. All rights reserved.
+//  Copyright (c) 2016-2022 David Posada. All rights reserved.
 
 	Name:		CellCoal
 	Purpose:	To simulate the clonal neutral evolution of single cells (for example within a tumor)
@@ -114,6 +114,13 @@ Version 1.1.0 (18/10/2019)
  - print all likelihoods for doublets also
  - update example parameter files
  
+ Version 1.2.2 (24/03/2021)
+ - minor fixes
+ 
+ Version 1.3.0 (11/01/2022)
+ - implement tree rate switches
+ 
+ 
 [TO-DOs]
 - add new signatures
 - move data structure into cell structure (optional)
@@ -158,8 +165,10 @@ int main (int argc, char **argv)
 	deathRate = 0;				/* death rate in the Ohtuski and Innan 2017 coalescent model*/
    	mutationRate = 1.0e-7;		/* nucleotide mutation rate per site per generation */
 	SNPrate = 0.0;				/* germline variation rate for rooth healthy genome */
-	rateVarAmongLineages = NO;	/* modify rate variation among branches  (to non-clock) */
-    alphabet = DNA;          	/* alphabet 0/1 or DNA */
+	rateVarAmongLineages = NO;	/* modify rate variation among branches (to non-clock) */
+	doTreeRateSwitches = NO;	/* do rate switches along the tree */
+	numTreeRateSwitches = 0;	/* number of rate switches along the tree */
+	alphabet = DNA;          	/* alphabet 0/1 or DNA */
     altModel = 0;				/* by default the alternative model will be ISM haploid */
     propAltModelSites = 0;		/* proportion of sites that will mutate according to alternative model */
     nonISMRelMutRate = 1.0;		/* relative rate alternative/default model for sites */
@@ -197,7 +206,7 @@ int main (int argc, char **argv)
     doPrintTree = NO;				/* whether to print the coalescent tree */
     doPrintTimes = NO;				/* whether to print coalescent times */
 	doPrintAncestors = NO;      	/* whether to print data for ancestral cells */
-	doNGS = YES;  					/* produce reads by default */
+	doNGS = NO;  					/* produce reads by default */
 	doTumorNames = NO;				/* use specific name for taxa in the tumor scenario */
 	stringPrecision = 12;			/* precision for taxa names */
 	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
@@ -284,6 +293,7 @@ int main (int argc, char **argv)
 	
     /* initialize a few variables */
 	numNodes = 2 * numCells + 1;
+	maxTreeRateSwitches = numCells;
 	a = 0;
     a2 = 0;
     for (i=1; i<numCells; i++) /* ignoring outgroup (healthy cell) */
@@ -494,10 +504,15 @@ int main (int argc, char **argv)
 			MakeCoalescenceTree (numCells, N, &seed);
 			if (noisy > 2)
 				fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
-	 
-		   /* Make cell tree non-clock if needed */
+			
+
+		   /* Make ingroup cell tree non-clock if needed */
 			if (rateVarAmongLineages == YES)
 				MakeTreeNonClock (coalTreeMRCA, &seed);
+			else if (doTreeRateSwitches == YES)
+				TreeRateSwitch (coalTreeMRCA, &seed);
+				
+			totalTreeLength = SumBranches (healthyRoot);
 			
 			cumNumCA += numCA;
 			cumTMRCA += TMRCA;
@@ -506,11 +521,10 @@ int main (int argc, char **argv)
  
         if (doPrintTree == YES)
             PrintTree (healthyRoot, fpTrees);
-			
+
         if (doPrintTimes == YES)
             PrintTimes (0, fpTimes);
  
-		totalTreeLength = SumBranches(healthyRoot);
  
 	/* allocate genotype data to be stored in data[genome][cell][site] */
         data = (int ***) calloc (ploidy, sizeof(int **));
@@ -813,9 +827,9 @@ int main (int argc, char **argv)
 		if (doPrintSeparateReplicates == YES)
 			{
 			if (doPrintTree == YES)
-				fclose(fpTrees);
+				fclose (fpTrees);
 			if (doPrintTimes == YES)
-				fclose(fpTimes);
+				fclose (fpTimes);
 			}
 		
         if (doSimulateData == YES)
@@ -824,21 +838,21 @@ int main (int argc, char **argv)
 			if (doPrintSeparateReplicates == YES)
 				{
 				if (doPrintSNVgenotypes == YES)
-					fclose(fpSNVgenotypes);
+					fclose (fpSNVgenotypes);
 				if (doPrintFullGenotypes == YES)
-					fclose(fpFullGenotypes);
+					fclose (fpFullGenotypes);
 				if (doPrintSNVhaplotypes == YES)
-					fclose(fpSNVhaplotypes);
+					fclose (fpSNVhaplotypes);
 				if (doPrintFullHaplotypes == YES)
-					fclose(fpFullHaplotypes);
+					fclose (fpFullHaplotypes);
 				if (doPrintTrueHaplotypes == YES)
-					fclose(fpTrueHaplotypes);
+					fclose (fpTrueHaplotypes);
 				if (doNGS == YES)
-					fclose(fpVCF);
+					fclose (fpVCF);
 				if (doPrintCATG == YES)
-					fclose(fpCATG);
+					fclose (fpCATG);
 				if (doPrintPILEUP == YES)
-					fclose(fpPILEUP);
+					fclose (fpPILEUP);
 				}
  
 			/* free data structures */
@@ -862,8 +876,8 @@ int main (int argc, char **argv)
 				{
 				for (i=0; i<64; i++)
 					{
-					free(triNucleotideMaternal[i].position);
-					free(triNucleotidePaternal[i].position);
+					free (triNucleotideMaternal[i].position);
+					free (triNucleotidePaternal[i].position);
 					}
 				free (triNucleotideMaternal);
 				free (triNucleotidePaternal);
@@ -973,7 +987,11 @@ int main (int argc, char **argv)
 		free (paternalUserGenome);
 		free (maternalUserGenome);
 		}
-	
+	if (doTreeRateSwitches == YES)
+		{
+		free (treeRateSwitchMultiplier);
+		free (treeRateInfo);
+		}
     secs = (double)(clock() - start) / CLOCKS_PER_SEC;
 
 #ifdef COUNT_ML_GENOTYPE_ERRORS
@@ -1235,8 +1253,8 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
     healthyRoot->right = healthyTip;
     healthyTip->time = 0;
     healthyTip->length = (healthyRoot->time - healthyTip->time) * healthyTipBranchLengthRatio;
-    healthyTip->branchLength = healthyTip->length * mutationRate;
-    healthyTip->isHealthyTip = YES;
+	healthyTipBranchLength = healthyTip->branchLength = healthyTip->length * mutationRate;
+	healthyTip->isHealthyTip = YES;
     if (noisy > 2)
         fprintf (stderr, "DONE");
 
@@ -1744,29 +1762,9 @@ void RelabelNodes (TreeNode *p)
 
 
 
-/*************************** SumBranchlengths **********************************/
-/* Returns the sum of the branch lengths for a given tree/subtree */
-double SumBranches (TreeNode *p)
-    {
-    static double sum;
-		
-    if (p != NULL)
-        {
-        if (p->anc == NULL)
-            sum = 0;
-        else
-            sum += p->branchLength;
-        SumBranches (p->left);
-        SumBranches (p->right);
-        }
-		
-    return sum;
-    }
-
-
 /*************************** SumTreeHeights **********************************/
 /* Returns the total height (sum of all paths from root to tips)
- 	and the number of tips for for a given tree/subtree
+	and the number of tips for for a given tree/subtree
 */
 /*
  double SumTreeHeights (TreeNode *p, double total, int *numTips)
@@ -1784,9 +1782,50 @@ double SumBranches (TreeNode *p)
 	}
 */
 
+/*************************** SumBranchlengths **********************************/
+/* Returns the sum of the branch lengths for a given tree/subtree */
+//because we have a static sum, we only want to call this function once
+/*
+ double SumBranchesOnce (TreeNode *p)
+	 {
+	 static double sum;
+		 
+	 if (p != NULL)
+		 {
+		 if (p->anc == NULL)
+			 sum = 0;
+		 else
+			 sum += p->branchLength;
+		 SumBranchesOnce (p->left);
+		 SumBranchesOnce (p->right);
+		 }
+		 
+	 return sum;
+	 }
+*/
+
+
+/************************** SumBranchlengths **********************************/
+/* Returns the sum of the branch lengths for a given tree/subtree */
+double SumBranches (TreeNode *p)
+   {
+	double totalSum, leftSum, rightSum;
+	totalSum = leftSum = rightSum = 0;
+	
+	if (p == NULL)
+	   return 0;
+	else
+		{
+		leftSum  = SumBranches(p->left);
+		rightSum = SumBranches(p->right);
+		totalSum =  p->branchLength + leftSum + rightSum;
+		return totalSum;
+		}
+   }
+
 
 /**************** MakeTreeNonClock **************/
-/*	Introduce rate variation among lineages using a gamma rate  */
+/*	Introduce rate variation among lineages using a gamma multiplier  */
 
 void MakeTreeNonClock (TreeNode *p, long int *seed)
     {
@@ -1797,6 +1836,98 @@ void MakeTreeNonClock (TreeNode *p, long int *seed)
         MakeTreeNonClock (p->right, seed);
         }
     }
+
+
+/**************** TreeRateSwitch **************/
+/*	Introduce rate switches on subtrees
+Chooses a random branch and from there on multiplies
+the branch lengths of descendants
+*/
+
+void TreeRateSwitch (TreeNode *p, long int *seed)
+	{
+	double		uniform, inTreeLength, cumBranchLength;
+	int			i, j, numTipsSwitched, equal;
+	TreeNode	**switchNode;
+	char		*concat;
+	
+	concat = (char *) calloc(300, sizeof(char));
+	
+	switchNode = (TreeNode **) calloc(numTreeRateSwitches, sizeof(TreeNode*));
+	if (!switchNode)
+		{
+		fprintf (stderr, "Could not allocate switchNode (%ld)\n", numTreeRateSwitches * sizeof(TreeNode*));
+		exit (-1);
+		}
+	
+	inTreeLength = SumBranches(p) - p->branchLength;
+	//fprintf(stderr,"\ninTreeBL = %6.4f;  pBL = %6.4f ; htBL = %6.4f;  total = %6.4f\n", inTreeLength, p->branchLength, healthyTipBranchLength, inTreeLength + p->branchLength + healthyTipBranchLength);
+	
+	// choose all switches
+	for (i=0; i<numTreeRateSwitches; i++)
+		{
+		uniform = RandomUniform(seed) * inTreeLength;
+		cumBranchLength = 0;
+
+		for (j=0; j<numNodes; j++)
+			{
+			p = treeNodes + j;
+			cumBranchLength += p->branchLength;
+			if (cumBranchLength >= uniform)
+				break;
+			}
+		
+		//avoid switches in the same branch
+		equal = NO;
+		if (i>0)
+			{
+			for (j=i; j>=0; j--)
+				if (p == switchNode[j])
+					equal = YES;
+			}
+
+		if (equal == NO)
+			switchNode[i] = p;
+		else
+			i--;
+		}
+
+	// do all switches
+	for (i=0; i<numTreeRateSwitches; i++)
+		{
+		p = switchNode[i];
+		sprintf (concat, "\n  node %d  *%4.2f  ( ", p->label+1, treeRateSwitchMultiplier[i]);
+		strcat (treeRateInfo, concat);
+		numTipsSwitched = 0;
+		BranchRateSwitch (p, treeRateSwitchMultiplier[i], &numTipsSwitched, seed);
+		strcat (treeRateInfo, ")");
+		}
+	free (switchNode);
+	free (concat);
+	}
+
+
+/**************** BranchRateSwitch **************/
+/* multiplies branch lengths of the given tree/subtree */
+
+void BranchRateSwitch (TreeNode *p, float multiplier, int *numTips, long int *seed)
+	{
+	if (p != NULL)
+		{
+		p->branchLength *= multiplier;
+		if (p->left == NULL && p->right == NULL)
+			{
+			(*numTips)++;
+			char *concat;
+			concat = (char *) calloc(20, sizeof(char));
+			sprintf (concat, "%d ", p->label+1);
+			strcat (treeRateInfo, concat);
+			free (concat);
+			}
+		BranchRateSwitch (p->left, multiplier, numTips, seed);
+		BranchRateSwitch (p->right, multiplier, numTips, seed);
+		}
+	}
 
 
 /********************************** InitializeGenomes ***********************************/
@@ -2113,14 +2244,6 @@ void SimulateISM (TreeNode *p, int genome, int doISMhaploid, long int *seed)
 		numModelSites = numAltModelSites;
 		}
 
-/*
-    totalBranchSum = 0;
-    for (i=0; i<numModelSites; i++)
-        {
-        allSites[modelSites[i]].branchSum = SumBranches (healthyRoot);
-        totalBranchSum += allSites[modelSites[i]].branchSum;
-        }
-*/
 
 	totalBranchSum = totalTreeLength * numModelSites;
 
@@ -2378,14 +2501,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 
 	/* count trinucleotide frequencies in the healthy root genome */
 	CountTriNucFrequencies (data[genome][OUTGROUP_ROOT], genome);
-/*
-    totalBranchSum = 0;
-    for (site=0; site<numSites; site++)
-        {
-        allSites[site].branchSum = SumBranches (healthyRoot);
-        totalBranchSum += allSites[site].branchSum;
-        }
-*/
+
 	totalBranchSum = totalTreeLength * numSites;
 
     if (doSimulateFixedNumMutations == YES) /* conditioned on a specified number of mutations */
@@ -3166,15 +3282,6 @@ void EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed)
 	{
     int		i, trials, numDeletions, deletionsSoFar;
     double	totalDeletionBranchSum;
-
-    /*
-    totalDeletionBranchSum = 0;
-    for (i=0; i<numSites; i++)
-        {
-        allSites[i].deletionBranchSum = SumBranches (healthyRoot) / mutationRate * deletionRate;;
-        totalDeletionBranchSum += allSites[i].deletionBranchSum;
-        }
-	*/
 	
 	totalDeletionBranchSum = numSites * totalTreeLength / mutationRate * deletionRate;
 	numDeletions = RandomPoisson (totalDeletionBranchSum, seed); /* the number of deletions will be distributed as a Poisson with parameter totalDeletionBranchSum */
@@ -4411,7 +4518,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	int		thereIsMaternalAllele, thereIsPaternalAllele;
 	double  maternalSiteAmplificationError, paternalSiteAmplificationError;
 	int		template, template1, template2;
-	int		debug_GL, fix_parameters;
+	int		debug_GL, debug_GL_EXIT, fix_parameters;
 	double	maxLike, pReadGivenA1, pReadGivenA2;
 	double	homozygote_for_read, heterozygote_for_read, no_allele_for_read;
 	double	**logGL, **normLogGL;
@@ -4450,20 +4557,21 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 
 	//!!!!: debug GL
 	debug_GL = NO;
+	debug_GL_EXIT = YES;
 	fix_parameters = NO;
 	if (fix_parameters == YES)
 		{
 		maternalAllele = c->maternalAllele = T;
-		paternalAllele = c->paternalAllele = T;
+		paternalAllele = c->paternalAllele = G;
 		thereIsMaternalAllele = c->thereIsMaternalAllele = YES;
 		thereIsPaternalAllele = c->thereIsPaternalAllele = YES;
 		readCount[A] = 0;
 		readCount[C] = 0;
-		readCount[G] = 0;
-		readCount[T] = 10;
+		readCount[G] = 14;
+		readCount[T] = 0;
 
-		alleleDropoutRate = 0.8;
-		thereisADO = YES;
+		alleleDropoutRate = 0.0;
+		thereisADO = NO;
 		doADOcell = NO;
 		doADOsite = NO;
 		fixedADOrate = alleleDropoutRate;
@@ -4471,7 +4579,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		
 		simulateOnlyTwoTemplates = NO;
 		numReads = c->numReads = readCount[A] + readCount[C] + readCount[G] + readCount[T];
-		sequencingError = 0.01;
+		sequencingError = 0.00;
 		maternalSiteAmplificationError = c->maternalSiteAmplificationError = 0;
 		paternalSiteAmplificationError = c->paternalSiteAmplificationError = 0;
 
@@ -4808,6 +4916,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	if (debug_GL == YES)
 		{
 		//PrintSiteInfo (stderr, SNVsites[snv]);
+		fprintf (stderr, "\n");
 		for (a1=0; a1<4; a1++)
 			for (a2=0; a2<4; a2++)
 				fprintf (stderr, "\nunphasedlog10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), logGL[a1][a2]);
@@ -4833,15 +4942,28 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			normLogGL[a1][a2] = logGL[a1][a2] - maxLike;
 			normLogGL[a2][a1] = normLogGL[a1][a2];
 			}
+
+	//TODO: print GL=-999?
+	/* substitute small numbers for printing */
+	/*for (a1=0; a1<4; a1++)
+		for (a2=a1; a2<4; a2++)
+			if (logGL[a1][a2] < 1e-6 )
+				{
+				logGL[a2][a1] = logGL[a1][a2] = smallNumber;
+				normLogGL[a2][a1] = normLogGL[a1][a2] = smallNumber;
+				}
+	*/
 	
 	if (debug_GL == YES)
 		{
 		//PrintSiteInfo (stderr, SNVsites[snv]);
+		fprintf (stderr, "\nmaxlike = %lf\n", maxLike);
 		for (a1=0; a1<4; a1++)
 			for (a2=0; a2<4; a2++)
 				fprintf (stderr, "\nunphased_norm_log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), normLogGL[a1][a2]);
 		fprintf (stderr, "\n");
-		//exit(1);
+		if (debug_GL_EXIT == YES)
+			exit(1);
 		}
 /*
 	if (debug_GL == YES)
@@ -4871,7 +4993,10 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		free(GL[k]);
 	free (GL);
 
-	//exit(1);
+	/*
+	if (debug_GL == YES)
+		//exit(1);
+	*/
 
 }
 
@@ -4992,7 +5117,7 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 					for (l=0; l<4; l++)
 						{
 						if (isinf(cell[c1].site[j].logGL[k][l]) || isinf(celldoublet.site[j].logGL[k][l]))
-							cell[c1].site[j].logGLdoublet[k][l] = -1.0/0.0;
+							cell[c1].site[j].logGLdoublet[k][l] = -INFINITY;
 						else
 							cell[c1].site[j].logGLdoublet[k][l] = cell[c1].site[j].logGL[k][l] + celldoublet.site[j].logGL[k][l];
 						}
@@ -5010,8 +5135,6 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 					fprintf (stderr, "\n");
 					}
 
-				
-				
 				/* obtain unphased GLs by combining GLs from both phases -only heterozygotes */
 				   for (k=0; k<4; k++)
 					   for (l=k+1; l<4; l++)
@@ -5023,8 +5146,6 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 							   //fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
 							   }
 
-				
-				
 				/* find max log10 doublet likelihood  */
 				maxLike = cell[c1].site[j].logGLdoublet[A][A];
 				MLmatAllele = MLpatAllele = A;
@@ -5036,7 +5157,6 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 							MLmatAllele = k;
 							MLpatAllele = l;
 							}
-
 				
 				/* normalize to likelihood ratios */
 				for (k=0; k<4; k++)
@@ -5045,7 +5165,17 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 					cell[c1].site[j].normLogGLdoublet[k][l] = cell[c1].site[j].logGLdoublet[k][l] - maxLike;
 					cell[c1].site[j].normLogGLdoublet[l][k] = cell[c1].site[j].normLogGLdoublet[k][l];
 					}
-						
+
+				//TODO: print GL=-999?
+				/* substitute small numbers for printing */
+				/*for (k=0; k<4; k++)
+					for (l=k; l<4; l++)
+						if (cell[c1].site[j].logGLdoublet[k][l] < 1e-6 )
+							{
+							cell[c1].site[j].logGLdoublet[l][k] = cell[c1].site[j].logGLdoublet[k][l] = smallNumber;
+							cell[c1].site[j].normLogGLdoublet[l][k] = cell[c1].site[j].normLogGLdoublet[k][l] = smallNumber;
+							}
+				 */
 				cell[c1].site[j].MLmatAlleleDoublet = MLmatAllele;
 				cell[c1].site[j].MLpatAlleleDoublet = MLpatAllele;
 			
@@ -5073,8 +5203,11 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 			} // if we do doublet for c1
 		} //c1
 	
-	//exit(1);
-
+	/*
+	if (debug_DL == YES)
+		//exit(1);
+	*/
+	
 	}
 
 
@@ -5398,24 +5531,6 @@ void PrintVCF (FILE *fp)
 						fprintf (fp,"%d", l+1);
 						break;
 						}
-	
-					//!!!: WARNING ML allele not in ALT/REF
-					/* if (l == allSites[j].numAltAlleles - 1)
-						{
-						fprintf (fp,"?");
-						fprintf (stderr,"\nWARNING: ML paternal allele is not in the ALT or REF set of reads [cell %d site %d]", i+1, j+1);
-						
-						fprintf (stderr,"\ncell %d site %d: %c%c", i+1, j+1, WhichNuc(trueMaternalAllele), WhichNuc(trueMaternalAllele));
-						fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d",   cell[i].site[j].readCount[A],  cell[i].site[j].readCount[C],  cell[i].site[j].readCount[G],  cell[i].site[j].readCount[T]);
-						fprintf (stderr,"\nsequencing error = %f",sequencingError);
-						fprintf (stderr,"\nmatAmpError = %f", cell[i].site[j].maternalSiteAmplificationError);
-						fprintf (stderr,"\npatAmpError = %f", cell[i].site[j].paternalSiteAmplificationError);
-						for (a1=0; a1<4; a1++)
-							for (a2=a1; a2<4; a2++)
-								fprintf (stderr, "\n(4T)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].logGL[a1][a2]);
-						fprintf (stderr, "\n");
-						 
-						} */
 					}
 				}
 	
@@ -5448,7 +5563,7 @@ void PrintVCF (FILE *fp)
 					fmt = fmt_comma_f_2;
 					}
 
-				/* VFC: FORMAT: GL (log10 genotype likelihoods) */
+				/* VFC: FORMAT: GL (log10 genotype likelihoods in order according to VCF standards) */
 				fprintf (fp, ":");
 				fmt = fmt_f_2;
 				for (k=0; k<=allSites[j].numAltAlleles; k++)
@@ -5468,7 +5583,7 @@ void PrintVCF (FILE *fp)
 						fmt = fmt_comma_f_2;
 						}
 				
-				/* VFC: FORMAT: GLN (normalized log10 genotype likelihoods) */
+				/* VFC: FORMAT: GLN (normalized log10 genotype likelihoods but in order according to VCF standards) */
 				fprintf (fp, ":");
 				fmt = fmt_f_2;
 				for (k=0; k<=allSites[j].numAltAlleles; k++)
@@ -5488,7 +5603,7 @@ void PrintVCF (FILE *fp)
 						fmt = fmt_comma_f_2;
 						}
 	
-				/* VFC: FORMAT: PL (phred-scale genotype likelihoods) */
+				/* VFC: FORMAT: PL (phred-scale genotype likelihoods in order according to VCF standards) */
 				fprintf (fp, ":");
 				fmt = fmt_d;
 				for (k=0; k<=allSites[j].numAltAlleles; k++)
@@ -5511,7 +5626,7 @@ void PrintVCF (FILE *fp)
 						fmt = fmt_comma_d;
 						}
 
-				/* VFC: FORMAT: PLN (normalized phred-scale genotype likelihoods) */
+				/* VFC: FORMAT: PLN (normalized phred-scale genotype likelihoods in order according to VCF standards) */
 				fprintf (fp, ":");
 				fmt = fmt_d;
 				for (k=0; k<=allSites[j].numAltAlleles; k++)
@@ -6076,6 +6191,9 @@ void WriteTree (TreeNode *p, FILE *fp)
 /********************* PrintTimes **********************/
 /*	Prints to a given file a detailed description of
 	the tree as lost of nodes, times, branch lengths.
+	Note that only the branch lengths can be modified
+	after the coalescent (by rate variation among lineages
+	or by tree rate switches)
  */
 
 void PrintTimes(int listPosition, FILE *fp)
@@ -6481,11 +6599,11 @@ static void PrintFullGenotypes (FILE *fp)
     {
     int		i, j;
 		
-    if (doPrintAncestors == YES)
+	if (doPrintAncestors == YES && doNGS == NO)
         fprintf (fp, "%d %d\n", numCells+3, numSites);
     else
         fprintf (fp, "%d %d\n", numCells+1, numSites);
-
+	
     if (alphabet == DNA)
         {
         for (i=0; i<numCells+1; i++)
@@ -7297,7 +7415,7 @@ static void PrintHeader(FILE *fp)
 	fprintf (fp, "______________________________________________________________________\n\n");
     fprintf (fp,"Cell coalescent simulation - %s", PROGRAM_NAME);
     fprintf (fp,"  %s", VERSION_NUMBER);
-    fprintf (fp,"\n(c) 2021 David Posada - dposada@uvigo.es");
+    fprintf (fp,"\n(c) 2016-2022 David Posada - dposada@uvigo.es");
 	fprintf (fp, "\n______________________________________________________________________\n\n");
     }
 
@@ -7373,8 +7491,10 @@ static void	PrintRunInformation (FILE *fp)
 			fprintf (fp, "\n Rate variation among branches (alpha)        =   %-3.2f", alphaBranches);
 		else
 			fprintf (fp, "\n No rate variation among branches");
-		}
 		
+		if (doTreeRateSwitches == YES)
+			fprintf(fp,"\n Tree rate switches (affected cells)%s", treeRateInfo);
+		}
     fprintf (fp, "\n\nUser-defined branches");
     fprintf (fp, "\n Transforming branch length ratio             =   %2.1e", transformingBranchLengthRatio);
     fprintf (fp, "\n Healthy tip branch length ratio              =   %2.1e", healthyTipBranchLengthRatio);
@@ -7668,7 +7788,13 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -k%2.1e", transformingBranchLengthRatio);
 		fprintf (fp, " -q%2.1e", healthyTipBranchLengthRatio);
 		fprintf (fp, " -i%6.4f", alphaBranches);
-
+		if (doTreeRateSwitches == YES)
+			{
+			fprintf (fp, "-N%d", numTreeRateSwitches);
+			for (i=0; i<=numTreeRateSwitches; i++)
+				fprintf (fp, " %4.2f", treeRateSwitchMultiplier[i]);
+			}
+		
 		/* Mutation model */
 		fprintf (fp, " -b%d", alphabet);
 		fprintf (fp, " -c%2.1e", SNPrate);
@@ -7763,11 +7889,12 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-g: exponential growth rate (e.g. -g1e-5)");
 	fprintf (fp,"\n-K: cell birth rate (e.g. -K1)");
 	fprintf (fp,"\n-L: cell death rate (e.g. -L0.001)");
-   	fprintf (fp,"\n-h: number of demographic periods followed by effective  population size at the beginning and at the end of the period, ");
+   	fprintf (fp,"\n-h: number of demographic periods followed by effective population size at the beginning and at the end of the period, ");
     fprintf (fp, "\n    and the duration of the period in generations. (e.g. -d1 100 200 30000) (e.g. -d2 100 100 40000 1000 2000 20000)");
 	fprintf (fp,"\n-k: transforming branch length (e.g. -u1e-2)");
     fprintf (fp,"\n-q: healthy tip branch length (e.g. -q1e-6)");
     fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages (e.g. -i0.5)");
+	fprintf (fp,"\n-N:  number of tree rate switches followed by the rate multipliers  (e.g. -N2 10 0.2)");
 	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] (e.g. -b0)");
 	fprintf (fp,"\n-c: germline SNP rate (e.g. -c1e-5)");
 	fprintf (fp,"\n-u: somatic mutation rate (e.g. -u1e-6)");
@@ -8342,13 +8469,13 @@ int CheckMatrixSymmetry(double matrix[4][4])
 
 /******************** ReadParametersFromCommandLine **************************/
 /*
-USED IN ORDER
-F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 Y v x o T U  W y  #
-
-USED
-a b c d e f g h i j k l m n o p q r s t u v w x y
-A B C D E F G H I   K L M     P Q R S T U V W X Y
-1 2 3 4 5 6 7 8 9 #
+ USED IN ORDER
+ F n s l e K L g h k q i b u d H j S m p w c f t a r G C V A E D P Q I R B M 1 2 3 4 5 6 7 8 9 Y v x o T U W y #
+ 
+ USED
+ a b c d e f g h i j k l m n o p q r s t u v w x y
+ A B C D E F G H I   K L M     P Q R S T U V W X Y
+ 1 2 3 4 5 6 7 8 9 #
 */
 
 static void ReadParametersFromCommandLine (int argc,char **argv)
@@ -8363,7 +8490,6 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 		{
 		cat = (char *) calloc(300, sizeof(char));
 		CommandLine = (char *) calloc(MAX_LINE, sizeof(char));
-
 		for (i=0; i<argc; i++)
 			{
 			sprintf (cat, " %s", argv[i]);
@@ -8540,6 +8666,41 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 rateVarAmongLineages = YES;
                 break;
+			case 'N':
+				argument = atof(argv[i]);
+				if (argument < 1 || argument > numCells)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of tree rate switches (%d), it has to be a single number between 1 and the number of cells (%d)\n\n", (int) argument, numCells);
+					PrintUsage(stderr);
+					}
+
+				if (rateVarAmongLineages == YES)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Tree rate switches (-N) cannot be simulated together with gamma rate variation among lineages (-i)");
+					PrintUsage(stderr);
+					}
+
+				numTreeRateSwitches = (int) argument;
+				doTreeRateSwitches = YES;
+				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
+				treeRateSwitchMultiplier = (double*) calloc (numTreeRateSwitches, sizeof(double));
+				if (!treeRateSwitchMultiplier)
+					{
+					fprintf (stderr, "Could not allocate the treeRateSwitchMultiplier array\n");
+					exit (-1);
+					}
+
+				for (j=0; j<numTreeRateSwitches; j++)
+					{
+					argument = atof(argv[++i]);
+					treeRateSwitchMultiplier[j] = argument;
+					if (treeRateSwitchMultiplier[j] <= 0)
+						{
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad tree rate switch multiplier (%f), it has to be > 0 \n\n", treeRateSwitchMultiplier[j]);
+						PrintUsage(stderr);
+						}
+					}
+				break;
 			case 'b':
                 argument = atof(argv[i]);
                 alphabet = (int) argument;
@@ -9274,8 +9435,47 @@ void ReadParametersFromFile ()
                     PrintUsage(stderr);
                     }
                 rateVarAmongLineages = YES;
-               break;
-            case 'b':
+				if (doTreeRateSwitches == YES)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Tree rate switches (-N) cannot be simulated together with gamma rate variation among lineages (-i)");
+					PrintUsage(stderr);
+					}
+             break;
+			case 'N':
+				if (fscanf(stdin, "%f", &argument) !=1 || argument < 1 || argument > numCells)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of tree rate switches (%d), it has to be a single number between 1 and the number of cells (%d)\n\n", (int) argument, numCells);
+					PrintUsage(stderr);
+					}
+
+				if (rateVarAmongLineages == YES)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Tree rate switches (-N) cannot be simulated together with gamma rate variation among lineages (-i)");
+					PrintUsage(stderr);
+					}
+
+				numTreeRateSwitches = (int) argument;
+				doTreeRateSwitches = YES;
+				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
+
+				treeRateSwitchMultiplier = (double*) calloc (numTreeRateSwitches, sizeof(double));
+				if (!treeRateSwitchMultiplier)
+					{
+					fprintf (stderr, "Could not allocate the treeRateSwitchMultiplier array\n");
+					exit (-1);
+					}
+
+				for (j=0; j<numTreeRateSwitches; j++)
+					{
+					fscanf(stdin, "%lf", &treeRateSwitchMultiplier[j]);
+					if (treeRateSwitchMultiplier[j] <= 0)
+						{
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad tree rate switch multiplier (%f), it has to be > 0 \n\n", treeRateSwitchMultiplier[j]);
+						PrintUsage(stderr);
+						}
+					}
+				break;
+			case 'b':
                 if (fscanf(stdin, "%f", &argument) !=1 || argument < 0  || argument > 1)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad alphabet (%d)\n\n", (int) argument);
