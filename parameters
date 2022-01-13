@@ -1,9 +1,9 @@
 [PARAMETER FILE for CellCoal] [text in brackets will be ignored]
     
 [COALESCENT]
-    [number of replicates] n1
-    [number of ingroup cells] s20
-    [number of sites] l10000
+    [number of replicates] n2
+    [number of ingroup cells] s10
+    [number of sites] l1000
     [effective population size] e1000
     [demographics] [h2 1000 100 40000 200 30000 20000]
     [exponential growth rate] g1e-5 [ln2=0.6931 max]
@@ -14,7 +14,7 @@
     [root branch length ratio] k0.2
     [outgroup branch length ratio] q1
     [rate variation among branches] [i1]
-	[tree rate switches] N1 3
+	[tree rate switches] N2 4 0.2
 	
 	
 [MUTATION MODEL]
@@ -48,10 +48,10 @@
                                   0.04 0.12 0.03 0.00]
 
 [GENOTYPING PARAMETERS]
-    [genotyping error; no reads] [G0.1 0.01]
+    [genotyping error; no reads] G0.1 0.01
 
 [scWGA PARAMETERS]
-    [fixed allelic dropout (ADO)] [D0.01]
+    [fixed allelic dropout (ADO)] D0.2
     [ADO per cell] [P0.1 0.01]
     [ADO per site] [Q0.2 0.01]
     [maternal allelic imbalance] [I0.5 0.01]
@@ -69,24 +69,24 @@
                                  1 1 1 0]
 [OUTPUT]
     [print SNV genotypes] 1
-    [print SNV haplotypes] 2
-    [print full genotypes] 3
-    [print full haplotypes] 4
+    [print SNV haplotypes] [2]
+    [print full genotypes] [3]
+    [print full haplotypes] [4]
     [print root ancestors] [5]
     [print trees] 6
     [print times] [7]
     [print CATG] [8]
     [print PILEUP] [9]
-    [print true haplotypes] Y
-    [print consensus IUPAC sequences] x
+    [print true haplotypes] [Y]
+    [print consensus IUPAC sequences] [x]
     [print replicates in individual folders] v
     [results folder name] oresults
     [user tree file] [Tusertree.0001]
     [user genome file] [Uusergenome.fas]
     
 [OTHER]
-    [use tumor nomenclature for cells] W
-    [noisy] y2
+    [use tumor nomenclature for cells] [W]
+    [noisy] y1
     [seed] [#16106252] [if no seed is specified, the current time will be used as seed]
 
     [noisy = 0: does not print anything

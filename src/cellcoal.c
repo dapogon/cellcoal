@@ -476,6 +476,9 @@ int main (int argc, char **argv)
 	if (doGeneticSignatures == YES && doSimulateData == YES)
 		PrepareGeneticSignatures();
 
+	if (noisy > 1)
+		fprintf(stderr, "\n");
+	
     for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
         {
         numCA = numMU = numDEL = numCNLOH = numProposedMU = TMRCA = numSNVmaternal = 0;
@@ -510,8 +513,10 @@ int main (int argc, char **argv)
 			if (rateVarAmongLineages == YES)
 				MakeTreeNonClock (coalTreeMRCA, &seed);
 			else if (doTreeRateSwitches == YES)
+				{
+				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
 				TreeRateSwitch (coalTreeMRCA, &seed);
-				
+				}
 			totalTreeLength = SumBranches (healthyRoot);
 			
 			cumNumCA += numCA;
@@ -722,7 +727,12 @@ int main (int argc, char **argv)
 				fprintf (stderr, "\nNumber of mutational events    =   %d", numMU);
 				fprintf (stderr, "\nNumber of SNVs                 =   %d", numSNVs);
 				fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
-				fprintf (stderr, "\nNumber of cnLOH events         =   %d\n\n", numCNLOH);
+				fprintf (stderr, "\nNumber of cnLOH events         =   %d", numCNLOH);
+				
+				if (doTreeRateSwitches == YES)
+					fprintf(stderr, "\nTree rate switches             =   %d %s", numTreeRateSwitches, treeRateInfo);
+
+				fprintf (stderr, "\n\n");
 				}
 
 			if (doPrintSNVgenotypes == YES && numSNVs > 0) /* we only print replicates with variation */
@@ -863,7 +873,10 @@ int main (int argc, char **argv)
                 free (data[i]);
                 }
 			free (data);
-			
+
+			if (doTreeRateSwitches == YES)
+				free (treeRateInfo);
+		 
 			for (i=0; i<numSites; i++)
               free(allSites[i].alternateAlleles);
             free (allSites);
@@ -988,11 +1001,9 @@ int main (int argc, char **argv)
 		free (maternalUserGenome);
 		}
 	if (doTreeRateSwitches == YES)
-		{
 		free (treeRateSwitchMultiplier);
-		free (treeRateInfo);
-		}
-    secs = (double)(clock() - start) / CLOCKS_PER_SEC;
+
+	secs = (double)(clock() - start) / CLOCKS_PER_SEC;
 
 #ifdef COUNT_ML_GENOTYPE_ERRORS
 	fprintf (stdout, "\n\n Mean probability for untrue genotype calls     =   %8.6f", meanMLgenotypeError);
@@ -1052,6 +1063,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
         treeNodes[i].label = 0;
         treeNodes[i].isHealthyRoot = NO;
         treeNodes[i].isHealthyTip = NO;
+		treeNodes[i].rateSwitch = 0.0;
 		treeNodes[i].name = (char*) calloc (MAX_NAME, sizeof(char));
 		if (!treeNodes[i].name)
 			{
@@ -1848,13 +1860,13 @@ void TreeRateSwitch (TreeNode *p, long int *seed)
 	{
 	double		uniform, inTreeLength, cumBranchLength;
 	int			i, j, numTipsSwitched, equal;
-	TreeNode	**switchNode;
+	TreeNode	**switchNodes;
 	char		*concat;
 	
 	concat = (char *) calloc(300, sizeof(char));
 	
-	switchNode = (TreeNode **) calloc(numTreeRateSwitches, sizeof(TreeNode*));
-	if (!switchNode)
+	switchNodes = (TreeNode **) calloc(numTreeRateSwitches, sizeof(TreeNode*));
+	if (!switchNodes)
 		{
 		fprintf (stderr, "Could not allocate switchNode (%ld)\n", numTreeRateSwitches * sizeof(TreeNode*));
 		exit (-1);
@@ -1877,17 +1889,17 @@ void TreeRateSwitch (TreeNode *p, long int *seed)
 				break;
 			}
 		
-		//avoid switches in the same branch
+		// avoid switches in the same branch
 		equal = NO;
 		if (i>0)
 			{
 			for (j=i; j>=0; j--)
-				if (p == switchNode[j])
+				if (p == switchNodes[j])
 					equal = YES;
 			}
 
 		if (equal == NO)
-			switchNode[i] = p;
+			switchNodes[i] = p;
 		else
 			i--;
 		}
@@ -1895,14 +1907,15 @@ void TreeRateSwitch (TreeNode *p, long int *seed)
 	// do all switches
 	for (i=0; i<numTreeRateSwitches; i++)
 		{
-		p = switchNode[i];
+		p = switchNodes[i];
 		sprintf (concat, "\n  node %d  *%4.2f  ( ", p->label+1, treeRateSwitchMultiplier[i]);
 		strcat (treeRateInfo, concat);
 		numTipsSwitched = 0;
 		BranchRateSwitch (p, treeRateSwitchMultiplier[i], &numTipsSwitched, seed);
 		strcat (treeRateInfo, ")");
+		p->rateSwitch = treeRateSwitchMultiplier[i];
 		}
-	free (switchNode);
+	free (switchNodes);
 	free (concat);
 	}
 
@@ -2799,8 +2812,6 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 
 	return chosenPosition;
 	}
-
-
 
 
 /********************************** SimulateSignatureISMforSite ***********************************/
@@ -6182,7 +6193,12 @@ void WriteTree (TreeNode *p, FILE *fp)
             fprintf (fp, ",");
             WriteTree (p->right, fp);
             if (p->anc !=NULL)
-                fprintf (fp, "):%8.6f",p->branchLength);
+				{
+				fprintf (fp, "):%8.6f",p->branchLength);
+				//TODO: anotate tree?
+				/*if (p->rateSwitch > 0)
+					fprintf (fp, "[&rate_switch=%e]",p->rateSwitch);*/
+				}
             }
         }
     }
@@ -7489,11 +7505,10 @@ static void	PrintRunInformation (FILE *fp)
 	 
 		if (rateVarAmongLineages == YES)
 			fprintf (fp, "\n Rate variation among branches (alpha)        =   %-3.2f", alphaBranches);
+		else if (doTreeRateSwitches == YES)
+			fprintf (fp, "\n Number of tree rate switches                 =   %-3d",  numTreeRateSwitches);
 		else
 			fprintf (fp, "\n No rate variation among branches");
-		
-		if (doTreeRateSwitches == YES)
-			fprintf(fp,"\n Tree rate switches (affected cells)%s", treeRateInfo);
 		}
     fprintf (fp, "\n\nUser-defined branches");
     fprintf (fp, "\n Transforming branch length ratio             =   %2.1e", transformingBranchLengthRatio);
@@ -7643,8 +7658,9 @@ static void	PrintRunInformation (FILE *fp)
 			else
 				fprintf (fp, "\n Doublet rate per cell                        =   %2.1f", meanDoubletRate);
 			}
+	
 		if (meanGenotypingError == 0 && doNGS == NO)
-			fprintf (fp, "\n\nNGS genotype errors/read counts are not being simulated");
+			fprintf (fp, "\n\nNGS genotype errors are not being simulated");
 
 		if (meanGenotypingError > 0)
 			{
@@ -7790,8 +7806,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -i%6.4f", alphaBranches);
 		if (doTreeRateSwitches == YES)
 			{
-			fprintf (fp, "-N%d", numTreeRateSwitches);
-			for (i=0; i<=numTreeRateSwitches; i++)
+			fprintf (fp, " -N%d", numTreeRateSwitches);
+			for (i=0; i<numTreeRateSwitches; i++)
 				fprintf (fp, " %4.2f", treeRateSwitchMultiplier[i]);
 			}
 		
@@ -7894,7 +7910,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-k: transforming branch length (e.g. -u1e-2)");
     fprintf (fp,"\n-q: healthy tip branch length (e.g. -q1e-6)");
     fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages (e.g. -i0.5)");
-	fprintf (fp,"\n-N:  number of tree rate switches followed by the rate multipliers  (e.g. -N2 10 0.2)");
+	fprintf (fp,"\n-N: number of tree rate switches followed by the rate multipliers  (e.g. -N2 10 0.2)");
 	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] (e.g. -b0)");
 	fprintf (fp,"\n-c: germline SNP rate (e.g. -c1e-5)");
 	fprintf (fp,"\n-u: somatic mutation rate (e.g. -u1e-6)");
@@ -8682,7 +8698,6 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 
 				numTreeRateSwitches = (int) argument;
 				doTreeRateSwitches = YES;
-				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
 				treeRateSwitchMultiplier = (double*) calloc (numTreeRateSwitches, sizeof(double));
 				if (!treeRateSwitchMultiplier)
 					{
@@ -9456,7 +9471,6 @@ void ReadParametersFromFile ()
 
 				numTreeRateSwitches = (int) argument;
 				doTreeRateSwitches = YES;
-				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
 
 				treeRateSwitchMultiplier = (double*) calloc (numTreeRateSwitches, sizeof(double));
 				if (!treeRateSwitchMultiplier)

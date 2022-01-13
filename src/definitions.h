@@ -80,7 +80,8 @@ typedef struct tnode
 	int				index, label, isHealthyTip, isHealthyRoot;
 	int				numLeftDescendants, numRightDescendants;
     double			length, time, branchLength, meanDepth;
-    char			*name;
+	double			rateSwitch;
+	char			*name;
     }
     TreeNode;
 
