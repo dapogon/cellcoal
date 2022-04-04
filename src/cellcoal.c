@@ -507,7 +507,6 @@ int main (int argc, char **argv)
 			MakeCoalescenceTree (numCells, N, &seed);
 			if (noisy > 2)
 				fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
-			
 
 		   /* Make ingroup cell tree non-clock if needed */
 			if (rateVarAmongLineages == YES)
@@ -517,13 +516,14 @@ int main (int argc, char **argv)
 				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
 				TreeRateSwitch (coalTreeMRCA, &seed);
 				}
-			totalTreeLength = SumBranches (healthyRoot);
 			
 			cumNumCA += numCA;
 			cumTMRCA += TMRCA;
 			cumTMRCASq += pow(TMRCA,2);
 			}
- 
+
+		totalTreeLength = SumBranches (healthyRoot);
+
         if (doPrintTree == YES)
             PrintTree (healthyRoot, fpTrees);
 
@@ -966,7 +966,6 @@ int main (int argc, char **argv)
 		if (doPrintTimes == YES)
 			fclose(fpTimes);
 		}
-
 	
     if (noisy > 0)
         {
@@ -8608,7 +8607,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad death rate (%f)\n\n", deathRate);
 					PrintUsage(stderr);
 					}
-				if (deathRate < birthRate)
+				if (deathRate > birthRate)
 					{
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad death rate (%f), it should be smaller than the birth rate (%f)\n\n", deathRate, birthRate);
 					PrintUsage(stderr);
