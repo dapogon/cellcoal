@@ -120,6 +120,8 @@ Version 1.1.0 (18/10/2019)
  Version 1.3.0 (11/01/2022)
  - implement tree rate switches
  
+ Version 1.3.1 (04/04/2022)
+ - fixed bug when using user trees that prevented the calculation of the total tree lenght
  
 [TO-DOs]
 - add new signatures
