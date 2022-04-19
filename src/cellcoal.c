@@ -5415,10 +5415,19 @@ void PrintVCF (FILE *fp)
 	fprintf (fp,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True genotype (considers DEL; ignores ADO/doublets\">");
 	fprintf (fp,"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
 	
-	for (i=0; i<numCells; i++)
-		fprintf (fp,"\ttumcell%04d", i+1);
-	fprintf (fp,"\thealthycell");
-
+	if (doUserTree == NO)
+		{
+		for (i=0; i<numCells; i++)
+			fprintf (fp,"\t%s%04d", inCellName, i+1);
+		fprintf (fp,"\t%s", outCellName);
+		}
+	else
+		{
+		for (i=0; i<numCells; i++)
+			fprintf (fp,"\t%-*s", stringPrecision, cellNames[i]);
+		fprintf (fp,"\t%s", outCellName);
+		}
+	
 	/* print only apparent SNVs */
 	for (snv=0; snv<numSNVs; snv++)
 		{
