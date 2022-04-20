@@ -5424,7 +5424,7 @@ void PrintVCF (FILE *fp)
 	else
 		{
 		for (i=0; i<numCells; i++)
-			fprintf (fp,"\t%-*s", stringPrecision, cellNames[i]);
+			fprintf (fp,"\t%s", cellNames[i]);
 		fprintf (fp,"\t%s", outCellName);
 		}
 	
