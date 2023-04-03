@@ -123,6 +123,9 @@ Version 1.1.0 (18/10/2019)
  Version 1.3.1 (04/04/2022)
  - fixed bug when using user trees that prevented the calculation of the total tree lenght
  
+ Version 1.3.1 (03/04/2023)
+ - fixing -P and -Q options when printing help (were interchanged only there)
+ 
 [TO-DOs]
 - add new signatures
 - move data structure into cell structure (optional)
@@ -7937,8 +7940,8 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-r: mutation matrix ACGT x ACGT (e.g. -r0 1 2 3 1 0 4 5 2 4 0 1 3 5 1 0)");
 
 	fprintf (fp,"\n-D: allelic dropout (e.g. -D0.1)");
-	fprintf (fp,"\n-P: allelic dropout variation among sites (e.g. -P1)");
-	fprintf (fp,"\n-Q: allelic dropout variation among cells (e.g. -Q1)");
+	fprintf (fp,"\n-P: allelic dropout variation among cells (e.g. -P1)");
+	fprintf (fp,"\n-Q: allelic dropout variation among sites (e.g. -Q1)");
 	fprintf (fp,"\n-I: maternal allelic imbalance (e.g. -I0.5)");
 	fprintf (fp,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
 	fprintf (fp,"\n-B: doublet rate per cell (e.g. -B0.1)");

@@ -1,10 +1,10 @@
 [PARAMETER FILE for CellCoal] [text in brackets will be ignored]
     
 [COALESCENT]
-    [number of replicates] n2
+    [number of replicates] n1
     [number of ingroup cells] s10
-    [number of sites] l1000
-    [effective population size] e1000
+    [number of sites] l10
+    [effective population size] e10000
     [demographics] [h2 1000 100 40000 200 30000 20000]
     [exponential growth rate] g1e-5 [ln2=0.6931 max]
     [birth rate] [K1]
@@ -23,11 +23,11 @@
     [somatic mutation rate] u1e-5
     [CN_LOH rate] [H1e-5]
     [deletion rate] [d1e-6]
-    [fixed number of mutations - ISM] [j1000]
+    [fixed number of mutations - ISM] j10
     [trinucleotide genetic signature - ISM] [S1 1 1.0] [S2 11 0.3 22 0.7]
      [default mutation model is ISM diploid]    
     [alternative mutation model ISMhap:0 Mk2:1 finiteDNA:2] m2
-    [proportion of alternative model sites] p1
+    [proportion of alternative model sites] p0
     [alternative/default model relative mutation rate] [w1]
     [base frequencies] f0.3 0.2 0.2 0.3
     [transition/transversion ratio] [t1.7]
@@ -48,10 +48,10 @@
                                   0.04 0.12 0.03 0.00]
 
 [GENOTYPING PARAMETERS]
-    [genotyping error; no reads] G0.1 0.01
+    [genotyping error; no reads] [G0.1 0.01]
 
 [scWGA PARAMETERS]
-    [fixed allelic dropout (ADO)] D0.2
+    [fixed allelic dropout (ADO)] [D0.2]
     [ADO per cell] [P0.1 0.01]
     [ADO per site] [Q0.2 0.01]
     [maternal allelic imbalance] [I0.5 0.01]
@@ -59,7 +59,7 @@
     [doublet rate per cell] [B0.02 0.01]
 
 [NGS PARAMETERS]
-    [sequencing coverage; reads simulated] [C20]
+    [sequencing coverage; reads simulated] C30
     [coverage overdispersion] [V5]
     [haploid coverage] [R0.5]   
     [sequencing error] [E0.01]
@@ -78,10 +78,10 @@
     [print CATG] [8]
     [print PILEUP] [9]
     [print true haplotypes] [Y]
-    [print consensus IUPAC sequences] [x]
+    [print consensus IUPAC sequences] x
     [print replicates in individual folders] v
     [results folder name] oresults
-    [user tree file] [Tusertree.0001]
+    [user tree file] Tusertree.0001
     [user genome file] [Uusergenome.fas]
     
 [OTHER]
