@@ -122,9 +122,11 @@ Version 1.1.0 (18/10/2019)
  
  Version 1.3.1 (04/04/2022)
  - fixed bug when using user trees that prevented the calculation of the total tree lenght
- 
- Version 1.3.1 (03/04/2023)
  - fixing -P and -Q options when printing help (were interchanged only there)
+ 
+ Version 1.3.3 (01/10/2024)
+- fix AllelicDropout so alleleADOrateSite is sampled once and stored for reuse across all cell genotypes. (Thanks to Jerry Barber)
+ 
  
 [TO-DOs]
 - add new signatures
@@ -3424,7 +3426,7 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
-	double alleleADOrateMean, alleleADOrateCell, alleleADOrateSite;
+	double alleleADOrateMean = 0.0, alleleADOrateCell = 0.0, alleleADOrateSite = 0.0;
 	double **alleleADOrate;
 
 	/* allocate space for the ADO rates */
@@ -3460,13 +3462,18 @@ void AllelicDropout (long int *seed)
 				alleleADOrateCell = RandomBetaMeanVar(meanADOcell, varADOcell, seed);
 			else
 				alleleADOrateCell = 0;
-			
+			}
+		for (j=0; j<numSites; j++)
+			{
+			if (doADOsite == YES)
+				alleleADOrateSite = RandomBetaMeanVar(meanADOsite, varADOsite, seed);
+			else
+				alleleADOrateSite = 0;
+			}
+		for (i=0; i<numCells+1; i++)
+			{
 			for (j=0; j<numSites; j++)
 				{
-				if (doADOsite == YES)
-					alleleADOrateSite = RandomBetaMeanVar(meanADOsite, varADOsite, seed);
-				else
-					alleleADOrateSite = 0;
 				alleleADOrate[i][j] = alleleADOrateCell + alleleADOrateSite - (alleleADOrateCell * alleleADOrateSite);
 				alleleADOrate[i][j] = 1.0 - sqrt (1.0 - alleleADOrate[i][j]); // at the allele level
 				}
@@ -3665,7 +3672,7 @@ void GenotypeError (long int *seed)
 /* Count number of variants in a given data set, assuming there is no ADO (yet).
    A variant is defined as no-deletion genotype different from the healthy root genotype */
 
-int CountTrueVariants () 
+int CountTrueVariants (void) 
 	{
     int		cell, site;
     int		nVariants = 0;
@@ -3694,7 +3701,7 @@ int CountTrueVariants ()
  	after introducing mutations, cnLOH, deletions, ADO and genotype errors
    A SNV is defined as no-deletion genotype different from the reference genotype */
 
-int CountAllelesInObservedGenotypes ()
+int CountAllelesInObservedGenotypes (void)
 	{
 	int		numAltAlleles, cell, site;
 	int		countA, countC, countG, countT, countADO, countDEL, nSNVs;
@@ -3861,7 +3868,7 @@ int CompareGenotypes (int a1, int a2, int b1, int b2)
  A SNV is defined as an ML genotype different from the reference genotype
  Note that ML genotypes cannot be ADO or DELETION
  */
-int CountAllelesInMLGenotypes()
+int CountAllelesInMLGenotypes(void)
 	{
 	int		numAltAllelesInCalls, i, j;
 	int		countA, countC, countG, countT, countN, nSNVs;
@@ -3933,7 +3940,7 @@ int CountAllelesInMLGenotypes()
  This cell structure keeps information basically about read count functions. It was
  build initially for making doublets.
  */
-void AllocateCellStructure()
+void AllocateCellStructure(void)
 	{
 	int i, j, k;
 	
@@ -9293,7 +9300,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
  */
 
 
-void ReadParametersFromFile ()
+void ReadParametersFromFile (void)
 	{
     int		j;
     char 	ch;

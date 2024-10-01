@@ -19,7 +19,7 @@
  Define tumor genetic signatures. See LoadSignatures()
 */
 
-void PrepareGeneticSignatures ()
+void PrepareGeneticSignatures (void)
 	{
 	int 	i, j, k, l;
 	char	*header, *token;
@@ -267,7 +267,7 @@ freq = prop.table(rowSums(tricounts))
 write.csv(freq, file = "trinuc.freqs.hg19-GRCh37.csv")
 */
 
-void LoadTrinucleotideFrequencies()
+void LoadTrinucleotideFrequencies(void)
 	{
 	
 	triNucFreq = (double *) calloc (64, sizeof(double));
@@ -451,7 +451,7 @@ void LoadTrinucleotideFrequencies()
 	5-CCT-3 => 5-CTT-3
 	*/
 
-void LoadSignatures()
+void LoadSignatures(void)
 	{
 	/* Signature 01 */
 	geneticSignature[0][A][CG_AT][A] = 0.011098326166;
