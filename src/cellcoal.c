@@ -127,6 +127,10 @@ Version 1.1.0 (18/10/2019)
  Version 1.3.3 (01/10/2024)
 - fix AllelicDropout so alleleADOrateSite is sampled once and stored for reuse across all cell genotypes. (Thanks to Jerry Barber)
  
+ Version 1.3.4 (10/02/2025)
+- fix nonISMRelMutRate input so it can be > 1
+	(Thanks to Haotian Zhang)
+
  
 [TO-DOs]
 - add new signatures
@@ -8772,7 +8776,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case 'j':
                 argument = atof(argv[i]);
                 numFixedMutations = (int) argument;
-                if (numFixedMutations <1)
+                if (numFixedMutations < 1)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad number of fixed mutations (%d)\n\n", numFixedMutations);
                     PrintUsage(stderr);
@@ -8887,7 +8891,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                break;
             case 'w':
                 nonISMRelMutRate = atof(argv[i]);
-                if (nonISMRelMutRate < 0 || nonISMRelMutRate > 1)
+//               if (nonISMRelMutRate < 0 || nonISMRelMutRate > 1)
+                 if (nonISMRelMutRate <= 0)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad relative nonISM/ISM mutation rate (%f)\n\n", nonISMRelMutRate);
                     PrintUsage(stderr);
@@ -9651,14 +9656,14 @@ void ReadParametersFromFile (void)
                     }
                 break;
             case 'w':
-                if (fscanf(stdin, "%lf", &nonISMRelMutRate)!=1 || nonISMRelMutRate < 0 || nonISMRelMutRate > 1)
+                if (fscanf(stdin, "%lf", &nonISMRelMutRate) != 1 || nonISMRelMutRate <= 0)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad relative non-ISM/ISM mutation rate (%f)\n\n", nonISMRelMutRate);
                     PrintUsage(stderr);
                     }
                 break;
 		   case 'c':
-                if (fscanf(stdin, "%lf", &SNPrate)!=1 || SNPrate < 0)
+                if (fscanf(stdin, "%lf", &SNPrate) != 1 || SNPrate < 0)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad germline SNP rate (%f)\n\n", SNPrate);
                     PrintUsage(stderr);

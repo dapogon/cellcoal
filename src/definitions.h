@@ -12,7 +12,7 @@
 #define PROGRAM_NAME            "CellCoal"
 #define PROGRAM_NAME_UPPERCASE	"CELLCOAL"
 #define PROGRAM_NAME_LOWERCASE	"cellcoal"
-#define VERSION_NUMBER          "version 1.3.2"
+#define VERSION_NUMBER          "version 1.3.4"
 
 #define	MAX_NAME                120
 #define	MAX_LINE                500000
