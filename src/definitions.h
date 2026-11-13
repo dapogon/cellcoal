@@ -113,32 +113,53 @@ typedef struct
     TriNucStr;
 
 
+
+/* Genotype likelihoods of a cell and site: after the phases are combined the 4x4 log10 likelihood matrix is
+   symmetric, so only the 10 values with a1<=a2 are kept, plus the maximum; the normalized matrix is always
+   logGL - max, so it is rebuilt with the same arithmetic when needed. A "gl" is an array of GL_NUM doubles.
+   For big runs the likelihoods are not stored at all: they are a pure function of the data in CellSiteStr and
+   are recomputed when they are printed (see GetSiteGL). */
+#define GL_NUM		11
+#define GL_MAX		10
+static inline int GL_Index (int a1, int a2)
+	{
+	int lo = a1 < a2 ? a1 : a2, hi = a1 < a2 ? a2 : a1;
+	return lo * (7 - lo) / 2 + hi;
+	}
+#define GLV(gl,a1,a2)	((gl)[GL_Index((a1),(a2))])
+#define GLN(gl,a1,a2)	((gl)[GL_Index((a1),(a2))] - (gl)[GL_MAX])
+
+/* 48 bytes per cell and site (alleles fit in a signed char: values are 0-3, DELETION=7, ADO=9, MISSING=-9) */
 typedef struct csite
     {
-	int		numReads;
-	int		*readCount;
-	int		trueMaternalAllele, truePaternalAllele;
-	int		maternalAllele, paternalAllele;
-	int		thereIsMaternalAllele, thereIsPaternalAllele;
-	double  maternalSiteAmplificationError, paternalSiteAmplificationError;
-	double	**logGL;
-	double	**normLogGL;
-	int		MLmatAllele;
-	int		MLpatAllele;
+	int			numReads;
+	int			readCount[4];
+	double  	maternalSiteAmplificationError, paternalSiteAmplificationError;
+	signed char	trueMaternalAllele, truePaternalAllele;
+	signed char	maternalAllele, paternalAllele;
+	signed char	thereIsMaternalAllele, thereIsPaternalAllele;
+	signed char	MLmatAllele, MLpatAllele;
+	}
+    CellSiteStr;
+
+/* data for cells that are doublets; only allocated for those cells */
+typedef struct
+    {
 	int		numReadsDoublet;
-	int		*readCountDoublet;
+	int		readCountDoublet[4];
 	int		maternalAlleleDoublet, paternalAlleleDoublet;
-	double	**logGLdoublet;
-	double	**normLogGLdoublet;
+	double	logGLdoublet[4][4];
+	double	normLogGLdoublet[4][4];
 	int		MLmatAlleleDoublet;
 	int		MLpatAlleleDoublet;
 	}
-    CellSiteStr;
+    DoubletSiteStr;
 
 
 typedef struct
     {
 	struct csite	*site;
+	DoubletSiteStr	*doublet;	/* NULL unless hasDoublet == YES */
 	int				hasDoublet;
 	}
     CellStr;
