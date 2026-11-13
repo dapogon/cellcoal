@@ -25,5 +25,5 @@ Bug fixes (genotyping error, allelic dropout variation, memory safety), 3–4× 
 - If you use CellCoal, please cite: Posada D. (2020) CellCoal: coalescent simulation of single-cell sequencing samples. *Molecular Biology and Evolution* 37: 1535-1542. <a href="https://academic.oup.com/mbe/article/37/5/1535/5728646" target="_blank">https://academic.oup.com/mbe/article/37/5/1535/5728646</a>.
 
 ## Manual
-A detailed manual is available in <a href="https://dapogon.github.io/cellcoal/" target="_blank">html</a> or in <a href="https://dapogon.github.io/cellcoal/cellcoal.manual.v1.1.pdf" target="_blank">pdf</a>.
+A detailed manual is available in <a href="https://dapogon.github.io/cellcoal/" target="_blank">html</a> or in <a href="https://dapogon.github.io/cellcoal/cellcoal.manual.v2.0.pdf" target="_blank">pdf</a>.
 
