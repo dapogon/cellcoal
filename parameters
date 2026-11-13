@@ -81,7 +81,7 @@
     [print consensus IUPAC sequences] x
     [print replicates in individual folders] v
     [results folder name] oresults
-    [user tree file] Tusertree.0001
+    [user tree file] [Tusertree.0001]
     [user genome file] [Uusergenome.fas]
     
 [OTHER]
