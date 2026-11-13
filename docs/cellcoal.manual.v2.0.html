@@ -963,7 +963,7 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <tr><td><code>RC</code></td><td>Read counts for A, C, G, T</td></tr>
 <tr><td><code>G10</code>, <code>G10N</code></td><td>Log10 genotype likelihoods of the 10 unphased genotypes (order AA AC AG AT CC CG CT GG GT TT), raw and normalized</td></tr>
 <tr><td><code>GL</code>, <code>GLN</code></td><td>Log10 genotype likelihoods for the genotypes formed by the REF and ALT alleles of the line (in VCF order), raw and normalized</td></tr>
-<tr><td><code>PL</code>, <code>PLN</code></td><td>Phred-scaled genotype likelihoods (10 &times; log10), raw and normalized</td></tr>
+<tr><td><code>PL</code>, <code>PLN</code></td><td>Phred-scaled genotype likelihoods (&minus;10 &times; log10, non-negative integers), raw and normalized</td></tr>
 <tr><td><code>ML</code></td><td>Maximum likelihood genotype</td></tr>
 <tr><td><code>NG</code></td><td>Genotype in the NGS library (considers ADO and deletions; ignores doublets)</td></tr>
 <tr><td><code>DG</code></td><td>Genotype in the NGS library for the second cell if there is a doublet</td></tr>
@@ -983,6 +983,7 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <ul>
 <li><strong>Genotyping error (-G).</strong> The rows of the error matrix were not normalized, so with the default matrix the first non-zero entry was always chosen as the erroneous nucleotide. Now the nucleotide is drawn with the intended probabilities.</li>
 <li><strong>Allelic dropout (-P, -Q).</strong> The variation of the ADO rate among cells and among sites is now simulated correctly: one rate per cell and one rate per site, reused for all genotypes.</li>
+<li><strong>VCF PL/PLN.</strong> They are now &minus;10 &times; log10 of the likelihood, as defined in the VCF specification (non-negative; 0 for the most likely genotype in <code>PLN</code>). Before they were 10 &times; log10, i.e. negative.</li>
 <li><strong>VCF likelihoods.</strong> Genotype likelihoods that are exactly zero (<code>-inf</code>) are printed as <code>.</code> in <code>G10</code>, <code>G10N</code>, <code>GL</code>, <code>GLN</code>, <code>PL</code> and <code>PLN</code>.</li>
 </ul>
 <h2>8.2 Robustness</h2>

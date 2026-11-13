@@ -135,6 +135,7 @@ Version 1.1.0 (18/10/2019)
 - fix genotyping error (-G): rows of the error matrix are now normalized, so the erroneous base is drawn with the intended probabilities
 - fix allelic dropout (-P/-Q): ADO rates now vary correctly between cells and between sites
 - fix memory errors and leaks (user genome/tree reading, signatures), input checks (missing option arguments, buffer bounds, realloc/calloc), VCF G10/G10N/GL/GLN/PL/PLN print '.' when the likelihood is exactly zero (log10 = -inf, e.g. with no sequencing error)
+- VCF PL/PLN follow the VCF specification: -10*log10 (non-negative integers, 0 = most likely genotype); before they were 10*log10 (negative)
 - much faster and leaner: compact genotype-likelihood storage, budgeted genotype-likelihood cache (env CELLCOAL_GL_CACHE_MB), exact log10 memoization, faster VCF formatting, OpenMP parallel read-count generation and VCF printing
 - read counts use independent per-site random streams: results for a given seed are reproducible and independent of the number of threads, but differ from versions <= 1.3.4
 
@@ -5752,7 +5753,7 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 		if (!isfinite (LGs[a1][a2]) || !isfinite (LG[a1][a2]))
 			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
 		else
-			p = VCF_PutInt (p, (int)round (10 * LG[a1][a2]));
+			p = VCF_PutInt (p, (int)round (-10 * LG[a1][a2]));
 		VCF_ROOM (fp, buf, p);
 		}
 	/* PLN */
@@ -5765,7 +5766,7 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 		if (!isfinite (LGs[a1][a2]) || !isfinite (NLG[a1][a2]))
 			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
 		else
-			p = VCF_PutInt (p, (int)round (10 * NLG[a1][a2]));
+			p = VCF_PutInt (p, (int)round (-10 * NLG[a1][a2]));
 		VCF_ROOM (fp, buf, p);
 		}
 	/* ML */
@@ -5907,8 +5908,8 @@ void PrintVCF (FILE *fp)
 	fprintf (fp,"\n##FORMAT=<ID=G10N,Number=G,Type=Float,Description=\"Normalized log10-scaled genotype likelihoods for all 10 genotypes (order is AA AC AG AT CC CG CT GG GT TT)\">");
 	fprintf (fp,"\n##FORMAT=<ID=GL,Number=G,Type=Float,Description=\"Log10-scaled genotype likelihoods\">");
 	fprintf (fp,"\n##FORMAT=<ID=GLN,Number=G,Type=Float,Description=\"Normalized log10-scaled genotype likelihoods\">");
-	fprintf (fp,"\n##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"Phread-scaled genotype likelihoods\">");
-	fprintf (fp,"\n##FORMAT=<ID=PLN,Number=G,Type=Integer,Description=\"Normalized phread-scaled genotype likelihoods\">");	fprintf (fp,"\n##FORMAT=<ID=ML,Number=1,Type=String,Description=\"Maximum likelihood genotype\">");
+	fprintf (fp,"\n##FORMAT=<ID=PL,Number=G,Type=Integer,Description=\"Phred-scaled genotype likelihoods\">");
+	fprintf (fp,"\n##FORMAT=<ID=PLN,Number=G,Type=Integer,Description=\"Normalized Phred-scaled genotype likelihoods\">");	fprintf (fp,"\n##FORMAT=<ID=ML,Number=1,Type=String,Description=\"Maximum likelihood genotype\">");
 	fprintf (fp,"\n##FORMAT=<ID=NG,Number=1,Type=String,Description=\"Genotype in the NGS library (considers ADO/DEL; ignores doublets)\">");
 	fprintf (fp,"\n##FORMAT=<ID=DG,Number=1,Type=String,Description=\"Genotype in the NGS library for the second cell if there is a doublet\">");
 	fprintf (fp,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True genotype (considers DEL; ignores ADO/doublets\">");
