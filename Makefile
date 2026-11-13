@@ -11,9 +11,9 @@ _OBJS = cellcoal.o eigen.o signatures.o
 OBJS=$(patsubst %,$(OBJDIR)/%,$(_OBJS))
 
 # -ffp-contract=off keeps floating-point results bit-identical to the original code
-# (do NOT add -ffast-math or -march=native). OpenMP is optional: make OMPFLAG=
+# (do NOT add -ffast-math or -march=native). -fno-math-errno only avoids setting errno in libm calls (faster, same results). OpenMP is optional: make OMPFLAG=
 OMPFLAG ?= -fopenmp
-CFLAGS ?= -Wall $(PROFILING) -O3 -ffp-contract=off $(OMPFLAG) $(WARN) -DUSE_COLORS
+CFLAGS ?= -Wall $(PROFILING) -O3 -ffp-contract=off -fno-math-errno $(OMPFLAG) $(WARN) -DUSE_COLORS
 
 LIBS = -lm
 
