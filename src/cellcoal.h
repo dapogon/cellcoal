@@ -83,7 +83,8 @@ static void 	SimulateISMforSite (TreeNode *p,  int genome, int site, int doISMha
 static void 	SimulateISMDNAforSite (TreeNode *p,  int genome, int site, int doISMhaploid, long int *seed);
 static void 	SimulateFiniteDNA (TreeNode *p, int genome, long int *seed);
 static void		SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed);
-static void 	SimulateSignatureISM (TreeNode *p,  int genome, long int *seed);
+static void				FreeTriNucleotides (void);
+void 	SimulateSignatureISM (TreeNode *p,  int genome, long int *seed);
 static void		SimulateSignatureISMforSite (TreeNode *p,  int genome, int site, int newState, long int *seed);
 static void		SimulateTriNucFreqGenome (int cell, long int *seed);
 static void 	CountTriNucFrequencies (int *genome_array, int genome);
