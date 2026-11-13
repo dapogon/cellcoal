@@ -3423,7 +3423,7 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
-	double alleleADOrateMean = 0.0, alleleADOrateCell = 0.0, alleleADOrateSite = 0.0;
+	double alleleADOrateMean = 0.0, *ADOrateCell, *ADOrateSite;
 	double **alleleADOrate;
 
 	/* allocate space for the ADO rates */
@@ -3453,28 +3453,31 @@ void AllelicDropout (long int *seed)
 		}
 	else // variable ADO rates
 		{
+		/* The rate of each cell and of each site must be sampled once and stored, so that every
+		   genotype uses the rate of its own cell and its own site (previously only the last
+		   sampled value of each was kept and applied to all cells and sites). The sampling
+		   order (cells first, then sites) is unchanged. */
+		ADOrateCell = (double*) calloc (numCells+1, sizeof(double));
+		ADOrateSite = (double*) calloc (numSites, sizeof(double));
+		if (!ADOrateCell || !ADOrateSite)
+			{
+			fprintf (stderr, "Could not allocate the ADO cell/site rate structures\n");
+			exit (-1);
+			}
 		for (i=0; i<numCells+1; i++)
-			{
-			if (doADOcell == YES)
-				alleleADOrateCell = RandomBetaMeanVar(meanADOcell, varADOcell, seed);
-			else
-				alleleADOrateCell = 0;
-			}
+			ADOrateCell[i] = (doADOcell == YES) ? RandomBetaMeanVar(meanADOcell, varADOcell, seed) : 0;
 		for (j=0; j<numSites; j++)
-			{
-			if (doADOsite == YES)
-				alleleADOrateSite = RandomBetaMeanVar(meanADOsite, varADOsite, seed);
-			else
-				alleleADOrateSite = 0;
-			}
+			ADOrateSite[j] = (doADOsite == YES) ? RandomBetaMeanVar(meanADOsite, varADOsite, seed) : 0;
 		for (i=0; i<numCells+1; i++)
 			{
 			for (j=0; j<numSites; j++)
 				{
-				alleleADOrate[i][j] = alleleADOrateCell + alleleADOrateSite - (alleleADOrateCell * alleleADOrateSite);
+				alleleADOrate[i][j] = ADOrateCell[i] + ADOrateSite[j] - (ADOrateCell[i] * ADOrateSite[j]);
 				alleleADOrate[i][j] = 1.0 - sqrt (1.0 - alleleADOrate[i][j]); // at the allele level
 				}
 			}
+		free (ADOrateCell);
+		free (ADOrateSite);
 		}
 	
 
