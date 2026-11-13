@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
@@ -56,7 +57,10 @@ static void		AllelicDropout (long int *seed);
 static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
 static void 	SiteReadCounts (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
-static void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
+static void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut);
+static void	BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat);
+static void	SiteGL (CellSiteStr *c, int i, int j, double *glOut);
+static const double	*GetSiteGL (int i, int j, double *buf);
 static void 	MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
 extern char		WhichNuc (int nucleotide);
 static int		WhichNucChar (char nucleotide);
@@ -80,7 +84,8 @@ static void 	SimulateISMforSite (TreeNode *p,  int genome, int site, int doISMha
 static void 	SimulateISMDNAforSite (TreeNode *p,  int genome, int site, int doISMhaploid, long int *seed);
 static void 	SimulateFiniteDNA (TreeNode *p, int genome, long int *seed);
 static void		SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed);
-static void 	SimulateSignatureISM (TreeNode *p,  int genome, long int *seed);
+static void				FreeTriNucleotides (void);
+void 	SimulateSignatureISM (TreeNode *p,  int genome, long int *seed);
 static void		SimulateSignatureISMforSite (TreeNode *p,  int genome, int site, int newState, long int *seed);
 static void		SimulateTriNucFreqGenome (int cell, long int *seed);
 static void 	CountTriNucFrequencies (int *genome_array, int genome);
@@ -141,13 +146,13 @@ static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountM
 static double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
 static double	varNumMU, varNumSNVs, varNumDEL, varNumCNLOH;
 static double	expNumMU, expVarNumMU;
-static double	theta, healthyTipBranchLength, transformingBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
+static double	theta, healthyTipBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
 static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], trueHaplotypesFile[MAX_NAME],MLhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
 static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], PILEUPfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME], parameterFile[MAX_NAME];
 static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], trueHaplotypesDir[MAX_NAME], MLhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME], PILEUPdir[MAX_NAME];
-static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames, *treeRateInfo;
+static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[4*MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames, *treeRateInfo;
 static char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
 static char		GLmodel[MAX_NAME];
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome, doSpecificParameterFile;
@@ -165,11 +170,13 @@ static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVar
 static double 	cumCountMLgenotypeErrors, cumCountMLgenotypeErrorsSq, meanMLgenotypeError, varMLgenotypeError;
 static double 	cumCountCalledGenotypes, cumCountCalledGenotypesSq, meanCalledGenotypes, varCalledGenotypes;
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
-static double	Rmat[6], NRmat[12], Cijk[256], Root[4];
+static double	Cijk[256], Root[4];
 static double	SNPrate, alphaCoverage;
 static int		OUTGROUP_ROOT, INGROUP_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
 static int 		doGATK, do2T, do4T, doGATK_ADO, do2T_ADO, do4T_ADO;
+static double	**siteGL;	/* per site: genotype likelihoods of all cells (GL_NUM doubles each), kept only for SNV sites and within the memory budget; NULL otherwise (recomputed when needed) */
+static size_t	glBudget, glUsed;
 static int		TipNodeNum, IntNodeNum;
 static char		*maternalUserGenome, *paternalUserGenome;
 static int		complementBase[4] = {3,2,1,0};
@@ -194,3 +201,30 @@ FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *
 
 
 #endif /* coaltumor_h */
+
+/* Independent random streams for the read-count simulation.
+   Each site gets its own stream (a 64-bit SplitMix64 generator seeded from the main stream and the site
+   number), so that the sites can be simulated in parallel and the result does not depend on the number of
+   threads or on the order in which they are processed. While a thread has a stream active, RandomUniform
+   ignores the seed it is given and draws from the stream instead. */
+static __thread int			streamActive = 0;
+static __thread uint64_t	streamState;
+
+static inline uint64_t SplitMix64 (uint64_t *x)
+	{
+	uint64_t z = (*x += 0x9E3779B97F4A7C15ULL);
+
+	z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+	z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+	return z ^ (z >> 31);
+	}
+
+/* starts the stream of a given item (site) from a base value taken from the main stream */
+static inline void StartStream (uint64_t base, uint64_t item)
+	{
+	uint64_t x = base + item * 0xD1B54A32D192ED03ULL;
+
+	streamState = SplitMix64 (&x);	/* mix, so that neighbouring items start far apart */
+	streamActive = 1;
+	}
+

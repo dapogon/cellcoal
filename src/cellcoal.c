@@ -131,6 +131,13 @@ Version 1.1.0 (18/10/2019)
 - fix nonISMRelMutRate input so it can be > 1
 	(Thanks to Haotian Zhang)
 
+ Version 2.0.0 (13/11/2026)
+- fix genotyping error (-G): rows of the error matrix are now normalized, so the erroneous base is drawn with the intended probabilities
+- fix allelic dropout (-P/-Q): ADO rates now vary correctly between cells and between sites
+- fix memory errors and leaks (user genome/tree reading, signatures), input checks (missing option arguments, buffer bounds, realloc/calloc), VCF PL/PLN print '.' when not finite
+- much faster and leaner: compact genotype-likelihood storage, budgeted genotype-likelihood cache (env CELLCOAL_GL_CACHE_MB), exact log10 memoization, faster VCF formatting, OpenMP parallel read-count generation and VCF printing
+- read counts use independent per-site random streams: results for a given seed are reproducible and independent of the number of threads, but differ from versions <= 1.3.4
+
  
 [TO-DOs]
 - add new signatures
@@ -151,12 +158,15 @@ Version 1.1.0 (18/10/2019)
 */
 
 #include "cellcoal.h"
+#ifdef _OPENMP
+#include <omp.h>
+#endif
 #include "definitions.h"
 
 int main (int argc, char **argv)
     {
     FILE 		*fp;
-    int			i, j, k;
+    int			i, j;
     int         dataSetNum;
     long int	seed;
     double		a, a2;
@@ -319,7 +329,7 @@ int main (int argc, char **argv)
     expVarTMRCA = 0;
     for (i=2; i<=numCells; i++)
         expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
-	cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = 0;
+    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = 0;
 	cumCountMLgenotypeErrors = cumCountMLgenotypeErrorsSq = cumCountCalledGenotypes = cumCountCalledGenotypesSq = 0;
     zeroSNVs = cumTMRCA = cumTMRCASq = 0;
 		
@@ -364,11 +374,11 @@ int main (int argc, char **argv)
     if (userSeed > 0)
         seed = userSeed;
 	
-	originalSeed = seed;
+    originalSeed = seed;
     for (i=0; i<100; i++)
         RandomUniform(&seed);
 
-	if (noisy > 0)
+    if (noisy > 0)
 		{
 		PrintCommandLine (stderr, argc, argv);
 		}
@@ -443,7 +453,7 @@ int main (int argc, char **argv)
 		PrepareGlobalFiles(argc, argv);
 
 	/* Start printing info to log */
-	sprintf(File,"%s/%s", resultsDir, settingsFile);
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
 	if ((fpLog = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -452,11 +462,11 @@ int main (int argc, char **argv)
 
 	PrintHeader(fpLog);
 	PrintDate(fpLog);
-	sprintf(File,"%s/%s", resultsDir, settingsFile);
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
 	PrintCommandLine (fpLog, argc, argv);
  
 	#ifdef COUNT_ML_GENOTYPE_ERRORS
-		sprintf(File,"%s/%s", resultsDir, "sims");
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, "sims");
 		 if ((fpSims= fopen(File, "w")) == NULL)
 			 {
 			 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -897,40 +907,22 @@ int main (int argc, char **argv)
             free (AltModelSites);
 
 			if (doGeneticSignatures == YES)
-				{
-				for (i=0; i<64; i++)
-					{
-					free (triNucleotideMaternal[i].position);
-					free (triNucleotidePaternal[i].position);
-					}
-				free (triNucleotideMaternal);
-				free (triNucleotidePaternal);
-				}
+				FreeTriNucleotides ();
 			}
 		
-		if (doNGS == YES)
+		/* free the per-cell structures (they are allocated at every replicate, with or without NGS) */
+		for (i=0; i<numCells+1; i++)
 			{
-			for (i=0; i<numCells+1; i++)
-				{
-				for (j=0; j<numSites; j++)
-					{
-					for (k=0; k<4; k++)
-						{
-						free(cell[i].site[j].logGL[k]);
-						free(cell[i].site[j].normLogGL[k]);
-						free(cell[i].site[j].logGLdoublet[k]);
-						free(cell[i].site[j].normLogGLdoublet[k]);
-						}
-					free(cell[i].site[j].readCount);
-					free(cell[i].site[j].readCountDoublet);
-					free(cell[i].site[j].logGL);
-					free(cell[i].site[j].logGLdoublet);
-					free(cell[i].site[j].normLogGL);
-					free(cell[i].site[j].normLogGLdoublet);
-					}
-                free(cell[i].site);
-				}
-			free (cell);
+			free (cell[i].doublet);
+			free (cell[i].site);
+			}
+		free (cell);
+		if (siteGL)
+			{
+			for (j=0; j<numSites; j++)
+				free (siteGL[j]);
+			free (siteGL);
+			siteGL = NULL;
 			}
 		
         /* if(((dataSetNum*10)%numDataSets) == 0)
@@ -1297,7 +1289,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
 
 void ReadUserGenome (FILE *fp)
 	{
-	char	*header;
+	char	*header, *newGenome;
 	
 
 	/* allocate space for reading */
@@ -1330,21 +1322,21 @@ void ReadUserGenome (FILE *fp)
 		}
 
 	/* read the FASTA file */
-	fgets (header, MAX_LINE, fpUserGenome);
-	fgets (maternalUserGenome, MAX_GENOME, fpUserGenome);
-	if (maternalUserGenome == NULL)
+	if (fgets (header, MAX_LINE, fpUserGenome) == NULL || fgets (maternalUserGenome, MAX_GENOME, fpUserGenome) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read the user maternal genome");
 		PrintUsage(stderr);
 		}
 	
-	fgets (header, MAX_LINE, fpUserGenome);
-	fgets (paternalUserGenome, MAX_GENOME, fpUserGenome);
-	if (paternalUserGenome == NULL)
+	if (fgets (header, MAX_LINE, fpUserGenome) == NULL || fgets (paternalUserGenome, MAX_GENOME, fpUserGenome) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read the user paternal genome");
 		PrintUsage(stderr);
 		}
+
+	/* remove the end-of-line characters (the last line may not have one) */
+	maternalUserGenome[strcspn (maternalUserGenome, "\r\n")] = '\0';
+	paternalUserGenome[strcspn (paternalUserGenome, "\r\n")] = '\0';
 
 	/* check lengths */
 	if (strlen(maternalUserGenome) != strlen(paternalUserGenome))
@@ -1353,11 +1345,23 @@ void ReadUserGenome (FILE *fp)
 		PrintUsage(stderr);
 		}
 
-	numSites = (int) strlen(maternalUserGenome) - 1;
+	numSites = (int) strlen(maternalUserGenome);
 	
-	/* realloc memory */
-	maternalUserGenome = (char *)realloc(maternalUserGenome, numSites * sizeof(char));
-	paternalUserGenome = (char *)realloc(paternalUserGenome, numSites * sizeof(char));
+	/* realloc memory (keep room for the string terminator) */
+	newGenome = (char *)realloc(maternalUserGenome, (numSites + 1) * sizeof(char));
+	if (newGenome == NULL)
+		{
+		fprintf (stderr, "\nERROR: Could not reallocate the user genomes\n");
+		exit (-1);
+		}
+	maternalUserGenome = newGenome;
+	newGenome = (char *)realloc(paternalUserGenome, (numSites + 1) * sizeof(char));
+	if (newGenome == NULL)
+		{
+		fprintf (stderr, "\nERROR: Could not reallocate the user genomes\n");
+		exit (-1);
+		}
+	paternalUserGenome = newGenome;
 
 
 	fprintf (stderr, "\nnumsites = %d", numSites);
@@ -1450,8 +1454,7 @@ static void ReadUserTree (FILE *fp)
 		}
 
 	/* read the tree string */
-	fgets (treeString, MAX_LINE, fpUserTree);
-	if (treeString == NULL)
+	if (fgets (treeString, MAX_LINE, fpUserTree) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read tree string");
 		PrintUsage(stderr);
@@ -1493,13 +1496,13 @@ static void ReadUserTree (FILE *fp)
                 nextAvailableNode++;
 				}
             }
-        else if (treeString[i] == ')')
+        else if (treeString[i] == ')' || treeString[i] == ',')
             {
-            q = p->anc;
-            p = q;
-            }
-        else if (treeString[i] == ',')
-            {
+            if (p == NULL || p->anc == NULL)
+                {
+                fprintf (stderr, "\nERROR: The user tree is not correctly formed (unbalanced parentheses or misplaced '%c')\n", treeString[i]);
+                exit (-1);
+                }
             q = p->anc;
             p = q;
             }
@@ -1563,6 +1566,7 @@ static void ReadUserTree (FILE *fp)
 					taxonNumber = 10*digit1 + digit2;
 	            else if (numDigits == 3)
 	            	taxonNumber = 100*digit1 + 10*digit2 + digit3;
+				(void) taxonNumber;	/* numeric taxon labels are only parsed (and skipped) */
 				}
 			else /* taxon names are letters */
 	            {
@@ -1575,7 +1579,14 @@ static void ReadUserTree (FILE *fp)
 	           	taxonNamesAreChars = YES;
 	            j = 0;
 	            while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':')
-	            	taxonName[j++] = treeString[i++];
+	            	{
+					if (j >= MAX_NAME-1)
+						{
+						fprintf (stderr, "\nERROR: A taxon name in the user tree is too long (maximum %d characters)\n", MAX_NAME-1);
+						exit (-1);
+						}
+					taxonName[j++] = treeString[i++];
+					}
 	            i--;
 				}
             q = treeNodes + nextAvailableNode;
@@ -1647,22 +1658,18 @@ static void ReadUserTree (FILE *fp)
     if (noisy > 2)
         fprintf (stderr, "\n>> Relabeling nodes on tree ... ");
 
-	TipNodeNum = 0;
+    TipNodeNum = 0;
 	IntNodeNum = numCells+1;
 	RelabelUserTree (healthyRoot);
 
     if (noisy > 2)
         fprintf (stderr, "DONE");
 
-	numNodes = nextAvailableNode+1;
+    numNodes = nextAvailableNode+1;
 
-	/* reallocate tree nodes */
-	treeNodes = (TreeNode *) realloc (treeNodes, numNodes * sizeof (TreeNode));
-	if (treeNodes == NULL)
-		{
-		fprintf (stderr, "Could not reallocate treeNodes (%ld bytes)\n", numNodes * sizeof (TreeNode));
-		PrintUsage(stderr);
-		}
+	/* Note: treeNodes is NOT shrunk here. The tree nodes point to each other (and healthyRoot
+	   points into this array), so a realloc that moved the block would leave all of them
+	   dangling (use-after-free). The unused tail of the array is harmless. */
 
 	fprintf (fpLog, "\n\nUser-defined tree: ");
 	PrintTree (healthyRoot, fpLog);
@@ -1919,10 +1926,12 @@ void TreeRateSwitch (TreeNode *p, long int *seed)
 		{
 		p = switchNodes[i];
 		sprintf (concat, "\n  node %d  *%4.2f  ( ", p->label+1, treeRateSwitchMultiplier[i]);
-		strcat (treeRateInfo, concat);
+		if (strlen (treeRateInfo) + strlen (concat) < MAX_LINE)
+			strcat (treeRateInfo, concat);
 		numTipsSwitched = 0;
 		BranchRateSwitch (p, treeRateSwitchMultiplier[i], &numTipsSwitched, seed);
-		strcat (treeRateInfo, ")");
+		if (strlen (treeRateInfo) + 2 < MAX_LINE)
+			strcat (treeRateInfo, ")");
 		p->rateSwitch = treeRateSwitchMultiplier[i];
 		}
 	free (switchNodes);
@@ -1944,7 +1953,8 @@ void BranchRateSwitch (TreeNode *p, float multiplier, int *numTips, long int *se
 			char *concat;
 			concat = (char *) calloc(20, sizeof(char));
 			sprintf (concat, "%d ", p->label+1);
-			strcat (treeRateInfo, concat);
+			if (strlen (treeRateInfo) + strlen (concat) < MAX_LINE)
+				strcat (treeRateInfo, concat);
 			free (concat);
 			}
 		BranchRateSwitch (p->left, multiplier, numTips, seed);
@@ -2093,12 +2103,14 @@ void RecordTriNucObservation (TriNucStr *trin, int site)
 	if (trin->numAvailablePositions == trin->tempLength)
 	  {
 	  trin->tempLength *= 2;
-	  trin->position = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
-	  if (!trin->position)
+	  int *newPosition = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
+	  if (!newPosition)
 		  {
+		  free (trin->position);	/* realloc leaves the original block untouched when it fails */
 		  fprintf (stderr, "Could not reallocate trinucleotide position array when adding\n");
 		  exit (-1);
 		  }
+	  trin->position = newPosition;
 	  }
 	trin->position[trin->numAvailablePositions++] = site;
   	}
@@ -2155,7 +2167,7 @@ void EvolveSitesOnTree (TreeNode *treeRoot, int genome, long int *seed)
         for (i=0; i<numSites; i++)
             allSites[i].rateMultiplier = RandomGamma (alphaSites, seed) / alphaSites;
 
-	if (doGeneticSignatures == YES)
+    if (doGeneticSignatures == YES)
 		{
 		SimulateSignatureISM(treeRoot, genome, seed); /* we assume diploid ISM for genetic signatures */
 		}
@@ -2487,6 +2499,29 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
 
 */
 
+/* Frees the trinucleotide position vectors. This function is called once per genome
+   (maternal and paternal) in every replicate and allocates both vectors each time, so the
+   previous ones must be freed first (otherwise they leak). */
+void FreeTriNucleotides (void)
+	{
+	int i;
+
+	if (triNucleotideMaternal)
+		{
+		for (i=0; i<64; i++)
+			free (triNucleotideMaternal[i].position);
+		free (triNucleotideMaternal);
+		triNucleotideMaternal = NULL;
+		}
+	if (triNucleotidePaternal)
+		{
+		for (i=0; i<64; i++)
+			free (triNucleotidePaternal[i].position);
+		free (triNucleotidePaternal);
+		triNucleotidePaternal = NULL;
+		}
+	}
+
 void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
     {
     int		i, numMutations, mutationsSoFar;
@@ -2494,6 +2529,8 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	int		newState, chosenSite;
 	
 	newState = -9;
+
+	FreeTriNucleotides ();
 	
 	/* allocate memory to store the trinucleotide frequencies */
 	triNucleotideMaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
@@ -2585,7 +2622,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	int doDeconstructSigs = YES;
 	FILE *fpCounts, *fpRefGenome;
 
-	sprintf(File,"%s/%s", resultsDir, "trimutcounts");
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, "trimutcounts");
 	if ((fpCounts = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -2607,7 +2644,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	fclose(fpCounts);
 
 	/* print reference genome as genome context for SomaticSignatures */
-	sprintf(File,"%s/%s", resultsDir, "contextGenome");
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, "contextGenome");
 	if ((fpRefGenome = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -2887,12 +2924,14 @@ void RemoveTriNucObservation(TriNucStr *trin, int site)
 	if (trin->numAvailablePositions > 0 && trin->numAvailablePositions % 100 == 0)
 		{
 		//fprintf (stderr, "\nreallocating now (available positions = %d)",trin->numAvailablePositions);
-		trin->position = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
-		if (!trin->position)
+		int *newPosition = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
+		if (!newPosition)
 			{
+			free (trin->position);
 			fprintf (stderr, "Could not reallocate trinucleotide position array when removing\n");
 			exit (-1);
 			}
+		trin->position = newPosition;
 		}
  /*	else if (trin->numAvailablePositions == 0)
 		{
@@ -3430,11 +3469,11 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
-	double alleleADOrateMean = 0.0, alleleADOrateCell = 0.0, alleleADOrateSite = 0.0;
+	double alleleADOrateMean = 0.0, *ADOrateCell, *ADOrateSite;
 	double **alleleADOrate;
 
 	/* allocate space for the ADO rates */
-	alleleADOrate = (double**) calloc (numCells+1, sizeof(double**));
+	alleleADOrate = (double**) calloc (numCells+1, sizeof(double*));
 	if (!alleleADOrate)
 		{
 		fprintf (stderr, "Could not allocate the alleleADOrate structure\n");
@@ -3442,7 +3481,7 @@ void AllelicDropout (long int *seed)
 		}
 	for (i=0; i<numCells+1; i++)
 		{
-		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double*));
+		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double));
 		if (!alleleADOrate[i])
 			{
 			fprintf (stderr, "Could not allocate the alleleADOrate[i] structure\n");
@@ -3460,28 +3499,31 @@ void AllelicDropout (long int *seed)
 		}
 	else // variable ADO rates
 		{
+		/* The rate of each cell and of each site must be sampled once and stored, so that every
+		   genotype uses the rate of its own cell and its own site (previously only the last
+		   sampled value of each was kept and applied to all cells and sites). The sampling
+		   order (cells first, then sites) is unchanged. */
+		ADOrateCell = (double*) calloc (numCells+1, sizeof(double));
+		ADOrateSite = (double*) calloc (numSites, sizeof(double));
+		if (!ADOrateCell || !ADOrateSite)
+			{
+			fprintf (stderr, "Could not allocate the ADO cell/site rate structures\n");
+			exit (-1);
+			}
 		for (i=0; i<numCells+1; i++)
-			{
-			if (doADOcell == YES)
-				alleleADOrateCell = RandomBetaMeanVar(meanADOcell, varADOcell, seed);
-			else
-				alleleADOrateCell = 0;
-			}
+			ADOrateCell[i] = (doADOcell == YES) ? RandomBetaMeanVar(meanADOcell, varADOcell, seed) : 0;
 		for (j=0; j<numSites; j++)
-			{
-			if (doADOsite == YES)
-				alleleADOrateSite = RandomBetaMeanVar(meanADOsite, varADOsite, seed);
-			else
-				alleleADOrateSite = 0;
-			}
+			ADOrateSite[j] = (doADOsite == YES) ? RandomBetaMeanVar(meanADOsite, varADOsite, seed) : 0;
 		for (i=0; i<numCells+1; i++)
 			{
 			for (j=0; j<numSites; j++)
 				{
-				alleleADOrate[i][j] = alleleADOrateCell + alleleADOrateSite - (alleleADOrateCell * alleleADOrateSite);
+				alleleADOrate[i][j] = ADOrateCell[i] + ADOrateSite[j] - (ADOrateCell[i] * ADOrateSite[j]);
 				alleleADOrate[i][j] = 1.0 - sqrt (1.0 - alleleADOrate[i][j]); // at the allele level
 				}
 			}
+		free (ADOrateCell);
+		free (ADOrateSite);
 		}
 	
 
@@ -3531,7 +3573,7 @@ void AllelicDropoutGamma (long int *seed)
 	alleleADOrateMean = 1.0 - sqrt (1.0 -  ADOrate);
 
 	// allocate space for the ADO rates
-	alleleADOrate = (double**) calloc (numCells+1, sizeof(double**));
+	alleleADOrate = (double**) calloc (numCells+1, sizeof(double*));
 	if (!alleleADOrate)
 		{
 		fprintf (stderr, "Could not allocate the alleleADOrate structure\n");
@@ -3539,7 +3581,7 @@ void AllelicDropoutGamma (long int *seed)
 		}
 	for (i=0; i<numCells+1; i++)
 		{
-		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double*));
+		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double));
 		if (!alleleADOrate[i])
 			{
 			fprintf (stderr, "Could not allocate the alleleADOrate[i] structure\n");
@@ -3602,19 +3644,6 @@ void AllelicDropoutGamma (long int *seed)
 	}
 */
 
-/* FIX: draw a wrong base from row Eij[from] normalized by its sum (cumEij[from][3]);
-   ChooseUniformState() expects probabilities summing to 1, but Eij rows sum to 3 by default,
-   which made errors deterministic (A->C, C/G/T->A). */
-static int ChooseErrorState (int from, long int *seed)
-	{
-	int k;
-	double u = RandomUniform(seed) * cumEij[from][3];
-	for (k=0; k<3; k++)
-		if (u <= cumEij[from][k])
-			return k;
-	return 3;
-	}
-
 /********************* GenotypeError  ************************/
 /*
  Introduce false positive errors directly in the genotypes
@@ -3629,8 +3658,17 @@ static int ChooseErrorState (int from, long int *seed)
 void GenotypeError (long int *seed)
 	{
 	int 	i,j;
-	double	genotypingError, alleleError;
+	double	genotypingError, alleleError, normEij[4][4], rowSum;
 	
+	/* ChooseUniformState expects probabilities that sum to 1, but the rows of Eij are
+	   relative weights (e.g. 0 1 1 1 by default), so normalize them first. Without this
+	   the first non-zero entry always wins and the wrong base is not drawn at random. */
+	for (i=0; i<4; i++)
+		{
+		rowSum = Eij[i][0] + Eij[i][1] + Eij[i][2] + Eij[i][3];
+		for (j=0; j<4; j++)
+			normEij[i][j] = (rowSum > 0.0) ? Eij[i][j] / rowSum : 0.0;
+		}
 	
 	if (alphabet == DNA)
 		{
@@ -3643,12 +3681,12 @@ void GenotypeError (long int *seed)
 
 				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[MATERNAL][i][j] = ChooseErrorState (data[MATERNAL][i][j], seed);
+					data[MATERNAL][i][j] = ChooseUniformState (normEij[data[MATERNAL][i][j]], seed);
 					allSites[j].hasGenotypeError = YES;
 					}
 				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[PATERNAL][i][j] = ChooseErrorState (data[PATERNAL][i][j], seed);
+					data[PATERNAL][i][j] = ChooseUniformState (normEij[data[PATERNAL][i][j]], seed);
 					allSites[j].hasGenotypeError = YES;
 					}
 				}
@@ -3819,8 +3857,8 @@ void CountMLGenotypingErrors()
 				}
 			else
 				{
-				MLmatAllele = c->MLmatAlleleDoublet;
-				MLpatAllele = c->MLpatAlleleDoublet;
+				MLmatAllele = cell[i].doublet[j].MLmatAlleleDoublet;
+				MLpatAllele = cell[i].doublet[j].MLpatAlleleDoublet;
 				}
 			
 			if (MLmatAllele == MISSING) // no reads for this genotype
@@ -3959,8 +3997,29 @@ int CountAllelesInMLGenotypes(void)
  */
 void AllocateCellStructure(void)
 	{
-	int i, j, k;
-	
+	int i;
+	double limitMB = 256.0;
+	char *env;
+
+	/* Genotype likelihoods are only printed for SNV sites, and they are a pure function of the stored reads, so they
+	   are kept only for SNV sites and only within a memory budget (CELLCOAL_GL_CACHE_MB, default 256; 0 = keep none);
+	   anything not kept is recomputed when printed, with the same result. */
+	env = getenv ("CELLCOAL_GL_CACHE_MB");
+	if (env && *env)
+		limitMB = atof (env);
+	glBudget = (size_t) (limitMB * 1048576.0);
+	glUsed = 0;
+	siteGL = NULL;
+	if (doNGS == YES)
+		{
+		siteGL = (double**) calloc (numSites, sizeof(double*));
+		if (!siteGL)
+			{
+			fprintf (stderr, "Could not allocate the siteGL structure\n");
+			exit (-1);
+			}
+		}
+
 	cell = (CellStr*) calloc(numCells+1, sizeof(CellStr));
 	if (!cell)
 		{
@@ -3968,6 +4027,7 @@ void AllocateCellStructure(void)
 		exit (-1);
 		}
 
+	/* all the per-site data (read counts, genotype likelihoods) lives inside CellSiteStr, so one block per cell is enough */
 	for (i=0; i<numCells+1; i++)
 		{
 		cell[i].site  = (CellSiteStr*) calloc (numSites, sizeof(CellSiteStr));
@@ -3975,90 +4035,6 @@ void AllocateCellStructure(void)
 			{
 			fprintf (stderr, "Could not allocate the cell[%d].site structure\n", i);
 			exit (-1);
-			}
-
-		if (doNGS == YES)
-			{
-			for (j=0; j<numSites; j++)
-				{
-				cell[i].site[j].readCount = (int*) calloc (4, sizeof(int));
-				if (!cell[i].site[j].readCount)
-					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].readCount structure\n", i, j);
-					exit (-1);
-					}
-				
-				cell[i].site[j].readCountDoublet = (int*) calloc (4, sizeof(int));
-				if (!cell[i].site[j].readCountDoublet)
-					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].readCountDoublet structure\n", i, j);
-					exit (-1);
-					}
-				
-				cell[i].site[j].logGL = (double**) calloc (4, sizeof(double*));
-				if (!cell[i].site[j].logGL)
-					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].logGL structure\n", i, j);
-					exit (-1);
-					}
-				for (k=0; k<4; k++)
-					{
-					cell[i].site[j].logGL[k] = (double*) calloc (4, sizeof(double));
-					if (! cell[i].site[j].logGL[k] )
-						{
-						fprintf (stderr, "Could not allocate the cell[%d].site[%d].logGL[%d] structure\n", i,j,k);
-						exit (-1);
-						}
-					}
-				
-				cell[i].site[j].normLogGL = (double**) calloc (4, sizeof(double*));
-				if (!cell[i].site[j].normLogGL)
-					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].normLogGL structure\n", i, j);
-					exit (-1);
-					}
-				for (k=0; k<4; k++)
-					{
-					cell[i].site[j].normLogGL[k] = (double*) calloc (4, sizeof(double));
-					if (!cell[i].site[j].normLogGL[k] )
-						{
-						fprintf (stderr, "Could not allocate the cell[%d].site[%d].normLogGL[%d] structure\n", i,j,k);
-						exit (-1);
-						}
-					}
-				
-				cell[i].site[j].logGLdoublet = (double**) calloc (4, sizeof(double*));
-				if (!cell[i].site[j].logGLdoublet)
-					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].logGLdoublet structure\n", i, j);
-					exit (-1);
-					}
-				for (k=0; k<4; k++)
-					{
-					cell[i].site[j].logGLdoublet[k] = (double*) calloc (4, sizeof(double));
-					if (!cell[i].site[j].logGLdoublet[k] )
-						{
-						fprintf (stderr, "Could not allocate the cell[%d].site[%d].logGLdoublet[%d] structure\n", i,j,k);
-						exit (-1);
-						}
-					}
-				
-				cell[i].site[j].normLogGLdoublet = (double**) calloc (4, sizeof(double*));
-				if (!cell[i].site[j].normLogGLdoublet)
-					{
-					fprintf (stderr, "Could not allocate the cell[%d].site[%d].normLogGLdoublet structure\n", i, j);
-					exit (-1);
-					}
-				for (k=0; k<4; k++)
-					{
-					cell[i].site[j].normLogGLdoublet[k] = (double*) calloc (4, sizeof(double));
-					if (!cell[i].site[j].normLogGLdoublet[k] )
-						{
-						fprintf (stderr, "Could not allocate the cell[%d].site[%d].normLogGLdoublet[%d] structure\n", i,j,k);
-						exit (-1);
-						}
-					}
-				}
 			}
 		}
 	}
@@ -4088,7 +4064,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	
 	/* allocate error probabilities for NGS */
-	ngsEij = (double**) calloc (4, sizeof(double**));
+	ngsEij = (double**) calloc (4, sizeof(double*));
 	if (!ngsEij)
 		{
 		fprintf (stderr, "Could not allocate the ngsEij structure\n");
@@ -4096,7 +4072,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	for (i=0; i<4; i++)
 		{
-		ngsEij[i] = (double*) calloc (4, sizeof(double*));
+		ngsEij[i] = (double*) calloc (4, sizeof(double));
 		if (!ngsEij[i])
 			{
 			fprintf (stderr, "Could not allocate the ngsEij[i] structure\n");
@@ -4105,7 +4081,7 @@ void GenerateReadCounts (long int *seed)
 		}
 
 	/* allocate error probabilities for amplification */
-	ampEijmat = (double**) calloc (4, sizeof(double**));
+	ampEijmat = (double**) calloc (4, sizeof(double*));
 	if (!ampEijmat)
 		{
 		fprintf (stderr, "Could not allocate the ampEijmat structure\n");
@@ -4113,7 +4089,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	for (i=0; i<4; i++)
 		{
-		ampEijmat[i] = (double*) calloc (4, sizeof(double*));
+		ampEijmat[i] = (double*) calloc (4, sizeof(double));
 		if (!ampEijmat[i])
 			{
 			fprintf (stderr, "Could not allocate the ampEijmat[i] structure\n");
@@ -4121,7 +4097,7 @@ void GenerateReadCounts (long int *seed)
 			}
 		}
 
-	ampEijpat = (double**) calloc (4, sizeof(double**));
+	ampEijpat = (double**) calloc (4, sizeof(double*));
 	if (!ampEijpat)
 		{
 		fprintf (stderr, "Could not allocate the ampEijpat structure\n");
@@ -4129,7 +4105,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	for (i=0; i<4; i++)
 		{
-		ampEijpat[i] = (double*) calloc (4, sizeof(double*));
+		ampEijpat[i] = (double*) calloc (4, sizeof(double));
 		if (!ampEijpat[i])
 			{
 			fprintf (stderr, "Could not allocate the ampEijpat[i] structure\n");
@@ -4194,18 +4170,109 @@ void GenerateReadCounts (long int *seed)
 			}
 		}
 		
-	/* produce read counts for all sites */
-	for (j=0; j<numSites; j++)
+	/* One stream per site is started from two numbers taken from the main stream (so each replicate
+	   differs), which makes the sites independent of each other. For every site the reads of all cells
+	   are simulated (in cell order, with the stream of the site) and then the genotype likelihoods are
+	   computed, all in parallel when compiled with OpenMP. The result is the same for any number of threads.
+	   Each thread needs its own scratch matrices. */
+	{
+	uint64_t	streamBase;
+	long int	s1, s2;
+
+	RandomUniform (seed);
+	s1 = *seed;
+	RandomUniform (seed);
+	s2 = *seed;
+	streamBase = ((uint64_t) s1 << 32) ^ (uint64_t) s2;
+
+	#pragma omp parallel
 		{
-		for (i=0; i<numCells+1; i++)
+		double	**ampMat, **ampPat, *sbuf, *probsT;
+		long int	dummySeed = 1;	/* never used: the stream of the site is active */
+		int		t, ii, jj;
+
+		ampMat = (double**) calloc (4, sizeof(double*));
+		ampPat = (double**) calloc (4, sizeof(double*));
+		probsT = (double*) calloc (4, sizeof(double));
+		sbuf = (double*) malloc ((size_t)(numCells+1) * GL_NUM * sizeof(double));
+		if (!ampMat || !ampPat || !sbuf || !probsT)
 			{
-			SiteReadCounts (&cell[i].site[j], i, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
-			if (cell[i].site[j].numReads > 0)
-				GenotypeLikelihoods (&cell[i].site[j], i, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
-			else
-				cell[i].site[j].MLmatAllele = cell[i].site[j].MLpatAllele = MISSING;
+			fprintf (stderr, "Could not allocate the thread amplification matrices\n");
+			exit (-1);
 			}
+		for (t=0; t<4; t++)
+			{
+			ampMat[t] = (double*) calloc (4, sizeof(double));
+			ampPat[t] = (double*) calloc (4, sizeof(double));
+			if (!ampMat[t] || !ampPat[t])
+				{
+				fprintf (stderr, "Could not allocate the thread amplification matrices\n");
+				exit (-1);
+				}
+			}
+
+		#pragma omp for schedule(static, 8)
+		for (jj=0; jj<numSites; jj++)
+			{
+			int		hasAlt = NO, al;
+			size_t	bytes = (size_t)(numCells+1) * GL_NUM * sizeof(double), before;
+
+			/* read counts of all the cells at this site, from the stream of the site */
+			StartStream (streamBase, (uint64_t) jj);
+			for (ii=0; ii<numCells+1; ii++)
+				{
+				SiteReadCounts (&cell[ii].site[jj], ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed);
+				if (cell[ii].site[jj].numReads <= 0)
+					cell[ii].site[jj].MLmatAllele = cell[ii].site[jj].MLpatAllele = MISSING;
+				}
+			streamActive = 0;
+
+			for (ii=0; ii<numCells+1; ii++)
+				{
+				double *g = sbuf + GL_NUM*(size_t)ii;
+				if (cell[ii].site[jj].numReads > 0)
+					{
+					/* rebuild the amplification error matrices of this site exactly as SiteReadCounts did */
+					BuildAmpMatrices (&cell[ii].site[jj], ampMat, ampPat);
+					GenotypeLikelihoods (&cell[ii].site[jj], ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
+					}
+				else
+					memset (g, 0, GL_NUM*sizeof(double));
+				/* same criterion as CountAllelesInMLGenotypes: the site is a SNV when an ML allele differs from the reference */
+				al = cell[ii].site[jj].MLmatAllele;
+				if (al >= A && al <= T && al != allSites[jj].referenceAllele)
+					hasAlt = YES;
+				al = cell[ii].site[jj].MLpatAllele;
+				if (al >= A && al <= T && al != allSites[jj].referenceAllele)
+					hasAlt = YES;
+				}
+			if (hasAlt == YES)
+				{
+				#pragma omp atomic capture
+					{ before = glUsed; glUsed += bytes; }
+				if (before + bytes <= glBudget)
+					{
+					double *keep = (double*) malloc (bytes);
+					if (keep)
+						{
+						memcpy (keep, sbuf, bytes);
+						siteGL[jj] = keep;
+						}
+					}
+				}
+			}
+
+		for (t=0; t<4; t++)
+			{
+			free (ampMat[t]);
+			free (ampPat[t]);
+			}
+		free (ampMat);
+		free (ampPat);
+		free (probsT);
+		free (sbuf);
 		}
+	}
 	/* add doublets and reads from them */
 	if (meanDoubletRate > 0)
 		MakeDoublets(probs, ngsEij, ampEijmat, ampEijpat, seed);
@@ -4218,10 +4285,10 @@ void GenerateReadCounts (long int *seed)
 			{
 			if (cell[i].hasDoublet == YES)
 				{
-				countReadsA += cell[i].site[j].readCountDoublet[A];
-				countReadsC += cell[i].site[j].readCountDoublet[C];
-				countReadsG += cell[i].site[j].readCountDoublet[G];
-				countReadsT += cell[i].site[j].readCountDoublet[T];
+				countReadsA += cell[i].doublet[j].readCountDoublet[A];
+				countReadsC += cell[i].doublet[j].readCountDoublet[C];
+				countReadsG += cell[i].doublet[j].readCountDoublet[G];
+				countReadsT += cell[i].doublet[j].readCountDoublet[T];
 				}
 			else
 				{
@@ -4251,6 +4318,12 @@ void GenerateReadCounts (long int *seed)
 		}
 
 	free (probs);
+	for (i=0; i<4; i++)
+		{
+		free (ngsEij[i]);
+		free (ampEijmat[i]);
+		free (ampEijpat[i]);
+		}
 	free (ngsEij);
 	free (ampEijmat);
 	free (ampEijpat);
@@ -4525,7 +4598,6 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		} // numReads > 0
 	
 	c->numReads = numReads;
-	c->readCount = readCount;
 	c->maternalAllele = maternalAllele;
 	c->paternalAllele = paternalAllele;
 	c->thereIsMaternalAllele = thereIsMaternalAllele;
@@ -4534,6 +4606,74 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	c->paternalSiteAmplificationError = paternalSiteAmplificationError;
 	}
 
+
+/* amplification error matrices of a site, exactly as SiteReadCounts builds them */
+void BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat)
+	{
+	int k, l;
+
+	for (k=0; k<4; k++)
+		for (l=0; l<4; l++)
+			{
+			if (k == l)
+				{
+				ampMat[k][l] = 1.0 - c->maternalSiteAmplificationError;
+				ampPat[k][l] = 1.0 - c->paternalSiteAmplificationError;
+				}
+			else
+				{
+				ampMat[k][l] = Eij[k][l]/cumEij[k][3] * c->maternalSiteAmplificationError;
+				ampPat[k][l] = Eij[k][l]/cumEij[k][3] * c->paternalSiteAmplificationError;
+				}
+			}
+	}
+
+/* Recomputes the genotype likelihoods of a cell and site from its stored data (reads and amplification errors).
+   It needs no random numbers, only reads shared data, and is safe to call from several threads. */
+void SiteGL (CellSiteStr *c, int i, int j, double *glOut)
+	{
+	double	ngsRows[4][4], ampMRows[4][4], ampPRows[4][4];
+	double	*ngsP[4], *ampMP[4], *ampPP[4], probs[4];
+	int		k, l;
+
+	for (k=0; k<4; k++)
+		{
+		ngsP[k] = ngsRows[k];  ampMP[k] = ampMRows[k];  ampPP[k] = ampPRows[k];
+		for (l=0; l<4; l++)
+			{
+			if (k == l)
+				ngsRows[k][l] = 1.0 - sequencingError;
+			else
+				ngsRows[k][l] = Eij[k][l]/cumEij[k][3] * sequencingError;
+			}
+		}
+	BuildAmpMatrices (c, ampMP, ampPP);
+	GenotypeLikelihoods (c, i, j, probs, ngsP, ampMP, ampPP, NULL, glOut);
+	}
+
+/* Returns the genotype likelihoods of cell i at site j: the stored ones when kept for this site, otherwise recomputed
+   into buf. Sites without reads have all-zero likelihoods, as when they were never computed. */
+const double *GetSiteGL (int i, int j, double *buf)
+	{
+	if (siteGL && siteGL[j])
+		return siteGL[j] + GL_NUM*(size_t)i;
+	if (cell[i].site[j].numReads > 0)
+		SiteGL (&cell[i].site[j], i, j, buf);
+	else
+		memset (buf, 0, GL_NUM*sizeof(double));
+	return buf;
+	}
+
+/* pow(10,x) without calling the library when the answer is known exactly:
+   10^0 = 1, and 10^x underflows to +0 for x < -400 (the smallest double is ~10^-324) */
+static inline double Pow10Fast (double x)
+	{
+	if (x == 0.0)
+		return 1.0;
+	if (x < -400.0)
+		return 0.0;
+	return pow (10.0, x);
+	}
 
 /* ******************** GenotypeLikelihoods  ************************/
 /*
@@ -4548,49 +4688,51 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
  AA AC AG AT CC CG CT GG GT TT
  */
 
-void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed)
+/* log10 of x, reusing the result of an earlier call with exactly the same argument (keys/vals hold the
+   previous arguments and results, n their number). log10 is a pure function, so the result is bit-identical;
+   with symmetric error matrices (the default) many of the arguments of one cell and site coincide, and log10
+   is the most expensive operation of the likelihood computation. */
+static inline double Log10Memo (double x, double *keys, double *vals, int *n)
+	{
+	int m;
+
+	for (m=0; m<*n; m++)
+		if (keys[m] == x)
+			return vals[m];
+	keys[*n] = x;
+	vals[*n] = log10 (x);
+	return vals[(*n)++];
+	}
+
+
+void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut)
 	{
 	int		k, l, a1, a2;
 	int		read, numReads;
 	int		*readCount;
 	int		maternalAllele, paternalAllele;
-	int		thereIsMaternalAllele, thereIsPaternalAllele;
 	double  maternalSiteAmplificationError, paternalSiteAmplificationError;
 	int		template, template1, template2;
 	int		debug_GL, debug_GL_EXIT, fix_parameters;
 	double	maxLike, pReadGivenA1, pReadGivenA2;
 	double	homozygote_for_read, heterozygote_for_read, no_allele_for_read;
-	double	**logGL, **normLogGL;
+	double	(*logGL)[4], (*normLogGL)[4];
 	double 	MLmatAllele, MLpatAllele;
 	double	alleleDropoutRate;
 	long double	term1, term2, term3, maxterm, num1, num2, num3, number1, number2;
-	double 	**GL;
-
-	/* allocate GL */
-	GL = (double**) calloc (4, sizeof(double*));
-	if (!GL)
-		{
-		fprintf (stderr, "Could not allocate the GL structure\n");
-		exit (-1);
-		}
-	for (k=0; k<4; k++)
-		{
-		  GL[k] = (double *) calloc (4, sizeof(double));
-		  if (!GL[k])
-			  {
-			  fprintf (stderr, "Could not allocate the GL[k] structure\n");
-			  exit (-1);
-			  }
-		  }
+	double 	GL[4][4] = {{0}};
+	double	pA1tab[4][4], pA2tab[4][4], lgA1tab[4][4], lgA2tab[4][4];
+	long double	T2a[4], T3a[4];
+	double	logGLm[4][4] = {{0}}, normLogGLm[4][4] = {{0}};
+	double	L1tab[4][4][4], memoKeys[32], memoVals[32];
+	int		memoN;
 	
 	numReads = c->numReads;
 	readCount = c->readCount;
-	logGL = c->logGL;
-	normLogGL = c->normLogGL;
+	logGL = logGLm;
+	normLogGL = normLogGLm;
 	maternalAllele = c->maternalAllele;
 	paternalAllele = c->paternalAllele;
-	thereIsMaternalAllele = c->thereIsMaternalAllele;
-	thereIsPaternalAllele = c->thereIsPaternalAllele;
 	maternalSiteAmplificationError = c->maternalSiteAmplificationError;
 	paternalSiteAmplificationError = c->paternalSiteAmplificationError;
 
@@ -4602,8 +4744,8 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		{
 		maternalAllele = c->maternalAllele = T;
 		paternalAllele = c->paternalAllele = G;
-		thereIsMaternalAllele = c->thereIsMaternalAllele = YES;
-		thereIsPaternalAllele = c->thereIsPaternalAllele = YES;
+		c->thereIsMaternalAllele = YES;
+		c->thereIsPaternalAllele = YES;
 		readCount[A] = 0;
 		readCount[C] = 0;
 		readCount[G] = 14;
@@ -4824,6 +4966,73 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 */
 	if (doGATK_ADO == YES || do4T_ADO == YES || do2T_ADO == YES)
 		{
+		/* p(read|allele) and its log10 depend only on (allele, read), not on the genotype pair: compute them once */
+		for (read=0; read<4; read++)
+			{
+			if (readCount[read] <= 0)
+				continue;
+			memoN = 0;
+			for (k=0; k<4; k++)
+				{
+				pReadGivenA1 = pReadGivenA2 = 0.0;
+				if (doGATK_ADO == YES)
+					{
+					pReadGivenA1 += ngsEij[k][read];
+					pReadGivenA2 += ngsEij[k][read];
+					}
+				else if (do2T_ADO == YES)
+					{
+					for (template1=0; template1<4; template1++)
+						if (template1 != k)
+							pReadGivenA1 += Eij[k][template1]/cumEij[k][3] * ((1.0 - maternalSiteAmplificationError) * ngsEij[k][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
+					for (template2=0; template2<4; template2++)
+						if (template2 != k)
+							pReadGivenA2 += Eij[k][template2]/cumEij[k][3] * ((1.0 - paternalSiteAmplificationError) * ngsEij[k][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
+					}
+				else
+					{
+					for (template=0; template<4; template++)
+						{
+						pReadGivenA1 += ampEijmat[k][template] * ngsEij[template][read];
+						pReadGivenA2 += ampEijpat[k][template] * ngsEij[template][read];
+						}
+					}
+				pA1tab[k][read] = pReadGivenA1;
+				pA2tab[k][read] = pReadGivenA2;
+				if (alleleDropoutRate != 0)
+					{
+					lgA1tab[k][read] = Log10Memo (pReadGivenA1, memoKeys, memoVals, &memoN);
+					lgA2tab[k][read] = Log10Memo (pReadGivenA2, memoKeys, memoVals, &memoN);
+					}
+				}
+			}
+
+		/* term2 depends only on a1 and term3 only on a2: sum them once per allele (same additions, same order) */
+		for (k=0; k<4; k++)
+			{
+			T2a[k] = 0.0;
+			T3a[k] = 0.0;
+			if (alleleDropoutRate != 0)
+				for (read=0; read<4; read++)
+					if (readCount[read] > 0)
+						{
+						T2a[k] += readCount[read] * lgA1tab[k][read];
+						T3a[k] += readCount[read] * lgA2tab[k][read];
+						}
+			}
+
+		/* log10 (1/2 p1 + 1/2 p2) for every read and genotype, computing each distinct argument only once */
+		if (alleleDropoutRate != 1)
+			for (read=0; read<4; read++)
+				if (readCount[read] > 0)
+					{
+					memoN = 0;
+					for (a1=0; a1<4; a1++)
+						for (a2=0; a2<4; a2++)
+							L1tab[read][a1][a2] = Log10Memo (meanAllelicImbalance * pA1tab[a1][read] + (1.0 - meanAllelicImbalance) * pA2tab[a2][read], memoKeys, memoVals, &memoN);
+					}
+
+		memoN = 0;	/* memo of the final log10 (GL) of each genotype */
 		for (a1=0; a1<4; a1++) /* a1 is maternal; a2 is paternal */
 			for (a2=0; a2<4; a2++)
 				{
@@ -4836,49 +5045,20 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 					pReadGivenA1 = pReadGivenA2 = 0.0;
 					if (readCount[read] > 0)
 						{
-						if (doGATK_ADO == YES)
-							{
-							pReadGivenA1 += ngsEij[a1][read];
-							pReadGivenA2 += ngsEij[a2][read];
-							}
-						else if (do2T_ADO == YES)
-							{
-							for (template1=0; template1<4; template1++)
-								if (template1 != a1)
-									pReadGivenA1 += Eij[a1][template1]/cumEij[a1][3] * ((1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
-							for (template2=0; template2<4; template2++)
-								if (template2 != a2)
-									pReadGivenA2 += Eij[a2][template2]/cumEij[a2][3] * ((1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
-							}
-						else if (do4T_ADO == YES)
-							{
-							for (template=0; template<4; template++)
-								{
-								pReadGivenA1 += ampEijmat[a1][template] * ngsEij[template][read];
-								pReadGivenA2 += ampEijpat[a2][template] * ngsEij[template][read];
-								}
-							}
+						pReadGivenA1 = pA1tab[a1][read];
+						pReadGivenA2 = pA2tab[a2][read];
 						
 						/* M [p(b|A)] */
-						if (alleleDropoutRate == 0)
-							{
-							term1 += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
-							}
-						else if (alleleDropoutRate == 1)
-							{
-							term2 += readCount[read] * log10(pReadGivenA1);
-							term3 += readCount[read] * log10(pReadGivenA2);
-							}
-						else
-							{
-							term1 += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
-							term2 += readCount[read] * log10(pReadGivenA1);
-							term3 += readCount[read] * log10(pReadGivenA2);
-							}
-							
+						if (alleleDropoutRate != 1)
+							term1 += readCount[read] * L1tab[read][a1][a2];
 						}
 					//fprintf (stderr, "\n***read=%c count=%3d gl[%c][%c] = %lf  logGL[%c][%c] = %lf (p1=%e p2=%e), term1=%Lf term2=%Lf term3=%Lf", WhichNuc(read), readCount[read], WhichNuc(a1), WhichNuc(a2), GL[a1][a2],  WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], pReadGivenA1,pReadGivenA2, term1, term2, term3);
 					} // reads
+				if (alleleDropoutRate != 0)
+					{
+					term2 = T2a[a1];
+					term3 = T3a[a2];
+					}
 				
 				/* compute log sum exp; first find maximum term */
 				if (alleleDropoutRate == 0)
@@ -4899,23 +5079,23 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 					}
 				
 				if (alleleDropoutRate == 0)
-					num1 = (1.0 - alleleDropoutRate) * pow(10.0,term1-maxterm);
+					num1 = (1.0 - alleleDropoutRate) * Pow10Fast(term1-maxterm);
 				else if (alleleDropoutRate == 1)
 					{
-					num2 = alleleDropoutRate * meanAllelicImbalance * pow(10.0,term2-maxterm);
-					num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * pow(10.0,term3-maxterm);;
+					num2 = alleleDropoutRate * meanAllelicImbalance * Pow10Fast(term2-maxterm);
+					num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * Pow10Fast(term3-maxterm);;
 					}
 				else
 					{
-					num1 = (1.0 - alleleDropoutRate) * pow(10.0,term1-maxterm);
-					num2 = alleleDropoutRate * meanAllelicImbalance * pow(10.0,term2-maxterm);
-					num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * pow(10.0,term3-maxterm);;
+					num1 = (1.0 - alleleDropoutRate) * Pow10Fast(term1-maxterm);
+					num2 = alleleDropoutRate * meanAllelicImbalance * Pow10Fast(term2-maxterm);
+					num3 = alleleDropoutRate * (1.0 - meanAllelicImbalance) * Pow10Fast(term3-maxterm);;
 					}
 	
 				GL[a1][a2] = num1 + num2 + num3;
 
 				if (isnan(GL[a1][a2]) == NO)
-					logGL[a1][a2] = maxterm + log10(GL[a1][a2]);
+					logGL[a1][a2] = maxterm + Log10Memo (GL[a1][a2], memoKeys, memoVals, &memoN);
 				else
 					logGL[a1][a2] = -INFINITY;
 				/*
@@ -5028,9 +5208,15 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	c->MLmatAllele = MLmatAllele;
 	c->MLpatAllele = MLpatAllele;
 
-	for (k=0; k<4; k++)
-		free(GL[k]);
-	free (GL);
+	/* hand the likelihoods over in compact form (not stored when the caller does not want them) */
+	if (glOut)
+		{
+		for (a1=0; a1<4; a1++)
+			for (a2=a1; a2<4; a2++)
+				glOut[GL_Index(a1,a2)] = logGL[a1][a2];
+		glOut[GL_MAX] = maxLike;
+		}
+
 
 	/*
 	if (debug_GL == YES)
@@ -5055,7 +5241,9 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 	double	maxLike;
 	double	doubletRate;
 	long double number1, number2;
-	CellStr celldoublet;
+	CellSiteStr donor;
+	double donorGL[GL_NUM], bufGL[GL_NUM];
+	const double *gl1;
 
 	debug_DL = NO;
 	if (debug_DL == YES)
@@ -5072,127 +5260,88 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 			/* select a cell genotype from the tumor sample */
 			c2 = RandomUniformTo (numCells,seed);
 
-			/* allocate temporal memory for this cell genotype */
-			celldoublet.site  = (CellSiteStr*) calloc (numSites, sizeof(CellSiteStr));
-			if (!celldoublet.site)
+			/* data for the doublet cell; the donor cell genotype is processed site by site in a scratch variable */
+			cell[c1].doublet = (DoubletSiteStr*) calloc (numSites, sizeof(DoubletSiteStr));
+			if (!cell[c1].doublet)
 				{
-				fprintf (stderr, "Could not allocate the celldoublet.site structure\n");
+				fprintf (stderr, "Could not allocate the cell[%d].doublet structure\n", c1);
 				exit (-1);
 				}
 
-			for (j=0; j<numSites; j++)
-				{
-				celldoublet.site[j].readCount = (int*) calloc (4, sizeof(int));
-				if (!celldoublet.site[j].readCount)
-					{
-					fprintf (stderr, "Could not allocate the celldoublet.site[%d].readCount structure\n", j);
-					exit (-1);
-					}
-			
-				celldoublet.site[j].logGL = (double**) calloc (4, sizeof(double*));
-				if (!celldoublet.site[j].logGL)
-					{
-					fprintf (stderr, "Could not allocate the celldoublet.site[%d].logGL structure\n", j);
-					exit (-1);
-					}
-				for (k=0; k<4; k++)
-					{
-					celldoublet.site[j].logGL[k] = (double*) calloc (4, sizeof(double));
-					if (!celldoublet.site[j].logGL[k] )
-						{
-						fprintf (stderr, "Could not allocate the celldoublet.site[%d].logGL[%d] structure\n", j,k);
-						exit (-1);
-						}
-					}
-
-				celldoublet.site[j].normLogGL = (double**) calloc (4, sizeof(double*));
-				if (!celldoublet.site[j].normLogGL)
-					{
-					fprintf (stderr, "Could not allocate the celldoublet.site[%d].normLogGL structure\n", j);
-					exit (-1);
-					}
-				for (k=0; k<4; k++)
-					{
-					celldoublet.site[j].normLogGL[k] = (double*) calloc (4, sizeof(double));
-					if (!celldoublet.site[j].normLogGL[k] )
-						{
-						fprintf (stderr, "Could not allocate the celldoublet.site[%d].normLogGL[%d] structure\n", j,k);
-						exit (-1);
-						}
-					}
-				}
-			
 			/* get read counts and likelihoods for this cell genotype for all sites */
 			for (j=0; j<numSites; j++) // produce doublet read counts for all sites
 				{
+				memset (&donor, 0, sizeof(donor));
+				memset (donorGL, 0, sizeof(donorGL));
 				if (debug_DL == YES)
 					fprintf (stderr,"\n\n-- New celldoublet reads and likelihoods");
-				SiteReadCounts (&celldoublet.site[j], c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
-				GenotypeLikelihoods (&celldoublet.site[j], c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
+				SiteReadCounts (&donor, c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
+				GenotypeLikelihoods (&donor, c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed, donorGL);
+				gl1 = GetSiteGL (c1, j, bufGL);
 
 				if (debug_DL == YES)
 					{
-					fprintf (stderr,"\ncelltype %d site %d: %c%c", c2+1, j+1, WhichNuc(celldoublet.site[j].maternalAllele), WhichNuc(celldoublet.site[j].paternalAllele));
-					fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d  | total:%d ",  celldoublet.site[j].readCount[A], celldoublet.site[j].readCount[C], celldoublet.site[j].readCount[G], celldoublet.site[j].readCount[T], celldoublet.site[j].numReads);
-					fprintf (stderr,"\nmatAmpError = %f", celldoublet.site[j].maternalSiteAmplificationError);
-					fprintf (stderr,"\npatAmpError = %f", celldoublet.site[j].paternalSiteAmplificationError);
+					fprintf (stderr,"\ncelltype %d site %d: %c%c", c2+1, j+1, WhichNuc(donor.maternalAllele), WhichNuc(donor.paternalAllele));
+					fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d  | total:%d ",  donor.readCount[A], donor.readCount[C], donor.readCount[G], donor.readCount[T], donor.numReads);
+					fprintf (stderr,"\nmatAmpError = %f", donor.maternalSiteAmplificationError);
+					fprintf (stderr,"\npatAmpError = %f", donor.paternalSiteAmplificationError);
 					for (k=0; k<4; k++)
 						for (l=0; l<4; l++)
-							fprintf (stderr, "\nlog10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l), celldoublet.site[j].logGL[k][l]);
+							fprintf (stderr, "\nlog10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l), GLV(donorGL,k,l));
 					fprintf (stderr, "\n");
 					}
 				
 				/* add doublet information */
-				cell[c1].site[j].numReadsDoublet = cell[c1].site[j].numReads + celldoublet.site[j].numReads;
+				cell[c1].doublet[j].numReadsDoublet = cell[c1].site[j].numReads + donor.numReads;
 				for (k=0; k<4; k++)
-					cell[c1].site[j].readCountDoublet[k] = cell[c1].site[j].readCount[k] + celldoublet.site[j].readCount[k];
+					cell[c1].doublet[j].readCountDoublet[k] = cell[c1].site[j].readCount[k] + donor.readCount[k];
 
-				cell[c1].site[j].maternalAlleleDoublet = celldoublet.site[j].maternalAllele;
-				cell[c1].site[j].paternalAlleleDoublet = celldoublet.site[j].paternalAllele;
+				cell[c1].doublet[j].maternalAlleleDoublet = donor.maternalAllele;
+				cell[c1].doublet[j].paternalAlleleDoublet = donor.paternalAllele;
 
 				//fprintf(stderr,"\nln cell\t\tcelltype\tdoublet");
 				/* adding the genotype log likelihoods of two sets of reads (c1 + celldoublet) to get the total doublet likelihoods */
 				for (k=0; k<4; k++)
 					for (l=0; l<4; l++)
 						{
-						if (isinf(cell[c1].site[j].logGL[k][l]) || isinf(celldoublet.site[j].logGL[k][l]))
-							cell[c1].site[j].logGLdoublet[k][l] = -INFINITY;
+						if (isinf(GLV(gl1,k,l)) || isinf(GLV(donorGL,k,l)))
+							cell[c1].doublet[j].logGLdoublet[k][l] = -INFINITY;
 						else
-							cell[c1].site[j].logGLdoublet[k][l] = cell[c1].site[j].logGL[k][l] + celldoublet.site[j].logGL[k][l];
+							cell[c1].doublet[j].logGLdoublet[k][l] = GLV(gl1,k,l) + GLV(donorGL,k,l);
 						}
 				
 				if (debug_DL == YES)
 					{
 					fprintf (stderr,"\nCell %d site %d: %c%c", c1+1, j+1, WhichNuc(cell[c1].site[j].maternalAllele), WhichNuc(cell[c1].site[j].paternalAllele));
 					fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d  | total:%d ",   cell[c1].site[j].readCount[A],  cell[c1].site[j].readCount[C],  cell[c1].site[j].readCount[G],  cell[c1].site[j].readCount[T],  cell[c1].site[j].numReads);
-					fprintf (stderr,"\n|reads doublet: A:%d C:%d G:%d T:%d  | total:%d ",   cell[c1].site[j].readCountDoublet[A],  cell[c1].site[j].readCountDoublet[C],  cell[c1].site[j].readCountDoublet[G],  cell[c1].site[j].readCountDoublet[T],  cell[c1].site[j].numReadsDoublet);
+					fprintf (stderr,"\n|reads doublet: A:%d C:%d G:%d T:%d  | total:%d ",   cell[c1].doublet[j].readCountDoublet[A],  cell[c1].doublet[j].readCountDoublet[C],  cell[c1].doublet[j].readCountDoublet[G],  cell[c1].doublet[j].readCountDoublet[T],  cell[c1].doublet[j].numReadsDoublet);
 					fprintf (stderr,"\nmatAmpError = %f",  cell[c1].site[j].maternalSiteAmplificationError);
 					fprintf (stderr,"\npatAmpError = %f",  cell[c1].site[j].paternalSiteAmplificationError);
 					for (k=0; k<4; k++)
 						for (l=0; l<4; l++)
-							fprintf (stderr, "\ndoublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l),  cell[c1].site[j].logGLdoublet[k][l]);
+							fprintf (stderr, "\ndoublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l),  cell[c1].doublet[j].logGLdoublet[k][l]);
 					fprintf (stderr, "\n");
 					}
 
 				/* obtain unphased GLs by combining GLs from both phases -only heterozygotes */
 				   for (k=0; k<4; k++)
 					   for (l=k+1; l<4; l++)
-						   if (cell[c1].site[j].logGLdoublet[k][l] != cell[c1].site[j].logGLdoublet[l][k])
+						   if (cell[c1].doublet[j].logGLdoublet[k][l] != cell[c1].doublet[j].logGLdoublet[l][k])
 							   {
-							   number1 = 0.5 * pow(10.0,cell[c1].site[j].logGLdoublet[k][l]);
-							   number2 = 0.5 * pow(10.0,cell[c1].site[j].logGLdoublet[l][k]);
-							   cell[c1].site[j].logGLdoublet[k][l] = cell[c1].site[j].logGLdoublet[l][k] = log10(number1 + number2);
+							   number1 = 0.5 * pow(10.0,cell[c1].doublet[j].logGLdoublet[k][l]);
+							   number2 = 0.5 * pow(10.0,cell[c1].doublet[j].logGLdoublet[l][k]);
+							   cell[c1].doublet[j].logGLdoublet[k][l] = cell[c1].doublet[j].logGLdoublet[l][k] = log10(number1 + number2);
 							   //fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
 							   }
 
 				/* find max log10 doublet likelihood  */
-				maxLike = cell[c1].site[j].logGLdoublet[A][A];
+				maxLike = cell[c1].doublet[j].logGLdoublet[A][A];
 				MLmatAllele = MLpatAllele = A;
 				for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
-						if (cell[c1].site[j].logGLdoublet[k][l] > maxLike)
+						if (cell[c1].doublet[j].logGLdoublet[k][l] > maxLike)
 							{
-							maxLike = cell[c1].site[j].logGLdoublet[k][l];
+							maxLike = cell[c1].doublet[j].logGLdoublet[k][l];
 							MLmatAllele = k;
 							MLpatAllele = l;
 							}
@@ -5201,44 +5350,32 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 				for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
 					{
-					cell[c1].site[j].normLogGLdoublet[k][l] = cell[c1].site[j].logGLdoublet[k][l] - maxLike;
-					cell[c1].site[j].normLogGLdoublet[l][k] = cell[c1].site[j].normLogGLdoublet[k][l];
+					cell[c1].doublet[j].normLogGLdoublet[k][l] = cell[c1].doublet[j].logGLdoublet[k][l] - maxLike;
+					cell[c1].doublet[j].normLogGLdoublet[l][k] = cell[c1].doublet[j].normLogGLdoublet[k][l];
 					}
 
 				//TODO: print GL=-999?
 				/* substitute small numbers for printing */
 				/*for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
-						if (cell[c1].site[j].logGLdoublet[k][l] < 1e-6 )
+						if (cell[c1].doublet[j].logGLdoublet[k][l] < 1e-6 )
 							{
-							cell[c1].site[j].logGLdoublet[l][k] = cell[c1].site[j].logGLdoublet[k][l] = smallNumber;
-							cell[c1].site[j].normLogGLdoublet[l][k] = cell[c1].site[j].normLogGLdoublet[k][l] = smallNumber;
+							cell[c1].doublet[j].logGLdoublet[l][k] = cell[c1].doublet[j].logGLdoublet[k][l] = smallNumber;
+							cell[c1].doublet[j].normLogGLdoublet[l][k] = cell[c1].doublet[j].normLogGLdoublet[k][l] = smallNumber;
 							}
 				 */
-				cell[c1].site[j].MLmatAlleleDoublet = MLmatAllele;
-				cell[c1].site[j].MLpatAlleleDoublet = MLpatAllele;
+				cell[c1].doublet[j].MLmatAlleleDoublet = MLmatAllele;
+				cell[c1].doublet[j].MLpatAlleleDoublet = MLpatAllele;
 			
 				if (debug_DL == YES)
 					{
 					for (k=0; k<4; k++)
 						for (l=0; l<4; l++)
-							fprintf (stderr, "\nscaled doublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l), cell[c1].site[j].normLogGLdoublet[k][l]);
+							fprintf (stderr, "\nscaled doublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l), cell[c1].doublet[j].normLogGLdoublet[k][l]);
 					fprintf (stderr, "\n");
 					}
 				}
 			
-			//free celldoublet
-			for (j=0; j<numSites; j++)
-				{
-				free(celldoublet.site[j].readCount);
-				for (k=0; k<4; k++)
-					{
-					free(celldoublet.site[j].logGL[k]);
-					free(celldoublet.site[j].normLogGL[k]);
-					}
-				free(celldoublet.site[j].logGL);
-				free(celldoublet.site[j].normLogGL);
-				}
 			} // if we do doublet for c1
 		} //c1
 	
@@ -5286,15 +5423,13 @@ void PrintCATG (FILE *fp)
 		for (i=0; i<numCells+1; i++)
 			fprintf (fp,"%c",WhichIUPAC(cell[i].site[j].MLmatAllele, cell[i].site[j].MLpatAllele));
 		
-		if (cell[i].hasDoublet == NO)
+			/* decide per cell (the original tested cell[numCells+1].hasDoublet, one element past the end of the array) */
+		for (i=0; i<numCells+1; i++)
 			{
-			for (i=0; i<numCells+1; i++)
+			if (cell[i].hasDoublet == NO)
 				fprintf (fp,"\t%d,%d,%d,%d", cell[i].site[j].readCount[C], cell[i].site[j].readCount[A], cell[i].site[j].readCount[T], cell[i].site[j].readCount[G]);
-			}
-		else
-			{
-			for (i=0; i<numCells+1; i++)
-				fprintf (fp,"\t%d,%d,%d,%d", cell[i].site[j].readCountDoublet[C], cell[i].site[j].readCountDoublet[A], cell[i].site[j].readCountDoublet[T], cell[i].site[j].readCountDoublet[G]);
+			else
+				fprintf (fp,"\t%d,%d,%d,%d", cell[i].doublet[j].readCountDoublet[C], cell[i].doublet[j].readCountDoublet[A], cell[i].doublet[j].readCountDoublet[T], cell[i].doublet[j].readCountDoublet[G]);
 			}
 		}
 
@@ -5405,17 +5540,343 @@ void PrintPILEUP (FILE *fp)
 /********************* PrintVCF  ************************/
 /**	VCF output format with read counts
 */
+
+/********************* fast VCF formatting helpers ************************/
+/* Output-identical replacements for the many tiny fprintf calls used to write each VCF genotype field */
+
+static inline char *VCF_PutUInt (char *p, unsigned long long n)
+	{
+	char	t[24];
+	int		k = 0;
+
+	/* the values written are almost always small: skip the digit reversal for them */
+	if (n < 10)
+		{
+		*p++ = (char)('0' + n);
+		return p;
+		}
+	if (n < 100)
+		{
+		*p++ = (char)('0' + n / 10);
+		*p++ = (char)('0' + n % 10);
+		return p;
+		}
+	if (n < 1000)
+		{
+		*p++ = (char)('0' + n / 100);
+		*p++ = (char)('0' + (n / 10) % 10);
+		*p++ = (char)('0' + n % 10);
+		return p;
+		}
+	do
+		{
+		t[k++] = (char)('0' + n % 10);
+		n /= 10;
+		}
+	while (n);
+	while (k)
+		*p++ = t[--k];
+	return p;
+	}
+
+static inline char *VCF_PutInt (char *p, int v)
+	{
+	if (v < 0)
+		{
+		*p++ = '-';
+		return VCF_PutUInt (p, (unsigned long long)(-(long long)v));
+		}
+	return VCF_PutUInt (p, (unsigned long long)v);
+	}
+
+/* same text as sprintf("%.2f", x). Fast path when x*100 is not within 1e-6 of a rounding tie
+   (the error of x*100 is < 1e-8 for |x| < 1e5); otherwise defer to the C library */
+static char *VCF_PutF2 (char *p, double x)
+	{
+	double				ax = fabs (x), v, fl, fr;
+	unsigned long long	n;
+
+	if (!(ax < 1e5))
+		return p + sprintf (p, "%.2f", x);
+	v  = ax * 100.0;
+	fl = (double)(unsigned long long) v;	/* v >= 0 and < 1e7, so this is floor (v) */
+	fr = v - fl;
+	if (fabs (fr - 0.5) < 1e-6)
+		return p + sprintf (p, "%.2f", x);
+	n = (unsigned long long)(fr > 0.5 ? fl + 1.0 : fl);
+	if (signbit (x))
+		*p++ = '-';
+	p = VCF_PutUInt (p, n / 100);
+	*p++ = '.';
+	*p++ = (char)('0' + (n % 100) / 10);
+	*p++ = (char)('0' + (n % 100) % 10);
+	return p;
+	}
+
+#define VCF_ROOM(fp,buf,p)	do { if ((p) - (buf) > 3000) { fwrite ((buf), 1, (size_t)((p) - (buf)), (fp)); (p) = (buf); } } while (0)
+
+/* writes the tab-started genotype fields (GT ... TG) of one cell at one SNV site */
+static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, DoubletSiteStr *ds, int hasDoublet, SiteStr *st, int referenceAllele, int npairs, const int *pa1, const int *pa2)
+	{
+	char	buf[4096], *p = buf;
+	double	(*LG)[4], (*NLG)[4], LGs[4][4], NLGs[4][4];
+	char	txt[4][4][400], txtN[4][4][400];	/* text of the G10 / G10N values (a %.2f of a huge double can be long) */
+	int		txtLen[4][4], txtNLen[4][4];
+	int		*rc, numReads, MLm, MLp, l, k, a1, a2;
+	int		MLmatAllele = cs->MLmatAllele, MLpatAllele = cs->MLpatAllele;
+
+	for (k=0; k<4; k++)
+		for (l=0; l<4; l++)
+			{
+			LGs[k][l]  = GLV (glp, k, l);
+			NLGs[k][l] = GLN (glp, k, l);
+			}
+	if (hasDoublet == NO)
+		{
+		LG = LGs;  NLG = NLGs;  rc = cs->readCount;  numReads = cs->numReads;
+		MLm = cs->MLmatAllele;  MLp = cs->MLpatAllele;
+		}
+	else
+		{
+		LG = ds->logGLdoublet;  NLG = ds->normLogGLdoublet;  rc = ds->readCountDoublet;  numReads = ds->numReadsDoublet;
+		MLm = ds->MLmatAlleleDoublet;  MLp = ds->MLpatAlleleDoublet;
+		}
+
+	/* GT */
+	*p++ = '\t';
+	if (MLmatAllele == MISSING)
+		*p++ = '.';
+	else if (MLmatAllele == referenceAllele)
+		*p++ = '0';
+	else
+		for (l=0; l<st->numAltAlleles; l++)
+			if (st->alternateAlleles[l] == MLmatAllele)
+				{
+				p = VCF_PutInt (p, l+1);
+				break;
+				}
+	*p++ = '|';
+	if (MLpatAllele == MISSING)
+		*p++ = '.';
+	else if (MLpatAllele == referenceAllele)
+		*p++ = '0';
+	else
+		for (l=0; l<st->numAltAlleles; l++)
+			if (st->alternateAlleles[l] == MLpatAllele)
+				{
+				p = VCF_PutInt (p, l+1);
+				break;
+				}
+
+	/* DP, RC */
+	*p++ = ':';
+	p = VCF_PutInt (p, numReads);
+	*p++ = ':';
+	p = VCF_PutInt (p, rc[A]);  *p++ = ',';
+	p = VCF_PutInt (p, rc[C]);  *p++ = ',';
+	p = VCF_PutInt (p, rc[G]);  *p++ = ',';
+	p = VCF_PutInt (p, rc[T]);
+
+	/* G10: the text of each of the 10 values is kept, because GL repeats a subset of them */
+	*p++ = ':';
+	for (k=0; k<4; k++)
+		for (l=k; l<4; l++)
+			{
+			if (!(k == 0 && l == 0))
+				*p++ = ',';
+			txtLen[k][l] = (int)(VCF_PutF2 (txt[k][l], LG[k][l]) - txt[k][l]);
+			memcpy (p, txt[k][l], (size_t)txtLen[k][l]);
+			p += txtLen[k][l];
+			VCF_ROOM (fp, buf, p);
+			}
+	/* G10N */
+	*p++ = ':';
+	for (k=0; k<4; k++)
+		for (l=k; l<4; l++)
+			{
+			if (!(k == 0 && l == 0))
+				*p++ = ',';
+			txtNLen[k][l] = (int)(VCF_PutF2 (txtN[k][l], NLG[k][l]) - txtN[k][l]);
+			memcpy (p, txtN[k][l], (size_t)txtNLen[k][l]);
+			p += txtNLen[k][l];
+			VCF_ROOM (fp, buf, p);
+			}
+	/* GL */
+	*p++ = ':';
+	for (k=0; k<npairs; k++)
+		{
+		if (k > 0)
+			*p++ = ',';
+		if (pa1[k] <= pa2[k])
+			{
+			memcpy (p, txt[pa1[k]][pa2[k]], (size_t)txtLen[pa1[k]][pa2[k]]);
+			p += txtLen[pa1[k]][pa2[k]];
+			}
+		else
+			p = VCF_PutF2 (p, LG[pa1[k]][pa2[k]]);
+		VCF_ROOM (fp, buf, p);
+		}
+	/* GLN */
+	*p++ = ':';
+	for (k=0; k<npairs; k++)
+		{
+		if (k > 0)
+			*p++ = ',';
+		if (pa1[k] <= pa2[k])
+			{
+			memcpy (p, txtN[pa1[k]][pa2[k]], (size_t)txtNLen[pa1[k]][pa2[k]]);
+			p += txtNLen[pa1[k]][pa2[k]];
+			}
+		else
+			p = VCF_PutF2 (p, NLG[pa1[k]][pa2[k]]);
+		VCF_ROOM (fp, buf, p);
+		}
+	/* PL  (the non-doublet logGL is tested for infinity in both cases, as in the original) */
+	*p++ = ':';
+	for (k=0; k<npairs; k++)
+		{
+		a1 = pa1[k];  a2 = pa2[k];
+		if (k > 0)
+			*p++ = ',';
+		if (!isfinite (LGs[a1][a2]) || !isfinite (LG[a1][a2]))
+			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
+		else
+			p = VCF_PutInt (p, (int)round (10 * LG[a1][a2]));
+		VCF_ROOM (fp, buf, p);
+		}
+	/* PLN */
+	*p++ = ':';
+	for (k=0; k<npairs; k++)
+		{
+		a1 = pa1[k];  a2 = pa2[k];
+		if (k > 0)
+			*p++ = ',';
+		if (!isfinite (LGs[a1][a2]) || !isfinite (NLG[a1][a2]))
+			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
+		else
+			p = VCF_PutInt (p, (int)round (10 * NLG[a1][a2]));
+		VCF_ROOM (fp, buf, p);
+		}
+	/* ML */
+	*p++ = ':';
+	if (numReads > 0)
+		{
+		*p++ = WhichNuc (MLm);  *p++ = '/';  *p++ = WhichNuc (MLp);
+		}
+	else
+		{
+		*p++ = '.';  *p++ = '/';  *p++ = '.';
+		}
+	/* NG */
+	*p++ = ':';
+	*p++ = WhichNuc (MLmatAllele);  *p++ = '|';  *p++ = WhichNuc (MLpatAllele);
+	/* DG */
+	*p++ = ':';
+	if (hasDoublet == NO)
+		{
+		*p++ = '.';  *p++ = '/';  *p++ = '.';
+		}
+	else
+		{
+		*p++ = WhichNuc (ds->maternalAlleleDoublet);  *p++ = '|';  *p++ = WhichNuc (ds->paternalAlleleDoublet);
+		}
+	/* TG */
+	*p++ = ':';
+	*p++ = WhichNuc (cs->trueMaternalAllele);  *p++ = '|';  *p++ = WhichNuc (cs->truePaternalAllele);
+
+	fwrite (buf, 1, (size_t)(p - buf), fp);
+	}
+
+/* writes the complete VCF line of one SNV site; it only reads shared data, so lines of different sites can be built concurrently */
+static void VCFSiteLine (FILE *fp, int j)
+	{
+	int		i, k, l, referenceAllele;
+
+		
+	/* VFC: CHROMOSOME */
+	fprintf (fp,"\n%d", 1);
+	
+	/* VFC: POSITION */
+	fprintf (fp,"\t%d", j+1);
+	
+	/* VFC: ID */
+	if (allSites[j].isSNV == NO)
+		fprintf (fp,"\tinv%06d", j+1);
+	else
+		fprintf (fp,"\tsnv%06d", j+1);
+
+	/* VFC: REFERENCE allele(s) => healthy root alleles */
+	referenceAllele = allSites[j].referenceAllele;
+	fprintf (fp,"\t%c", WhichNuc(referenceAllele));
+	
+	/* VFC: ALTERNATE allele(s) seen in the reads (so not necessarily true) */
+	fprintf (fp,"\t");
+	if (allSites[j].numAltAlleles == 0)
+		fprintf (fp,".");
+	else
+		{
+		fprintf (fp,"%c", WhichNuc(allSites[j].alternateAlleles[0]));
+		for (k=1; k<allSites[j].numAltAlleles; k++)
+			fprintf (fp,",%c", WhichNuc(allSites[j].alternateAlleles[k]));
+		}
+
+	/* VFC: QUALITY */  /* Qphred probability that a SNV exists at this site; I will put missing info here */
+	fprintf (fp, "\t.");
+
+	/* VFC: FILTER */
+	if (allSites[j].countACGT < allSites[j].countN)  /* if less than half of the samples have missing data */
+		fprintf (fp, "\ts50");
+	else
+		fprintf (fp, "\tPASS");
+
+	/* VFC: INFO: AA (ancestral allele) ; ancestral allele is the reference alleles in this case */
+	fprintf (fp, "\tAA=%c", WhichNuc(referenceAllele));
+
+	/* VFC: INFO: NS (number of samples with data) */
+	fprintf (fp, ";NS=%d", allSites[j].countCellswithData);
+
+	/* VFC: INFO: AF (true alternate allele frequencies) */
+	fprintf (fp, ";AF");
+	{
+	const char *afSep = "=";
+	if (allSites[j].countA > 0 && referenceAllele != A)
+		{ fprintf (fp,"%s%4.3f", afSep, (double) allSites[j].countA / allSites[j].countACGT); afSep = ","; }
+	if (allSites[j].countC > 0 && referenceAllele != C)
+		{ fprintf (fp,"%s%4.3f", afSep, (double) allSites[j].countC / allSites[j].countACGT); afSep = ","; }
+	if (allSites[j].countG > 0 && referenceAllele != G)
+		{ fprintf (fp,"%s%4.3f", afSep, (double) allSites[j].countG / allSites[j].countACGT); afSep = ","; }
+	if (allSites[j].countT > 0 && referenceAllele != T)
+		{ fprintf (fp,"%s%4.3f", afSep, (double) allSites[j].countT / allSites[j].countACGT); afSep = ","; }
+	}
+
+	/* VFC: INFO : SOMATIC */
+	fprintf (fp, ";SOMATIC");
+	
+	/* VFC: FORMAT */
+	fprintf (fp, "\tGT:DP:RC:G10:G10N:GL:GLN:PL:PLN:ML:NG:DG:TG");
+	
+	{
+	int npairs = 0, pa1[10], pa2[10];
+	for (k=0; k<=allSites[j].numAltAlleles; k++)
+		for (l=0; l<=k; l++)
+			{
+			pa1[npairs] = (k == 0) ? allSites[j].referenceAllele : allSites[j].alternateAlleles[k-1];
+			pa2[npairs] = (l == 0) ? allSites[j].referenceAllele : allSites[j].alternateAlleles[l-1];
+			npairs++;
+			}
+	for (i=0; i<numCells+1; i++)
+		{
+		double glbuf[GL_NUM];
+		const double *glp = GetSiteGL (i, j, glbuf);
+		VCFCellFields (fp, &cell[i].site[j], glp, cell[i].doublet ? &cell[i].doublet[j] : NULL, cell[i].hasDoublet, &allSites[j], referenceAllele, npairs, pa1, pa2);
+		}
+	}
+	}
+
+
 void PrintVCF (FILE *fp)
 	{
-	int		i, j, k, l, snv, a1, a2;
-	int		MLmatAllele, MLpatAllele, referenceAllele;
-	int		trueMaternalAllele, truePaternalAllele;
-	int		maternalAlleleDoublet, paternalAlleleDoublet;
-	char	*fmt = NULL;
-	char 	*fmt_f_2 = "%.2f";
-    char 	*fmt_comma_f_2 = ",%.2f";
-	char 	*fmt_d = "%d";
-    char 	*fmt_comma_d = ",%d";
+	int		i, snv;
 
 	/* print file header */
 	fprintf (fp,"##fileformat=VCFv4.3");
@@ -5456,405 +5917,46 @@ void PrintVCF (FILE *fp)
 		}
 	
 	/* print only apparent SNVs */
-	for (snv=0; snv<numSNVs; snv++)
+#ifdef _OPENMP
+	if (omp_get_max_threads() > 1 && numSNVs > 1)
 		{
-		j = SNVsites[snv];
-		
-		/* VFC: CHROMOSOME */
-		fprintf (fp,"\n%d", 1);
-		
-		/* VFC: POSITION */
-		fprintf (fp,"\t%d", j+1);
-		
-		/* VFC: ID */
-		if (allSites[j].isSNV == NO)
-			fprintf (fp,"\tinv%06d", j+1);
-		else
-			fprintf (fp,"\tsnv%06d", j+1);
-
-		/* VFC: REFERENCE allele(s) => healthy root alleles */
-		referenceAllele = allSites[j].referenceAllele;
-		fprintf (fp,"\t%c", WhichNuc(referenceAllele));
-		
-		/* VFC: ALTERNATE allele(s) seen in the reads (so not necessarily true) */
-		fprintf (fp,"\t");
-		if (allSites[j].numAltAlleles == 0)
-			fprintf (fp,".");
-		else
+		/* build the lines of a chunk of sites in memory in parallel, then write them in order */
+		int		chunk = 4 * omp_get_max_threads(), q, nq;
+		char	**lineBuf = (char**) calloc (chunk, sizeof(char*));
+		size_t	*lineLen = (size_t*) calloc (chunk, sizeof(size_t));
+		if (!lineBuf || !lineLen)
 			{
-			fprintf (fp,"%c", WhichNuc(allSites[j].alternateAlleles[0]));
-			for (k=1; k<allSites[j].numAltAlleles; k++)
-				fprintf (fp,",%c", WhichNuc(allSites[j].alternateAlleles[k]));
+			fprintf (stderr, "Could not allocate the VCF line buffers\n");
+			exit (-1);
 			}
-
-		/* VFC: QUALITY */  /* Qphred probability that a SNV exists at this site; I will put missing info here */
-		fprintf (fp, "\t.");
-
-		/* VFC: FILTER */
-		if (allSites[j].countACGT < allSites[j].countN)  /* if less than half of the samples have missing data */
-			fprintf (fp, "\ts50");
-		else
-			fprintf (fp, "\tPASS");
-
-		/* VFC: INFO: AA (ancestral allele) ; ancestral allele is the reference alleles in this case */
-		fprintf (fp, "\tAA=%c", WhichNuc(referenceAllele));
-
-		/* VFC: INFO: NS (number of samples with data) */
-		fprintf (fp, ";NS=%d", allSites[j].countCellswithData);
-
-		/* VFC: INFO: AF (true alternate allele frequencies) */
-		fprintf (fp, ";AF=");
-		if (allSites[j].countA > 0 && referenceAllele != A)
-			fprintf (fp,"%4.3f,", (double) allSites[j].countA / allSites[j].countACGT);
-		if (allSites[j].countC > 0 && referenceAllele != C)
-			fprintf (fp,"%4.3f,", (double) allSites[j].countC / allSites[j].countACGT);
-		if (allSites[j].countG > 0 && referenceAllele != G)
-			fprintf (fp,"%4.3f,", (double) allSites[j].countG / allSites[j].countACGT);
-		if (allSites[j].countT > 0 && referenceAllele != T)
-			fprintf (fp,"%4.3f,", (double) allSites[j].countT / allSites[j].countACGT);
-		fseek(fp, -1, SEEK_CUR); 	/* get rid of the last comma */
-
-		/* VFC: INFO : SOMATIC */
-		fprintf (fp, ";SOMATIC");
-		
-		/* VFC: FORMAT */
-		fprintf (fp, "\tGT:DP:RC:G10:G10N:GL:GLN:PL:PLN:ML:NG:DG:TG");
-		
-		for (i=0; i<numCells+1; i++)
+		for (snv=0; snv<numSNVs; snv+=chunk)
 			{
-			MLmatAllele = cell[i].site[j].MLmatAllele;
-			MLpatAllele = cell[i].site[j].MLpatAllele;
-			trueMaternalAllele = cell[i].site[j].trueMaternalAllele;
-			truePaternalAllele = cell[i].site[j].truePaternalAllele;
-			maternalAlleleDoublet = cell[i].site[j].maternalAlleleDoublet;
-			paternalAlleleDoublet= cell[i].site[j].paternalAlleleDoublet;
-	
-			/* VFC: FORMAT: GT (genotypes) */
-			if (MLmatAllele == MISSING)
-				fprintf (fp, "\t.");
-			else if (MLmatAllele == referenceAllele)
-				fprintf (fp, "\t0");
-			else
+			nq = (numSNVs - snv < chunk) ? numSNVs - snv : chunk;
+			#pragma omp parallel for schedule(dynamic,1)
+			for (q=0; q<nq; q++)
 				{
-				fprintf (fp,"\t");
-				for (l=0; l<allSites[j].numAltAlleles; l++)
+				FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+				if (!ms)
 					{
-					if (allSites[j].alternateAlleles[l] == MLmatAllele)
-						{
-						fprintf (fp,"%d", l+1);
-						break;
-						}
-					
-						//!!!: WARNING ML allele not in ALT/REF
-						/*if (l == allSites[j].numAltAlleles - 1)
-						{
-						fprintf (fp,"?");
-						fprintf (stderr,"\nWARNING: ML maternal allele is not in the ALT or REF set of reads [cell %d site %d]", i+1, j+1);
-						
-						fprintf (stderr,"\ncell %d site %d: %c%c", i+1, j+1, WhichNuc(trueMaternalAllele), WhichNuc(trueMaternalAllele));
-						fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d",   cell[i].site[j].readCount[A],  cell[i].site[j].readCount[C],  cell[i].site[j].readCount[G],  cell[i].site[j].readCount[T]);
-						fprintf (stderr,"\nsequencing error = %f",sequencingError);
-						fprintf (stderr,"\nmatAmpError = %f", cell[i].site[j].maternalSiteAmplificationError);
-						fprintf (stderr,"\npatAmpError = %f", cell[i].site[j].paternalSiteAmplificationError);
-						for (a1=0; a1<4; a1++)
-							for (a2=a1; a2<4; a2++)
-								fprintf (stderr, "\n(4T)log10 GL[%c][%c] = %lf", WhichNuc(a1), WhichNuc(a2), cell[i].site[j].logGL[a1][a2]);
-						fprintf (stderr, "\n");
-						 
-						} */
-					 
+					fprintf (stderr, "Could not open a memory stream for the VCF line\n");
+					exit (-1);
 					}
+				VCFSiteLine (ms, SNVsites[snv+q]);
+				fclose (ms);
 				}
-			fprintf (fp, "|");
-			if (MLpatAllele == MISSING)
-				fprintf (fp, ".");
-			else if (MLpatAllele == referenceAllele)
-				fprintf (fp, "0");
-			else
+			for (q=0; q<nq; q++)
 				{
-				for (l=0; l<allSites[j].numAltAlleles; l++)
-					{
-					if (allSites[j].alternateAlleles[l] == MLpatAllele)
-						{
-						fprintf (fp,"%d", l+1);
-						break;
-						}
-					}
+				fwrite (lineBuf[q], 1, lineLen[q], fp);
+				free (lineBuf[q]);
 				}
-	
-			if (cell[i].hasDoublet == NO)
-				{
-				/* VFC: FORMAT: DP (read depth) */
-				fprintf (fp, ":%d", cell[i].site[j].numReads);
-
-				/* VFC: FORMAT: RC (read counts ACGT) */
-				fprintf (fp,":%d,%d,%d,%d",  cell[i].site[j].readCount[A], cell[i].site[j].readCount[C], cell[i].site[j].readCount[G], cell[i].site[j].readCount[T]);
-
-				/* VFC: FORMAT: G10 (all 10 genotype likelihoods) */
-				fprintf (fp, ":");
-                fmt = fmt_f_2;
-				for (k=0; k<4; k++)
-					for (l=k; l<4; l++)
-					{
-                    fprintf (fp, fmt, cell[i].site[j].logGL[k][l]);
-					fmt = fmt_comma_f_2;
-					}
-				//fseek(fp, -1, SEEK_CUR); 	/* rewind to get rid of the last comma */
-
-				/* VFC: FORMAT: G10N (all 10 normalized genotype likelihoods) */
-				fprintf (fp, ":");
-                fmt = fmt_f_2;
-				for (k=0; k<4; k++)
-					for (l=k; l<4; l++)
-					{
-                    fprintf (fp, fmt, cell[i].site[j].normLogGL[k][l]);
-					fmt = fmt_comma_f_2;
-					}
-
-				/* VFC: FORMAT: GL (log10 genotype likelihoods in order according to VCF standards) */
-				fprintf (fp, ":");
-				fmt = fmt_f_2;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						
-                        fprintf (fp, fmt, cell[i].site[j].logGL[a1][a2]);
-						fmt = fmt_comma_f_2;
-						}
-				
-				/* VFC: FORMAT: GLN (normalized log10 genotype likelihoods but in order according to VCF standards) */
-				fprintf (fp, ":");
-				fmt = fmt_f_2;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						
-						fprintf (fp, fmt, cell[i].site[j].normLogGL[a1][a2]);
-						fmt = fmt_comma_f_2;
-						}
-	
-				/* VFC: FORMAT: PL (phred-scale genotype likelihoods in order according to VCF standards) */
-				fprintf (fp, ":");
-				fmt = fmt_d;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						
-						if (isinf(cell[i].site[j].logGL[a1][a2]) == YES)
-							fprintf (fp, fmt, cell[i].site[j].logGL[a1][a2]);
-						else
-							fprintf (fp, fmt, (int)round(10*cell[i].site[j].logGL[a1][a2]));
-						fmt = fmt_comma_d;
-						}
-
-				/* VFC: FORMAT: PLN (normalized phred-scale genotype likelihoods in order according to VCF standards) */
-				fprintf (fp, ":");
-				fmt = fmt_d;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						
-						if (isinf(cell[i].site[j].logGL[a1][a2]) == YES)
-							fprintf (fp, fmt, cell[i].site[j].normLogGL[a1][a2]);
-						else
-							fprintf (fp, fmt, (int)round(10*cell[i].site[j].normLogGL[a1][a2]));
-						fmt = fmt_comma_d;
-						}
-
-				/* VFC: FORMAT: ML (maximum likelihood genotype) */
-				if (cell[i].site[j].numReads > 0)
-					{
-					fprintf (fp, ":");
-					fprintf (fp, "%c/%c", WhichNuc(cell[i].site[j].MLmatAllele), WhichNuc(cell[i].site[j].MLpatAllele));
-					}
-				else
-					fprintf (fp, ":./.");
-
-				/* VFC: FORMAT: NG (NGS SNV genotype) */
-				fprintf (fp, ":");
-				fprintf (fp, "%c|%c", WhichNuc(MLmatAllele), WhichNuc(MLpatAllele));
-				
-				/* VFC: FORMAT: DG (true SNV second cell genotype, in doublet) */
-				fprintf (fp, ":");
-				fprintf (fp, "./.");
-
-				/* VFC: FORMAT: TG (true SNV genotype) */
-				fprintf (fp, ":");
-				fprintf (fp, "%c|%c", WhichNuc(trueMaternalAllele), WhichNuc(truePaternalAllele));
-				
-				}
-			else //if this is a doublet
-				{
-				/* VFC: FORMAT: DP (read depth) */
-				fprintf (fp, ":%d", cell[i].site[j].numReadsDoublet);
-				
-				/* VFC: FORMAT: RC (read counts ACGT) */
-				fprintf (fp,":%d,%d,%d,%d",  cell[i].site[j].readCountDoublet[A], cell[i].site[j].readCountDoublet[C], cell[i].site[j].readCountDoublet[G], cell[i].site[j].readCountDoublet[T]);
-				
-				/* VFC: FORMAT: G10 (all 10 genotype likelihoods) */
-				fprintf (fp, ":");
-                fmt = fmt_f_2;
-				for (k=0; k<4; k++)
-					for (l=k; l<4; l++)
-					{
-                    fprintf (fp, fmt, cell[i].site[j].logGLdoublet[k][l]);
-					fmt = fmt_comma_f_2;
-					}
-
-				/* VFC: FORMAT: G10N (all 10 genotype likelihoods) */
-				fprintf (fp, ":");
-				fmt = fmt_f_2;
-				for (k=0; k<4; k++)
-					for (l=k; l<4; l++)
-					{
-					fprintf (fp, fmt, cell[i].site[j].normLogGLdoublet[k][l]);
-					fmt = fmt_comma_f_2;
-					}
-
-				/* VFC: FORMAT: GL (log 10 genotype likelihoods) */
-				fprintf (fp, ":");
-				fmt = fmt_f_2;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-						
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						fprintf (fp, fmt, cell[i].site[j].logGLdoublet[a1][a2]);
-						fmt = fmt_comma_f_2;
-						}
-
-				/* VFC: FORMAT: GLN (normalized log 10 genotype likelihoods) */
-				fprintf (fp, ":");
-				fmt = fmt_f_2;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-						
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						fprintf (fp, fmt, cell[i].site[j].normLogGLdoublet[a1][a2]);
-						fmt = fmt_comma_f_2;
-						}
-
-				
-				/* VFC: FORMAT: PL (phred-scale genotype likelihoods) */
-				fprintf (fp, ":");
-				fmt = fmt_d;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						
-						if (isinf(cell[i].site[j].logGL[a1][a2]) == YES)
-							fprintf (fp, fmt, cell[i].site[j].logGLdoublet[a1][a2]);
-						else
-							fprintf (fp, fmt, (int)round(10*cell[i].site[j].logGLdoublet[a1][a2]));
-						fmt = fmt_comma_d;
-						}
-
-				/* VFC: FORMAT: PLN (normalized phred-scale genotype likelihoods) */
-				fprintf (fp, ":");
-				fmt = fmt_d;
-				for (k=0; k<=allSites[j].numAltAlleles; k++)
-					for (l=0; l<=k; l++)
-						{
-						if (k == 0)
-							a1 = allSites[j].referenceAllele;
-						else
-							a1 = allSites[j].alternateAlleles[k-1];
-
-						if (l == 0)
-							a2 = allSites[j].referenceAllele;
-						else
-							a2 = allSites[j].alternateAlleles[l-1];
-						
-						if (isinf(cell[i].site[j].logGL[a1][a2]) == YES)
-							fprintf (fp, fmt, cell[i].site[j].normLogGLdoublet[a1][a2]);
-						else
-							fprintf (fp, fmt, (int)round(10*cell[i].site[j].normLogGLdoublet[a1][a2]));
-						fmt = fmt_comma_d;
-						}
-				
-				/* VFC: FORMAT: ML (maximum likelihood genotype) */
-				if (cell[i].site[j].numReadsDoublet > 0)
-					{
-					fprintf (fp, ":");
-					fprintf (fp, "%c/%c",WhichNuc(cell[i].site[j].MLmatAlleleDoublet), WhichNuc(cell[i].site[j].MLpatAlleleDoublet));
-					}
-				else
-					fprintf (fp, ":./.");
-				
-				/* VFC: FORMAT: NG (NGS SNV genotype) */
-				fprintf (fp, ":");
-				fprintf (fp, "%c|%c",WhichNuc(MLmatAllele), WhichNuc(MLpatAllele));
-				
-				/* VFC: FORMAT: DG (true NGS SNV second cell genotype, in doublet) */
-				fprintf (fp, ":");
-				fprintf (fp, "%c|%c",WhichNuc(maternalAlleleDoublet), WhichNuc(paternalAlleleDoublet));
-
-				/* VFC: FORMAT: TG (true SNV genotype) */
-				fprintf (fp, ":");
-				fprintf (fp, "%c|%c",WhichNuc(trueMaternalAllele), WhichNuc(truePaternalAllele));
-				}
-			} // cell
-		} // snv
+			}
+		free (lineBuf);
+		free (lineLen);
+		}
+	else
+#endif
+		for (snv=0; snv<numSNVs; snv++)
+			VCFSiteLine (fp, SNVsites[snv]);
 	
 	fprintf (fp, "\n");
 	}
@@ -5864,12 +5966,12 @@ void PrintVCF (FILE *fp)
 /* Open global files to output results */
 void PrepareGlobalFiles(int argc, char **argv)
     {
-    char File[MAX_NAME];
+    char File[4*MAX_NAME];
 		
     /* contains the simulated tree in Newick format */
     if (doPrintTree == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, treeFile);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeFile);
         if ((fpTrees = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5880,7 +5982,7 @@ void PrepareGlobalFiles(int argc, char **argv)
     /* contains a list of times and branch lenghts for all nodes in the simulated trees */
     if (doPrintTimes == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, timesFile);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesFile);
         if ((fpTimes = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5893,7 +5995,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains SNV genotypes for every cell */
         if (doPrintSNVgenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVgenotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesFile);
              if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
                 {
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5904,7 +6006,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains haplotypes for variable sites for every cell */
         if (doPrintSNVhaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVhaplotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesFile);
             if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5915,7 +6017,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains error-free haplotypes for variable sites for every cell */
         if (doPrintTrueHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, trueHaplotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesFile);
             if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5926,7 +6028,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains all genotypes (variable or invariable) for every cell */
         if (doPrintFullGenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullGenotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesFile);
             if ((fpFullGenotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5937,7 +6039,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains haplotypes for all sites for every cell */
         if (doPrintFullHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullHaplotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesFile);
             if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5948,7 +6050,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains reads counts and genotype likelihoods for every SNV and cell */
         if (doNGS == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, VCFfile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFfile);
             if ((fpVCF = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5959,7 +6061,7 @@ void PrepareGlobalFiles(int argc, char **argv)
          /* contains reads counts for every SNV and cell */
         if (doPrintCATG == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, CATGfile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGfile);
             if ((fpCATG = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5969,7 +6071,7 @@ void PrepareGlobalFiles(int argc, char **argv)
 
 		if (doPrintPILEUP == YES)
 			{
-			sprintf(File,"%s/%s", resultsDir, PILEUPfile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPfile);
 			if ((fpPILEUP = fopen(File, "w")) == NULL)
 				{
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6062,9 +6164,9 @@ void PrepareSeparateFiles(int replicate)
 	/* contains the simulated tree in Newick format */
     if (doPrintTree == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, treeDir);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeDir);
 		mkdir(File,S_IRWXU);
-		sprintf(File,"%s/%s/%s.%04d", resultsDir, treeDir, treeFile, replicate+1);
+		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, treeDir, treeFile, replicate+1);
 		if ((fpTrees = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6074,9 +6176,9 @@ void PrepareSeparateFiles(int replicate)
 		
 	if (doPrintTimes == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, timesDir);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesDir);
 		mkdir(File,S_IRWXU);
-		sprintf(File,"%s/%s/%s.%04d", resultsDir, timesDir, timesFile, replicate+1);
+		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, timesDir, timesFile, replicate+1);
 		if ((fpTimes = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6089,9 +6191,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains SNV genotypes for every cell */
         if (doPrintSNVgenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVgenotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, SNVgenotypesDir, SNVgenotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVgenotypesDir, SNVgenotypesFile, replicate+1);
             if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
                 {
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6102,9 +6204,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains haplotypes for variable sites for every cell */
         if (doPrintSNVhaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVhaplotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, SNVhaplotypesDir, SNVhaplotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVhaplotypesDir, SNVhaplotypesFile, replicate+1);
             if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6115,9 +6217,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains reference haplotypes (before errors)  for every cell */
         if (doPrintTrueHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, trueHaplotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
             if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6128,9 +6230,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains all genotypes (variable or invariable) for every cell */
         if (doPrintFullGenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullGenotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, fullGenotypesDir, fullGenotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullGenotypesDir, fullGenotypesFile, replicate+1);
             if ((fpFullGenotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6141,9 +6243,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains haplotypes for all sites for every cell */
         if (doPrintFullHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullHaplotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, fullHaplotypesDir, fullHaplotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullHaplotypesDir, fullHaplotypesFile, replicate+1);
             if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6154,9 +6256,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains reads counts and log10 normalized genotype likelihoods for every SNV and cell */
         if (doNGS == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, VCFdir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFdir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
             if ((fpVCF = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6167,9 +6269,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains reads counts for every SNV and cell */
         if (doPrintCATG == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, CATGdir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGdir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, CATGdir, CATGfile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, CATGdir, CATGfile, replicate+1);
             if ((fpCATG = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6180,9 +6282,9 @@ void PrepareSeparateFiles(int replicate)
 		/* contains reads counts for every SNV and cell */
 		if (doPrintPILEUP == YES)
 			{
-			sprintf(File,"%s/%s", resultsDir, PILEUPdir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPdir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
 			if ((fpPILEUP = fopen(File, "w")) == NULL)
 				{
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6341,7 +6443,7 @@ static void PrintSiteInfo (FILE *fp, int i)
 /* Prints observed/ML genotypes at variable sites (SNVs) to a file */
 static void PrintSNVGenotypes (FILE *fp)
     {
-    int		i, j, k;
+    int		i, j;
 
     if (doPrintAncestors == YES && doNGS == NO)
         fprintf (fp, "%d %d\n", numCells+3, numSNVs);
@@ -6353,7 +6455,6 @@ static void PrintSNVGenotypes (FILE *fp)
 	for (i=1; i<numSNVs; i++)
 		fprintf (fp, " %d", SNVsites[i]+1);
     fprintf (fp, "\n");
-	k=0;
 	
     if (alphabet == DNA)
         {
@@ -6375,12 +6476,12 @@ static void PrintSNVGenotypes (FILE *fp)
 				else if (cell[i].hasDoublet == NO)
 					fprintf (fp, " %c%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAllele), WhichNuc(cell[i].site[SNVsites[j]].MLpatAllele));
 				else
-					fprintf (fp, " %c%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAlleleDoublet), WhichNuc(cell[i].site[SNVsites[j]].MLpatAlleleDoublet));
+					fprintf (fp, " %c%c", WhichNuc(cell[i].doublet[SNVsites[j]].MLmatAlleleDoublet), WhichNuc(cell[i].doublet[SNVsites[j]].MLpatAlleleDoublet));
 				}
            fprintf (fp,"\n");
             }
 			
-        if (doPrintAncestors == YES & doNGS == NO)
+        if (doPrintAncestors == YES && doNGS == NO)
             {
             fprintf (fp,"%s ", outRootCellName);
 			for (j=0; j<numSNVs; j++)
@@ -6479,7 +6580,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichIUPAC(cell[i].site[SNVsites[j]].MLmatAllele, cell[i].site[SNVsites[j]].MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichIUPAC(cell[i].site[SNVsites[j]].MLmatAlleleDoublet, cell[i].site[SNVsites[j]].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichIUPAC(cell[i].doublet[SNVsites[j]].MLmatAlleleDoublet, cell[i].doublet[SNVsites[j]].MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -6516,7 +6617,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(cell[i].doublet[SNVsites[j]].MLmatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				
@@ -6537,7 +6638,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(cell[i].doublet[SNVsites[j]].MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -6677,7 +6778,7 @@ static void PrintFullGenotypes (FILE *fp)
 				else if (cell[i].hasDoublet == NO)
 					fprintf (fp, " %c%c", WhichNuc(cell[i].site[j].MLmatAllele), WhichNuc(cell[i].site[j].MLpatAllele));
 				else
-					fprintf (fp, " %c%c", WhichNuc(cell[i].site[j].MLmatAlleleDoublet), WhichNuc(cell[i].site[j].MLpatAlleleDoublet));
+					fprintf (fp, " %c%c", WhichNuc(cell[i].doublet[j].MLmatAlleleDoublet), WhichNuc(cell[i].doublet[j].MLpatAlleleDoublet));
 				}
 			fprintf (fp,"\n");
             }
@@ -6772,7 +6873,7 @@ static void PrintFullHaplotypes (FILE *fp)
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichIUPAC(cell[i].site[j].MLmatAllele, cell[i].site[j].MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichIUPAC(cell[i].site[j].MLmatAlleleDoublet, cell[i].site[j].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichIUPAC(cell[i].doublet[j].MLmatAlleleDoublet, cell[i].doublet[j].MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -6811,7 +6912,7 @@ static void PrintFullHaplotypes (FILE *fp)
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLmatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLmatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(cell[i].doublet[j].MLmatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				
@@ -6833,7 +6934,7 @@ static void PrintFullHaplotypes (FILE *fp)
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(cell[i].doublet[j].MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -7512,7 +7613,7 @@ static void	PrintRunInformation (FILE *fp)
     fprintf (fp, "\n Effective population size                    =   %-3d",  N);
     if (doExponential == YES)
         fprintf (fp, "\n Exponential growth rate                      =   %2.1e", growthRate);
-	if (doOthsukiInnanCoal == YES)
+    if (doOthsukiInnanCoal == YES)
 		{
 		fprintf (fp, "\n Cell birth rate                              =   %2.1e", birthRate);
 		fprintf (fp, "\n Cell death rate                              =   %2.1e", deathRate);
@@ -7662,7 +7763,7 @@ static void	PrintRunInformation (FILE *fp)
 			}
  
 		fprintf (fp, "\n\nSingle-cell WGA");
-		if (fixedADOrate == 0 & doADOcell == NO & doADOsite == NO)
+		if (fixedADOrate == 0 && doADOcell == NO && doADOsite == NO)
 			fprintf (fp, "\n Alellic dropout                              =   %2.1f", fixedADOrate);
 		if (fixedADOrate > 0)
 			fprintf (fp, "\n Alellic dropout fixed                        =   %2.1e", fixedADOrate);
@@ -7970,7 +8071,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
 	fprintf (fp,"\n-B: doublet rate per cell (e.g. -B0.1)");
 
-	fprintf (fp,"\n-G: genotyping error [no read counts] (e.g. -G0.01)");
+	fprintf (fp,"\n-G: genotyping error [no read counts]: mean and variance (e.g. -G0.01 0.001)");
 
 	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
 	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
@@ -8167,18 +8268,41 @@ int ChooseUniformState (double *prob, long int *seed)
  ones are hard to find.  Communications of the ACM, 31(10):1192-1201.
  */
 
+/* One step of the minimal standard generator s <- 16807*s mod (2^31-1), computed with a multiplication and a
+   Mersenne reduction instead of Schrage's divisions. For a valid state (1 <= s <= 2^31-2) it gives exactly the
+   same value as the original code; any other state goes through the original code. */
+#define LCG_M		2147483647UL
+#define LCG_A1		16807UL
+#define LCG_A2		282475249UL
+#define LCG_A3		1622650073UL
+#define LCG_A4		984943658UL
+
+static inline long LCG_MulMod (long s, unsigned long a)
+	{
+	unsigned long	x = a * (unsigned long) s;
+	unsigned long	r = (x & LCG_M) + (x >> 31);
+	return (long) (r >= LCG_M ? r - LCG_M : r);
+	}
+
 double RandomUniform (long int *seed)
 	{
-    long int	lo, hi, test;
-		
-    hi = (*seed) / 127773;
-    lo = (*seed) % 127773;
-    test = 16807 * lo - 2836 * hi;
-    if (test > 0)
-        *seed = test;
-    else
-        *seed = test + 2147483647;
-    return (double)(*seed) / (double)2147483647;
+	long int	lo, hi, test;
+
+	if (streamActive)
+		return (double)((SplitMix64 (&streamState) >> 11) + 0.5) * (1.0 / 9007199254740992.0);	/* in (0,1) */
+	if (*seed >= 1 && *seed < 2147483647L)
+		*seed = LCG_MulMod (*seed, LCG_A1);
+	else
+		{
+		hi = (*seed) / 127773;
+		lo = (*seed) % 127773;
+		test = 16807 * lo - 2836 * hi;
+		if (test > 0)
+			*seed = test;
+		else
+			*seed = test + 2147483647;
+		}
+	return (double)(*seed) / (double)2147483647;
 	}
 
 
@@ -8202,19 +8326,60 @@ static int RandomUniformTo (int max, long int *seed)
 
 int RandomPoisson (double lambda, long int *seed)
 	{
-    int		poissonNumber;
-    double	sum;
-		
-    sum = 0;
-    poissonNumber = -1;
-		
-    while (sum <= 1.0)
+	int		poissonNumber;
+	double	sum;
+
+	/* Fast path. The original algorithm adds Exponential(lambda) draws until the sum exceeds 1,
+	   which costs one log() per draw. The decision "sum > 1" is the same as "prod(U) < exp(-lambda)",
+	   so we multiply the uniforms and only fall back to the exact sum of logs (using the stored
+	   uniforms) when the product is within 1e-9 (relative) of the threshold. The number of uniforms
+	   consumed and the returned value are identical to the original algorithm. */
+	if (lambda > 0.0 && lambda < 500.0)
 		{
-        sum += RandomExponential (lambda, seed);
-        poissonNumber++;
+		enum { CAP = 4096 };
+		double	U[CAP], u, P, thr, lo, hi;
+		int		k, i;
+
+		thr = exp (-lambda);
+		lo = thr * (1.0 - 1e-9);
+		hi = thr * (1.0 + 1e-9);
+		P  = 1.0;
+		k  = 0;
+		for (;;)
+			{
+			do
+				u = RandomUniform (seed);
+			while (u == 0);
+			if (k < CAP)
+				U[k] = u;
+			k++;
+			P *= u;
+			if (P < lo)
+				return (k - 1);
+			if (P > hi && k < CAP)
+				continue;
+			/* ambiguous (or too many draws to store): exact computation as in the original */
+			if (k <= CAP)
+				{
+				sum = 0;
+				for (i=0; i<k; i++)
+					sum += -log (U[i]) / lambda;
+				if (sum > 1.0)
+					return (k - 1);
+				}
+			else if (P < hi)
+				return (k - 1);
+			}
 		}
-		
-    return poissonNumber;
+
+	sum = 0;
+	poissonNumber = -1;
+	while (sum <= 1.0)
+		{
+		sum += RandomExponential (lambda, seed);
+		poissonNumber++;
+		}
+	return poissonNumber;
 	}
 
 
@@ -8245,14 +8410,78 @@ double RandomExponential (double lambda, long int *seed)
 
 int RandomBinomial (double prob, int numTrials, long int *seed)
 	{
-	int i, sum;
-	sum = 0;
-	
-	for(i=0; i<numTrials; i++)
+	/* Same stream and result as summing Bernoulli(RandomUniform(seed) < prob), but the comparison
+	   (double)s/2147483647 < prob is turned into the exactly equivalent integer comparison s < t,
+	   where t is the smallest integer with (double)t/2147483647 >= prob (the division is monotonic).
+	   This avoids one floating-point division per trial. */
+	const long	m = 2147483647L;
+	const double M = 2147483647.0;
+	long		s, t, hi, lo, test;
+	int			i, sum;
+
+	if (streamActive)	/* the fast path below works on the state of the minimal standard generator */
 		{
-		if(RandomUniform(seed) < prob)
+		/* Bernoulli trial: the top 53 bits of the draw are below prob * 2^53 (probability prob to within 2^-53) */
+		uint64_t	thr53;
+
+		if (!(prob > 0.0))
+			return 0;
+		if (prob >= 1.0)
+			return numTrials > 0 ? numTrials : 0;
+		thr53 = (uint64_t)(prob * 9007199254740992.0);
+		for (sum=0, i=0; i<numTrials; i++)
+			sum += (SplitMix64 (&streamState) >> 11) < thr53;
+		return sum;
+		}
+
+	if (!(prob > 0.0))
+		t = 0;
+	else if (prob >= 1.0)
+		t = m;
+	else
+		{
+		t = (long) (prob * M);
+		if (t < 0) t = 0;
+		if (t > m) t = m;
+		while (t > 0 && (double)(t - 1) / M >= prob)
+			t--;
+		while (t < m && (double)t / M < prob)
+			t++;
+		}
+
+	s = *seed;
+	sum = 0;
+	i = 0;
+	if (s >= 1 && s < m)
+		{
+		/* valid state: the next four states are independent products of the current one (a, a^2, a^3, a^4 mod m),
+		   so the four steps can be computed at the same time; same states, same order as one step at a time */
+		for (; i+4 <= numTrials; i+=4)
+			{
+			long s1 = LCG_MulMod (s, LCG_A1);
+			long s2 = LCG_MulMod (s, LCG_A2);
+			long s3 = LCG_MulMod (s, LCG_A3);
+			long s4 = LCG_MulMod (s, LCG_A4);
+			sum += (s1 < t) + (s2 < t) + (s3 < t) + (s4 < t);
+			s = s4;
+			}
+		for (; i<numTrials; i++)
+			{
+			s = LCG_MulMod (s, LCG_A1);
+			if (s < t)
+				sum++;
+			}
+		}
+	for (; i<numTrials; i++)
+		{
+		hi = s / 127773;
+		lo = s % 127773;
+		test = 16807 * lo - 2836 * hi;
+		s = (test > 0) ? test : test + m;
+		if (s < t)
 			sum++;
 		}
+	*seed = s;
 	return sum;
 	}
 
@@ -8392,7 +8621,7 @@ double RandomGamma1 (double s, long int *seed)
      switching method
      */
     double			r, x=0.0, small=1e-37, w;
-    static double   a, p, uf, ss=10.0, d;
+    static __thread double   a, p, uf, ss=10.0, d;
 	
     if (s!=ss)
     {
@@ -8434,7 +8663,7 @@ double RandomGamma2 (double s, long int *seed)
      Best's (1978) t distribution method
      */
     double			r ,d, f, g, x;
-    static double	b, h, ss=0;
+    static __thread double	b, h, ss=0;
 	
     if (s!=ss)
     {
@@ -8520,6 +8749,31 @@ int CheckMatrixSymmetry(double matrix[4][4])
 	}
 
 
+/******************** CopyName **************************/
+/* Copies a name given by the user (file or folder name) checking that it fits in the buffer */
+static void CopyName (char *dest, const char *src, const char *what)
+	{
+	if (strlen (src) >= MAX_NAME)
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: The name for %s is too long (maximum %d characters)\n\n", what, MAX_NAME-1);
+		PrintUsage (stderr);
+		exit (-1);
+		}
+	strcpy (dest, src);
+	}
+
+
+/******************** MissingArgument **************************/
+/* Reports an option that is missing one or more of its values */
+static char *MissingArgument (char flag)
+	{
+	fprintf (stderr, "\n!!! PARAMETER ERROR: Missing value(s) for option -%c\n\n", flag);
+	PrintUsage (stderr);
+	exit (-1);
+	return NULL;
+	}
+
+
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
@@ -8534,25 +8788,39 @@ int CheckMatrixSymmetry(double matrix[4][4])
 static void ReadParametersFromCommandLine (int argc,char **argv)
 {
     int		i, j;
-    char	flag, ch, *cat;
+/* Next command-line value of an option that takes several arguments: stop with an error
+   instead of reading past the end of argv when a value is missing. */
+#define NEXTARG(i)	(((i)+1 < argc) ? argv[++(i)] : MissingArgument (flag))
+    char	flag, ch;
     double  sumPi, sum;
     float	argument;
 	double  argdouble;
 	
 	if (argc > 0)
 		{
-		cat = (char *) calloc(300, sizeof(char));
 		CommandLine = (char *) calloc(MAX_LINE, sizeof(char));
+		if (!CommandLine)
+			{
+			fprintf (stderr, "Could not allocate the command line string\n");
+			exit (-1);
+			}
+		/* bounded copy: a long command line must not overflow the buffer */
 		for (i=0; i<argc; i++)
 			{
-			sprintf (cat, " %s", argv[i]);
-			strcat (CommandLine, cat);
+			size_t used = strlen (CommandLine);
+			if (used + 2 >= MAX_LINE)
+				break;
+			snprintf (CommandLine + used, MAX_LINE - used, " %s", argv[i]);
 			}
-		free(cat);
 		}
 	
     for (i=1; i<argc; i++)
         {
+        if (argv[i][0] != '-' || argv[i][1] == '\0')
+            {
+            fprintf (stderr, "\n!!! PARAMETER ERROR: Incorrect parameter: %s\n\n", argv[i]);
+            PrintUsage (stderr);
+            }
         argv[i]++;
         flag =* argv[i];
         argv[i]++;
@@ -8564,7 +8832,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case 'F':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(parameterFile,argv[i]);
+					CopyName (parameterFile, argv[i], "parameterFile");
 				i = argc;
 				doSpecificParameterFile = YES;
 				break;
@@ -8686,11 +8954,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 for (j=1; j<=numPeriods; j++)
                     {
-                    argument = atof(argv[++i]);
+                    argument = atof(NEXTARG(i));
                     Nbegin[j] = (int) argument;
-                    argument = atof(argv[++i]);
+                    argument = atof(NEXTARG(i));
                     Nend[j] = (int) argument;
-                    argument = atof(argv[++i]);
+                    argument = atof(NEXTARG(i));
                     cumDuration[j] = (int) argument + cumDuration[j-1];
                     }
                 break;
@@ -8744,7 +9012,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 
 				for (j=0; j<numTreeRateSwitches; j++)
 					{
-					argument = atof(argv[++i]);
+					argument = atof(NEXTARG(i));
 					treeRateSwitchMultiplier[j] = argument;
 					if (treeRateSwitchMultiplier[j] <= 0)
 						{
@@ -8833,9 +9101,9 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				sum = 0;
 				for (j=0; j<numUserSignatures; j++)
 					{
-					argument = atof(argv[++i]);
+					argument = atof(NEXTARG(i));
 					signatureID[j] = (int) argument;
-					argument = atof(argv[++i]);
+					argument = atof(NEXTARG(i));
 					signatureWeight[j] = argument;
 					if (signatureWeight[j] <= 0)
 						{
@@ -8921,9 +9189,9 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 break;
 			case 'f':
                 freq[0] = atof(argv[i]);
-                freq[1] = atof(argv[++i]);
-                freq[2] = atof(argv[++i]);
-                freq[3] = atof(argv[++i]);
+                freq[1] = atof(NEXTARG(i));
+                freq[2] = atof(NEXTARG(i));
+                freq[3] = atof(NEXTARG(i));
 					
                 if ((freq[0] == freq[1]) && (freq[0] == freq[2]) && (freq[0] == freq[3])) /* TODO fix with loop */
                     equalBaseFreq = YES;
@@ -8976,21 +9244,21 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					}
 					/*	AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT */
 					Mij[0][0]= atof(argv[i]);
-					Mij[0][1] = atof(argv[++i]);
-					Mij[0][2] = atof(argv[++i]);
-					Mij[0][3] = atof(argv[++i]);
-					Mij[1][0] = atof(argv[++i]);
-					Mij[1][1] = atof(argv[++i]);
-					Mij[1][2] = atof(argv[++i]);
-					Mij[1][3] = atof(argv[++i]);
-					Mij[2][0] = atof(argv[++i]);
-					Mij[2][1] = atof(argv[++i]);
-					Mij[2][2] = atof(argv[++i]);
-					Mij[2][3] = atof(argv[++i]);
-					Mij[3][0] = atof(argv[++i]);
-					Mij[3][1] = atof(argv[++i]);
-					Mij[3][2] = atof(argv[++i]);
-					Mij[3][3] = atof(argv[++i]);
+					Mij[0][1] = atof(NEXTARG(i));
+					Mij[0][2] = atof(NEXTARG(i));
+					Mij[0][3] = atof(NEXTARG(i));
+					Mij[1][0] = atof(NEXTARG(i));
+					Mij[1][1] = atof(NEXTARG(i));
+					Mij[1][2] = atof(NEXTARG(i));
+					Mij[1][3] = atof(NEXTARG(i));
+					Mij[2][0] = atof(NEXTARG(i));
+					Mij[2][1] = atof(NEXTARG(i));
+					Mij[2][2] = atof(NEXTARG(i));
+					Mij[2][3] = atof(NEXTARG(i));
+					Mij[3][0] = atof(NEXTARG(i));
+					Mij[3][1] = atof(NEXTARG(i));
+					Mij[3][2] = atof(NEXTARG(i));
+					Mij[3][3] = atof(NEXTARG(i));
 					if (Mij[0][0] != 0  || Mij[1][1] != 0 || Mij[2][2] != 0 || Mij[3][3] != 0)
 						{
 						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad general rate matrix: diagonals should be 0 \n\n");
@@ -9014,7 +9282,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
    			case 'G':
 				meanGenotypingError = atof(argv[i]);
-				varGenotypingError = atof(argv[++i]);
+				varGenotypingError = atof(NEXTARG(i));
 				if (meanGenotypingError < 0 || meanGenotypingError > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean genotyping error (%f)\n\n", meanGenotypingError);
@@ -9053,8 +9321,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
    			case 'A':
 					meanAmplificationError = atof(argv[i]);
-					varAmplificationError = atof(argv[++i]);
-					simulateOnlyTwoTemplates = (int) atof(argv[++i]);
+					varAmplificationError = atof(NEXTARG(i));
+					simulateOnlyTwoTemplates = (int) atof(NEXTARG(i));
 				if (meanAmplificationError < 0 || meanAmplificationError > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
@@ -9096,7 +9364,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
 			case 'P':
 				meanADOcell = atof(argv[i]);
-				varADOcell = atof(argv[++i]);
+				varADOcell = atof(NEXTARG(i));
 				if (meanADOcell < 0 || meanADOcell == 0 || meanADOcell > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per cell (%f)\n\n", meanADOcell);
@@ -9117,7 +9385,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
 			case 'Q':
 				meanADOsite = atof(argv[i]);
-				varADOsite = atof(argv[++i]);
+				varADOsite = atof(NEXTARG(i));
 				if (meanADOsite < 0 || meanADOsite > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per site (%f)\n\n", meanADOsite);
@@ -9138,7 +9406,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
 			case 'I':
 					meanAllelicImbalance = atof(argv[i]);
-					varAllelicImbalance = atof(argv[++i]);
+					varAllelicImbalance = atof(NEXTARG(i));
 				if (meanAllelicImbalance < 0 || meanAllelicImbalance > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean allelic imbalance (%f)\n\n", meanAllelicImbalance);
@@ -9161,7 +9429,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 break;
 			case 'B':
 					meanDoubletRate = atof(argv[i]);
-					varDoubletRate = atof(argv[++i]);
+					varDoubletRate = atof(NEXTARG(i));
 				if (meanDoubletRate < 0 || meanDoubletRate > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean doublet rate (%f)\n\n", meanDoubletRate);
@@ -9176,21 +9444,21 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case 'X':
 					/*	AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT */
 					Eij[0][0]= atof(argv[i]);
-					Eij[0][1] = atof(argv[++i]);
-					Eij[0][2] = atof(argv[++i]);
-					Eij[0][3] = atof(argv[++i]);
-					Eij[1][0] = atof(argv[++i]);
-					Eij[1][1] = atof(argv[++i]);
-					Eij[1][2] = atof(argv[++i]);
-					Eij[1][3] = atof(argv[++i]);
-					Eij[2][0] = atof(argv[++i]);
-					Eij[2][1] = atof(argv[++i]);
-					Eij[2][2] = atof(argv[++i]);
-					Eij[2][3] = atof(argv[++i]);
-					Eij[3][0] = atof(argv[++i]);
-					Eij[3][1] = atof(argv[++i]);
-					Eij[3][2] = atof(argv[++i]);
-					Eij[3][3] = atof(argv[++i]);
+					Eij[0][1] = atof(NEXTARG(i));
+					Eij[0][2] = atof(NEXTARG(i));
+					Eij[0][3] = atof(NEXTARG(i));
+					Eij[1][0] = atof(NEXTARG(i));
+					Eij[1][1] = atof(NEXTARG(i));
+					Eij[1][2] = atof(NEXTARG(i));
+					Eij[1][3] = atof(NEXTARG(i));
+					Eij[2][0] = atof(NEXTARG(i));
+					Eij[2][1] = atof(NEXTARG(i));
+					Eij[2][2] = atof(NEXTARG(i));
+					Eij[2][3] = atof(NEXTARG(i));
+					Eij[3][0] = atof(NEXTARG(i));
+					Eij[3][1] = atof(NEXTARG(i));
+					Eij[3][2] = atof(NEXTARG(i));
+					Eij[3][3] = atof(NEXTARG(i));
 					if (Eij[0][0] != 0  || Eij[1][1] != 0 || Eij[2][2] != 0 || Eij[3][3] != 0)
 						{
 						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad error matrix: diagonals should be 0 \n\n");
@@ -9247,18 +9515,18 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
  			case 'o':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(resultsDir,argv[i]);
+					CopyName (resultsDir, argv[i], "resultsDir");
 			break;
  			case 'T':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(userTreeFile,argv[i]);
+					CopyName (userTreeFile, argv[i], "userTreeFile");
 				doUserTree = YES;
 			break;
  			case 'U':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(userGenomeFile,argv[i]);
+					CopyName (userGenomeFile, argv[i], "userGenomeFile");
 				doUserGenome = YES;
 			break;
 			/*case '0':
@@ -9459,11 +9727,11 @@ void ReadParametersFromFile (void)
                     }
                 for (j=1; j<=numPeriods; j++)
                     {
-                    fscanf(stdin, "%f", &argument);
+                    if (fscanf(stdin, "%f", &argument) != 1) { fprintf (stderr, "\n!!! PARAMETER ERROR: Bad demographic period (-h)\n\n"); PrintUsage(stderr); }
                     Nbegin[j] = (int) argument;
-                    fscanf(stdin, "%f", &argument);
+                    if (fscanf(stdin, "%f", &argument) != 1) { fprintf (stderr, "\n!!! PARAMETER ERROR: Bad demographic period (-h)\n\n"); PrintUsage(stderr); }
                     Nend[j] = (int) argument;
-                    fscanf(stdin, "%f", &argument);
+                    if (fscanf(stdin, "%f", &argument) != 1) { fprintf (stderr, "\n!!! PARAMETER ERROR: Bad demographic period (-h)\n\n"); PrintUsage(stderr); }
                     cumDuration[j] = (int) argument + cumDuration[j-1];
                     }
                 break;
@@ -9519,7 +9787,8 @@ void ReadParametersFromFile (void)
 
 				for (j=0; j<numTreeRateSwitches; j++)
 					{
-					fscanf(stdin, "%lf", &treeRateSwitchMultiplier[j]);
+					if (fscanf(stdin, "%lf", &treeRateSwitchMultiplier[j]) != 1)
+						treeRateSwitchMultiplier[j] = 0;	/* triggers the error below */
 					if (treeRateSwitchMultiplier[j] <= 0)
 						{
 						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad tree rate switch multiplier (%f), it has to be > 0 \n\n", treeRateSwitchMultiplier[j]);
@@ -9602,9 +9871,11 @@ void ReadParametersFromFile (void)
 				sum = 0;
 				for (j=0; j<numUserSignatures; j++)
 					{
-					fscanf(stdin, "%f", &argument);
+					if (fscanf(stdin, "%f", &argument) != 1)
+						argument = 0;
 					signatureID[j] = (int) argument;
-					fscanf(stdin, "%lf", &signatureWeight[j]);
+					if (fscanf(stdin, "%lf", &signatureWeight[j]) != 1)
+						signatureWeight[j] = 0;	/* triggers the error below */
 					if (signatureWeight[j] <= 0)
 						{
 						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad signatureWeight (%f)\n\n", signatureWeight[j]);
@@ -9688,7 +9959,7 @@ void ReadParametersFromFile (void)
                     fprintf(stderr, "\n!!! PARAMETER ERROR: Bad base frequencies (%lf %lf %lf %lf)\n", freq[0], freq[1], freq[2], freq[3]);
                     PrintUsage(stderr);
                     }
-                else if (freq[0] == freq[1] == freq[2] == freq[3])
+                else if ((freq[0] == freq[1]) && (freq[0] == freq[2]) && (freq[0] == freq[3]))
                     equalBaseFreq = YES;
                 else
                     equalBaseFreq = NO;
@@ -10010,11 +10281,17 @@ void ReadParametersFromFile (void)
 					j=0;
 					do
 						{
+						if (j >= MAX_NAME-1)
+							{
+							fprintf (stderr, "\n!!! PARAMETER ERROR: The name for resultsDir is too long (maximum %d characters)\n\n", MAX_NAME-1);
+							PrintUsage (stderr);
+							exit (-1);
+							}
 						resultsDir[j]=ch;
 						j++;
 						ch=fgetc(stdin);
 						}
-					while(!isspace(ch));
+					while(ch != EOF && !isspace(ch));
 					resultsDir[j]='\0';
 					}
 			break;
@@ -10025,11 +10302,17 @@ void ReadParametersFromFile (void)
 					j=0;
 					do
 						{
+						if (j >= MAX_NAME-1)
+							{
+							fprintf (stderr, "\n!!! PARAMETER ERROR: The name for userTreeFile is too long (maximum %d characters)\n\n", MAX_NAME-1);
+							PrintUsage (stderr);
+							exit (-1);
+							}
 						userTreeFile[j]=ch;
 						j++;
 						ch=fgetc(stdin);
 						}
-					while(!isspace(ch));
+					while(ch != EOF && !isspace(ch));
 					userTreeFile[j]='\0';
 					}
 				doUserTree = YES;
@@ -10041,11 +10324,17 @@ void ReadParametersFromFile (void)
 					j=0;
 					do
 						{
+						if (j >= MAX_NAME-1)
+							{
+							fprintf (stderr, "\n!!! PARAMETER ERROR: The name for userGenomeFile is too long (maximum %d characters)\n\n", MAX_NAME-1);
+							PrintUsage (stderr);
+							exit (-1);
+							}
 						userGenomeFile[j]=ch;
 						j++;
 						ch=fgetc(stdin);
 						}
-					while(!isspace(ch));
+					while(ch != EOF && !isspace(ch));
 					userGenomeFile[j]='\0';
 					}
 				doUserGenome = YES;
