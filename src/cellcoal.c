@@ -159,7 +159,7 @@ Version 1.1.0 (18/10/2019)
 int main (int argc, char **argv)
     {
     FILE 		*fp;
-    int			i, j, k;
+    int			i, j;
     int         dataSetNum;
     long int	seed;
     double		a, a2;
@@ -322,7 +322,7 @@ int main (int argc, char **argv)
     expVarTMRCA = 0;
     for (i=2; i<=numCells; i++)
         expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
-	cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = 0;
+    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = 0;
 	cumCountMLgenotypeErrors = cumCountMLgenotypeErrorsSq = cumCountCalledGenotypes = cumCountCalledGenotypesSq = 0;
     zeroSNVs = cumTMRCA = cumTMRCASq = 0;
 		
@@ -367,11 +367,11 @@ int main (int argc, char **argv)
     if (userSeed > 0)
         seed = userSeed;
 	
-	originalSeed = seed;
+    originalSeed = seed;
     for (i=0; i<100; i++)
         RandomUniform(&seed);
 
-	if (noisy > 0)
+    if (noisy > 0)
 		{
 		PrintCommandLine (stderr, argc, argv);
 		}
@@ -446,7 +446,7 @@ int main (int argc, char **argv)
 		PrepareGlobalFiles(argc, argv);
 
 	/* Start printing info to log */
-	sprintf(File,"%s/%s", resultsDir, settingsFile);
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
 	if ((fpLog = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -455,11 +455,11 @@ int main (int argc, char **argv)
 
 	PrintHeader(fpLog);
 	PrintDate(fpLog);
-	sprintf(File,"%s/%s", resultsDir, settingsFile);
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
 	PrintCommandLine (fpLog, argc, argv);
  
 	#ifdef COUNT_ML_GENOTYPE_ERRORS
-		sprintf(File,"%s/%s", resultsDir, "sims");
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, "sims");
 		 if ((fpSims= fopen(File, "w")) == NULL)
 			 {
 			 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -1282,7 +1282,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
 
 void ReadUserGenome (FILE *fp)
 	{
-	char	*header;
+	char	*header, *newGenome;
 	
 
 	/* allocate space for reading */
@@ -1341,13 +1341,20 @@ void ReadUserGenome (FILE *fp)
 	numSites = (int) strlen(maternalUserGenome);
 	
 	/* realloc memory (keep room for the string terminator) */
-	maternalUserGenome = (char *)realloc(maternalUserGenome, (numSites + 1) * sizeof(char));
-	paternalUserGenome = (char *)realloc(paternalUserGenome, (numSites + 1) * sizeof(char));
-	if (maternalUserGenome == NULL || paternalUserGenome == NULL)
+	newGenome = (char *)realloc(maternalUserGenome, (numSites + 1) * sizeof(char));
+	if (newGenome == NULL)
 		{
 		fprintf (stderr, "\nERROR: Could not reallocate the user genomes\n");
 		exit (-1);
 		}
+	maternalUserGenome = newGenome;
+	newGenome = (char *)realloc(paternalUserGenome, (numSites + 1) * sizeof(char));
+	if (newGenome == NULL)
+		{
+		fprintf (stderr, "\nERROR: Could not reallocate the user genomes\n");
+		exit (-1);
+		}
+	paternalUserGenome = newGenome;
 
 
 	fprintf (stderr, "\nnumsites = %d", numSites);
@@ -1440,8 +1447,7 @@ static void ReadUserTree (FILE *fp)
 		}
 
 	/* read the tree string */
-	fgets (treeString, MAX_LINE, fpUserTree);
-	if (treeString == NULL)
+	if (fgets (treeString, MAX_LINE, fpUserTree) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read tree string");
 		PrintUsage(stderr);
@@ -1483,13 +1489,13 @@ static void ReadUserTree (FILE *fp)
                 nextAvailableNode++;
 				}
             }
-        else if (treeString[i] == ')')
+        else if (treeString[i] == ')' || treeString[i] == ',')
             {
-            q = p->anc;
-            p = q;
-            }
-        else if (treeString[i] == ',')
-            {
+            if (p == NULL || p->anc == NULL)
+                {
+                fprintf (stderr, "\nERROR: The user tree is not correctly formed (unbalanced parentheses or misplaced '%c')\n", treeString[i]);
+                exit (-1);
+                }
             q = p->anc;
             p = q;
             }
@@ -1553,6 +1559,7 @@ static void ReadUserTree (FILE *fp)
 					taxonNumber = 10*digit1 + digit2;
 	            else if (numDigits == 3)
 	            	taxonNumber = 100*digit1 + 10*digit2 + digit3;
+				(void) taxonNumber;	/* numeric taxon labels are only parsed (and skipped) */
 				}
 			else /* taxon names are letters */
 	            {
@@ -1565,7 +1572,14 @@ static void ReadUserTree (FILE *fp)
 	           	taxonNamesAreChars = YES;
 	            j = 0;
 	            while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':')
-	            	taxonName[j++] = treeString[i++];
+	            	{
+					if (j >= MAX_NAME-1)
+						{
+						fprintf (stderr, "\nERROR: A taxon name in the user tree is too long (maximum %d characters)\n", MAX_NAME-1);
+						exit (-1);
+						}
+					taxonName[j++] = treeString[i++];
+					}
 	            i--;
 				}
             q = treeNodes + nextAvailableNode;
@@ -1637,14 +1651,14 @@ static void ReadUserTree (FILE *fp)
     if (noisy > 2)
         fprintf (stderr, "\n>> Relabeling nodes on tree ... ");
 
-	TipNodeNum = 0;
+    TipNodeNum = 0;
 	IntNodeNum = numCells+1;
 	RelabelUserTree (healthyRoot);
 
     if (noisy > 2)
         fprintf (stderr, "DONE");
 
-	numNodes = nextAvailableNode+1;
+    numNodes = nextAvailableNode+1;
 
 	/* Note: treeNodes is NOT shrunk here. The tree nodes point to each other (and healthyRoot
 	   points into this array), so a realloc that moved the block would leave all of them
@@ -1905,10 +1919,12 @@ void TreeRateSwitch (TreeNode *p, long int *seed)
 		{
 		p = switchNodes[i];
 		sprintf (concat, "\n  node %d  *%4.2f  ( ", p->label+1, treeRateSwitchMultiplier[i]);
-		strcat (treeRateInfo, concat);
+		if (strlen (treeRateInfo) + strlen (concat) < MAX_LINE)
+			strcat (treeRateInfo, concat);
 		numTipsSwitched = 0;
 		BranchRateSwitch (p, treeRateSwitchMultiplier[i], &numTipsSwitched, seed);
-		strcat (treeRateInfo, ")");
+		if (strlen (treeRateInfo) + 2 < MAX_LINE)
+			strcat (treeRateInfo, ")");
 		p->rateSwitch = treeRateSwitchMultiplier[i];
 		}
 	free (switchNodes);
@@ -1930,7 +1946,8 @@ void BranchRateSwitch (TreeNode *p, float multiplier, int *numTips, long int *se
 			char *concat;
 			concat = (char *) calloc(20, sizeof(char));
 			sprintf (concat, "%d ", p->label+1);
-			strcat (treeRateInfo, concat);
+			if (strlen (treeRateInfo) + strlen (concat) < MAX_LINE)
+				strcat (treeRateInfo, concat);
 			free (concat);
 			}
 		BranchRateSwitch (p->left, multiplier, numTips, seed);
@@ -2079,12 +2096,14 @@ void RecordTriNucObservation (TriNucStr *trin, int site)
 	if (trin->numAvailablePositions == trin->tempLength)
 	  {
 	  trin->tempLength *= 2;
-	  trin->position = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
-	  if (!trin->position)
+	  int *newPosition = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
+	  if (!newPosition)
 		  {
+		  free (trin->position);	/* realloc leaves the original block untouched when it fails */
 		  fprintf (stderr, "Could not reallocate trinucleotide position array when adding\n");
 		  exit (-1);
 		  }
+	  trin->position = newPosition;
 	  }
 	trin->position[trin->numAvailablePositions++] = site;
   	}
@@ -2141,7 +2160,7 @@ void EvolveSitesOnTree (TreeNode *treeRoot, int genome, long int *seed)
         for (i=0; i<numSites; i++)
             allSites[i].rateMultiplier = RandomGamma (alphaSites, seed) / alphaSites;
 
-	if (doGeneticSignatures == YES)
+    if (doGeneticSignatures == YES)
 		{
 		SimulateSignatureISM(treeRoot, genome, seed); /* we assume diploid ISM for genetic signatures */
 		}
@@ -2596,7 +2615,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	int doDeconstructSigs = YES;
 	FILE *fpCounts, *fpRefGenome;
 
-	sprintf(File,"%s/%s", resultsDir, "trimutcounts");
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, "trimutcounts");
 	if ((fpCounts = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -2618,7 +2637,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	fclose(fpCounts);
 
 	/* print reference genome as genome context for SomaticSignatures */
-	sprintf(File,"%s/%s", resultsDir, "contextGenome");
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, "contextGenome");
 	if ((fpRefGenome = fopen(File, "w")) == NULL)
 		{
 		fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -2898,12 +2917,14 @@ void RemoveTriNucObservation(TriNucStr *trin, int site)
 	if (trin->numAvailablePositions > 0 && trin->numAvailablePositions % 100 == 0)
 		{
 		//fprintf (stderr, "\nreallocating now (available positions = %d)",trin->numAvailablePositions);
-		trin->position = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
-		if (!trin->position)
+		int *newPosition = (int *)realloc(trin->position, trin->tempLength * sizeof(int));
+		if (!newPosition)
 			{
+			free (trin->position);
 			fprintf (stderr, "Could not reallocate trinucleotide position array when removing\n");
 			exit (-1);
 			}
+		trin->position = newPosition;
 		}
  /*	else if (trin->numAvailablePositions == 0)
 		{
@@ -3445,7 +3466,7 @@ void AllelicDropout (long int *seed)
 	double **alleleADOrate;
 
 	/* allocate space for the ADO rates */
-	alleleADOrate = (double**) calloc (numCells+1, sizeof(double**));
+	alleleADOrate = (double**) calloc (numCells+1, sizeof(double*));
 	if (!alleleADOrate)
 		{
 		fprintf (stderr, "Could not allocate the alleleADOrate structure\n");
@@ -3453,7 +3474,7 @@ void AllelicDropout (long int *seed)
 		}
 	for (i=0; i<numCells+1; i++)
 		{
-		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double*));
+		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double));
 		if (!alleleADOrate[i])
 			{
 			fprintf (stderr, "Could not allocate the alleleADOrate[i] structure\n");
@@ -3545,7 +3566,7 @@ void AllelicDropoutGamma (long int *seed)
 	alleleADOrateMean = 1.0 - sqrt (1.0 -  ADOrate);
 
 	// allocate space for the ADO rates
-	alleleADOrate = (double**) calloc (numCells+1, sizeof(double**));
+	alleleADOrate = (double**) calloc (numCells+1, sizeof(double*));
 	if (!alleleADOrate)
 		{
 		fprintf (stderr, "Could not allocate the alleleADOrate structure\n");
@@ -3553,7 +3574,7 @@ void AllelicDropoutGamma (long int *seed)
 		}
 	for (i=0; i<numCells+1; i++)
 		{
-		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double*));
+		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double));
 		if (!alleleADOrate[i])
 			{
 			fprintf (stderr, "Could not allocate the alleleADOrate[i] structure\n");
@@ -4036,7 +4057,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	
 	/* allocate error probabilities for NGS */
-	ngsEij = (double**) calloc (4, sizeof(double**));
+	ngsEij = (double**) calloc (4, sizeof(double*));
 	if (!ngsEij)
 		{
 		fprintf (stderr, "Could not allocate the ngsEij structure\n");
@@ -4044,7 +4065,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	for (i=0; i<4; i++)
 		{
-		ngsEij[i] = (double*) calloc (4, sizeof(double*));
+		ngsEij[i] = (double*) calloc (4, sizeof(double));
 		if (!ngsEij[i])
 			{
 			fprintf (stderr, "Could not allocate the ngsEij[i] structure\n");
@@ -4053,7 +4074,7 @@ void GenerateReadCounts (long int *seed)
 		}
 
 	/* allocate error probabilities for amplification */
-	ampEijmat = (double**) calloc (4, sizeof(double**));
+	ampEijmat = (double**) calloc (4, sizeof(double*));
 	if (!ampEijmat)
 		{
 		fprintf (stderr, "Could not allocate the ampEijmat structure\n");
@@ -4061,7 +4082,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	for (i=0; i<4; i++)
 		{
-		ampEijmat[i] = (double*) calloc (4, sizeof(double*));
+		ampEijmat[i] = (double*) calloc (4, sizeof(double));
 		if (!ampEijmat[i])
 			{
 			fprintf (stderr, "Could not allocate the ampEijmat[i] structure\n");
@@ -4069,7 +4090,7 @@ void GenerateReadCounts (long int *seed)
 			}
 		}
 
-	ampEijpat = (double**) calloc (4, sizeof(double**));
+	ampEijpat = (double**) calloc (4, sizeof(double*));
 	if (!ampEijpat)
 		{
 		fprintf (stderr, "Could not allocate the ampEijpat structure\n");
@@ -4077,7 +4098,7 @@ void GenerateReadCounts (long int *seed)
 		}
 	for (i=0; i<4; i++)
 		{
-		ampEijpat[i] = (double*) calloc (4, sizeof(double*));
+		ampEijpat[i] = (double*) calloc (4, sizeof(double));
 		if (!ampEijpat[i])
 			{
 			fprintf (stderr, "Could not allocate the ampEijpat[i] structure\n");
@@ -4652,7 +4673,6 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	int		read, numReads;
 	int		*readCount;
 	int		maternalAllele, paternalAllele;
-	int		thereIsMaternalAllele, thereIsPaternalAllele;
 	double  maternalSiteAmplificationError, paternalSiteAmplificationError;
 	int		template, template1, template2;
 	int		debug_GL, debug_GL_EXIT, fix_parameters;
@@ -4673,8 +4693,6 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	normLogGL = normLogGLm;
 	maternalAllele = c->maternalAllele;
 	paternalAllele = c->paternalAllele;
-	thereIsMaternalAllele = c->thereIsMaternalAllele;
-	thereIsPaternalAllele = c->thereIsPaternalAllele;
 	maternalSiteAmplificationError = c->maternalSiteAmplificationError;
 	paternalSiteAmplificationError = c->paternalSiteAmplificationError;
 
@@ -4686,8 +4704,8 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		{
 		maternalAllele = c->maternalAllele = T;
 		paternalAllele = c->paternalAllele = G;
-		thereIsMaternalAllele = c->thereIsMaternalAllele = YES;
-		thereIsPaternalAllele = c->thereIsPaternalAllele = YES;
+		c->thereIsMaternalAllele = YES;
+		c->thereIsPaternalAllele = YES;
 		readCount[A] = 0;
 		readCount[C] = 0;
 		readCount[G] = 14;
@@ -5622,22 +5640,17 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 		p = VCF_PutF2 (p, NLG[pa1[k]][pa2[k]]);
 		VCF_ROOM (fp, buf, p);
 		}
-	/* PL  (the original tests the non-doublet logGL for infinity in both cases; the %d with a double argument is kept as is) */
+	/* PL  (the non-doublet logGL is tested for infinity in both cases, as in the original) */
 	*p++ = ':';
 	for (k=0; k<npairs; k++)
 		{
 		a1 = pa1[k];  a2 = pa2[k];
-		if (isinf (LGs[a1][a2]) == YES)
-			{
-			fwrite (buf, 1, (size_t)(p - buf), fp);  p = buf;
-			fprintf (fp, k == 0 ? "%d" : ",%d", LG[a1][a2]);
-			}
+		if (k > 0)
+			*p++ = ',';
+		if (!isfinite (LGs[a1][a2]) || !isfinite (LG[a1][a2]))
+			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
 		else
-			{
-			if (k > 0)
-				*p++ = ',';
 			p = VCF_PutInt (p, (int)round (10 * LG[a1][a2]));
-			}
 		VCF_ROOM (fp, buf, p);
 		}
 	/* PLN */
@@ -5645,17 +5658,12 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 	for (k=0; k<npairs; k++)
 		{
 		a1 = pa1[k];  a2 = pa2[k];
-		if (isinf (LGs[a1][a2]) == YES)
-			{
-			fwrite (buf, 1, (size_t)(p - buf), fp);  p = buf;
-			fprintf (fp, k == 0 ? "%d" : ",%d", NLG[a1][a2]);
-			}
+		if (k > 0)
+			*p++ = ',';
+		if (!isfinite (LGs[a1][a2]) || !isfinite (NLG[a1][a2]))
+			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
 		else
-			{
-			if (k > 0)
-				*p++ = ',';
 			p = VCF_PutInt (p, (int)round (10 * NLG[a1][a2]));
-			}
 		VCF_ROOM (fp, buf, p);
 		}
 	/* ML */
@@ -5777,15 +5785,7 @@ static void VCFSiteLine (FILE *fp, int j)
 
 void PrintVCF (FILE *fp)
 	{
-	int		i, j, k, l, snv, a1, a2;
-	int		MLmatAllele, MLpatAllele, referenceAllele;
-	int		trueMaternalAllele, truePaternalAllele;
-	int		maternalAlleleDoublet, paternalAlleleDoublet;
-	char	*fmt = NULL;
-	char 	*fmt_f_2 = "%.2f";
-    char 	*fmt_comma_f_2 = ",%.2f";
-	char 	*fmt_d = "%d";
-    char 	*fmt_comma_d = ",%d";
+	int		i, snv;
 
 	/* print file header */
 	fprintf (fp,"##fileformat=VCFv4.3");
@@ -5875,12 +5875,12 @@ void PrintVCF (FILE *fp)
 /* Open global files to output results */
 void PrepareGlobalFiles(int argc, char **argv)
     {
-    char File[MAX_NAME];
+    char File[4*MAX_NAME];
 		
     /* contains the simulated tree in Newick format */
     if (doPrintTree == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, treeFile);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeFile);
         if ((fpTrees = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5891,7 +5891,7 @@ void PrepareGlobalFiles(int argc, char **argv)
     /* contains a list of times and branch lenghts for all nodes in the simulated trees */
     if (doPrintTimes == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, timesFile);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesFile);
         if ((fpTimes = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5904,7 +5904,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains SNV genotypes for every cell */
         if (doPrintSNVgenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVgenotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesFile);
              if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
                 {
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5915,7 +5915,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains haplotypes for variable sites for every cell */
         if (doPrintSNVhaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVhaplotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesFile);
             if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5926,7 +5926,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains error-free haplotypes for variable sites for every cell */
         if (doPrintTrueHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, trueHaplotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesFile);
             if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5937,7 +5937,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains all genotypes (variable or invariable) for every cell */
         if (doPrintFullGenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullGenotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesFile);
             if ((fpFullGenotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5948,7 +5948,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains haplotypes for all sites for every cell */
         if (doPrintFullHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullHaplotypesFile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesFile);
             if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5959,7 +5959,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         /* contains reads counts and genotype likelihoods for every SNV and cell */
         if (doNGS == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, VCFfile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFfile);
             if ((fpVCF = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5970,7 +5970,7 @@ void PrepareGlobalFiles(int argc, char **argv)
          /* contains reads counts for every SNV and cell */
         if (doPrintCATG == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, CATGfile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGfile);
             if ((fpCATG = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -5980,7 +5980,7 @@ void PrepareGlobalFiles(int argc, char **argv)
 
 		if (doPrintPILEUP == YES)
 			{
-			sprintf(File,"%s/%s", resultsDir, PILEUPfile);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPfile);
 			if ((fpPILEUP = fopen(File, "w")) == NULL)
 				{
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6073,9 +6073,9 @@ void PrepareSeparateFiles(int replicate)
 	/* contains the simulated tree in Newick format */
     if (doPrintTree == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, treeDir);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeDir);
 		mkdir(File,S_IRWXU);
-		sprintf(File,"%s/%s/%s.%04d", resultsDir, treeDir, treeFile, replicate+1);
+		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, treeDir, treeFile, replicate+1);
 		if ((fpTrees = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6085,9 +6085,9 @@ void PrepareSeparateFiles(int replicate)
 		
 	if (doPrintTimes == YES)
         {
-		sprintf(File,"%s/%s", resultsDir, timesDir);
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesDir);
 		mkdir(File,S_IRWXU);
-		sprintf(File,"%s/%s/%s.%04d", resultsDir, timesDir, timesFile, replicate+1);
+		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, timesDir, timesFile, replicate+1);
 		if ((fpTimes = fopen(File, "w")) == NULL)
             {
             fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6100,9 +6100,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains SNV genotypes for every cell */
         if (doPrintSNVgenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVgenotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, SNVgenotypesDir, SNVgenotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVgenotypesDir, SNVgenotypesFile, replicate+1);
             if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
                 {
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6113,9 +6113,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains haplotypes for variable sites for every cell */
         if (doPrintSNVhaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, SNVhaplotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, SNVhaplotypesDir, SNVhaplotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVhaplotypesDir, SNVhaplotypesFile, replicate+1);
             if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6126,9 +6126,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains reference haplotypes (before errors)  for every cell */
         if (doPrintTrueHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, trueHaplotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
             if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6139,9 +6139,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains all genotypes (variable or invariable) for every cell */
         if (doPrintFullGenotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullGenotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, fullGenotypesDir, fullGenotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullGenotypesDir, fullGenotypesFile, replicate+1);
             if ((fpFullGenotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6152,9 +6152,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains haplotypes for all sites for every cell */
         if (doPrintFullHaplotypes == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, fullHaplotypesDir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesDir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, fullHaplotypesDir, fullHaplotypesFile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullHaplotypesDir, fullHaplotypesFile, replicate+1);
             if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6165,9 +6165,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains reads counts and log10 normalized genotype likelihoods for every SNV and cell */
         if (doNGS == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, VCFdir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFdir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
             if ((fpVCF = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6178,9 +6178,9 @@ void PrepareSeparateFiles(int replicate)
         /* contains reads counts for every SNV and cell */
         if (doPrintCATG == YES)
             {
-			sprintf(File,"%s/%s", resultsDir, CATGdir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGdir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, CATGdir, CATGfile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, CATGdir, CATGfile, replicate+1);
             if ((fpCATG = fopen(File, "w")) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6191,9 +6191,9 @@ void PrepareSeparateFiles(int replicate)
 		/* contains reads counts for every SNV and cell */
 		if (doPrintPILEUP == YES)
 			{
-			sprintf(File,"%s/%s", resultsDir, PILEUPdir);
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPdir);
 			mkdir(File,S_IRWXU);
-			sprintf(File,"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
 			if ((fpPILEUP = fopen(File, "w")) == NULL)
 				{
 				fprintf (stderr, "Can't open \"%s\"\n", File);
@@ -6352,7 +6352,7 @@ static void PrintSiteInfo (FILE *fp, int i)
 /* Prints observed/ML genotypes at variable sites (SNVs) to a file */
 static void PrintSNVGenotypes (FILE *fp)
     {
-    int		i, j, k;
+    int		i, j;
 
     if (doPrintAncestors == YES && doNGS == NO)
         fprintf (fp, "%d %d\n", numCells+3, numSNVs);
@@ -6364,7 +6364,6 @@ static void PrintSNVGenotypes (FILE *fp)
 	for (i=1; i<numSNVs; i++)
 		fprintf (fp, " %d", SNVsites[i]+1);
     fprintf (fp, "\n");
-	k=0;
 	
     if (alphabet == DNA)
         {
@@ -7523,7 +7522,7 @@ static void	PrintRunInformation (FILE *fp)
     fprintf (fp, "\n Effective population size                    =   %-3d",  N);
     if (doExponential == YES)
         fprintf (fp, "\n Exponential growth rate                      =   %2.1e", growthRate);
-	if (doOthsukiInnanCoal == YES)
+    if (doOthsukiInnanCoal == YES)
 		{
 		fprintf (fp, "\n Cell birth rate                              =   %2.1e", birthRate);
 		fprintf (fp, "\n Cell death rate                              =   %2.1e", deathRate);
@@ -8642,6 +8641,31 @@ int CheckMatrixSymmetry(double matrix[4][4])
 	}
 
 
+/******************** CopyName **************************/
+/* Copies a name given by the user (file or folder name) checking that it fits in the buffer */
+static void CopyName (char *dest, const char *src, const char *what)
+	{
+	if (strlen (src) >= MAX_NAME)
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: The name for %s is too long (maximum %d characters)\n\n", what, MAX_NAME-1);
+		PrintUsage (stderr);
+		exit (-1);
+		}
+	strcpy (dest, src);
+	}
+
+
+/******************** MissingArgument **************************/
+/* Reports an option that is missing one or more of its values */
+static char *MissingArgument (char flag)
+	{
+	fprintf (stderr, "\n!!! PARAMETER ERROR: Missing value(s) for option -%c\n\n", flag);
+	PrintUsage (stderr);
+	exit (-1);
+	return NULL;
+	}
+
+
 /******************** ReadParametersFromCommandLine **************************/
 /*
  USED IN ORDER
@@ -8656,25 +8680,39 @@ int CheckMatrixSymmetry(double matrix[4][4])
 static void ReadParametersFromCommandLine (int argc,char **argv)
 {
     int		i, j;
-    char	flag, ch, *cat;
+/* Next command-line value of an option that takes several arguments: stop with an error
+   instead of reading past the end of argv when a value is missing. */
+#define NEXTARG(i)	(((i)+1 < argc) ? argv[++(i)] : MissingArgument (flag))
+    char	flag, ch;
     double  sumPi, sum;
     float	argument;
 	double  argdouble;
 	
 	if (argc > 0)
 		{
-		cat = (char *) calloc(300, sizeof(char));
 		CommandLine = (char *) calloc(MAX_LINE, sizeof(char));
+		if (!CommandLine)
+			{
+			fprintf (stderr, "Could not allocate the command line string\n");
+			exit (-1);
+			}
+		/* bounded copy: a long command line must not overflow the buffer */
 		for (i=0; i<argc; i++)
 			{
-			sprintf (cat, " %s", argv[i]);
-			strcat (CommandLine, cat);
+			size_t used = strlen (CommandLine);
+			if (used + 2 >= MAX_LINE)
+				break;
+			snprintf (CommandLine + used, MAX_LINE - used, " %s", argv[i]);
 			}
-		free(cat);
 		}
 	
     for (i=1; i<argc; i++)
         {
+        if (argv[i][0] != '-' || argv[i][1] == '\0')
+            {
+            fprintf (stderr, "\n!!! PARAMETER ERROR: Incorrect parameter: %s\n\n", argv[i]);
+            PrintUsage (stderr);
+            }
         argv[i]++;
         flag =* argv[i];
         argv[i]++;
@@ -8686,7 +8724,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case 'F':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(parameterFile,argv[i]);
+					CopyName (parameterFile, argv[i], "parameterFile");
 				i = argc;
 				doSpecificParameterFile = YES;
 				break;
@@ -8808,11 +8846,11 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 for (j=1; j<=numPeriods; j++)
                     {
-                    argument = atof(argv[++i]);
+                    argument = atof(NEXTARG(i));
                     Nbegin[j] = (int) argument;
-                    argument = atof(argv[++i]);
+                    argument = atof(NEXTARG(i));
                     Nend[j] = (int) argument;
-                    argument = atof(argv[++i]);
+                    argument = atof(NEXTARG(i));
                     cumDuration[j] = (int) argument + cumDuration[j-1];
                     }
                 break;
@@ -8866,7 +8904,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 
 				for (j=0; j<numTreeRateSwitches; j++)
 					{
-					argument = atof(argv[++i]);
+					argument = atof(NEXTARG(i));
 					treeRateSwitchMultiplier[j] = argument;
 					if (treeRateSwitchMultiplier[j] <= 0)
 						{
@@ -8955,9 +8993,9 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				sum = 0;
 				for (j=0; j<numUserSignatures; j++)
 					{
-					argument = atof(argv[++i]);
+					argument = atof(NEXTARG(i));
 					signatureID[j] = (int) argument;
-					argument = atof(argv[++i]);
+					argument = atof(NEXTARG(i));
 					signatureWeight[j] = argument;
 					if (signatureWeight[j] <= 0)
 						{
@@ -9043,9 +9081,9 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 break;
 			case 'f':
                 freq[0] = atof(argv[i]);
-                freq[1] = atof(argv[++i]);
-                freq[2] = atof(argv[++i]);
-                freq[3] = atof(argv[++i]);
+                freq[1] = atof(NEXTARG(i));
+                freq[2] = atof(NEXTARG(i));
+                freq[3] = atof(NEXTARG(i));
 					
                 if ((freq[0] == freq[1]) && (freq[0] == freq[2]) && (freq[0] == freq[3])) /* TODO fix with loop */
                     equalBaseFreq = YES;
@@ -9098,21 +9136,21 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					}
 					/*	AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT */
 					Mij[0][0]= atof(argv[i]);
-					Mij[0][1] = atof(argv[++i]);
-					Mij[0][2] = atof(argv[++i]);
-					Mij[0][3] = atof(argv[++i]);
-					Mij[1][0] = atof(argv[++i]);
-					Mij[1][1] = atof(argv[++i]);
-					Mij[1][2] = atof(argv[++i]);
-					Mij[1][3] = atof(argv[++i]);
-					Mij[2][0] = atof(argv[++i]);
-					Mij[2][1] = atof(argv[++i]);
-					Mij[2][2] = atof(argv[++i]);
-					Mij[2][3] = atof(argv[++i]);
-					Mij[3][0] = atof(argv[++i]);
-					Mij[3][1] = atof(argv[++i]);
-					Mij[3][2] = atof(argv[++i]);
-					Mij[3][3] = atof(argv[++i]);
+					Mij[0][1] = atof(NEXTARG(i));
+					Mij[0][2] = atof(NEXTARG(i));
+					Mij[0][3] = atof(NEXTARG(i));
+					Mij[1][0] = atof(NEXTARG(i));
+					Mij[1][1] = atof(NEXTARG(i));
+					Mij[1][2] = atof(NEXTARG(i));
+					Mij[1][3] = atof(NEXTARG(i));
+					Mij[2][0] = atof(NEXTARG(i));
+					Mij[2][1] = atof(NEXTARG(i));
+					Mij[2][2] = atof(NEXTARG(i));
+					Mij[2][3] = atof(NEXTARG(i));
+					Mij[3][0] = atof(NEXTARG(i));
+					Mij[3][1] = atof(NEXTARG(i));
+					Mij[3][2] = atof(NEXTARG(i));
+					Mij[3][3] = atof(NEXTARG(i));
 					if (Mij[0][0] != 0  || Mij[1][1] != 0 || Mij[2][2] != 0 || Mij[3][3] != 0)
 						{
 						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad general rate matrix: diagonals should be 0 \n\n");
@@ -9136,7 +9174,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
    			case 'G':
 				meanGenotypingError = atof(argv[i]);
-				varGenotypingError = atof(argv[++i]);
+				varGenotypingError = atof(NEXTARG(i));
 				if (meanGenotypingError < 0 || meanGenotypingError > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean genotyping error (%f)\n\n", meanGenotypingError);
@@ -9175,8 +9213,8 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
    			case 'A':
 					meanAmplificationError = atof(argv[i]);
-					varAmplificationError = atof(argv[++i]);
-					simulateOnlyTwoTemplates = (int) atof(argv[++i]);
+					varAmplificationError = atof(NEXTARG(i));
+					simulateOnlyTwoTemplates = (int) atof(NEXTARG(i));
 				if (meanAmplificationError < 0 || meanAmplificationError > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean amplification error (%f)\n\n", meanAmplificationError);
@@ -9218,7 +9256,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
 			case 'P':
 				meanADOcell = atof(argv[i]);
-				varADOcell = atof(argv[++i]);
+				varADOcell = atof(NEXTARG(i));
 				if (meanADOcell < 0 || meanADOcell == 0 || meanADOcell > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per cell (%f)\n\n", meanADOcell);
@@ -9239,7 +9277,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
 			case 'Q':
 				meanADOsite = atof(argv[i]);
-				varADOsite = atof(argv[++i]);
+				varADOsite = atof(NEXTARG(i));
 				if (meanADOsite < 0 || meanADOsite > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean ADO per site (%f)\n\n", meanADOsite);
@@ -9260,7 +9298,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
 			case 'I':
 					meanAllelicImbalance = atof(argv[i]);
-					varAllelicImbalance = atof(argv[++i]);
+					varAllelicImbalance = atof(NEXTARG(i));
 				if (meanAllelicImbalance < 0 || meanAllelicImbalance > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean allelic imbalance (%f)\n\n", meanAllelicImbalance);
@@ -9283,7 +9321,7 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
                 break;
 			case 'B':
 					meanDoubletRate = atof(argv[i]);
-					varDoubletRate = atof(argv[++i]);
+					varDoubletRate = atof(NEXTARG(i));
 				if (meanDoubletRate < 0 || meanDoubletRate > 1)
 					{
 					fprintf(stderr, "\n!!! PARAMETER ERROR: Bad mean doublet rate (%f)\n\n", meanDoubletRate);
@@ -9298,21 +9336,21 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case 'X':
 					/*	AA AC AG AT CA CC CG CT GA GC GG GT TA TC TG TT */
 					Eij[0][0]= atof(argv[i]);
-					Eij[0][1] = atof(argv[++i]);
-					Eij[0][2] = atof(argv[++i]);
-					Eij[0][3] = atof(argv[++i]);
-					Eij[1][0] = atof(argv[++i]);
-					Eij[1][1] = atof(argv[++i]);
-					Eij[1][2] = atof(argv[++i]);
-					Eij[1][3] = atof(argv[++i]);
-					Eij[2][0] = atof(argv[++i]);
-					Eij[2][1] = atof(argv[++i]);
-					Eij[2][2] = atof(argv[++i]);
-					Eij[2][3] = atof(argv[++i]);
-					Eij[3][0] = atof(argv[++i]);
-					Eij[3][1] = atof(argv[++i]);
-					Eij[3][2] = atof(argv[++i]);
-					Eij[3][3] = atof(argv[++i]);
+					Eij[0][1] = atof(NEXTARG(i));
+					Eij[0][2] = atof(NEXTARG(i));
+					Eij[0][3] = atof(NEXTARG(i));
+					Eij[1][0] = atof(NEXTARG(i));
+					Eij[1][1] = atof(NEXTARG(i));
+					Eij[1][2] = atof(NEXTARG(i));
+					Eij[1][3] = atof(NEXTARG(i));
+					Eij[2][0] = atof(NEXTARG(i));
+					Eij[2][1] = atof(NEXTARG(i));
+					Eij[2][2] = atof(NEXTARG(i));
+					Eij[2][3] = atof(NEXTARG(i));
+					Eij[3][0] = atof(NEXTARG(i));
+					Eij[3][1] = atof(NEXTARG(i));
+					Eij[3][2] = atof(NEXTARG(i));
+					Eij[3][3] = atof(NEXTARG(i));
 					if (Eij[0][0] != 0  || Eij[1][1] != 0 || Eij[2][2] != 0 || Eij[3][3] != 0)
 						{
 						fprintf(stderr, "\n!!! PARAMETER ERROR: Bad error matrix: diagonals should be 0 \n\n");
@@ -9369,18 +9407,18 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
  			case 'o':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(resultsDir,argv[i]);
+					CopyName (resultsDir, argv[i], "resultsDir");
 			break;
  			case 'T':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(userTreeFile,argv[i]);
+					CopyName (userTreeFile, argv[i], "userTreeFile");
 				doUserTree = YES;
 			break;
  			case 'U':
 				ch = *argv[i];
 				if(!isspace(ch))
-					strcpy(userGenomeFile,argv[i]);
+					CopyName (userGenomeFile, argv[i], "userGenomeFile");
 				doUserGenome = YES;
 			break;
 			/*case '0':
@@ -9581,11 +9619,11 @@ void ReadParametersFromFile (void)
                     }
                 for (j=1; j<=numPeriods; j++)
                     {
-                    fscanf(stdin, "%f", &argument);
+                    if (fscanf(stdin, "%f", &argument) != 1) { fprintf (stderr, "\n!!! PARAMETER ERROR: Bad demographic period (-h)\n\n"); PrintUsage(stderr); }
                     Nbegin[j] = (int) argument;
-                    fscanf(stdin, "%f", &argument);
+                    if (fscanf(stdin, "%f", &argument) != 1) { fprintf (stderr, "\n!!! PARAMETER ERROR: Bad demographic period (-h)\n\n"); PrintUsage(stderr); }
                     Nend[j] = (int) argument;
-                    fscanf(stdin, "%f", &argument);
+                    if (fscanf(stdin, "%f", &argument) != 1) { fprintf (stderr, "\n!!! PARAMETER ERROR: Bad demographic period (-h)\n\n"); PrintUsage(stderr); }
                     cumDuration[j] = (int) argument + cumDuration[j-1];
                     }
                 break;
@@ -9641,7 +9679,8 @@ void ReadParametersFromFile (void)
 
 				for (j=0; j<numTreeRateSwitches; j++)
 					{
-					fscanf(stdin, "%lf", &treeRateSwitchMultiplier[j]);
+					if (fscanf(stdin, "%lf", &treeRateSwitchMultiplier[j]) != 1)
+						treeRateSwitchMultiplier[j] = 0;	/* triggers the error below */
 					if (treeRateSwitchMultiplier[j] <= 0)
 						{
 						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad tree rate switch multiplier (%f), it has to be > 0 \n\n", treeRateSwitchMultiplier[j]);
@@ -9724,9 +9763,11 @@ void ReadParametersFromFile (void)
 				sum = 0;
 				for (j=0; j<numUserSignatures; j++)
 					{
-					fscanf(stdin, "%f", &argument);
+					if (fscanf(stdin, "%f", &argument) != 1)
+						argument = 0;
 					signatureID[j] = (int) argument;
-					fscanf(stdin, "%lf", &signatureWeight[j]);
+					if (fscanf(stdin, "%lf", &signatureWeight[j]) != 1)
+						signatureWeight[j] = 0;	/* triggers the error below */
 					if (signatureWeight[j] <= 0)
 						{
 						fprintf (stderr, "\n!!! PARAMETER ERROR: Bad signatureWeight (%f)\n\n", signatureWeight[j]);
@@ -10132,11 +10173,17 @@ void ReadParametersFromFile (void)
 					j=0;
 					do
 						{
+						if (j >= MAX_NAME-1)
+							{
+							fprintf (stderr, "\n!!! PARAMETER ERROR: The name for resultsDir is too long (maximum %d characters)\n\n", MAX_NAME-1);
+							PrintUsage (stderr);
+							exit (-1);
+							}
 						resultsDir[j]=ch;
 						j++;
 						ch=fgetc(stdin);
 						}
-					while(!isspace(ch));
+					while(ch != EOF && !isspace(ch));
 					resultsDir[j]='\0';
 					}
 			break;
@@ -10147,11 +10194,17 @@ void ReadParametersFromFile (void)
 					j=0;
 					do
 						{
+						if (j >= MAX_NAME-1)
+							{
+							fprintf (stderr, "\n!!! PARAMETER ERROR: The name for userTreeFile is too long (maximum %d characters)\n\n", MAX_NAME-1);
+							PrintUsage (stderr);
+							exit (-1);
+							}
 						userTreeFile[j]=ch;
 						j++;
 						ch=fgetc(stdin);
 						}
-					while(!isspace(ch));
+					while(ch != EOF && !isspace(ch));
 					userTreeFile[j]='\0';
 					}
 				doUserTree = YES;
@@ -10163,11 +10216,17 @@ void ReadParametersFromFile (void)
 					j=0;
 					do
 						{
+						if (j >= MAX_NAME-1)
+							{
+							fprintf (stderr, "\n!!! PARAMETER ERROR: The name for userGenomeFile is too long (maximum %d characters)\n\n", MAX_NAME-1);
+							PrintUsage (stderr);
+							exit (-1);
+							}
 						userGenomeFile[j]=ch;
 						j++;
 						ch=fgetc(stdin);
 						}
-					while(!isspace(ch));
+					while(ch != EOF && !isspace(ch));
 					userGenomeFile[j]='\0';
 					}
 				doUserGenome = YES;

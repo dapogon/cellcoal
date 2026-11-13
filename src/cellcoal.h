@@ -145,13 +145,13 @@ static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountM
 static double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
 static double	varNumMU, varNumSNVs, varNumDEL, varNumCNLOH;
 static double	expNumMU, expVarNumMU;
-static double	theta, healthyTipBranchLength, transformingBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
+static double	theta, healthyTipBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
 static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], trueHaplotypesFile[MAX_NAME],MLhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
 static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], PILEUPfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME], parameterFile[MAX_NAME];
 static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], trueHaplotypesDir[MAX_NAME], MLhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
 static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME], PILEUPdir[MAX_NAME];
-static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames, *treeRateInfo;
+static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[4*MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames, *treeRateInfo;
 static char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
 static char		GLmodel[MAX_NAME];
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome, doSpecificParameterFile;
@@ -169,7 +169,7 @@ static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVar
 static double 	cumCountMLgenotypeErrors, cumCountMLgenotypeErrorsSq, meanMLgenotypeError, varMLgenotypeError;
 static double 	cumCountCalledGenotypes, cumCountCalledGenotypesSq, meanCalledGenotypes, varCalledGenotypes;
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
-static double	Rmat[6], NRmat[12], Cijk[256], Root[4];
+static double	Cijk[256], Root[4];
 static double	SNPrate, alphaCoverage;
 static int		OUTGROUP_ROOT, INGROUP_ROOT;
 static int		readingParameterFile, simulateOnlyTwoTemplates;
