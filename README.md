@@ -16,6 +16,10 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 4. **Inspect results**: Once the run is finished, different output files will be written by default inside a folder called *results*.
 
+## What's new in 1.4.0
+
+Bug fixes (genotyping error, allelic dropout variation, memory safety), 3–4× faster with about 7× less memory, and parallel read-count generation (`OMP_NUM_THREADS`). Output for a given seed differs from versions ≤ 1.3.4. See [docs/CHANGES-1.4.0.md](docs/CHANGES-1.4.0.md).
+
 ## Citation
 
 - If you use CellCoal, please cite: Posada D. (2020) CellCoal: coalescent simulation of single-cell sequencing samples. *Molecular Biology and Evolution* 37: 1535-1542. <a href="https://academic.oup.com/mbe/article/37/5/1535/5728646" target="_blank">https://academic.oup.com/mbe/article/37/5/1535/5728646</a>.

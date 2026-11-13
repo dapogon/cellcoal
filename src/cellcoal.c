@@ -131,6 +131,13 @@ Version 1.1.0 (18/10/2019)
 - fix nonISMRelMutRate input so it can be > 1
 	(Thanks to Haotian Zhang)
 
+ Version 1.4.0 (13/11/2026)
+- fix genotyping error (-G): rows of the error matrix are now normalized, so the erroneous base is drawn with the intended probabilities
+- fix allelic dropout (-P/-Q): ADO rates now vary correctly between cells and between sites
+- fix memory errors and leaks (user genome/tree reading, signatures), input checks (missing option arguments, buffer bounds, realloc/calloc), VCF PL/PLN print '.' when not finite
+- much faster and leaner: compact genotype-likelihood storage, budgeted genotype-likelihood cache (env CELLCOAL_GL_CACHE_MB), exact log10 memoization, faster VCF formatting, OpenMP parallel read-count generation and VCF printing
+- read counts use independent per-site random streams: results for a given seed are reproducible and independent of the number of threads, but differ from versions <= 1.3.4
+
  
 [TO-DOs]
 - add new signatures
