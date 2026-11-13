@@ -6446,10 +6446,14 @@ static void PrintSNVGenotypes (FILE *fp)
     int		i, j;
 
     if (doPrintAncestors == YES && doNGS == NO)
+        {
         fprintf (fp, "%d %d\n", numCells+3, numSNVs);
+        }
     else
+        {
         fprintf (fp, "%d %d\n", numCells+1, numSNVs);
-		
+        }
+
     /* site information */
 	fprintf (fp, "%d", SNVsites[0]+1);
 	for (i=1; i<numSNVs; i++)

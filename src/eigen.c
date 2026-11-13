@@ -49,7 +49,6 @@ int matinv( double x[], int n, int m, double space[])
    register int i,j,k;
    int *irow=(int*) space;
    double ee=1.0e-20, t,t1,xmax;
-   double det=1.0;
 
    for (i=0; i<n; i++)  {
       xmax = 0.;
@@ -59,7 +58,6 @@ int matinv( double x[], int n, int m, double space[])
 	    irow[i] = j;
 	 }
       }
-      det *= xmax;
       if (xmax < ee)   {
 	 fprintf(stderr,"\nDet becomes zero at %3d!\t\n", i+1);
 	 return(-1);
