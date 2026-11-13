@@ -1,6 +1,6 @@
-# CellCoal 1.4.0 — what changed
+# CellCoal 2.0.0 — what changed
 
-Release 1.4.0 fixes several bugs, makes the program much faster and lighter on memory, and parallelizes read-count generation. **Output for a given random seed is different from versions ≤ 1.3.4** (see "Reproducibility").
+Release 2.0.0 fixes several bugs, makes the program much faster and lighter on memory, and parallelizes read-count generation. **Output for a given random seed is different from versions ≤ 1.3.4** (see "Reproducibility").
 
 ## 1. Bug fixes that change the simulated data
 
@@ -24,8 +24,8 @@ Benchmark (300 cells × 3000 sites, genotype likelihoods, ADO, doublets, 1 repli
 | Version | Wall time | Peak memory |
 |---|---|---|
 | 1.3.4 | 17–19 s | ≈ 1 GB |
-| 1.4.0, 1 thread | ≈ 4.9 s | ≈ 134 MB |
-| 1.4.0, 2 threads | ≈ 3.4 s | ≈ 136 MB |
+| 2.0.0, 1 thread | ≈ 4.9 s | ≈ 134 MB |
+| 2.0.0, 2 threads | ≈ 3.4 s | ≈ 136 MB |
 
 What was done:
 
