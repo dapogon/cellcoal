@@ -1,4 +1,4 @@
-## CellCoal
+## CellCoal 2
 CellCoal: coalescent simulation of single-cell NGS genotypes 
 
 &copy;2020 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
