@@ -13,6 +13,7 @@
 #include <stdio.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdint.h>
 #include <string.h>
 #include <time.h>
 #include <ctype.h>
@@ -200,3 +201,30 @@ FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *
 
 
 #endif /* coaltumor_h */
+
+/* Independent random streams for the read-count simulation.
+   Each site gets its own stream (a 64-bit SplitMix64 generator seeded from the main stream and the site
+   number), so that the sites can be simulated in parallel and the result does not depend on the number of
+   threads or on the order in which they are processed. While a thread has a stream active, RandomUniform
+   ignores the seed it is given and draws from the stream instead. */
+static __thread int			streamActive = 0;
+static __thread uint64_t	streamState;
+
+static inline uint64_t SplitMix64 (uint64_t *x)
+	{
+	uint64_t z = (*x += 0x9E3779B97F4A7C15ULL);
+
+	z = (z ^ (z >> 30)) * 0xBF58476D1CE4E5B9ULL;
+	z = (z ^ (z >> 27)) * 0x94D049BB133111EBULL;
+	return z ^ (z >> 31);
+	}
+
+/* starts the stream of a given item (site) from a base value taken from the main stream */
+static inline void StartStream (uint64_t base, uint64_t item)
+	{
+	uint64_t x = base + item * 0xD1B54A32D192ED03ULL;
+
+	streamState = SplitMix64 (&x);	/* mix, so that neighbouring items start far apart */
+	streamActive = 1;
+	}
+
