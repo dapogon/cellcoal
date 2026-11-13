@@ -900,15 +900,7 @@ int main (int argc, char **argv)
             free (AltModelSites);
 
 			if (doGeneticSignatures == YES)
-				{
-				for (i=0; i<64; i++)
-					{
-					free (triNucleotideMaternal[i].position);
-					free (triNucleotidePaternal[i].position);
-					}
-				free (triNucleotideMaternal);
-				free (triNucleotidePaternal);
-				}
+				FreeTriNucleotides ();
 			}
 		
 		/* free the per-cell structures (they are allocated at every replicate, with or without NGS) */
@@ -1323,21 +1315,21 @@ void ReadUserGenome (FILE *fp)
 		}
 
 	/* read the FASTA file */
-	fgets (header, MAX_LINE, fpUserGenome);
-	fgets (maternalUserGenome, MAX_GENOME, fpUserGenome);
-	if (maternalUserGenome == NULL)
+	if (fgets (header, MAX_LINE, fpUserGenome) == NULL || fgets (maternalUserGenome, MAX_GENOME, fpUserGenome) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read the user maternal genome");
 		PrintUsage(stderr);
 		}
 	
-	fgets (header, MAX_LINE, fpUserGenome);
-	fgets (paternalUserGenome, MAX_GENOME, fpUserGenome);
-	if (paternalUserGenome == NULL)
+	if (fgets (header, MAX_LINE, fpUserGenome) == NULL || fgets (paternalUserGenome, MAX_GENOME, fpUserGenome) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read the user paternal genome");
 		PrintUsage(stderr);
 		}
+
+	/* remove the end-of-line characters (the last line may not have one) */
+	maternalUserGenome[strcspn (maternalUserGenome, "\r\n")] = '\0';
+	paternalUserGenome[strcspn (paternalUserGenome, "\r\n")] = '\0';
 
 	/* check lengths */
 	if (strlen(maternalUserGenome) != strlen(paternalUserGenome))
@@ -1346,11 +1338,16 @@ void ReadUserGenome (FILE *fp)
 		PrintUsage(stderr);
 		}
 
-	numSites = (int) strlen(maternalUserGenome) - 1;
+	numSites = (int) strlen(maternalUserGenome);
 	
-	/* realloc memory */
-	maternalUserGenome = (char *)realloc(maternalUserGenome, numSites * sizeof(char));
-	paternalUserGenome = (char *)realloc(paternalUserGenome, numSites * sizeof(char));
+	/* realloc memory (keep room for the string terminator) */
+	maternalUserGenome = (char *)realloc(maternalUserGenome, (numSites + 1) * sizeof(char));
+	paternalUserGenome = (char *)realloc(paternalUserGenome, (numSites + 1) * sizeof(char));
+	if (maternalUserGenome == NULL || paternalUserGenome == NULL)
+		{
+		fprintf (stderr, "\nERROR: Could not reallocate the user genomes\n");
+		exit (-1);
+		}
 
 
 	fprintf (stderr, "\nnumsites = %d", numSites);
@@ -1649,13 +1646,9 @@ static void ReadUserTree (FILE *fp)
 
 	numNodes = nextAvailableNode+1;
 
-	/* reallocate tree nodes */
-	treeNodes = (TreeNode *) realloc (treeNodes, numNodes * sizeof (TreeNode));
-	if (treeNodes == NULL)
-		{
-		fprintf (stderr, "Could not reallocate treeNodes (%ld bytes)\n", numNodes * sizeof (TreeNode));
-		PrintUsage(stderr);
-		}
+	/* Note: treeNodes is NOT shrunk here. The tree nodes point to each other (and healthyRoot
+	   points into this array), so a realloc that moved the block would leave all of them
+	   dangling (use-after-free). The unused tail of the array is harmless. */
 
 	fprintf (fpLog, "\n\nUser-defined tree: ");
 	PrintTree (healthyRoot, fpLog);
@@ -2480,6 +2473,29 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
 
 */
 
+/* Frees the trinucleotide position vectors. This function is called once per genome
+   (maternal and paternal) in every replicate and allocates both vectors each time, so the
+   previous ones must be freed first (otherwise they leak). */
+void FreeTriNucleotides (void)
+	{
+	int i;
+
+	if (triNucleotideMaternal)
+		{
+		for (i=0; i<64; i++)
+			free (triNucleotideMaternal[i].position);
+		free (triNucleotideMaternal);
+		triNucleotideMaternal = NULL;
+		}
+	if (triNucleotidePaternal)
+		{
+		for (i=0; i<64; i++)
+			free (triNucleotidePaternal[i].position);
+		free (triNucleotidePaternal);
+		triNucleotidePaternal = NULL;
+		}
+	}
+
 void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
     {
     int		i, numMutations, mutationsSoFar;
@@ -2487,6 +2503,8 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	int		newState, chosenSite;
 	
 	newState = -9;
+
+	FreeTriNucleotides ();
 	
 	/* allocate memory to store the trinucleotide frequencies */
 	triNucleotideMaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
@@ -7963,7 +7981,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
 	fprintf (fp,"\n-B: doublet rate per cell (e.g. -B0.1)");
 
-	fprintf (fp,"\n-G: genotyping error [no read counts] (e.g. -G0.01)");
+	fprintf (fp,"\n-G: genotyping error [no read counts]: mean and variance (e.g. -G0.01 0.001)");
 
 	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
 	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
