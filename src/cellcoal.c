@@ -131,7 +131,7 @@ Version 1.1.0 (18/10/2019)
 - fix nonISMRelMutRate input so it can be > 1
 	(Thanks to Haotian Zhang)
 
- Version 1.4.0 (13/11/2026)
+ Version 2.0.0 (13/11/2026)
 - fix genotyping error (-G): rows of the error matrix are now normalized, so the erroneous base is drawn with the intended probabilities
 - fix allelic dropout (-P/-Q): ADO rates now vary correctly between cells and between sites
 - fix memory errors and leaks (user genome/tree reading, signatures), input checks (missing option arguments, buffer bounds, realloc/calloc), VCF PL/PLN print '.' when not finite
