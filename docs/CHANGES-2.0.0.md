@@ -38,7 +38,7 @@ What was done:
 
 ### Threads
 
-OpenMP is enabled by default. Use `OMP_NUM_THREADS=n` to choose the number of threads. To build without OpenMP: `make OMPFLAG=`.
+OpenMP is detected automatically by the Makefile: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded (with identical results). Use `OMP_NUM_THREADS=n` to choose the number of threads. To force a build without OpenMP: `make OMPFLAG=`.
 
 ## 4. Reproducibility
 
