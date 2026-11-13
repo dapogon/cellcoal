@@ -134,7 +134,7 @@ Version 1.1.0 (18/10/2019)
  Version 2.0.0 (13/11/2026)
 - fix genotyping error (-G): rows of the error matrix are now normalized, so the erroneous base is drawn with the intended probabilities
 - fix allelic dropout (-P/-Q): ADO rates now vary correctly between cells and between sites
-- fix memory errors and leaks (user genome/tree reading, signatures), input checks (missing option arguments, buffer bounds, realloc/calloc), VCF PL/PLN print '.' when not finite
+- fix memory errors and leaks (user genome/tree reading, signatures), input checks (missing option arguments, buffer bounds, realloc/calloc), VCF G10/G10N/GL/GLN/PL/PLN print '.' when the likelihood is exactly zero (log10 = -inf, e.g. with no sequencing error)
 - much faster and leaner: compact genotype-likelihood storage, budgeted genotype-likelihood cache (env CELLCOAL_GL_CACHE_MB), exact log10 memoization, faster VCF formatting, OpenMP parallel read-count generation and VCF printing
 - read counts use independent per-site random streams: results for a given seed are reproducible and independent of the number of threads, but differ from versions <= 1.3.4
 
@@ -5613,6 +5613,17 @@ static char *VCF_PutF2 (char *p, double x)
 	return p;
 	}
 
+/* a log10 likelihood; a value that is not finite (a likelihood of exactly zero, e.g. with no sequencing error) is written as '.', the VCF missing value */
+static inline char *VCF_PutLL (char *p, double x)
+	{
+	if (!isfinite (x))
+		{
+		*p++ = '.';
+		return p;
+		}
+	return VCF_PutF2 (p, x);
+	}
+
 #define VCF_ROOM(fp,buf,p)	do { if ((p) - (buf) > 3000) { fwrite ((buf), 1, (size_t)((p) - (buf)), (fp)); (p) = (buf); } } while (0)
 
 /* writes the tab-started genotype fields (GT ... TG) of one cell at one SNV site */
@@ -5684,7 +5695,7 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 			{
 			if (!(k == 0 && l == 0))
 				*p++ = ',';
-			txtLen[k][l] = (int)(VCF_PutF2 (txt[k][l], LG[k][l]) - txt[k][l]);
+			txtLen[k][l] = (int)(VCF_PutLL (txt[k][l], LG[k][l]) - txt[k][l]);
 			memcpy (p, txt[k][l], (size_t)txtLen[k][l]);
 			p += txtLen[k][l];
 			VCF_ROOM (fp, buf, p);
@@ -5696,7 +5707,7 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 			{
 			if (!(k == 0 && l == 0))
 				*p++ = ',';
-			txtNLen[k][l] = (int)(VCF_PutF2 (txtN[k][l], NLG[k][l]) - txtN[k][l]);
+			txtNLen[k][l] = (int)(VCF_PutLL (txtN[k][l], NLG[k][l]) - txtN[k][l]);
 			memcpy (p, txtN[k][l], (size_t)txtNLen[k][l]);
 			p += txtNLen[k][l];
 			VCF_ROOM (fp, buf, p);
@@ -5713,7 +5724,7 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 			p += txtLen[pa1[k]][pa2[k]];
 			}
 		else
-			p = VCF_PutF2 (p, LG[pa1[k]][pa2[k]]);
+			p = VCF_PutLL (p, LG[pa1[k]][pa2[k]]);
 		VCF_ROOM (fp, buf, p);
 		}
 	/* GLN */
@@ -5728,7 +5739,7 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 			p += txtNLen[pa1[k]][pa2[k]];
 			}
 		else
-			p = VCF_PutF2 (p, NLG[pa1[k]][pa2[k]]);
+			p = VCF_PutLL (p, NLG[pa1[k]][pa2[k]]);
 		VCF_ROOM (fp, buf, p);
 		}
 	/* PL  (the non-doublet logGL is tested for infinity in both cases, as in the original) */

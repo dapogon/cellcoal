@@ -8,7 +8,7 @@ Release 2.0.0 fixes several bugs, makes the program much faster and lighter on m
 |---|---|---|
 | Genotyping error (`-G`) | The rows of the error-weight table (default `{0,1,1,1}`, sum 3) were not normalized, but the sampler expects probabilities summing to 1, so the first non-zero entry was always chosen. | Rows are normalized before sampling; the erroneous base now follows the intended probabilities. |
 | Allelic dropout (`-P`, `-Q`) | ADO variation between cells and between sites was not simulated correctly. | ADO rate is drawn once per cell and once per site and reused (per-cell and per-site arrays). |
-| VCF `PL` / `PLN` | Values were printed with `%d` from a `double`; infinite likelihoods gave undefined output. | Printed correctly; non-finite values are written as `.`. |
+| VCF `G10`, `G10N`, `GL`, `GLN`, `PL`, `PLN` | `PL`/`PLN` were printed with `%d` from a `double` (undefined for infinite values), and the log10 likelihoods showed `-inf` whenever a genotype had probability exactly zero (e.g. with no sequencing error, `-E0`, the default). | Likelihoods that are not finite are written as `.` (VCF missing value) in all six fields. |
 
 ## 2. Robustness fixes (no change to valid output)
 

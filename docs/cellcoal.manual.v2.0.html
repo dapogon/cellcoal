@@ -954,6 +954,7 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <div id="the-vcf-file" class="section level2">
 <h2>6.10 The VCF file</h2>
 <p>When reads are simulated (option -C), CellCoal writes a <em>vcf</em> file (VCF v4.3) with one line per SNV site and one column per cell (plus the outgroup cell). If the option -v is active, each replicate is written to a separate file inside the <em>vcf_dir</em> subfolder. The INFO fields are <code>AA</code> (ancestral allele), <code>NS</code> (number of samples with data), <code>AF</code> (true alternate allele frequency, ignoring doublets) and <code>SOMATIC</code>. Sites for which fewer than half of the samples have data are flagged with the filter <code>s50</code>. For each cell, the FORMAT fields are:</p>
+<p>A genotype likelihood that is exactly zero (log10 = -inf; this happens, for instance, when the sequencing error is zero, option -E0, the default) is written as <code>.</code> (the VCF missing value) in the fields <code>G10</code>, <code>G10N</code>, <code>GL</code>, <code>GLN</code>, <code>PL</code> and <code>PLN</code>.</p>
 <table class="table table-condensed">
 <thead><tr><th>Field</th><th>Description</th></tr></thead>
 <tbody>
@@ -962,7 +963,7 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <tr><td><code>RC</code></td><td>Read counts for A, C, G, T</td></tr>
 <tr><td><code>G10</code>, <code>G10N</code></td><td>Log10 genotype likelihoods of the 10 unphased genotypes (order AA AC AG AT CC CG CT GG GT TT), raw and normalized</td></tr>
 <tr><td><code>GL</code>, <code>GLN</code></td><td>Log10 genotype likelihoods for the genotypes formed by the REF and ALT alleles of the line (in VCF order), raw and normalized</td></tr>
-<tr><td><code>PL</code>, <code>PLN</code></td><td>Phred-scaled genotype likelihoods, raw and normalized. A value that is not finite (a likelihood of zero) is printed as <code>.</code></td></tr>
+<tr><td><code>PL</code>, <code>PLN</code></td><td>Phred-scaled genotype likelihoods (10 &times; log10), raw and normalized</td></tr>
 <tr><td><code>ML</code></td><td>Maximum likelihood genotype</td></tr>
 <tr><td><code>NG</code></td><td>Genotype in the NGS library (considers ADO and deletions; ignores doublets)</td></tr>
 <tr><td><code>DG</code></td><td>Genotype in the NGS library for the second cell if there is a doublet</td></tr>
@@ -982,7 +983,7 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <ul>
 <li><strong>Genotyping error (-G).</strong> The rows of the error matrix were not normalized, so with the default matrix the first non-zero entry was always chosen as the erroneous nucleotide. Now the nucleotide is drawn with the intended probabilities.</li>
 <li><strong>Allelic dropout (-P, -Q).</strong> The variation of the ADO rate among cells and among sites is now simulated correctly: one rate per cell and one rate per site, reused for all genotypes.</li>
-<li><strong>VCF PL/PLN.</strong> Likelihoods that are not finite are printed as <code>.</code> instead of an undefined value.</li>
+<li><strong>VCF likelihoods.</strong> Genotype likelihoods that are exactly zero (<code>-inf</code>) are printed as <code>.</code> in <code>G10</code>, <code>G10N</code>, <code>GL</code>, <code>GLN</code>, <code>PL</code> and <code>PLN</code>.</li>
 </ul>
 <h2>8.2 Robustness</h2>
 <ul>
