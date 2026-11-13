@@ -375,6 +375,10 @@ p.caption {
 <p class="caption">Fig. 5. Rate variation among branches. Rate variation among lineages can be a product for example of changes in the mutation rate.</p>
 </div>
 </div>
+<div id="rate-switches-along-the-genealogy" class="section level3">
+<h3>5.1.3 Rate switches along the genealogy</h3>
+<p>Alternatively to the gamma rate variation, a few <em>rate switches</em> can be introduced in the genealogy (option -N). Each switch chooses one branch of the ingroup tree at random, with probability proportional to its length (the root branch is excluded, and the same branch is never chosen twice), and multiplies by a given factor the length of that branch <em>and</em> of all the branches descending from it. Because mutations accumulate along branches, a factor larger than 1 produces a clade with an accelerated mutation rate (for example, a mutator lineage), and a factor smaller than 1 a clade that evolves more slowly. If a switch falls inside the subtree of another switch, their factors are multiplied. With the noisy option -y2 or higher, the node chosen by each switch, its factor and the cells in the affected clade are printed on screen for each replicate (for example, <code>node 17 *0.20 ( 1 5 9 7 )</code>); the log file records the number of switches and their factors. For example, <code>-N2 4 0.2</code> introduces two switches, one that makes a clade evolve four times faster and another that makes a clade evolve five times slower. This option cannot be combined with rate variation among lineages (-i). See section 6.2.</p>
+</div>
 </div>
 <div id="genotype-evolution-models" class="section level2">
 <h2>5.2 Genotype evolution models</h2>
@@ -621,8 +625,8 @@ p\left(b|A\right) = \sum_{\substack{j = 1 \\ j \neq A}}^{4}{p\left( t_{j} \middl
 <p>Length of the outgroup branch as a proportion of the mean depth of the <em>sample/outgroup MRCA</em>. Note that this branch is attached before introducing rate variation among branches. See Figs. 3-4.</p>
 <p><strong>i#: rate variation among branches; double (0-inf)</strong></p>
 <p>Amount of rate variation among lineages, specified with the alpha shape parameter of a continuous <em>Gamma</em> distribution with mean 1. The smaller the shape the strongest the heterogeneity introduced. See Fig. 5.</p>
-<p><strong>N# # # ...: tree rate switches; integer [0-inf) followed by that many doubles (0-inf)</strong></p>
-<p>Number of rate switches along the genealogy, followed by one rate multiplier per switch. Each switch is placed on a randomly chosen branch (no branch is chosen twice) and multiplies the length of that branch and of all the branches descending from it by the corresponding multiplier. For example, <code>N2 4 0.2</code> makes two switches, one that multiplies the rate by 4 and another one that multiplies it by 0.2. The affected nodes and cells are reported in the log file. This option cannot be used together with rate variation among lineages (option -i).</p>
+<p><strong>N# # # ...: tree rate switches; integer [1-numCells] followed by that many doubles (0-inf)</strong></p>
+<p>Number of rate switches along the genealogy, an integer between 1 and the number of ingroup cells, followed by one rate multiplier per switch (each a double &gt; 0). Each switch chooses a branch at random, with probability proportional to its length (no branch is chosen twice), and multiplies the length of that branch and of all the branches descending from it by its multiplier (see section 5.1.3). For example, <code>N2 4 0.2</code> makes two switches, one with multiplier 4 and another with multiplier 0.2. With the noisy option -y2 or higher, the chosen nodes, their multipliers and the cells in each affected clade are printed on screen for each replicate; the log file records the number of switches and their multipliers. This option cannot be used together with rate variation among lineages (option -i).</p>
 </div>
 <div id="mutation-models" class="section level2">
 <h2>6.3 Mutation models</h2>
