@@ -3609,8 +3609,17 @@ void AllelicDropoutGamma (long int *seed)
 void GenotypeError (long int *seed)
 	{
 	int 	i,j;
-	double	genotypingError, alleleError;
+	double	genotypingError, alleleError, normEij[4][4], rowSum;
 	
+	/* ChooseUniformState expects probabilities that sum to 1, but the rows of Eij are
+	   relative weights (e.g. 0 1 1 1 by default), so normalize them first. Without this
+	   the first non-zero entry always wins and the wrong base is not drawn at random. */
+	for (i=0; i<4; i++)
+		{
+		rowSum = Eij[i][0] + Eij[i][1] + Eij[i][2] + Eij[i][3];
+		for (j=0; j<4; j++)
+			normEij[i][j] = (rowSum > 0.0) ? Eij[i][j] / rowSum : 0.0;
+		}
 	
 	if (alphabet == DNA)
 		{
@@ -3623,12 +3632,12 @@ void GenotypeError (long int *seed)
 
 				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[MATERNAL][i][j] = ChooseUniformState (Eij[data[MATERNAL][i][j]], seed);
+					data[MATERNAL][i][j] = ChooseUniformState (normEij[data[MATERNAL][i][j]], seed);
 					allSites[j].hasGenotypeError = YES;
 					}
 				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[PATERNAL][i][j] = ChooseUniformState (Eij[data[PATERNAL][i][j]], seed);
+					data[PATERNAL][i][j] = ChooseUniformState (normEij[data[PATERNAL][i][j]], seed);
 					allSites[j].hasGenotypeError = YES;
 					}
 				}
