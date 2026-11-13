@@ -4667,6 +4667,23 @@ static inline double Pow10Fast (double x)
  AA AC AG AT CC CG CT GG GT TT
  */
 
+/* log10 of x, reusing the result of an earlier call with exactly the same argument (keys/vals hold the
+   previous arguments and results, n their number). log10 is a pure function, so the result is bit-identical;
+   with symmetric error matrices (the default) many of the arguments of one cell and site coincide, and log10
+   is the most expensive operation of the likelihood computation. */
+static inline double Log10Memo (double x, double *keys, double *vals, int *n)
+	{
+	int m;
+
+	for (m=0; m<*n; m++)
+		if (keys[m] == x)
+			return vals[m];
+	keys[*n] = x;
+	vals[*n] = log10 (x);
+	return vals[(*n)++];
+	}
+
+
 void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut)
 	{
 	int		k, l, a1, a2;
@@ -4686,6 +4703,8 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	double	pA1tab[4][4], pA2tab[4][4], lgA1tab[4][4], lgA2tab[4][4];
 	long double	T2a[4], T3a[4];
 	double	logGLm[4][4] = {{0}}, normLogGLm[4][4] = {{0}};
+	double	L1tab[4][4][4], memoKeys[32], memoVals[32];
+	int		memoN;
 	
 	numReads = c->numReads;
 	readCount = c->readCount;
@@ -4931,6 +4950,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 			{
 			if (readCount[read] <= 0)
 				continue;
+			memoN = 0;
 			for (k=0; k<4; k++)
 				{
 				pReadGivenA1 = pReadGivenA2 = 0.0;
@@ -4960,8 +4980,8 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 				pA2tab[k][read] = pReadGivenA2;
 				if (alleleDropoutRate != 0)
 					{
-					lgA1tab[k][read] = log10(pReadGivenA1);
-					lgA2tab[k][read] = log10(pReadGivenA2);
+					lgA1tab[k][read] = Log10Memo (pReadGivenA1, memoKeys, memoVals, &memoN);
+					lgA2tab[k][read] = Log10Memo (pReadGivenA2, memoKeys, memoVals, &memoN);
 					}
 				}
 			}
@@ -4980,6 +5000,18 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 						}
 			}
 
+		/* log10 (1/2 p1 + 1/2 p2) for every read and genotype, computing each distinct argument only once */
+		if (alleleDropoutRate != 1)
+			for (read=0; read<4; read++)
+				if (readCount[read] > 0)
+					{
+					memoN = 0;
+					for (a1=0; a1<4; a1++)
+						for (a2=0; a2<4; a2++)
+							L1tab[read][a1][a2] = Log10Memo (meanAllelicImbalance * pA1tab[a1][read] + (1.0 - meanAllelicImbalance) * pA2tab[a2][read], memoKeys, memoVals, &memoN);
+					}
+
+		memoN = 0;	/* memo of the final log10 (GL) of each genotype */
 		for (a1=0; a1<4; a1++) /* a1 is maternal; a2 is paternal */
 			for (a2=0; a2<4; a2++)
 				{
@@ -4997,7 +5029,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 						
 						/* M [p(b|A)] */
 						if (alleleDropoutRate != 1)
-							term1 += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
+							term1 += readCount[read] * L1tab[read][a1][a2];
 						}
 					//fprintf (stderr, "\n***read=%c count=%3d gl[%c][%c] = %lf  logGL[%c][%c] = %lf (p1=%e p2=%e), term1=%Lf term2=%Lf term3=%Lf", WhichNuc(read), readCount[read], WhichNuc(a1), WhichNuc(a2), GL[a1][a2],  WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], pReadGivenA1,pReadGivenA2, term1, term2, term3);
 					} // reads
@@ -5042,7 +5074,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 				GL[a1][a2] = num1 + num2 + num3;
 
 				if (isnan(GL[a1][a2]) == NO)
-					logGL[a1][a2] = maxterm + log10(GL[a1][a2]);
+					logGL[a1][a2] = maxterm + Log10Memo (GL[a1][a2], memoKeys, memoVals, &memoN);
 				else
 					logGL[a1][a2] = -INFINITY;
 				/*
@@ -5495,6 +5527,26 @@ static inline char *VCF_PutUInt (char *p, unsigned long long n)
 	{
 	char	t[24];
 	int		k = 0;
+
+	/* the values written are almost always small: skip the digit reversal for them */
+	if (n < 10)
+		{
+		*p++ = (char)('0' + n);
+		return p;
+		}
+	if (n < 100)
+		{
+		*p++ = (char)('0' + n / 10);
+		*p++ = (char)('0' + n % 10);
+		return p;
+		}
+	if (n < 1000)
+		{
+		*p++ = (char)('0' + n / 100);
+		*p++ = (char)('0' + (n / 10) % 10);
+		*p++ = (char)('0' + n % 10);
+		return p;
+		}
 	do
 		{
 		t[k++] = (char)('0' + n % 10);
@@ -5526,7 +5578,7 @@ static char *VCF_PutF2 (char *p, double x)
 	if (!(ax < 1e5))
 		return p + sprintf (p, "%.2f", x);
 	v  = ax * 100.0;
-	fl = floor (v);
+	fl = (double)(unsigned long long) v;	/* v >= 0 and < 1e7, so this is floor (v) */
 	fr = v - fl;
 	if (fabs (fr - 0.5) < 1e-6)
 		return p + sprintf (p, "%.2f", x);
@@ -5547,6 +5599,8 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 	{
 	char	buf[4096], *p = buf;
 	double	(*LG)[4], (*NLG)[4], LGs[4][4], NLGs[4][4];
+	char	txt[4][4][400], txtN[4][4][400];	/* text of the G10 / G10N values (a %.2f of a huge double can be long) */
+	int		txtLen[4][4], txtNLen[4][4];
 	int		*rc, numReads, MLm, MLp, l, k, a1, a2;
 	int		MLmatAllele = cs->MLmatAllele, MLpatAllele = cs->MLpatAllele;
 
@@ -5602,14 +5656,16 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 	p = VCF_PutInt (p, rc[G]);  *p++ = ',';
 	p = VCF_PutInt (p, rc[T]);
 
-	/* G10 */
+	/* G10: the text of each of the 10 values is kept, because GL repeats a subset of them */
 	*p++ = ':';
 	for (k=0; k<4; k++)
 		for (l=k; l<4; l++)
 			{
 			if (!(k == 0 && l == 0))
 				*p++ = ',';
-			p = VCF_PutF2 (p, LG[k][l]);
+			txtLen[k][l] = (int)(VCF_PutF2 (txt[k][l], LG[k][l]) - txt[k][l]);
+			memcpy (p, txt[k][l], (size_t)txtLen[k][l]);
+			p += txtLen[k][l];
 			VCF_ROOM (fp, buf, p);
 			}
 	/* G10N */
@@ -5619,7 +5675,9 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 			{
 			if (!(k == 0 && l == 0))
 				*p++ = ',';
-			p = VCF_PutF2 (p, NLG[k][l]);
+			txtNLen[k][l] = (int)(VCF_PutF2 (txtN[k][l], NLG[k][l]) - txtN[k][l]);
+			memcpy (p, txtN[k][l], (size_t)txtNLen[k][l]);
+			p += txtNLen[k][l];
 			VCF_ROOM (fp, buf, p);
 			}
 	/* GL */
@@ -5628,7 +5686,13 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 		{
 		if (k > 0)
 			*p++ = ',';
-		p = VCF_PutF2 (p, LG[pa1[k]][pa2[k]]);
+		if (pa1[k] <= pa2[k])
+			{
+			memcpy (p, txt[pa1[k]][pa2[k]], (size_t)txtLen[pa1[k]][pa2[k]]);
+			p += txtLen[pa1[k]][pa2[k]];
+			}
+		else
+			p = VCF_PutF2 (p, LG[pa1[k]][pa2[k]]);
 		VCF_ROOM (fp, buf, p);
 		}
 	/* GLN */
@@ -5637,7 +5701,13 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 		{
 		if (k > 0)
 			*p++ = ',';
-		p = VCF_PutF2 (p, NLG[pa1[k]][pa2[k]]);
+		if (pa1[k] <= pa2[k])
+			{
+			memcpy (p, txtN[pa1[k]][pa2[k]], (size_t)txtNLen[pa1[k]][pa2[k]]);
+			p += txtNLen[pa1[k]][pa2[k]];
+			}
+		else
+			p = VCF_PutF2 (p, NLG[pa1[k]][pa2[k]]);
 		VCF_ROOM (fp, buf, p);
 		}
 	/* PL  (the non-doublet logGL is tested for infinity in both cases, as in the original) */
