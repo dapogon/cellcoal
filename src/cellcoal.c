@@ -3602,6 +3602,19 @@ void AllelicDropoutGamma (long int *seed)
 	}
 */
 
+/* FIX: draw a wrong base from row Eij[from] normalized by its sum (cumEij[from][3]);
+   ChooseUniformState() expects probabilities summing to 1, but Eij rows sum to 3 by default,
+   which made errors deterministic (A->C, C/G/T->A). */
+static int ChooseErrorState (int from, long int *seed)
+	{
+	int k;
+	double u = RandomUniform(seed) * cumEij[from][3];
+	for (k=0; k<3; k++)
+		if (u <= cumEij[from][k])
+			return k;
+	return 3;
+	}
+
 /********************* GenotypeError  ************************/
 /*
  Introduce false positive errors directly in the genotypes
@@ -3630,12 +3643,12 @@ void GenotypeError (long int *seed)
 
 				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[MATERNAL][i][j] = ChooseUniformState (Eij[data[MATERNAL][i][j]], seed);
+					data[MATERNAL][i][j] = ChooseErrorState (data[MATERNAL][i][j], seed);
 					allSites[j].hasGenotypeError = YES;
 					}
 				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[PATERNAL][i][j] = ChooseUniformState (Eij[data[PATERNAL][i][j]], seed);
+					data[PATERNAL][i][j] = ChooseErrorState (data[PATERNAL][i][j], seed);
 					allSites[j].hasGenotypeError = YES;
 					}
 				}
