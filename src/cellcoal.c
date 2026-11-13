@@ -4163,30 +4163,32 @@ void GenerateReadCounts (long int *seed)
 			}
 		}
 		
-	/* produce read counts for all sites. This pass has to be sequential: it consumes random numbers,
-	   and the order (site, cell) defines the random stream */
-	for (j=0; j<numSites; j++)
-		{
-		for (i=0; i<numCells+1; i++)
-			{
-			SiteReadCounts (&cell[i].site[j], i, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
-			if (cell[i].site[j].numReads <= 0)
-				cell[i].site[j].MLmatAllele = cell[i].site[j].MLpatAllele = MISSING;
-			}
-		}
+	/* One stream per site is started from two numbers taken from the main stream (so each replicate
+	   differs), which makes the sites independent of each other. For every site the reads of all cells
+	   are simulated (in cell order, with the stream of the site) and then the genotype likelihoods are
+	   computed, all in parallel when compiled with OpenMP. The result is the same for any number of threads.
+	   Each thread needs its own scratch matrices. */
+	{
+	uint64_t	streamBase;
+	long int	s1, s2;
 
-	/* genotype likelihoods do not use random numbers and each (cell,site) is independent, so they are
-	   computed in parallel when compiled with OpenMP (the result is the same for any number of threads).
-	   Each thread needs its own scratch amplification matrices. */
+	RandomUniform (seed);
+	s1 = *seed;
+	RandomUniform (seed);
+	s2 = *seed;
+	streamBase = ((uint64_t) s1 << 32) ^ (uint64_t) s2;
+
 	#pragma omp parallel
 		{
-		double	**ampMat, **ampPat, *sbuf;
+		double	**ampMat, **ampPat, *sbuf, *probsT;
+		long int	dummySeed = 1;	/* never used: the stream of the site is active */
 		int		t, ii, jj;
 
 		ampMat = (double**) calloc (4, sizeof(double*));
 		ampPat = (double**) calloc (4, sizeof(double*));
+		probsT = (double*) calloc (4, sizeof(double));
 		sbuf = (double*) malloc ((size_t)(numCells+1) * GL_NUM * sizeof(double));
-		if (!ampMat || !ampPat || !sbuf)
+		if (!ampMat || !ampPat || !sbuf || !probsT)
 			{
 			fprintf (stderr, "Could not allocate the thread amplification matrices\n");
 			exit (-1);
@@ -4208,6 +4210,16 @@ void GenerateReadCounts (long int *seed)
 			int		hasAlt = NO, al;
 			size_t	bytes = (size_t)(numCells+1) * GL_NUM * sizeof(double), before;
 
+			/* read counts of all the cells at this site, from the stream of the site */
+			StartStream (streamBase, (uint64_t) jj);
+			for (ii=0; ii<numCells+1; ii++)
+				{
+				SiteReadCounts (&cell[ii].site[jj], ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed);
+				if (cell[ii].site[jj].numReads <= 0)
+					cell[ii].site[jj].MLmatAllele = cell[ii].site[jj].MLpatAllele = MISSING;
+				}
+			streamActive = 0;
+
 			for (ii=0; ii<numCells+1; ii++)
 				{
 				double *g = sbuf + GL_NUM*(size_t)ii;
@@ -4215,7 +4227,7 @@ void GenerateReadCounts (long int *seed)
 					{
 					/* rebuild the amplification error matrices of this site exactly as SiteReadCounts did */
 					BuildAmpMatrices (&cell[ii].site[jj], ampMat, ampPat);
-					GenotypeLikelihoods (&cell[ii].site[jj], ii, jj, probs, ngsEij, ampMat, ampPat, seed, g);
+					GenotypeLikelihoods (&cell[ii].site[jj], ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
 					}
 				else
 					memset (g, 0, GL_NUM*sizeof(double));
@@ -4250,8 +4262,10 @@ void GenerateReadCounts (long int *seed)
 			}
 		free (ampMat);
 		free (ampPat);
+		free (probsT);
 		free (sbuf);
 		}
+	}
 	/* add doublets and reads from them */
 	if (meanDoubletRate > 0)
 		MakeDoublets(probs, ngsEij, ampEijmat, ampEijpat, seed);
@@ -8267,6 +8281,8 @@ double RandomUniform (long int *seed)
 	{
 	long int	lo, hi, test;
 
+	if (streamActive)
+		return (double)((SplitMix64 (&streamState) >> 11) + 0.5) * (1.0 / 9007199254740992.0);	/* in (0,1) */
 	if (*seed >= 1 && *seed < 2147483647L)
 		*seed = LCG_MulMod (*seed, LCG_A1);
 	else
@@ -8395,6 +8411,21 @@ int RandomBinomial (double prob, int numTrials, long int *seed)
 	const double M = 2147483647.0;
 	long		s, t, hi, lo, test;
 	int			i, sum;
+
+	if (streamActive)	/* the fast path below works on the state of the minimal standard generator */
+		{
+		/* Bernoulli trial: the top 53 bits of the draw are below prob * 2^53 (probability prob to within 2^-53) */
+		uint64_t	thr53;
+
+		if (!(prob > 0.0))
+			return 0;
+		if (prob >= 1.0)
+			return numTrials > 0 ? numTrials : 0;
+		thr53 = (uint64_t)(prob * 9007199254740992.0);
+		for (sum=0, i=0; i<numTrials; i++)
+			sum += (SplitMix64 (&streamState) >> 11) < thr53;
+		return sum;
+		}
 
 	if (!(prob > 0.0))
 		t = 0;
@@ -8583,7 +8614,7 @@ double RandomGamma1 (double s, long int *seed)
      switching method
      */
     double			r, x=0.0, small=1e-37, w;
-    static double   a, p, uf, ss=10.0, d;
+    static __thread double   a, p, uf, ss=10.0, d;
 	
     if (s!=ss)
     {
@@ -8625,7 +8656,7 @@ double RandomGamma2 (double s, long int *seed)
      Best's (1978) t distribution method
      */
     double			r ,d, f, g, x;
-    static double	b, h, ss=0;
+    static __thread double	b, h, ss=0;
 	
     if (s!=ss)
     {
