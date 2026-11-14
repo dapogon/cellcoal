@@ -1,0 +1,44 @@
+name: Release
+
+# Manual workflow: run it from the Actions tab (works from a phone browser).
+# It tags the current master as v<version> and publishes a GitHub release
+# using docs/CHANGES-<version>.md as release notes.
+
+on:
+  workflow_dispatch:
+    inputs:
+      version:
+        description: "Version number without the v (e.g. 2.0.2)"
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Check version
+        run: |
+          V="${{ inputs.version }}"
+          grep -q "^VERSION = $V\$" Makefile || { echo "Makefile VERSION is not $V"; exit 1; }
+          test -f "docs/CHANGES-$V.md" || { echo "docs/CHANGES-$V.md not found"; exit 1; }
+          if git ls-remote --tags origin "refs/tags/v$V" | grep -q .; then
+            echo "Tag v$V already exists"; exit 1
+          fi
+
+      - name: Build (smoke test)
+        run: make
+
+      - name: Create release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          V="${{ inputs.version }}"
+          gh release create "v$V" --target master --title "CellCoal $V" \
+            --notes-file "docs/CHANGES-$V.md" --latest
