@@ -33,6 +33,9 @@
 #define C						1
 #define G						2
 #define T						3
+/* type of a genotype value (nucleotide, ADO, DELETION, MISSING, ...); one byte per site to save memory */
+typedef signed char Geno;
+
 #define ADO						9
 #define DELETION				7
 #define MISSING					-9

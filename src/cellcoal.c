@@ -569,7 +569,7 @@ int main (int argc, char **argv)
  
  
 	/* allocate genotype data to be stored in data[genome][cell][site] */
-        data = (int ***) calloc (ploidy, sizeof(int **));
+        data = (Geno ***) calloc (ploidy, sizeof(Geno **));
         if (!data)
             {
             fprintf (stderr, "Could not allocate the data structure\n");
@@ -577,7 +577,7 @@ int main (int argc, char **argv)
             }
         for (i=0; i<ploidy; i++)
             {
-            data[i] = (int **) calloc (2*numCells+1, sizeof(int *));
+            data[i] = (Geno **) calloc (2*numCells+1, sizeof(Geno *));
             if (!data[i])
                 {
                 fprintf (stderr, "Could not allocate the data[] structure\n");
@@ -585,7 +585,7 @@ int main (int argc, char **argv)
                 }
             for (j=0; j<2*numCells+1; j++)
                 {
-                data[i][j] = (int *) calloc (numSites, sizeof(int));
+                data[i][j] = (Geno *) calloc (numSites, sizeof(Geno));
                 if (!data[i][j])
                     {
                     fprintf (stderr, "Could not allocate the data[][] structure\n");
@@ -2735,7 +2735,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	 Counts the trinucleotide frequencies in the given genome
 */
 
-void CountTriNucFrequencies (int *genome_array, int genome)
+void CountTriNucFrequencies (Geno *genome_array, int genome)
 	{
 	int i, n1, n2, n3;
 	TriNucStr *triNucleotide;
@@ -3803,7 +3803,7 @@ int CountTrueVariants (void)
     int		cell, site;
     int		nVariants = 0;
     char	*isVar;
-    int		*matRoot, *patRoot, *mat, *pat;
+    Geno	*matRoot, *patRoot, *mat, *pat;
 
     /* cell-major traversal (genomes are stored contiguously per cell) */
     isVar = (char *) calloc (numSites, sizeof(char));
@@ -3848,7 +3848,8 @@ int CountAllelesInObservedGenotypes (void)
 	{
 	int		numAltAlleles, cell, site, s0, s1, k, ch;
 	int		countA, countC, countG, countT, countADO, countDEL, nSNVs;
-	int		*cnt[7], *row;
+	int		*cnt[7];
+	Geno	*row;
 	unsigned char slot[19];
 	enum { BLK = 4096 };
 	

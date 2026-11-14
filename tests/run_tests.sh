@@ -21,7 +21,7 @@ for p in "$ROOT"/examples/parameters.*; do
   n=$(basename "$p"); d="$TMP/ex_$n"; mkdir -p "$d"
   cp "$ROOT"/examples/usergenome.fas "$ROOT"/examples/usertree.0001 "$d"/ 2>/dev/null
   # fix the seed so that the example is deterministic
-  sed 's/^\[seed\] \[#[0-9]*\]/[seed] #1234/' "$p" > "$d/par"
+  sed 's/\[seed\] \[#[0-9]*\]/[seed] #1234/' "$p" > "$d/par"
   (cd "$d" && "$BIN" -Fpar >out.txt 2>&1) && ok "$n" || bad "$n"
 done
 
