@@ -164,6 +164,14 @@ Version 1.1.0 (18/10/2019)
 #endif
 #include "definitions.h"
 
+/* The per-cell/per-site blocks (cell[i].site[j], 48 bytes each) are only needed for read counts
+   (NGS, doublets, VCF/CATG/PILEUP) and for haplotype/full-genotype/ancestor outputs. Without them,
+   SNV genotypes are printed from data[][][], and allocating (cells+1) x sites blocks anyway costs
+   e.g. ~2.4 GB for 1000 cells x 50000 sites. */
+#define NEED_CELL_SITES (doNGS == YES || doPrintSNVhaplotypes == YES || doPrintTrueHaplotypes == YES || \
+                         doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || \
+                         doPrintCATG == YES || doPrintPILEUP == YES || doPrintAncestors == YES)
+
 int main (int argc, char **argv)
     {
     FILE 		*fp;
@@ -703,6 +711,7 @@ int main (int argc, char **argv)
 			numSNVs = CountTrueVariants();
 
 			/* copy true genotypes before doing ADO but after CNLOH and deletion */
+			if (NEED_CELL_SITES)
 			for (i=0; i<numCells+1; i++)
 				for (j=0; j<numSites; j++)
 					{
@@ -4028,7 +4037,10 @@ void AllocateCellStructure(void)
 		exit (-1);
 		}
 
-	/* all the per-site data (read counts, genotype likelihoods) lives inside CellSiteStr, so one block per cell is enough */
+	/* all the per-site data (read counts, genotype likelihoods) lives inside CellSiteStr, so one block per cell is enough;
+	   these blocks are only allocated when an option needs them (see NEED_CELL_SITES) */
+	if (!NEED_CELL_SITES)
+		return;
 	for (i=0; i<numCells+1; i++)
 		{
 		cell[i].site  = (CellSiteStr*) calloc (numSites, sizeof(CellSiteStr));
