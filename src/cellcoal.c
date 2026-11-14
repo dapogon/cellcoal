@@ -131,6 +131,9 @@ Version 1.1.0 (18/10/2019)
 - fix nonISMRelMutRate input so it can be > 1
 	(Thanks to Haotian Zhang)
 
+ Version 2.0.1 (14/11/2026)
+- memory: the per-cell, per-site blocks are only allocated when an option needs them (reads, haplotypes, full genotypes, ancestors); about 66% less peak memory in runs without reads, with identical output
+
  Version 2.0.0 (13/11/2026)
 - fix genotyping error (-G): rows of the error matrix are now normalized, so the erroneous base is drawn with the intended probabilities
 - fix allelic dropout (-P/-Q): ADO rates now vary correctly between cells and between sites

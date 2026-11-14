@@ -261,7 +261,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">CellCoal manual v2.0</h1>
 <h4 class="author">David Posada</h4>
-<h4 class="date">November, 2026 (CellCoal 2.0.0)</h4>
+<h4 class="date">November, 2026 (CellCoal 2.0.1)</h4>
 
 </div>
 
@@ -291,8 +291,8 @@ p.caption {
 <div id="getting-started" class="section level1">
 <h1>3. Getting started</h1>
 <ol style="list-style-type: decimal">
-<li><p><strong>Download</strong>: get the program from the GitHub repository at <a href="https://github.com/dapogon/cellcoal" class="uri">https://github.com/dapogon/cellcoal</a>. Under the Code tab you will see a section call <em>release</em>. Click on it download the source code in .zip (or tar.gz) format. Then unzip the <em>cellcoal-x.y.z.zip</em> file (for example, cellcoal-2.0.0.zip). You should see now a folder called <em>cellcoal-x.y.z</em>. Move into the folder to compile and run the program.</p></li>
-<li><p><strong>Compile</strong>: type <code>make</code>. The program should compile without much problem in Linux/MacOSX. A <em>Makefile</em> is provided for the gcc compiler. The executable file will be located in the <em>bin</em> folder (e.g., <code>bin/cellcoal-2.0.0</code>). The Makefile detects OpenMP support automatically (see section 4.1): it uses <code>-fopenmp</code> when the compiler supports it and, on macOS, Homebrew's <code>libomp</code> if it is installed (<code>brew install libomp</code>); otherwise the program is compiled single-threaded, with identical results. To compile without OpenMP type <code>make OMPFLAG=</code>. Compilation flags include <code>-O3 -ffp-contract=off -fno-math-errno</code>; please do not add <code>-ffast-math</code> or <code>-march=native</code> if you need identical results across machines.</p></li>
+<li><p><strong>Download</strong>: get the program from the GitHub repository at <a href="https://github.com/dapogon/cellcoal" class="uri">https://github.com/dapogon/cellcoal</a>. Under the Code tab you will see a section call <em>release</em>. Click on it download the source code in .zip (or tar.gz) format. Then unzip the <em>cellcoal-x.y.z.zip</em> file (for example, cellcoal-2.0.1.zip). You should see now a folder called <em>cellcoal-x.y.z</em>. Move into the folder to compile and run the program.</p></li>
+<li><p><strong>Compile</strong>: type <code>make</code>. The program should compile without much problem in Linux/MacOSX. A <em>Makefile</em> is provided for the gcc compiler. The executable file will be located in the <em>bin</em> folder (e.g., <code>bin/cellcoal-2.0.1</code>). The Makefile detects OpenMP support automatically (see section 4.1): it uses <code>-fopenmp</code> when the compiler supports it and, on macOS, Homebrew's <code>libomp</code> if it is installed (<code>brew install libomp</code>); otherwise the program is compiled single-threaded, with identical results. To compile without OpenMP type <code>make OMPFLAG=</code>. Compilation flags include <code>-O3 -ffp-contract=off -fno-math-errno</code>; please do not add <code>-ffast-math</code> or <code>-march=native</code> if you need identical results across machines.</p></li>
 <li><p><strong>Run</strong>: <code>bin/cellcoal-x.y.z</code>. In this case, the program arguments will be read from a file called <em>parameters</em>. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.</p></li>
 <li><p><strong>Inspect results</strong>: Once the run is finished, different output files will be written by default inside a folder called <em>Results</em>.</p></li>
 </ol>
@@ -314,7 +314,7 @@ p.caption {
 <div id="parallel-execution-and-reproducibility" class="section level2">
 <h2>4.1 Parallel execution and reproducibility</h2>
 <p>Since version 2.0.0 CellCoal uses OpenMP to generate read counts and to print the VCF file in parallel. The number of threads is controlled with the environment variable <code>OMP_NUM_THREADS</code>, for example:</p>
-<pre><code>OMP_NUM_THREADS=4 bin/cellcoal-2.0.0 -Fexamples/parameters.GTR.reads</code></pre>
+<pre><code>OMP_NUM_THREADS=4 bin/cellcoal-2.0.1 -Fexamples/parameters.GTR.reads</code></pre>
 <p>If the variable is not set, OpenMP uses all the available cores. Use <code>OMP_NUM_THREADS=1</code> to run on a single core.</p>
 <p>The genotype likelihoods of SNV sites can be kept in memory to avoid recalculating them when printing. The amount of memory used for this cache can be set, in megabytes, with the environment variable <code>CELLCOAL_GL_CACHE_MB</code> (default 256; 0 disables the cache). This setting only affects speed and memory, never the results.</p>
 <blockquote>
@@ -998,7 +998,9 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 </ul>
 <h2>8.3 Speed and memory</h2>
 <p>In a test with 300 cells, 3000 sites, genotype likelihoods, ADO, doublets and one replicate, version 1.3.4 needed 17-19 s and about 1 GB of memory, whereas version 2.0.0 needs about 4.9 s and 134 MB with one thread, and about 3.4 s with two threads. The improvements include a compact storage of genotype likelihoods, a memory-limited cache of likelihoods (<code>CELLCOAL_GL_CACHE_MB</code>), memoization of logarithms (exact), faster VCF formatting, and OpenMP parallelization of read generation and VCF printing (<code>OMP_NUM_THREADS</code>).</p>
-<h2>8.4 Reproducibility</h2>
+<h2>8.4 Version 2.0.1</h2>
+<p>The per-cell, per-site data blocks are now allocated only when an option needs them (read counts, haplotypes, full genotypes, ancestors). Runs that print only SNV genotypes use about 66% less peak memory (for example, 695 MB to 236 MB with 500 cells and 20,000 sites) and are slightly faster, with identical output.</p>
+<h2>8.5 Reproducibility</h2>
 <p>Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.</p>
 </div>
 <div id="references" class="section level1">
