@@ -7782,7 +7782,7 @@ static void	PrintRunInformation (FILE *fp)
         else
             {
             fprintf (fp, "\n Mutation rate                                =   %2.1e", mutationRate);
-            fprintf (fp, "\n Population mutation parameter (4Nu2L)        =   %3.2f", theta);
+            fprintf (fp, "\n Population mutation parameter (4NuL)         =   %3.2f", theta);
             if (noisy > 1)
 				fprintf (fp, "\n Exp num mutation events [Ne=cte,ISMh]        =   %3.2f", expNumMU);
             }
