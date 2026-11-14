@@ -184,6 +184,13 @@ static int		sparseMode = 0;
 static Geno		**sparseCols = NULL;
 static int		numNodes = 0;
 static long		numSparseCols = 0;
+/* In sparse mode, ADO and genotyping errors are not written in the genomes (that would create a column for almost
+   every site): they are computed on the fly for the cells (see ObservedAllele) once obsActive is set. */
+static int			obsActive = 0;
+static Geno		ObservedAllele (int genome, int node, int site, Geno trueAllele);
+static void		SparseAllelicDropout (long int *seed);
+static void		SparseGenotypeError (long int *seed);
+static void		ResetObservationLayer (void);
 static Geno		*NewSparseColumn (int site);
 static void		DecideSparseMode (void);
 static void		ResetSparseColumns (void);
@@ -192,7 +199,10 @@ static inline Geno GetG (int genome, int node, int site)
 	if (__builtin_expect (sparseMode, 0) && node != OUTGROUP_ROOT)
 		{
 		Geno *c = sparseCols[site];
-		return c ? c[(long)genome * numNodes + node] : data[genome][OUTGROUP_ROOT][site];
+		Geno b = c ? c[(long)genome * numNodes + node] : data[genome][OUTGROUP_ROOT][site];
+		if (__builtin_expect (obsActive, 0) && node <= numCells)
+			return ObservedAllele (genome, node, site, b);
+		return b;
 		}
 	return data[genome][node][site];
 	}

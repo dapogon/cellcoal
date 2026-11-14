@@ -668,7 +668,10 @@ int main (int argc, char **argv)
  			numISMCNLOH = 0;
  
 			if (sparseMode == YES)
+				{
+				ResetObservationLayer ();
 				ResetSparseColumns ();
+				}
 
              /* assign ancestral states to all genomes */
             InitializeGenomes (healthyRoot, &seed);
@@ -760,11 +763,24 @@ int main (int argc, char **argv)
 
 			/* do alellic dropout */
 			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
-				AllelicDropout(&seed);
+				{
+				if (sparseMode == YES)
+					SparseAllelicDropout(&seed);
+				else
+					AllelicDropout(&seed);
+				}
 	
 			/* introduce errors directly in the genotypes */
 			if (meanGenotypingError > 0)
-				GenotypeError(&seed);
+				{
+				if (sparseMode == YES)
+					SparseGenotypeError(&seed);
+				else
+					GenotypeError(&seed);
+				}
+
+			if (sparseMode == YES)
+				obsActive = YES;	/* from now on the cell genotypes are observed with ADO and errors */
 	
 			/* generate NGS read counts */
 			if (doNGS == YES)
@@ -937,6 +953,7 @@ int main (int argc, char **argv)
 			free (data);
 			if (sparseMode == YES)
 				{
+				ResetObservationLayer ();
 				ResetSparseColumns ();
 				free (sparseCols);
 				sparseCols = NULL;
@@ -2192,6 +2209,203 @@ void RecordTriNucObservation (TriNucStr *trin, int site)
   	}
 
 
+
+
+/********************************** Observation layer (sparse mode) ***********************************/
+/* In sparse mode ADO and genotyping errors are not stored in the genomes. ADO is a function of a hash of
+   (genome, cell, site), compared with the ADO rate of the genotype, and genotyping errors are a sparse list of
+   events per site. Only the sites that vary (or have an error) need to be examined: the other sites are identical
+   to the root in all the cells. Note that the random numbers differ from those of the dense mode. */
+
+typedef struct { int cell; signed char m, p; } ErrEv;	/* new maternal/paternal alleles (-1: unchanged) */
+
+static int			sparseADO = 0;
+static double		sparseAdoFixed = 0.0, *sparseAdoCell = NULL, *sparseAdoSite = NULL;
+static uint64_t	sparseAdoBase = 0;
+static ErrEv		**errEv = NULL;
+static int			*errCount = NULL, *errCap = NULL;
+static long		totalErrEv = 0;
+
+static inline double HashUniform (uint64_t base, uint64_t a, uint64_t b)
+	{
+	uint64_t x = base ^ (a * 0x9E3779B97F4A7C15ULL) ^ ((b + 1) * 0xC2B2AE3D27D4EB4FULL);
+	(void) SplitMix64 (&x);
+	return (double)((SplitMix64 (&x) >> 11) + 0.5) * (1.0 / 9007199254740992.0);
+	}
+
+Geno ObservedAllele (int genome, int node, int site, Geno trueAllele)
+	{
+	double	rate, r;
+
+	if (trueAllele == DELETION)
+		return trueAllele;
+	if (sparseADO)
+		{
+		if (sparseAdoCell == NULL)
+			rate = sparseAdoFixed;
+		else
+			{
+			r = sparseAdoCell[node] + sparseAdoSite[site] - sparseAdoCell[node] * sparseAdoSite[site];
+			rate = 1.0 - sqrt (1.0 - r);
+			}
+		if (HashUniform (sparseAdoBase, (uint64_t) node * 2 + genome, (uint64_t) site) < rate)
+			return ADO;
+		}
+	if (errCount != NULL && errCount[site] > 0)
+		{
+		int lo = 0, hi = errCount[site] - 1;
+		while (lo <= hi)
+			{
+			int mid = (lo + hi) / 2;
+			if (errEv[site][mid].cell == node)
+				{
+				int ns = (genome == MATERNAL) ? errEv[site][mid].m : errEv[site][mid].p;
+				return (ns >= 0) ? (Geno) ns : trueAllele;
+				}
+			if (errEv[site][mid].cell < node)
+				lo = mid + 1;
+			else
+				hi = mid - 1;
+			}
+		}
+	return trueAllele;
+	}
+
+void ResetObservationLayer (void)
+	{
+	long	site;
+
+	obsActive = NO;
+	sparseADO = NO;
+	free (sparseAdoCell);
+	free (sparseAdoSite);
+	sparseAdoCell = sparseAdoSite = NULL;
+	if (errEv != NULL)
+		{
+		for (site=0; site<numSites; site++)
+			free (errEv[site]);
+		free (errEv);
+		free (errCount);
+		free (errCap);
+		errEv = NULL;
+		errCount = errCap = NULL;
+		}
+	totalErrEv = 0;
+	}
+
+void SparseAllelicDropout (long int *seed)
+	{
+	int i, j;
+
+	sparseAdoBase = ((uint64_t)(RandomUniform (seed) * 4294967296.0) << 32) | (uint64_t)(RandomUniform (seed) * 4294967296.0);
+	if (doADOcell == NO && doADOsite == NO)
+		sparseAdoFixed = 1.0 - sqrt (1.0 - fixedADOrate);	/* ADO rate of an allele */
+	else
+		{
+		sparseAdoCell = (double*) calloc (numCells+1, sizeof(double));
+		sparseAdoSite = (double*) calloc (numSites, sizeof(double));
+		if (!sparseAdoCell || !sparseAdoSite)
+			{
+			fprintf (stderr, "Could not allocate the ADO cell/site rate structures\n");
+			exit (-1);
+			}
+		for (i=0; i<numCells+1; i++)
+			sparseAdoCell[i] = (doADOcell == YES) ? RandomBetaMeanVar(meanADOcell, varADOcell, seed) : 0;
+		for (j=0; j<numSites; j++)
+			sparseAdoSite[j] = (doADOsite == YES) ? RandomBetaMeanVar(meanADOsite, varADOsite, seed) : 0;
+		}
+	sparseADO = YES;
+	}
+
+/* Genotyping errors: a genotype has an error with probability G (its genotyping error), where G ~ Beta(mean, var)
+   is drawn for every genotype, and then each allele has an error with probability a = 1 - sqrt(1-G). The genotypes
+   with an error are therefore selected with probability E[G] = mean, with G distributed as the size-biased Beta
+   (shape1 + 1, shape2) among them, and, given that the genotype has an error, both alleles are changed with
+   probability a^2/G and only the maternal (or only the paternal) one with probability a(1-a)/G each. */
+void SparseGenotypeError (long int *seed)
+	{
+	int		i, j, cell, site, k, ns;
+	double	normEij[4][4], rowSum, ss, shape1, shape2, g, a, u, pBoth, pOne, g1, g2, N, idx, logq;
+	int		newAllele[2];
+
+	for (i=0; i<4; i++)
+		{
+		rowSum = Eij[i][0] + Eij[i][1] + Eij[i][2] + Eij[i][3];
+		for (j=0; j<4; j++)
+			normEij[i][j] = (rowSum > 0.0) ? Eij[i][j] / rowSum : 0.0;
+		}
+	ss = (varGenotypingError > 0.0) ? (meanGenotypingError * (1.0 - meanGenotypingError) / varGenotypingError) - 1.0 : 0.0;
+	shape1 = meanGenotypingError * ss;
+	shape2 = (1.0 - meanGenotypingError) * ss;
+
+	errEv = (ErrEv **) calloc (numSites, sizeof(ErrEv *));
+	errCount = (int *) calloc (numSites, sizeof(int));
+	errCap = (int *) calloc (numSites, sizeof(int));
+	if (!errEv || !errCount || !errCap)
+		{
+		fprintf (stderr, "Could not allocate the genotyping error structures\n");
+		exit (-1);
+		}
+
+	N = (double)(numCells + 1) * (double) numSites;
+	logq = log1p (-meanGenotypingError);
+	idx = -1.0;
+	while (1)
+		{
+		idx += floor (log (RandomUniform (seed)) / logq) + 1.0;	/* geometric skip to the next genotype with an error */
+		if (idx >= N)
+			break;
+		cell = (int)(idx / numSites);
+		site = (int)(idx - (double) cell * numSites);
+
+		if (ss > 0.0)
+			{
+			g1 = RandomGamma (shape1 + 1.0, seed);
+			g2 = RandomGamma (shape2, seed);
+			g = g1 / (g1 + g2);
+			}
+		else
+			g = meanGenotypingError;
+		a = 1.0 - sqrt (1.0 - g);
+		pBoth = a * a / g;
+		pOne = a * (1.0 - a) / g;
+		u = RandomUniform (seed);
+		newAllele[0] = newAllele[1] = -1;
+		for (k=0; k<2; k++)
+			{
+			int change = (k == 0) ? (u < pBoth + pOne) : (u < pBoth || u >= pBoth + pOne);
+			Geno b;
+			if (!change)
+				continue;
+			b = GetG ((k == 0) ? MATERNAL : PATERNAL, cell, site);	/* true allele (the layer is not active yet) */
+			if (b == DELETION)
+				continue;
+			if (alphabet == DNA)
+				ns = ChooseUniformState (normEij[b], seed);
+			else
+				ns = (b == 0) ? 1 : (b == 1 ? 0 : -1);
+			newAllele[k] = ns;
+			}
+		if (newAllele[0] < 0 && newAllele[1] < 0)
+			continue;
+		if (errCount[site] == errCap[site])
+			{
+			errCap[site] = errCap[site] ? 2 * errCap[site] : 4;
+			errEv[site] = (ErrEv *) realloc (errEv[site], errCap[site] * sizeof(ErrEv));
+			if (!errEv[site])
+				{
+				fprintf (stderr, "Could not allocate the genotyping error events\n");
+				exit (-1);
+				}
+			}
+		errEv[site][errCount[site]].cell = cell;
+		errEv[site][errCount[site]].m = (signed char) newAllele[0];
+		errEv[site][errCount[site]].p = (signed char) newAllele[1];
+		errCount[site]++;
+		totalErrEv++;
+		allSites[site].hasGenotypeError = YES;
+		}
+	}
 
 
 /********************************** DecideSparseMode ***********************************/
@@ -3641,33 +3855,15 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
-	double alleleADOrateMean = 0.0, *ADOrateCell, *ADOrateSite;
-	double **alleleADOrate;
+	double alleleADOrateMean = 0.0, *ADOrateCell = NULL, *ADOrateSite = NULL;
+	double alleleRate, cellSiteRate;
 
-	/* allocate space for the ADO rates */
-	alleleADOrate = (double**) calloc (numCells+1, sizeof(double*));
-	if (!alleleADOrate)
-		{
-		fprintf (stderr, "Could not allocate the alleleADOrate structure\n");
-		exit (-1);
-		}
-	for (i=0; i<numCells+1; i++)
-		{
-		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double));
-		if (!alleleADOrate[i])
-			{
-			fprintf (stderr, "Could not allocate the alleleADOrate[i] structure\n");
-			exit (-1);
-			}
-		}
-
-	// fixed ADO rate
+	/* The rate of each genotype is computed on the fly from the rate of its cell and the rate of its site,
+	   so that no cells x sites matrix of rates has to be stored. */
 	if (doADOcell == NO && doADOsite == NO)
 		{
+		// fixed ADO rate
 		alleleADOrateMean = 1.0 - sqrt (1.0 - fixedADOrate);
-		for (i=0; i<numCells+1; i++)
-			for (j=0; j<numSites; j++)
-				alleleADOrate[i][j] = alleleADOrateMean;
 		}
 	else // variable ADO rates
 		{
@@ -3686,31 +3882,22 @@ void AllelicDropout (long int *seed)
 			ADOrateCell[i] = (doADOcell == YES) ? RandomBetaMeanVar(meanADOcell, varADOcell, seed) : 0;
 		for (j=0; j<numSites; j++)
 			ADOrateSite[j] = (doADOsite == YES) ? RandomBetaMeanVar(meanADOsite, varADOsite, seed) : 0;
-		for (i=0; i<numCells+1; i++)
-			{
-			for (j=0; j<numSites; j++)
-				{
-				alleleADOrate[i][j] = ADOrateCell[i] + ADOrateSite[j] - (ADOrateCell[i] * ADOrateSite[j]);
-				alleleADOrate[i][j] = 1.0 - sqrt (1.0 - alleleADOrate[i][j]); // at the allele level
-				}
-			}
-		free (ADOrateCell);
-		free (ADOrateSite);
 		}
-	
 
-/*	for (i=0; i<numCells+1; i++)
-		for (j=0; j<numSites; j++)
-			fprintf (stderr, "\ncell %d  site %d  alleleADOrate[i][j] = %6.4f", i+1, j+1, alleleADOrate[i][j]);
-*/
-	
 	for (i=0; i<numCells+1; i++)
 		{
 		for (j=0; j<numSites; j++)
 			{
+			if (ADOrateCell == NULL)
+				alleleRate = alleleADOrateMean;
+			else
+				{
+				cellSiteRate = ADOrateCell[i] + ADOrateSite[j] - (ADOrateCell[i] * ADOrateSite[j]);
+				alleleRate = 1.0 - sqrt (1.0 - cellSiteRate); // at the allele level
+				}
 			if (GetG(MATERNAL, i, j) != DELETION)
 				{
-				if (RandomUniform(seed) < alleleADOrate[i][j])
+				if (RandomUniform(seed) < alleleRate)
 					{
 					SetG(MATERNAL, i, j, ADO);
 					allSites[j].hasADO = YES;
@@ -3718,7 +3905,7 @@ void AllelicDropout (long int *seed)
 				}
 			if (GetG(PATERNAL, i, j) != DELETION)
 				{
-				if (RandomUniform(seed) < alleleADOrate[i][j])
+				if (RandomUniform(seed) < alleleRate)
 					{
 					SetG(PATERNAL, i, j, ADO);
 					allSites[j].hasADO = YES;
@@ -3726,11 +3913,9 @@ void AllelicDropout (long int *seed)
 				}
 			}
 		}
-	
-	// free allele ADO rates
-	for (i=0; i<numCells+1; i++)
-		free(alleleADOrate[i]);
-	free(alleleADOrate);
+
+	free (ADOrateCell);
+	free (ADOrateSite);
 	}
 
 
@@ -4005,9 +4190,9 @@ int CountAllelesInObservedGenotypes (void)
 			for (site=s0; site<s1; site++)
 				{
 				Geno *c = sparseCols[site];
-				if (c == NULL)
+				if (c == NULL && !(errCount != NULL && errCount[site] > 0))
 					{
-					/* all the nodes are identical to the root */
+					/* all the cells are identical to the root (ADO at these sites is not counted) */
 					cnt[slot[data[MATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
 					cnt[slot[data[PATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
 					}
@@ -4015,8 +4200,8 @@ int CountAllelesInObservedGenotypes (void)
 					{
 					for (cell=0; cell<numCells+1; cell++)
 						{
-						cnt[slot[c[cell]+9]][site-s0]++;
-						cnt[slot[c[numNodes+cell]+9]][site-s0]++;
+						cnt[slot[GetG(MATERNAL, cell, site)+9]][site-s0]++;
+						cnt[slot[GetG(PATERNAL, cell, site)+9]][site-s0]++;
 						}
 					}
 				}
