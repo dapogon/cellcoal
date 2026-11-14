@@ -734,7 +734,7 @@ p\left(b|A\right) = \sum_{\substack{j = 1 \\ j \neq A}}^{4}{p\left( t_{j} \middl
 <p><strong>A# # #: amplification error (mean, variance, model): double [0-1] double (0-inf) int [0/1]</strong></p>
 <p>Expected <em>Beta-binomial</em> probability (<em>mean</em>) of introducing an amplification error per read per site, plus the <em>variance</em> of this error across sites, plus the amplification model (0: four-template-model; 1: two-template model). For DNA data, the specific amplification error is selected according to the error matrix (option -X).</p>
 <p><strong>B#: doublet rate per cell: double [0-1] double (0-inf)</strong></p>
-<p>Probability of a doublet per cell, which follows a <em>Beta-binomial</em> distribution with <em>mean</em> and <em>variance</em> specified by the user.</p>
+<p>Probability of a doublet per cell, which follows a <em>Beta-binomial</em> distribution with <em>mean</em> and <em>variance</em> specified by the user. Doublets are simulated at the level of the sequencing reads, so this option only has an effect when reads are simulated (option -C).</p>
 </div>
 <div id="genotyping-parameters" class="section level2">
 <h2>6.5 Genotyping parameters</h2>

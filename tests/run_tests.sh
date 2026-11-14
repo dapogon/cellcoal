@@ -53,5 +53,36 @@ echo "4. Reproducibility"
 for r in 1 2; do mkdir -p "$TMP/r$r"; (cd "$TMP/r$r" && "$BIN" $A >out.txt 2>&1); done
 [ "$(norm "$TMP/r1/Results" | md5sum)" = "$(norm "$TMP/r2/Results" | md5sum)" ] && ok "same seed, same output" || bad "same seed, same output"
 
+echo "5. Option rates match the requested values (statistical, loose tolerances)"
+cat > "$TMP/rates.py" <<'PY'
+import sys
+# usage: rates.py <Results dir> -> prints the fraction of true heterozygous genotypes changed by
+# the observation process, the fraction of all genotypes changed, and the fraction of het with both alleles lost
+d=sys.argv[1]
+sg=open(d+'/snv_gen').read().split('\n')
+k=int(sg[2].split()[1]); sites=list(map(int,sg[3].split()))
+obs={l.split()[0]:l.split()[1:] for l in sg[4:] if l.strip()}
+seq={l.split()[0]:l.split()[1] for l in open(d+'/true_hap').read().split('\n')[3:] if l.strip()}
+het=chg=tot=chgall=miss=0
+for c,g in obs.items():
+    if c=='outgcell': continue
+    for si,s in enumerate(sites):
+        t=seq[c+'m'][s-1]+seq[c+'p'][s-1]; tot+=1; chgall+=(g[si]!=t)
+        if t[0]!=t[1]:
+            het+=1; chg+=(g[si]!=t); miss+=(g[si]=='??')
+print(round(chg/het,4), round(chgall/tot,4), round(miss/het,4))
+PY
+close() { python3 -c "import sys; sys.exit(0 if abs($1-$2)<=$3 else 1)"; }
+M="-n1 -s30 -l3000 -u3e-6 -e10000 -g0 -b1 -1 -Y -#5"
+mkdir -p "$TMP/ado" "$TMP/gen" "$TMP/fj"
+(cd "$TMP/ado" && "$BIN" $M -D0.3 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/ado/Results"))
+close ${r[0]} 0.30 0.03 && ok "fixed ADO (-D0.3): ${r[0]} changed het genotypes (expected 0.30)" || bad "fixed ADO: ${r[0]} (expected 0.30)"
+close ${r[2]} 0.027 0.012 && ok "ADO both alleles: ${r[2]} (expected 0.027)" || bad "ADO both alleles: ${r[2]} (expected 0.027)"
+(cd "$TMP/gen" && "$BIN" $M -G0.1 0.001 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/gen/Results"))
+close ${r[1]} 0.10 0.01 && ok "genotyping error (-G0.1): ${r[1]} (expected 0.10)" || bad "genotyping error: ${r[1]} (expected 0.10)"
+(cd "$TMP/fj" && "$BIN" -n20 -s20 -l1000 -u1e-6 -e10000 -g0 -b1 -j50 -y1 -#5 >out.txt 2>&1)
+m=$(strings "$TMP/fj/Results/log" | grep "Mean number of mutation events" | awk '{print $NF}')
+[ "$m" = "50.00" ] && ok "fixed number of mutations (-j50): $m" || bad "fixed number of mutations: $m (expected 50.00)"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
