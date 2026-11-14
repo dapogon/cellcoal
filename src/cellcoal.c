@@ -176,7 +176,7 @@ Version 1.1.0 (18/10/2019)
 
 /* The per-cell/per-site blocks (cell[i].site[j], 48 bytes each) are only needed for read counts
    (NGS, doublets, VCF/CATG/PILEUP) and for haplotype/full-genotype/ancestor outputs. Without them,
-   SNV genotypes are printed from data[][][], and allocating (cells+1) x sites blocks anyway costs
+   SNV genotypes are printed from the genome data, and allocating (cells+1) x sites blocks anyway costs
    e.g. ~2.4 GB for 1000 cells x 50000 sites. */
 #define NEED_CELL_SITES (doNGS == YES || doPrintSNVhaplotypes == YES || doPrintTrueHaplotypes == YES || \
                          doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || \
@@ -571,7 +571,9 @@ int main (int argc, char **argv)
             PrintTimes (0, fpTimes);
  
  
-	/* allocate genotype data to be stored in data[genome][cell][site] */
+	DecideSparseMode ();
+
+	/* allocate genotype data (see GetG and SetG) */
         data = (Geno ***) calloc (ploidy, sizeof(Geno **));
         if (!data)
             {
@@ -588,12 +590,24 @@ int main (int argc, char **argv)
                 }
             for (j=0; j<2*numCells+1; j++)
                 {
+                if (sparseMode == YES && j != OUTGROUP_ROOT)
+                    continue;	/* in sparse mode only the genome of the root is stored densely */
                 data[i][j] = (Geno *) calloc (numSites, sizeof(Geno));
                 if (!data[i][j])
                     {
                     fprintf (stderr, "Could not allocate the data[][] structure\n");
                     exit (-1);
                     }
+                }
+            }
+        if (sparseMode == YES)
+            {
+            numNodes = 2*numCells+1;
+            sparseCols = (Geno **) calloc (numSites, sizeof(Geno *));
+            if (!sparseCols)
+                {
+                fprintf (stderr, "Could not allocate the sparseCols structure\n");
+                exit (-1);
                 }
             }
 
@@ -653,6 +667,9 @@ int main (int argc, char **argv)
 			numISMdeletions = 0;
  			numISMCNLOH = 0;
  
+			if (sparseMode == YES)
+				ResetSparseColumns ();
+
              /* assign ancestral states to all genomes */
             InitializeGenomes (healthyRoot, &seed);
 			
@@ -729,8 +746,8 @@ int main (int argc, char **argv)
 			for (i=0; i<numCells+1; i++)
 				for (j=0; j<numSites; j++)
 					{
-					cell[i].site[j].trueMaternalAllele = data[MATERNAL][i][j];
-					cell[i].site[j].truePaternalAllele = data[PATERNAL][i][j];
+					cell[i].site[j].trueMaternalAllele = GetG(MATERNAL, i, j);
+					cell[i].site[j].truePaternalAllele = GetG(PATERNAL, i, j);
 					}
 
 			/* print reference haplotypes without errors */
@@ -839,9 +856,9 @@ int main (int argc, char **argv)
             for (j=0; j<numSites; j++)
                 for (i=0; i<numCells; i++)
                     {
-                    if (data[0][i][j] == 1)
+                    if (GetG(0, i, j) == 1)
                         SiteMut[j]++;
-                    if (data[1][i][j] == 1)
+                    if (GetG(1, i, j) == 1)
                         SiteMut[j]++;
                      }
             for (j=0; j<numSites; j++)
@@ -914,10 +931,16 @@ int main (int argc, char **argv)
 			for (i=0; i<ploidy; i++)
                 {
                 for (j=0; j<2*numCells+1; j++)
-                    free (data[i][j]);
+                    free (data[i][j]);	/* NULL in sparse mode, except for the root */
                 free (data[i]);
                 }
 			free (data);
+			if (sparseMode == YES)
+				{
+				ResetSparseColumns ();
+				free (sparseCols);
+				sparseCols = NULL;
+				}
 
 			if (doTreeRateSwitches == YES)
 				free (treeRateInfo);
@@ -2024,7 +2047,9 @@ void InitializeGenomes (TreeNode *p, long int *seed)
     if (p != NULL)
         {
         cell = p->label;
-        if (alphabet == DNA)
+        if (sparseMode == YES && p->isHealthyRoot == NO)
+            ;	/* sparse mode: nodes are identical to the root until they are modified */
+        else if (alphabet == DNA)
             {
             if (p->isHealthyRoot == YES)
                 {
@@ -2032,9 +2057,9 @@ void InitializeGenomes (TreeNode *p, long int *seed)
 					{
 					for (site=0; site<numSites; site++) /* initialize genome with the user provided sequences */
 						{
-						data[MATERNAL][cell][site] = WhichNucChar(maternalUserGenome[site]);
-						data[PATERNAL][cell][site] = WhichNucChar(paternalUserGenome[site]);
-						allSites[site].referenceAllele = data[MATERNAL][cell][site];   // then allSites[site].referenceAllele hosts the reference genome
+						SetG(MATERNAL, cell, site, WhichNucChar(maternalUserGenome[site]));
+						SetG(PATERNAL, cell, site, WhichNucChar(paternalUserGenome[site]));
+						allSites[site].referenceAllele = GetG(MATERNAL, cell, site);   // then allSites[site].referenceAllele hosts the reference genome
 						}
 					}
   				else if (doGeneticSignatures == NO) /* initialize genome with mononucleotide frequencies */
@@ -2046,7 +2071,7 @@ void InitializeGenomes (TreeNode *p, long int *seed)
 							{
 							if (ran <= cumfreq[i])
 								{
-								allSites[site].referenceAllele = data[MATERNAL][cell][site] = data[PATERNAL][cell][site] = i;
+								allSites[site].referenceAllele = SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, i));
 								// then allSites[site].referenceAllele hosts the reference genome
 								break;
 								}
@@ -2063,14 +2088,14 @@ void InitializeGenomes (TreeNode *p, long int *seed)
                 anccell = p->anc->label;
                 for (site=0; site<numSites; site++)
                     {
-                    data[MATERNAL][cell][site] = data[MATERNAL][anccell][site];
-                    data[PATERNAL][cell][site] = data[PATERNAL][anccell][site];
+                    SetG(MATERNAL, cell, site, GetG(MATERNAL, anccell, site));
+                    SetG(PATERNAL, cell, site, GetG(PATERNAL, anccell, site));
                     }
                 }
              }
         else /* binary alphabet */
             for (site=0; site<numSites; site++)
-                data[MATERNAL][cell][site] = data[PATERNAL][cell][site] = 0;
+                SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, 0));
 
         InitializeGenomes (p->left, seed);
         InitializeGenomes (p->right, seed);
@@ -2116,11 +2141,11 @@ void SimulateTriNucFreqGenome (int cell, long int *seed)
 	//fprintf (stderr, "\n%2d %c%c%c ", chosenTriNucleotide, WhichNuc(n1), WhichNuc(n2), WhichNuc(n3));
 
 	site = 0;
-	data[MATERNAL][cell][site] = data[PATERNAL][cell][site] = allSites[site].referenceAllele = n1;
+	SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = n1));
 	site++;
-	data[MATERNAL][cell][site] = data[PATERNAL][cell][site] = allSites[site].referenceAllele = n2;
+	SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = n2));
 	site++;
-	data[MATERNAL][cell][site] = data[PATERNAL][cell][site] = allSites[site].referenceAllele = n3;
+	SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = n3));
 	
 	/* fill the rest of the genome */
 	/* choose next nucleotide given the last two bases of the previous trinucleotide  */
@@ -2134,7 +2159,7 @@ void SimulateTriNucFreqGenome (int cell, long int *seed)
 			prob4[k] = triNucFreq[trinuc(n2,n3,k)] / sum;
 		
 		nextNucleotide = ChooseUniformState(prob4, seed);
-		data[MATERNAL][cell][site] = data[PATERNAL][cell][site] = allSites[site].referenceAllele = nextNucleotide;
+		SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = nextNucleotide));
 
 		/* move downstream one position */
 		n1 = n2;
@@ -2169,22 +2194,95 @@ void RecordTriNucObservation (TriNucStr *trin, int site)
 
 
 
+/********************************** DecideSparseMode ***********************************/
+/* Sparse genome storage is used when the dense genome matrices would need too much memory
+   (more than CELLCOAL_DENSE_MB megabytes, 2048 by default), or when it is requested with
+   the environment variable CELLCOAL_SPARSE=1 (CELLCOAL_SPARSE=0 forces dense storage). */
+void DecideSparseMode (void)
+	{
+	char	*env;
+	double	denseMB, limitMB = 2048.0;
+	int		force = -1;
+
+	sparseMode = NO;
+	if ((env = getenv ("CELLCOAL_SPARSE")) != NULL && *env != '\0')
+		force = (atoi (env) != 0);
+	if ((env = getenv ("CELLCOAL_DENSE_MB")) != NULL && atof (env) > 0)
+		limitMB = atof (env);
+
+	denseMB = (double) ploidy * (2.0 * numCells + 1.0) * (double) numSites / 1048576.0;
+
+	if (force == 1 || (force == -1 && denseMB > limitMB))
+		sparseMode = YES;
+
+	if (sparseMode == YES && doNGS == YES)
+		{
+		if (force == 1)
+			{
+			fprintf (stderr, "\nERROR: sparse genome storage does not support simulating reads yet. Unset CELLCOAL_SPARSE or do not use -C.\n");
+			exit (-1);
+			}
+		sparseMode = NO;	/* automatic choice: keep dense storage */
+		}
+	if (sparseMode == YES && noisy > 1)
+		fprintf (stderr, "\nUsing sparse genome storage (dense genomes would need %.0f MB)\n", denseMB);
+	}
+
+
+/********************************** ResetSparseColumns ***********************************/
+void ResetSparseColumns (void)
+	{
+	long	site;
+
+	if (sparseCols == NULL)
+		return;
+	for (site=0; site<numSites; site++)
+		{
+		free (sparseCols[site]);
+		sparseCols[site] = NULL;
+		}
+	numSparseCols = 0;
+	}
+
+
+/********************************** NewSparseColumn ***********************************/
+/* Allocate the column of a site that starts to vary in sparse mode: all the nodes get the genotype of the root */
+Geno *NewSparseColumn (int site)
+	{
+	Geno	*c;
+	long	n = (long) numNodes;
+
+	c = (Geno *) malloc (2 * n);
+	if (!c)
+		{
+		fprintf (stderr, "\n\nERROR: not enough memory to store the genotypes of site %d (%ld sites vary so far, %.0f MB).\n", site+1, numSparseCols, (double) numSparseCols * 2.0 * n / 1048576.0);
+		fprintf (stderr, "Try a smaller mutation rate, fewer cells or sites.\n");
+		exit (-1);
+		}
+	memset (c, data[MATERNAL][OUTGROUP_ROOT][site], n);
+	memset (c + n, data[PATERNAL][OUTGROUP_ROOT][site], n);
+	sparseCols[site] = c;
+	numSparseCols++;
+	return c;
+	}
+
+
 /********************************** InheritRootGenome ***********************************/
 /* Copy the genomes of the healthy root (with germline variation) to all its descendants */
 void InheritRootGenome (TreeNode *p)
     {
     int cell, anccell, site;
 
-    if (p == NULL)
-        return;
+    if (p == NULL || sparseMode == YES)
+        return;	/* in sparse mode all nodes inherit the root genome implicitly */
     if (p->isHealthyRoot == NO)
         {
         cell = p->label;
         anccell = p->anc->label;
         for (site=0; site<numSites; site++)
             {
-            data[MATERNAL][cell][site] = data[MATERNAL][anccell][site];
-            data[PATERNAL][cell][site] = data[PATERNAL][anccell][site];
+            SetG(MATERNAL, cell, site, GetG(MATERNAL, anccell, site));
+            SetG(PATERNAL, cell, site, GetG(PATERNAL, anccell, site));
             }
         }
     InheritRootGenome (p->left);
@@ -2210,16 +2308,16 @@ void AddGermlineVariation (long int *seed)
 				genome = PATERNAL;
 		
 			if (alphabet == BINARY)
-				data[genome][OUTGROUP_ROOT][site] = 1;
+				SetG(genome, OUTGROUP_ROOT, site, 1);
 			else // DNA mutation according to Mij matrix
 				{
-				current_state = data[genome][OUTGROUP_ROOT][site];
+				current_state = GetG(genome, OUTGROUP_ROOT, site);
 				ran = RandomUniform(seed) * cumMij[current_state][3];
                 for (j=0; j<4; j++)
                     {
 					if (ran <= cumMij[current_state][j])
                         {
-                        data[genome][OUTGROUP_ROOT][site] = j;
+                        SetG(genome, OUTGROUP_ROOT, site, j);
                         break;
                         }
 					}
@@ -2457,16 +2555,16 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
                 ((doISMhaploid == YES) && (genome == MATERNAL) && (allSites[site].numMutationsMaternal > 0)) ||
                 ((doISMhaploid == YES) && (genome == PATERNAL) && (allSites[site].numMutationsPaternal > 0)))
                 {
-                data[genome][cell][site] = data[genome][anccell][site];
+                SetG(genome, cell, site, GetG(genome, anccell, site));
                 }
             else /* => there will be change */
                 {
-                if (data[genome][anccell][site] == 0)  /* checking all this might be excessive */
-                    data[genome][cell][site] = 1;
-				else if (data[genome][anccell][site] == 1)
+                if (GetG(genome, anccell, site) == 0)  /* checking all this might be excessive */
+                    SetG(genome, cell, site, 1);
+				else if (GetG(genome, anccell, site) == 1)
                     {
 					if (allSites[site].isSNP == YES) // this is a germline mutation
-						data[genome][cell][site] = 0;
+						SetG(genome, cell, site, 0);
 					else
 						{
 						fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d cannot mutate twice under the ISM model", site, genome, cell);
@@ -2475,7 +2573,7 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
 					}
                 else
                     {
-                    fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model", site, genome, anccell, data[genome][anccell][site]);
+                    fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model", site, genome, anccell, GetG(genome, anccell, site));
                     exit(-1);
                     }
 					
@@ -2517,7 +2615,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
         else
             {
             anccell = p->anc->label;
-            ancstate = data[genome][anccell][site];
+            ancstate = GetG(genome, anccell, site);
             cumBranchLength += p->branchLength;
 				
             if ((cumBranchLength < uniform) || /* => there will be no change */
@@ -2525,7 +2623,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
                 ((doISMhaploid == YES) && (genome == MATERNAL) && (allSites[site].numMutationsMaternal > 0)) ||
                 ((doISMhaploid == YES) && (genome == PATERNAL) && (allSites[site].numMutationsPaternal > 0)))
                 {
-                data[genome][cell][site] = ancstate;
+                SetG(genome, cell, site, ancstate);
                 }
             else /* => there will be change */
                 {
@@ -2534,7 +2632,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
                     {
                     if (ran <= cumMij[ancstate][j])
                         {
-                        data[genome][cell][site] = j;
+                        SetG(genome, cell, site, j);
                         break;
                         }
 					}
@@ -2958,17 +3056,17 @@ void SimulateSignatureISMforSite (TreeNode *p, int genome, int site, int newStat
         else
             {
             anccell = p->anc->label;
-            ancState = data[genome][anccell][site];
+            ancState = GetG(genome, anccell, site);
             cumBranchLength += p->branchLength;
 				
             if (cumBranchLength < uniform || allSites[site].numMutations > 0)/* => there will be no change; forcing ISM diploid */
                 {
-                data[genome][cell][site] = ancState;
+                SetG(genome, cell, site, ancState);
  				//fprintf (stderr, "\ncopying ancstate %c", WhichNuc(ancstate));
                }
             else /* => there will be change */
                 {
-				data[genome][cell][site] = newState;
+				SetG(genome, cell, site, newState);
                 if (genome == MATERNAL)
                     allSites[site].numMutationsMaternal++;
                 else if (genome == PATERNAL)
@@ -3061,13 +3159,13 @@ void SimulateMk2forSite (TreeNode *p, int genome, int site, long int *seed)
 
 			uniform = RandomUniform(seed);
 			if (uniform >= probOfChange) /* => no change */
-				data[genome][cell][site] = data[genome][anccell][site];
+				SetG(genome, cell, site, GetG(genome, anccell, site));
 			else /* => there will be change */
 				{
-				if (data[genome][anccell][site] == 0)
-					data[genome][cell][site] = 1;
+				if (GetG(genome, anccell, site) == 0)
+					SetG(genome, cell, site, 1);
 				else
-					data[genome][cell][site] = 0;
+					SetG(genome, cell, site, 0);
 					
 				if (genome == MATERNAL)
 					allSites[site].numMutationsMaternal++;
@@ -3139,7 +3237,7 @@ void SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed
 			{
 			cell = p->label;
 			anccell = p->anc->label;
-			ancstate = data[genome][anccell][site];
+			ancstate = GetG(genome, anccell, site);
 	
 			if (doUserTree == YES)
 				branchLength = p->branchLength;
@@ -3152,7 +3250,7 @@ void SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed
 				}
 				
 			FillSubstitutionMatrix (Pij, branchLength);
-			newstate = data[genome][cell][site] = ChooseUniformState (Pij[ancstate], seed);
+			newstate = SetG(genome, cell, site, ChooseUniformState (Pij[ancstate], seed));
 			
 			if (newstate != ancstate)
 				{
@@ -3373,18 +3471,18 @@ void SimulateCNLOHforSite (TreeNode *p, int genome, int site, long int *seed)
                 ((genome == MATERNAL) && (allSites[site].numCNLOHmaternal > 0)) ||
                 ((genome == PATERNAL) && (allSites[site].numCNLOHpaternal > 0)))
                 {
-                data[genome][cell][site] = data[genome][anccell][site];
+                SetG(genome, cell, site, GetG(genome, anccell, site));
                 }
 			else /* => there will be a CN_LOH event */
                 {
 				if (genome == MATERNAL)
 					{
-					data[genome][cell][site] = data[PATERNAL][cell][site];
+					SetG(genome, cell, site, GetG(PATERNAL, cell, site));
 					allSites[site].numCNLOHmaternal++;
 					}
 				else
 					{
-					data[genome][cell][site] = data[MATERNAL][cell][site];
+					SetG(genome, cell, site, GetG(MATERNAL, cell, site));
 					allSites[site].numCNLOHpaternal++;
 					}
 
@@ -3497,20 +3595,20 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
                 ((genome == MATERNAL) && (allSites[site].numDeletionsMaternal > 0)) ||
                 ((genome == PATERNAL) && (allSites[site].numDeletionsPaternal > 0)))
                 {
-                data[genome][cell][site] = data[genome][anccell][site];
+                SetG(genome, cell, site, GetG(genome, anccell, site));
                 }
 			else /* => there will be a deletion */
                 {
-                if (data[genome][anccell][site] != DELETION)  /* checking all this might be excessive */
-                    data[genome][cell][site] = DELETION;
-                else if (data[genome][anccell][site] == DELETION)
+                if (GetG(genome, anccell, site) != DELETION)  /* checking all this might be excessive */
+                    SetG(genome, cell, site, DELETION);
+                else if (GetG(genome, anccell, site) == DELETION)
                     {
                     fprintf (stderr, "\n\n ERROR: site %d in genome %d of cell %d cannot be deleted twice under the ISM model\n", site, genome, cell);
                     exit(-1);
                     }
                 else
                     {
-                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model\n", site, genome, anccell, data[genome][anccell][site]);
+                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model\n", site, genome, anccell, GetG(genome, anccell, site));
                     exit(-1);
                     }
 					
@@ -3610,19 +3708,19 @@ void AllelicDropout (long int *seed)
 		{
 		for (j=0; j<numSites; j++)
 			{
-			if (data[MATERNAL][i][j] != DELETION)
+			if (GetG(MATERNAL, i, j) != DELETION)
 				{
 				if (RandomUniform(seed) < alleleADOrate[i][j])
 					{
-					data[MATERNAL][i][j] = ADO;
+					SetG(MATERNAL, i, j, ADO);
 					allSites[j].hasADO = YES;
 					}
 				}
-			if (data[PATERNAL][i][j] != DELETION)
+			if (GetG(PATERNAL, i, j) != DELETION)
 				{
 				if (RandomUniform(seed) < alleleADOrate[i][j])
 					{
-					data[PATERNAL][i][j] = ADO;
+					SetG(PATERNAL, i, j, ADO);
 					allSites[j].hasADO = YES;
 					}
 				}
@@ -3692,19 +3790,19 @@ void AllelicDropoutGamma (long int *seed)
 		{
 		for (j=0; j<numSites; j++)
 			{
-			if (data[MATERNAL][i][j] != DELETION)
+			if (GetG(MATERNAL, i, j) != DELETION)
 				{
 				if (RandomUniform(seed) < alleleADOrate[i][j])
 					{
-					data[MATERNAL][i][j] = ADO;
+					SetG(MATERNAL, i, j, ADO);
 					allSites[j].hasADO = YES;
 					}
 				}
-			if (data[PATERNAL][i][j] != DELETION)
+			if (GetG(PATERNAL, i, j) != DELETION)
 				{
 				if (RandomUniform(seed) < alleleADOrate[i][j])
 					{
-					data[PATERNAL][i][j] = ADO;
+					SetG(PATERNAL, i, j, ADO);
 					allSites[j].hasADO = YES;
 					}
 				}
@@ -3753,14 +3851,14 @@ void GenotypeError (long int *seed)
 				genotypingError = RandomBetaMeanVar(meanGenotypingError, varGenotypingError, seed);
 				alleleError = 1.0 - sqrt (1.0 -  genotypingError);
 
-				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
+				if (GetG(MATERNAL, i, j) != ADO && GetG(MATERNAL, i, j) != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[MATERNAL][i][j] = ChooseUniformState (normEij[data[MATERNAL][i][j]], seed);
+					SetG(MATERNAL, i, j, ChooseUniformState (normEij[GetG(MATERNAL, i, j)], seed));
 					allSites[j].hasGenotypeError = YES;
 					}
-				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
+				if (GetG(PATERNAL, i, j) != ADO && GetG(PATERNAL, i, j) != DELETION && RandomUniform(seed) < alleleError)
 					{
-					data[PATERNAL][i][j] = ChooseUniformState (normEij[data[PATERNAL][i][j]], seed);
+					SetG(PATERNAL, i, j, ChooseUniformState (normEij[GetG(PATERNAL, i, j)], seed));
 					allSites[j].hasGenotypeError = YES;
 					}
 				}
@@ -3774,20 +3872,20 @@ void GenotypeError (long int *seed)
 				{
 				genotypingError = RandomBetaMeanVar(meanGenotypingError, varGenotypingError, seed);
 				alleleError = 1.0 - sqrt (1.0 -  genotypingError);
-				if (data[MATERNAL][i][j] != ADO && data[MATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
+				if (GetG(MATERNAL, i, j) != ADO && GetG(MATERNAL, i, j) != DELETION && RandomUniform(seed) < alleleError)
 					{
-					if (data[MATERNAL][i][j] == 0)
-						data[MATERNAL][i][j] = 1;
-					else if (data[MATERNAL][i][j] == 1)
-						data[MATERNAL][i][j] = 0;
+					if (GetG(MATERNAL, i, j) == 0)
+						SetG(MATERNAL, i, j, 1);
+					else if (GetG(MATERNAL, i, j) == 1)
+						SetG(MATERNAL, i, j, 0);
 					allSites[j].hasGenotypeError = YES;
 					}
-				if (data[PATERNAL][i][j] != ADO && data[PATERNAL][i][j] != DELETION && RandomUniform(seed) < alleleError)
+				if (GetG(PATERNAL, i, j) != ADO && GetG(PATERNAL, i, j) != DELETION && RandomUniform(seed) < alleleError)
 					{
-					if (data[PATERNAL][i][j] == 0)
-						data[PATERNAL][i][j] = 1;
-					else if (data[PATERNAL][i][j] == 1)
-						data[PATERNAL][i][j] = 0;
+					if (GetG(PATERNAL, i, j) == 0)
+						SetG(PATERNAL, i, j, 1);
+					else if (GetG(PATERNAL, i, j) == 1)
+						SetG(PATERNAL, i, j, 0);
 					allSites[j].hasGenotypeError = YES;
 					}
 				}
@@ -3807,6 +3905,30 @@ int CountTrueVariants (void)
     int		nVariants = 0;
     char	*isVar;
     Geno	*matRoot, *patRoot, *mat, *pat;
+
+    if (sparseMode == YES)
+        {
+        /* only the sites with a column can differ from the root */
+        for (site=0; site<numSites; site++)
+            {
+            Geno *c = sparseCols[site];
+            Geno mr, pr;
+            if (c == NULL)
+                continue;
+            mr = data[MATERNAL][OUTGROUP_ROOT][site];
+            pr = data[PATERNAL][OUTGROUP_ROOT][site];
+            for (cell=0; cell<numCells+1; cell++)
+                {
+                if ((c[cell] != DELETION && c[cell] != mr) || (c[numNodes+cell] != DELETION && c[numNodes+cell] != pr))
+                    {
+                    allSites[site].isVariant = YES;
+                    variantSites[nVariants++] = site;
+                    break;
+                    }
+                }
+            }
+        return nVariants;
+        }
 
     /* cell-major traversal (genomes are stored contiguously per cell) */
     isVar = (char *) calloc (numSites, sizeof(char));
@@ -3878,6 +4000,28 @@ int CountAllelesInObservedGenotypes (void)
 		s1 = (s0 + BLK < numSites) ? s0 + BLK : numSites;
 		for (k=0; k<7; k++)
 			memset (cnt[k], 0, BLK * sizeof(int));
+		if (sparseMode == YES)
+			{
+			for (site=s0; site<s1; site++)
+				{
+				Geno *c = sparseCols[site];
+				if (c == NULL)
+					{
+					/* all the nodes are identical to the root */
+					cnt[slot[data[MATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
+					cnt[slot[data[PATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
+					}
+				else
+					{
+					for (cell=0; cell<numCells+1; cell++)
+						{
+						cnt[slot[c[cell]+9]][site-s0]++;
+						cnt[slot[c[numNodes+cell]+9]][site-s0]++;
+						}
+					}
+				}
+			}
+		else
 		for (cell=0; cell<numCells+1; cell++)
 			{
 			for (ch=0; ch<2; ch++)
@@ -4466,11 +4610,11 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	thereIsMaternalAllele = YES;
 	thereIsPaternalAllele = YES;
 	
-	maternalAllele = data[MATERNAL][i][j];
+	maternalAllele = GetG(MATERNAL, i, j);
 	if (maternalAllele == ADO || maternalAllele == DELETION)
 		thereIsMaternalAllele = NO;
 	
-	paternalAllele = data[PATERNAL][i][j];
+	paternalAllele = GetG(PATERNAL, i, j);
 	if (paternalAllele == ADO || paternalAllele == DELETION)
 		thereIsPaternalAllele = NO;
 	
@@ -6598,7 +6742,7 @@ static void PrintSNVGenotypes (FILE *fp)
 			for (j=0; j<numSNVs; j++)
 				{
 				if (doNGS == NO)
-					fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][i][SNVsites[j]]), WhichNuc(data[PATERNAL][i][SNVsites[j]]));
+					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, SNVsites[j])), WhichNuc(GetG(PATERNAL, i, SNVsites[j])));
 				else if (cell[i].hasDoublet == NO)
 					fprintf (fp, " %c%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAllele), WhichNuc(cell[i].site[SNVsites[j]].MLpatAllele));
 				else
@@ -6611,10 +6755,10 @@ static void PrintSNVGenotypes (FILE *fp)
             {
             fprintf (fp,"%s ", outRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][SNVsites[j]]),WhichNuc(data[PATERNAL][OUTGROUP_ROOT][SNVsites[j]]));
+				fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, OUTGROUP_ROOT, SNVsites[j])),WhichNuc(GetG(PATERNAL, OUTGROUP_ROOT, SNVsites[j])));
             fprintf (fp,"\n%s ", inRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][SNVsites[j]]),WhichNuc(data[PATERNAL][INGROUP_ROOT][SNVsites[j]]));
+				fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, INGROUP_ROOT, SNVsites[j])),WhichNuc(GetG(PATERNAL, INGROUP_ROOT, SNVsites[j])));
             fprintf (fp,"\n");
             }
         }
@@ -6632,7 +6776,7 @@ static void PrintSNVGenotypes (FILE *fp)
 					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
 				}
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %c%c", WhichMut(data[MATERNAL][i][SNVsites[j]]),WhichMut(data[PATERNAL][i][SNVsites[j]]));
+				fprintf (fp, " %c%c", WhichMut(GetG(MATERNAL, i, SNVsites[j])),WhichMut(GetG(PATERNAL, i, SNVsites[j])));
 			fprintf (fp,"\n");
             }
 			
@@ -6640,10 +6784,10 @@ static void PrintSNVGenotypes (FILE *fp)
             {
 			fprintf (fp,"%s ", outRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %d%d", data[MATERNAL][OUTGROUP_ROOT][SNVsites[j]],data[PATERNAL][OUTGROUP_ROOT][SNVsites[j]]);
+				fprintf (fp, " %d%d", GetG(MATERNAL, OUTGROUP_ROOT, SNVsites[j]),GetG(PATERNAL, OUTGROUP_ROOT, SNVsites[j]));
 			fprintf (fp,"\n%s ", inRootCellName);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %d%d", data[MATERNAL][INGROUP_ROOT][SNVsites[j]],data[PATERNAL][INGROUP_ROOT][SNVsites[j]]);
+				fprintf (fp, " %d%d", GetG(MATERNAL, INGROUP_ROOT, SNVsites[j]),GetG(PATERNAL, INGROUP_ROOT, SNVsites[j]));
 			fprintf (fp,"\n");
             }
         }
@@ -6702,7 +6846,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				for (j=0; j<numSNVs; j++)
 					{
 					if (doNGS == NO)
-						fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][i][sites[j]],data[PATERNAL][i][sites[j]]));
+						fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, sites[j]),GetG(PATERNAL, i, sites[j])));
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichIUPAC(cell[i].site[SNVsites[j]].MLmatAllele, cell[i].site[SNVsites[j]].MLpatAllele));
 					else
@@ -6715,10 +6859,10 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				{
 				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][OUTGROUP_ROOT][sites[j]],data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, OUTGROUP_ROOT, sites[j]),GetG(PATERNAL, OUTGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][INGROUP_ROOT][sites[j]],data[PATERNAL][INGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, INGROUP_ROOT, sites[j]),GetG(PATERNAL, INGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n");
 				}
 			}
@@ -6739,7 +6883,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				for (j=0; j<numSNVs; j++)
 					{
 					if (doNGS == NO)
-						fprintf (fp, "%c", WhichNuc(data[MATERNAL][i][SNVsites[j]]));
+						fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, SNVsites[j])));
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAllele));
 					else
@@ -6760,7 +6904,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				for (j=0; j<numSNVs; j++)
 					{
 					if (doNGS == NO)
-						fprintf (fp, "%c", WhichNuc(data[PATERNAL][i][SNVsites[j]]));
+						fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, SNVsites[j])));
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLpatAllele));
 					else
@@ -6773,16 +6917,16 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				{
 				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, OUTGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, OUTGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, INGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][INGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, INGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n");
 				}
 			}
@@ -6803,7 +6947,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][i][sites[j]],data[PATERNAL][i][sites[j]]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, sites[j]),GetG(PATERNAL, i, sites[j])));
 				fprintf (fp,"\n");
 				}
 
@@ -6811,10 +6955,10 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				{
 				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][OUTGROUP_ROOT][sites[j]],data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, OUTGROUP_ROOT, sites[j]),GetG(PATERNAL, OUTGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][INGROUP_ROOT][sites[j]],data[PATERNAL][INGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, INGROUP_ROOT, sites[j]),GetG(PATERNAL, INGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n");
 				}
 			}
@@ -6833,7 +6977,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][sites[j]]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, sites[j])));
 				fprintf (fp,"\n");
 					
 				/* print paternal haplotype */
@@ -6847,7 +6991,7 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][sites[j]]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, sites[j])));
 				fprintf (fp,"\n");
 				}
 
@@ -6855,16 +6999,16 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				{
 				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][OUTGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, OUTGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][OUTGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, OUTGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][INGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, INGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSNVs; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][INGROUP_ROOT][sites[j]]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, INGROUP_ROOT, sites[j])));
 				fprintf (fp,"\n");
 				}
 			}
@@ -6900,7 +7044,7 @@ static void PrintFullGenotypes (FILE *fp)
 			for (j=0; j<numSites; j++)
 				{
 				if (doNGS == NO)
-					fprintf (fp, " %c%c", WhichNuc(data[MATERNAL][i][j]), WhichNuc(data[PATERNAL][i][j]));
+					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, j)), WhichNuc(GetG(PATERNAL, i, j)));
 				else if (cell[i].hasDoublet == NO)
 					fprintf (fp, " %c%c", WhichNuc(cell[i].site[j].MLmatAllele), WhichNuc(cell[i].site[j].MLpatAllele));
 				else
@@ -6914,11 +7058,11 @@ static void PrintFullGenotypes (FILE *fp)
             {
             fprintf (fp,"%s ", outRootCellName);
             for (j=0; j<numSites; j++)
-				fprintf (fp, " %c%c",  WhichNuc(data[MATERNAL][OUTGROUP_ROOT][j]), WhichNuc(data[PATERNAL][OUTGROUP_ROOT][j]));
+				fprintf (fp, " %c%c",  WhichNuc(GetG(MATERNAL, OUTGROUP_ROOT, j)), WhichNuc(GetG(PATERNAL, OUTGROUP_ROOT, j)));
             fprintf (fp,"\n%s ", inRootCellName);
 
             for (j=0; j<numSites; j++)
-                fprintf (fp, " %c%c",  WhichNuc(data[MATERNAL][INGROUP_ROOT][j]), WhichNuc(data[PATERNAL][INGROUP_ROOT][j]));
+                fprintf (fp, " %c%c",  WhichNuc(GetG(MATERNAL, INGROUP_ROOT, j)), WhichNuc(GetG(PATERNAL, INGROUP_ROOT, j)));
             fprintf (fp,"\n");
             }
         }
@@ -6936,7 +7080,7 @@ static void PrintFullGenotypes (FILE *fp)
 					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
 				}
 			for (j=0; j<numSites; j++)
-                fprintf (fp, " %c%c", WhichMut(data[0][i][j]),WhichMut(data[1][i][j]));
+                fprintf (fp, " %c%c", WhichMut(GetG(0, i, j)),WhichMut(GetG(1, i, j)));
             fprintf (fp,"\n");
 			}
 			
@@ -6944,10 +7088,10 @@ static void PrintFullGenotypes (FILE *fp)
             {
             fprintf (fp,"%s ", outRootCellName);
             for (j=0; j<numSites; j++)
-                fprintf (fp, " %d%d", data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]);
+                fprintf (fp, " %d%d", GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j));
             fprintf (fp,"\n%s ", inRootCellName);
             for (j=0; j<numSites; j++)
-                fprintf (fp, " %d%d", data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]);
+                fprintf (fp, " %d%d", GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j));
             fprintf (fp,"\n");
             }
 		}
@@ -6995,7 +7139,7 @@ static void PrintFullHaplotypes (FILE *fp)
 				for (j=0; j<numSites; j++)
 					{
 					if (doNGS == NO)
-						fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][i][j],data[PATERNAL][i][j]));
+						fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichIUPAC(cell[i].site[j].MLmatAllele, cell[i].site[j].MLpatAllele));
 					else
@@ -7008,10 +7152,10 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}
@@ -7034,7 +7178,7 @@ static void PrintFullHaplotypes (FILE *fp)
 				for (j=0; j<numSites; j++)
 					{
 					if (doNGS == NO)
-						fprintf (fp, "%c", WhichNuc(data[MATERNAL][i][j]));
+						fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, j)));
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLmatAllele));
 					else
@@ -7056,7 +7200,7 @@ static void PrintFullHaplotypes (FILE *fp)
 				for (j=0; j<numSites; j++)
 					{
 					if (doNGS == NO)
-						fprintf (fp, "%c", WhichNuc(data[PATERNAL][i][j]));
+						fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, j)));
 					else if (cell[i].hasDoublet == NO)
 						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLpatAllele));
 					else
@@ -7069,16 +7213,16 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}
@@ -7099,7 +7243,7 @@ static void PrintFullHaplotypes (FILE *fp)
 						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][i][j],data[PATERNAL][i][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
 				}
 			
@@ -7107,10 +7251,10 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}
@@ -7129,7 +7273,7 @@ static void PrintFullHaplotypes (FILE *fp)
 						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][j]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, j)));
 				fprintf (fp,"\n");
 					
 				/* print paternal haplotype */
@@ -7143,7 +7287,7 @@ static void PrintFullHaplotypes (FILE *fp)
 						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][j]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
 				}
 			
@@ -7151,16 +7295,16 @@ static void PrintFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}
@@ -7207,7 +7351,7 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 					}
 				for (j=0; j<numSites; j++)
 					{
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][i][j],data[PATERNAL][i][j]));
+					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
 					}
 				fprintf (fp,"\n");
 				}
@@ -7216,10 +7360,10 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}
@@ -7239,7 +7383,7 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 					}
 				for (j=0; j<numSites; j++)
 					{
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][i][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, j)));
 					}
 				fprintf (fp,"\n");
 				
@@ -7255,7 +7399,7 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 					}
 				for (j=0; j<numSites; j++)
 					{
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][i][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, j)));
 					}
 				fprintf (fp,"\n");
 				}
@@ -7264,16 +7408,16 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[MATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}
@@ -7294,7 +7438,7 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][i][j],data[PATERNAL][i][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
 				}
 
@@ -7302,10 +7446,10 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%s ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][OUTGROUP_ROOT][j],data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%s ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(data[MATERNAL][INGROUP_ROOT][j],data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}
@@ -7324,7 +7468,7 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][i][j]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, j)));
 				fprintf (fp,"\n");
 				
 				/* print paternal haplotype */
@@ -7338,7 +7482,7 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
 					}
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][i][j]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
 				}
 			
@@ -7346,16 +7490,16 @@ static void PrintTrueFullHaplotypes (FILE *fp)
 				{
 				fprintf (fp,"%sm  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", outRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][OUTGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, OUTGROUP_ROOT, j)));
 				fprintf (fp,"\n%sm  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[MATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n%sp  ", inRootCellName);
 				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(data[PATERNAL][INGROUP_ROOT][j]));
+					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, INGROUP_ROOT, j)));
 				fprintf (fp,"\n");
 				}
 			}

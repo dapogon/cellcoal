@@ -175,6 +175,44 @@ static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfre
 static double	Cijk[256], Root[4];
 static double	SNPrate, alphaCoverage;
 static int		OUTGROUP_ROOT, INGROUP_ROOT;
+
+/* Genotype storage. In dense mode, data[genome][node][site] holds the genotype of every node at every site.
+   In sparse mode (very large data sets), only the genome of the root is stored densely (data[genome][OUTGROUP_ROOT]);
+   a site where some node differs from the root gets a column sparseCols[site] with the genotypes of all the nodes
+   (maternal nodes first, then paternal). Sites without a column are identical to the root in all the nodes. */
+static int		sparseMode = 0;
+static Geno		**sparseCols = NULL;
+static int		numNodes = 0;
+static long		numSparseCols = 0;
+static Geno		*NewSparseColumn (int site);
+static void		DecideSparseMode (void);
+static void		ResetSparseColumns (void);
+static inline Geno GetG (int genome, int node, int site)
+	{
+	if (__builtin_expect (sparseMode, 0) && node != OUTGROUP_ROOT)
+		{
+		Geno *c = sparseCols[site];
+		return c ? c[(long)genome * numNodes + node] : data[genome][OUTGROUP_ROOT][site];
+		}
+	return data[genome][node][site];
+	}
+static inline Geno SetG (int genome, int node, int site, Geno value)
+	{
+	if (__builtin_expect (sparseMode, 0) && node != OUTGROUP_ROOT)
+		{
+		Geno *c = sparseCols[site];
+		if (c == NULL)
+			{
+			if (value == data[genome][OUTGROUP_ROOT][site])
+				return value;
+			c = NewSparseColumn (site);
+			}
+		c[(long)genome * numNodes + node] = value;
+		return value;
+		}
+	data[genome][node][site] = value;
+	return value;
+	}
 static int		readingParameterFile, simulateOnlyTwoTemplates;
 static int 		doGATK, do2T, do4T, doGATK_ADO, do2T_ADO, do4T_ADO;
 static double	**siteGL;	/* per site: genotype likelihoods of all cells (GL_NUM doubles each), kept only for SNV sites and within the memory budget; NULL otherwise (recomputed when needed) */
