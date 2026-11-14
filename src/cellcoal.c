@@ -3798,26 +3798,43 @@ void GenotypeError (long int *seed)
 /* Count number of variants in a given data set, assuming there is no ADO (yet).
    A variant is defined as no-deletion genotype different from the healthy root genotype */
 
-int CountTrueVariants (void) 
+int CountTrueVariants (void)
 	{
     int		cell, site;
     int		nVariants = 0;
-		
+    char	*isVar;
+    int		*matRoot, *patRoot, *mat, *pat;
+
+    /* cell-major traversal (genomes are stored contiguously per cell) */
+    isVar = (char *) calloc (numSites, sizeof(char));
+    if (!isVar)
+        {
+        fprintf (stderr, "Could not allocate the isVar vector\n");
+        exit (-1);
+        }
+    matRoot = data[MATERNAL][OUTGROUP_ROOT];
+    patRoot = data[PATERNAL][OUTGROUP_ROOT];
+    for (cell=0; cell<numCells+1; cell++)
+        {
+        mat = data[MATERNAL][cell];
+        pat = data[PATERNAL][cell];
+        for (site=0; site<numSites; site++)
+            {
+            if (isVar[site] == 0 &&
+                ((mat[site] != DELETION && mat[site] != matRoot[site]) ||
+                 (pat[site] != DELETION && pat[site] != patRoot[site])))
+                isVar[site] = 1;
+            }
+        }
     for (site=0; site<numSites; site++)
         {
-		for (cell=0; cell<numCells+1; cell++)
-			{
-			if ((data[MATERNAL][cell][site] != DELETION && data[MATERNAL][cell][site] != data[MATERNAL][OUTGROUP_ROOT
-][site]) 	||
-			    (data[PATERNAL][cell][site] != DELETION && data[PATERNAL][cell][site] != data[PATERNAL][OUTGROUP_ROOT
-][site]))
-                {
-				allSites[site].isVariant = YES;
-				variantSites[nVariants++] = site;
-  				break;
-               }
-			}
-		}
+        if (isVar[site])
+            {
+            allSites[site].isVariant = YES;
+            variantSites[nVariants++] = site;
+            }
+        }
+    free (isVar);
     return nVariants;
 	}
 
@@ -3829,42 +3846,54 @@ int CountTrueVariants (void)
 
 int CountAllelesInObservedGenotypes (void)
 	{
-	int		numAltAlleles, cell, site;
+	int		numAltAlleles, cell, site, s0, s1, k, ch;
 	int		countA, countC, countG, countT, countADO, countDEL, nSNVs;
+	int		*cnt[7], *row;
+	unsigned char slot[19];
+	enum { BLK = 4096 };
 	
 	nSNVs = 0;
 	
-	for (site=0; site<numSites; site++)
+	/* counts for a block of sites are accumulated cell by cell (genomes are stored contiguously per cell) */
+	/* slot of each genotype value (offset by 9 to allow MISSING = -9); slot 6 collects everything else */
+	for (k=0; k<19; k++)
+		slot[k] = 6;
+	slot[A+9] = 0; slot[C+9] = 1; slot[G+9] = 2; slot[T+9] = 3; slot[ADO+9] = 4; slot[DELETION+9] = 5;
+	for (k=0; k<7; k++)
 		{
-		countA = countC = countG = countT = countADO = countDEL = 0;
+		cnt[k] = (int *) calloc (BLK, sizeof(int));
+		if (!cnt[k])
+			{
+			fprintf (stderr, "Could not allocate the allele counts vector\n");
+			exit (-1);
+			}
+		}
+
+	for (s0=0; s0<numSites; s0+=BLK)
+		{
+		s1 = (s0 + BLK < numSites) ? s0 + BLK : numSites;
+		for (k=0; k<7; k++)
+			memset (cnt[k], 0, BLK * sizeof(int));
 		for (cell=0; cell<numCells+1; cell++)
 			{
-			if (data[MATERNAL][cell][site] == A)
-				countA++;
-			else if (data[MATERNAL][cell][site] == C)
-				countC++;
-			else if (data[MATERNAL][cell][site] == G)
-				countG++;
-			else if (data[MATERNAL][cell][site] == T)
-				countT++;
-			else if (data[MATERNAL][cell][site] == ADO)
-				countADO++;
-			else if (data[MATERNAL][cell][site] == DELETION)
-				countDEL++;
-
-			if (data[PATERNAL][cell][site] == A)
-				countA++;
-			else if (data[PATERNAL][cell][site] == C)
-				countC++;
-			else if (data[PATERNAL][cell][site] == G)
-				countG++;
-			else if (data[PATERNAL][cell][site] == T)
-				countT++;
-			else if (data[PATERNAL][cell][site] == ADO)
-				countADO++;
-			else if (data[PATERNAL][cell][site] == DELETION)
-				countDEL++;
+			for (ch=0; ch<2; ch++)
+				{
+				row = data[ch == 0 ? MATERNAL : PATERNAL][cell];
+				for (site=s0; site<s1; site++)
+					{
+					cnt[slot[row[site]+9]][site-s0]++;
+					}
+				}
 			}
+
+		for (site=s0; site<s1; site++)
+			{
+			countA = cnt[0][site-s0];
+			countC = cnt[1][site-s0];
+			countG = cnt[2][site-s0];
+			countT = cnt[3][site-s0];
+			countADO = cnt[4][site-s0];
+			countDEL = cnt[5][site-s0];
 
 		allSites[site].countA = countA;
 		allSites[site].countC = countC;
@@ -3892,6 +3921,10 @@ int CountAllelesInObservedGenotypes (void)
 			SNVsites[nSNVs++] = site;
 			}
 		}
+		}
+
+	for (k=0; k<7; k++)
+		free (cnt[k]);
 	return nSNVs;
 	}
 
