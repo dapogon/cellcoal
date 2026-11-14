@@ -84,5 +84,46 @@ close ${r[1]} 0.10 0.01 && ok "genotyping error (-G0.1): ${r[1]} (expected 0.10)
 m=$(strings "$TMP/fj/Results/log" | grep "Mean number of mutation events" | awk '{print $NF}')
 [ "$m" = "50.00" ] && ok "fixed number of mutations (-j50): $m" || bad "fixed number of mutations: $m (expected 50.00)"
 
+echo "6. Reads and signatures"
+mkdir -p "$TMP/imb" "$TMP/dbl" "$TMP/sig" "$TMP/pq"
+cat > "$TMP/reads.py" <<'PY'
+import sys, statistics as st, collections
+mode, f = sys.argv[1], sys.argv[2]
+idx={'A':0,'C':1,'G':2,'T':3}; comp={'A':'T','C':'G','G':'C','T':'A'}
+names=None; fr=[]; has=collections.Counter(); tot=collections.Counter(); c=collections.Counter()
+for l in open(f):
+    if l.startswith('#CHROM'): names=l.rstrip('\n').split('\t')[9:]; continue
+    if l.startswith('#'): continue
+    x=l.rstrip('\n').split('\t'); fmt=x[8].split(':')
+    if mode=='sig':
+        r,a=x[3],x[4].split(',')[0]
+        if r in 'AG': r,a=comp[r],comp[a]
+        c[r+'>'+a]+=1; continue
+    for n,cell in zip(names,x[9:]):
+        v=dict(zip(fmt,cell.split(':')))
+        if mode=='imb':
+            tg=v['TG']
+            if len(tg)==3 and tg[0]!=tg[2]:
+                rc=list(map(int,v['RC'].split(','))); dp=sum(rc)
+                if dp>0: fr.append(rc[idx[tg[0]]]/dp)
+        else:
+            tot[n]+=1; has[n]+=(v['DG'] not in ('.','','./.'))
+if mode=='imb': print(round(st.mean(fr),4))
+elif mode=='dbl': print(round(sum(1 for n in names if tot[n] and has[n]/tot[n]>0.5)/len(names),4))
+else:
+    n=sum(c.values()); print(round(c['C>T']/n,4), round(c['T>C']/n,4))
+PY
+(cd "$TMP/imb" && "$BIN" -n1 -s20 -l5000 -u1e-6 -e10000 -g0 -b1 -C60 -V1000 -E0 -I0.7 0.001 -v -#5 >/dev/null 2>&1)
+r=$(python3 "$TMP/reads.py" imb "$TMP/imb/Results/vcf_dir/vcf.0001")
+close $r 0.70 0.02 && ok "allelic imbalance (-I0.7): maternal read fraction $r" || bad "allelic imbalance: $r (expected 0.70)"
+(cd "$TMP/dbl" && "$BIN" -n1 -s100 -l3000 -u1e-6 -e10000 -g0 -b1 -C30 -V1000 -E0 -B0.2 0.001 -v -#5 >/dev/null 2>&1)
+r=$(python3 "$TMP/reads.py" dbl "$TMP/dbl/Results/vcf_dir/vcf.0001")
+close $r 0.20 0.08 && ok "doublets (-B0.2): fraction of doublet cells $r" || bad "doublets: $r (expected 0.20)"
+(cd "$TMP/sig" && "$BIN" -n1 -s20 -l500000 -u1e-8 -e10000 -g0 -b1 -S1 1 1.0 -C20 -V1000 -E0 -v -#5 >/dev/null 2>&1)
+r=($(python3 "$TMP/reads.py" sig "$TMP/sig/Results/vcf_dir/vcf.0001"))
+close ${r[0]} 0.675 0.05 && ok "signature 1: C>T fraction ${r[0]} (expected 0.675)" || bad "signature 1: C>T ${r[0]} (expected 0.675)"
+(cd "$TMP/pq" && "$BIN" $M -P0.2 0.01 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/pq/Results"))
+close ${r[0]} 0.20 0.06 && ok "ADO per cell (-P0.2 0.01): mean ${r[0]} (expected 0.20)" || bad "ADO per cell: ${r[0]} (expected 0.20)"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

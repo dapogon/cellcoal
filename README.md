@@ -34,7 +34,7 @@ Bug fixes (genotyping error, allelic dropout variation, memory safety), 3–4× 
 
 ## Tests
 
-`make test` runs a small regression suite (`tests/run_tests.sh`): the example parameter files, identical results with 1 and 2 threads, reproducibility with the same seed, and inheritance of germline SNPs (`-c`), and that the observed rates of allelic dropout (`-D`), genotyping error (`-G`) and the fixed number of mutations (`-j`) match the requested values. It does not depend on exact floating-point output, so it can be run on any platform.
+`make test` runs a small regression suite (`tests/run_tests.sh`): the example parameter files, identical results with 1 and 2 threads, reproducibility with the same seed, and inheritance of germline SNPs (`-c`), and that the observed rates of allelic dropout (`-D`), genotyping error (`-G`) the fixed number of mutations (`-j`), allelic imbalance (`-I`), doublets (`-B`), ADO per cell (`-P`) and the spectrum of mutational signature 1 match the expected values. It does not depend on exact floating-point output, so it can be run on any platform.
 
 ## Validation
 A script that simulates with CellCoal, infers the tree with CellPhy and compares it with the true tree is in [examples/validation](examples/validation).
