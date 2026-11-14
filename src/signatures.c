@@ -247,7 +247,18 @@ void PrepareGeneticSignatures (void)
 	/* free memopry */
 	free(header);
 	free(token);
+	for (l=0; l<NUM_SIGNATURES; l++)
+		{
+		for (i=0; i<4; i++)
+			{
+			for (j=0; j<6; j++)
+				free(geneticSignature[l][i][j]);
+			free(geneticSignature[l][i]);
+			}
+		free(geneticSignature[l]);
+		}
 	free(geneticSignature);
+	geneticSignature = NULL;
 	}
 
 

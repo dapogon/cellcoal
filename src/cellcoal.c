@@ -133,6 +133,7 @@ Version 1.1.0 (18/10/2019)
 
  Version 2.0.1 (14/11/2026)
 - memory: the per-cell, per-site blocks are only allocated when an option needs them (reads, haplotypes, full genotypes, ancestors); about 66% less peak memory in runs without reads, with identical output
+- fix memory that was not freed at exit (user tree names, genetic signature tables); the example parameter files are now clean under AddressSanitizer/LeakSanitizer
 
  Version 2.0.0 (13/11/2026)
 - fix genotyping error (-G): rows of the error matrix are now normalized, so the erroneous base is drawn with the intended probabilities
@@ -1006,6 +1007,8 @@ int main (int argc, char **argv)
 	
 	/* free pending stuff */
 	free (CommandLine);
+	if (doUserTree == YES)
+		FreeUserTree ();
 	free (cellNames);
 	free (triMutationsCounter);
 	free (signatureWeight);
@@ -1386,6 +1389,28 @@ void ReadUserGenome (FILE *fp)
 	}
 
 
+/* sizes of the arrays allocated by ReadUserTree, needed to free them at the end of the run
+   (numNodes and numCells change while the tree is read) */
+static int	userTreeAllocNodes = 0, userTreeAllocCells = 0;
+
+static void FreeUserTree (void)
+	{
+	int		i;
+
+	if (treeNodes)
+		{
+		for (i=0; i<userTreeAllocNodes; i++)
+			free (treeNodes[i].name);
+		free (treeNodes);
+		treeNodes = NULL;
+		}
+	if (cellNames)
+		{
+		for (i=0; i<userTreeAllocCells; i++)
+			free (cellNames[i]);
+		}
+	}
+
 /********************************** ReadUserTree ***********************************/
 /* Reads a rooted phyogenetic tree with branch lengths in Newick format */
 static void ReadUserTree (FILE *fp)
@@ -1422,6 +1447,9 @@ static void ReadUserTree (FILE *fp)
         exit (-1);
         }
 	
+	userTreeAllocNodes = numNodes;
+	userTreeAllocCells = numCells;
+
 	/* allocate space for cellNames */
     cellNames = (char **) calloc(numCells, sizeof(char *));
     if (!cellNames)
@@ -1643,7 +1671,7 @@ static void ReadUserTree (FILE *fp)
    	healthyRoot->left = coalTreeMRCA;
 	healthyRoot->length = 0;
 	healthyRoot->isHealthyRoot = YES;
-	healthyRoot->name = "healthyroot";
+	strcpy (healthyRoot->name, "healthyroot");
 	coalTreeMRCA->anc = healthyRoot;
 	coalTreeMRCA->branchLength = coalTreeMRCA->meanDepth * transformingBranchLengthRatio;
     if (noisy > 2)
@@ -1662,7 +1690,7 @@ static void ReadUserTree (FILE *fp)
     healthyTip->time = 0;
     healthyTip->branchLength = (coalTreeMRCA->meanDepth + coalTreeMRCA->branchLength) * healthyTipBranchLengthRatio;
     healthyTip->isHealthyTip = YES;
-	healthyTip->name = "healthy";
+	strcpy (healthyTip->name, "healthy");
 	healthyTip->index = nextAvailableNode;
    if (noisy > 2)
         fprintf (stderr, "DONE");

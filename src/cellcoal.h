@@ -38,6 +38,7 @@ static void		PrepareGlobalFiles (int argc, char **argv);
 static void		PrepareSeparateFiles (int replicate);
 static void		ReadUserGenome (FILE *fp);
 static void		ReadUserTree (FILE *fp);
+static void		FreeUserTree (void);
 static void		CheckTree (char *treeString);
 static void 	RelabelUserTree (TreeNode *p);
 static void		PrintTree (TreeNode *treeRoot, FILE *fp);
