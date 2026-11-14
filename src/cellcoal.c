@@ -2437,6 +2437,12 @@ void DecideSparseMode (void)
 			}
 		sparseMode = NO;	/* automatic choice: keep dense storage */
 		}
+	if (sparseMode == YES && denseMB > limitMB && (doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || doPrintTrueHaplotypes == YES))
+		{
+		/* These outputs write every site of every cell: (cells x sites) characters per file. */
+		fprintf (stderr, "\nERROR: this data set is too large for full-sequence outputs (-4, -5, -Y): they write (cells x sites) characters and need about %.0f MB of genomes. Use SNV outputs (-1, -2, -3) or reduce the size; CELLCOAL_DENSE_MB raises the limit.\n", denseMB);
+		exit (-1);
+		}
 	if (sparseMode == YES && noisy > 1)
 		fprintf (stderr, "\nUsing sparse genome storage (dense genomes would need %.0f MB)\n", denseMB);
 	}
