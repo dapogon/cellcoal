@@ -61,7 +61,11 @@ $(OBJS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-.PHONY: clean 
+.PHONY: clean test
+
+test: all
+	./tests/run_tests.sh $(BINDIR)/$(PROG)$(DASH)$(VERSION)
+
 .PHONY: remove
 
 clean:

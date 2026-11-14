@@ -32,6 +32,10 @@ Bug fixes (genotyping error, allelic dropout variation, memory safety), 3–4× 
 
 - If you use CellCoal, please cite: Posada D. (2020) CellCoal: coalescent simulation of single-cell sequencing samples. *Molecular Biology and Evolution* 37: 1535-1542. <a href="https://academic.oup.com/mbe/article/37/5/1535/5728646" target="_blank">https://academic.oup.com/mbe/article/37/5/1535/5728646</a>.
 
+## Tests
+
+`make test` runs a small regression suite (`tests/run_tests.sh`): the example parameter files, identical results with 1 and 2 threads, reproducibility with the same seed, and inheritance of germline SNPs (`-c`). It does not depend on exact floating-point output, so it can be run on any platform.
+
 ## Validation
 A script that simulates with CellCoal, infers the tree with CellPhy and compares it with the true tree is in [examples/validation](examples/validation).
 
