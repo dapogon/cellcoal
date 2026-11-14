@@ -2219,11 +2219,10 @@ void RecordTriNucObservation (TriNucStr *trin, int site)
 
 typedef struct { int cell; signed char m, p; } ErrEv;	/* new maternal/paternal alleles (-1: unchanged) */
 
-static int			sparseADO = 0;
 static double		sparseAdoFixed = 0.0, *sparseAdoCell = NULL, *sparseAdoSite = NULL;
 static uint64_t	sparseAdoBase = 0;
 static ErrEv		**errEv = NULL;
-static int			*errCount = NULL, *errCap = NULL;
+static int			*errCap = NULL;
 static long		totalErrEv = 0;
 
 static inline double HashUniform (uint64_t base, uint64_t a, uint64_t b)
@@ -6913,6 +6912,49 @@ static void PrintSNVGenotypes (FILE *fp)
 	
     if (alphabet == DNA)
         {
+        if (doNGS == NO)
+            {
+            /* Genotypes are gathered for a block of cells, site by site (the genomes are stored by site in sparse
+               mode), in a text buffer that is then written row by row. */
+            enum { CELLBLOCK = 128 };
+            long	rowLen = 3L * numSNVs;
+            char	*buf = (char *) malloc ((size_t) CELLBLOCK * rowLen + 1);
+            int		i0, i1;
+
+            if (!buf)
+                {
+                fprintf (stderr, "Could not allocate the genotype print buffer\n");
+                exit (-1);
+                }
+            for (i0=0; i0<numCells+1; i0+=CELLBLOCK)
+                {
+                i1 = (i0 + CELLBLOCK < numCells+1) ? i0 + CELLBLOCK : numCells+1;
+                for (j=0; j<numSNVs; j++)
+                    {
+                    int site = SNVsites[j];
+                    for (i=i0; i<i1; i++)
+                        {
+                        char *q = buf + (long)(i-i0) * rowLen + 3L * j;
+                        q[0] = ' ';
+                        q[1] = WhichNuc(GetG(MATERNAL, i, site));
+                        q[2] = WhichNuc(GetG(PATERNAL, i, site));
+                        }
+                    }
+                for (i=i0; i<i1; i++)
+                    {
+                    if (i == numCells)
+                        fprintf (fp,"%s ", outCellName);
+                    else if (doUserTree == NO)
+                        fprintf (fp,"%s%04d ", inCellName,i+1);
+                    else
+                        fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
+                    fwrite (buf + (long)(i-i0) * rowLen, 1, (size_t) rowLen, fp);
+                    fprintf (fp,"\n");
+                    }
+                }
+            free (buf);
+            }
+        else
         for (i=0; i<numCells+1; i++)
             {
             if (i == numCells)
