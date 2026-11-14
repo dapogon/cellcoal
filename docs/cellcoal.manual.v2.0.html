@@ -261,7 +261,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">CellCoal manual v2.0</h1>
 <h4 class="author">David Posada</h4>
-<h4 class="date">November, 2026 (CellCoal 2.0.2)</h4>
+<h4 class="date">November, 2026 (CellCoal 2.0.3)</h4>
 
 </div>
 
@@ -1002,7 +1002,9 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <p>The per-cell, per-site data blocks are now allocated only when an option needs them (read counts, haplotypes, full genotypes, ancestors). Runs that print only SNV genotypes use about 66% less peak memory (for example, 695 MB to 236 MB with 500 cells and 20,000 sites) and are slightly faster, with identical output. Memory that was not freed at exit (user tree names, genetic signature tables) is now released.</p>
 <h2>8.5 Version 2.0.2</h2>
 <p>Fixed the germline variation option (<code>-c</code>): the germline SNPs were added only to the root genome and were not inherited by the cells. They are now passed down to all the cells and the healthy cell. Simulations with <code>-c</code> &gt; 0 change; the rest is identical.</p>
-<h2>8.6 Reproducibility</h2>
+<h2>8.6 Version 2.0.3</h2>
+<p>Performance release with output identical to 2.0.2: allele counting traverses the genomes cell by cell and genomes are stored with one byte per site, which divides the memory used by the genomes by four (for example, 1000 cells and 50,000 sites, genotypes only: 775 MB to 203 MB, and 1.5 s to 0.6 s).</p>
+<h2>8.7 Reproducibility</h2>
 <p>Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.</p>
 </div>
 <div id="references" class="section level1">

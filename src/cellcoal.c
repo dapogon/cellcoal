@@ -131,6 +131,9 @@ Version 1.1.0 (18/10/2019)
 - fix nonISMRelMutRate input so it can be > 1
 	(Thanks to Haotian Zhang)
 
+ Version 2.0.3 (14/11/2026)
+- faster and lighter genotype handling: allele counting traverses the genomes cell by cell, and genomes are stored with one byte per site (output identical to 2.0.2)
+
  Version 2.0.2 (14/11/2026)
 - fix germline variation (-c): the SNPs were added to the root genome only, so the cells (and the healthy cell) never inherited them; they are now passed down to all nodes
 
