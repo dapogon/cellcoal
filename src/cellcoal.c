@@ -131,6 +131,9 @@ Version 1.1.0 (18/10/2019)
 - fix nonISMRelMutRate input so it can be > 1
 	(Thanks to Haotian Zhang)
 
+ Version 2.0.2 (14/11/2026)
+- fix germline variation (-c): the SNPs were added to the root genome only, so the cells (and the healthy cell) never inherited them; they are now passed down to all nodes
+
  Version 2.0.1 (14/11/2026)
 - memory: the per-cell, per-site blocks are only allocated when an option needs them (reads, haplotypes, full genotypes, ancestors); about 66% less peak memory in runs without reads, with identical output
 - fix memory that was not freed at exit (user tree names, genetic signature tables); the example parameter files are now clean under AddressSanitizer/LeakSanitizer
@@ -652,7 +655,11 @@ int main (int argc, char **argv)
 			
 			/* add germline variation if needed */
 			if (SNPrate > 0)
+				{
 				AddGermlineVariation (&seed);
+				/* germline SNPs were added to the root genome only: pass them down to all the nodes */
+				InheritRootGenome (healthyRoot);
+				}
 	
             /* evolve maternal genome */
             if (noisy > 2)
@@ -2157,6 +2164,29 @@ void RecordTriNucObservation (TriNucStr *trin, int site)
   	}
 
 
+
+
+/********************************** InheritRootGenome ***********************************/
+/* Copy the genomes of the healthy root (with germline variation) to all its descendants */
+void InheritRootGenome (TreeNode *p)
+    {
+    int cell, anccell, site;
+
+    if (p == NULL)
+        return;
+    if (p->isHealthyRoot == NO)
+        {
+        cell = p->label;
+        anccell = p->anc->label;
+        for (site=0; site<numSites; site++)
+            {
+            data[MATERNAL][cell][site] = data[MATERNAL][anccell][site];
+            data[PATERNAL][cell][site] = data[PATERNAL][anccell][site];
+            }
+        }
+    InheritRootGenome (p->left);
+    InheritRootGenome (p->right);
+    }
 
 
 /********************************** AddGermlineVariation ***********************************/

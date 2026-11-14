@@ -78,6 +78,7 @@ static void		TreeRateSwitch (TreeNode *p, long int *seed);
 static void 	BranchRateSwitch (TreeNode *p, float multiplier, int *numTips, long int *seed);
 static void     InitializeGenomes (TreeNode *p, long int *seed);
 static void     AddGermlineVariation (long int *seed);
+static void     InheritRootGenome (TreeNode *p);
 static void     SimulateMk2 (TreeNode *p, int genome, long int *seed);
 static void     SimulateMk2forSite (TreeNode *p, int genome, int site, long int *seed);
 static void 	SimulateISM (TreeNode *p,  int genome, int doISMhaploid, long int *seed);
