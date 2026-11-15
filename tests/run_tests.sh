@@ -276,7 +276,7 @@ for l in open(sys.argv[1]):
     print('\t'.join([p[1], p[3], p[4]] + [c.split(':')[i] for c in p[9:]]))
 PY
   if [ "$n1" = "$n2" ] && [ "$n1" -gt 100 ] && cmp -s "$TMP/q1.txt" "$TMP/q2.txt"; then ok "bcftools reads the BCF: $n1 records, positions, alleles and DP equal the VCF"; else bad "bcftools reading ($n1 vs $n2)"; bcftools view -H "$f" 2>&1 | head -3; fi
-  bcftools index "$f" >/dev/null 2>&1 && ok "bcftools can index the BCF" || bad "bcftools index"
+  bcftools index -f "$f" >/dev/null 2>&1 && ok "bcftools can (re)index the BCF" || bad "bcftools index"
 else echo "  skip (bcftools not installed)"; fi
 echo "2g11b. The BCF index (.bcf.csi) is written by the program and is correct (several bins)"
 BX="-n1 -s12 -l70000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.01 -v -#9"

@@ -8,6 +8,11 @@ on:
   pull_request:
   workflow_dispatch:
 
+# pipefail: a failing 'make test | tee' must fail the step
+defaults:
+  run:
+    shell: bash
+
 jobs:
   test:
     strategy:
