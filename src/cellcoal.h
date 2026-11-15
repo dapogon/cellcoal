@@ -187,6 +187,11 @@ static long		numSparseCols = 0;
 /* In sparse mode, ADO and genotyping errors are not written in the genomes (that would create a column for almost
    every site): they are computed on the fly for the cells (see ObservedAllele) once obsActive is set. */
 static int			obsActive = 0;
+/* Per-cell, per-site data lives in cell[i].site / cell[i].doublet. When it is streamed (see StreamReads), those arrays only
+   hold a window of sites starting at siteOff; otherwise siteOff is 0 and they hold all the sites. */
+static long			siteOff = 0;
+#define CS(i,j)	(cell[i].site[(long)(j) - siteOff])
+#define CD(i,j)	(cell[i].doublet[(long)(j) - siteOff])
 static int			sparseADO = 0;
 static int			*errCount = NULL;
 static Geno		ObservedAllele (int genome, int node, int site, Geno trueAllele);

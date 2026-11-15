@@ -174,7 +174,7 @@ Version 1.1.0 (18/10/2019)
 #endif
 #include "definitions.h"
 
-/* The per-cell/per-site blocks (cell[i].site[j], 48 bytes each) are only needed for read counts
+/* The per-cell/per-site blocks (CS(i,j), 48 bytes each) are only needed for read counts
    (NGS, doublets, VCF/CATG/PILEUP) and for haplotype/full-genotype/ancestor outputs. Without them,
    SNV genotypes are printed from the genome data, and allocating (cells+1) x sites blocks anyway costs
    e.g. ~2.4 GB for 1000 cells x 50000 sites. */
@@ -749,8 +749,8 @@ int main (int argc, char **argv)
 			for (i=0; i<numCells+1; i++)
 				for (j=0; j<numSites; j++)
 					{
-					cell[i].site[j].trueMaternalAllele = GetG(MATERNAL, i, j);
-					cell[i].site[j].truePaternalAllele = GetG(PATERNAL, i, j);
+					CS(i,j).trueMaternalAllele = GetG(MATERNAL, i, j);
+					CS(i,j).truePaternalAllele = GetG(PATERNAL, i, j);
 					}
 
 			/* print reference haplotypes without errors */
@@ -4289,7 +4289,7 @@ void CountMLGenotypingErrors()
 			//j = SNVsites[snv];*/
 		for (j=0; j<numSites; j++)
 			{
-			c = &cell[i].site[j];
+			c = &CS(i,j);
 			trueMaternalAllele = c->trueMaternalAllele;
 			truePaternalAllele = c->truePaternalAllele;
 			if (cell[i].hasDoublet == NO)
@@ -4299,8 +4299,8 @@ void CountMLGenotypingErrors()
 				}
 			else
 				{
-				MLmatAllele = cell[i].doublet[j].MLmatAlleleDoublet;
-				MLpatAllele = cell[i].doublet[j].MLpatAlleleDoublet;
+				MLmatAllele = CD(i,j).MLmatAlleleDoublet;
+				MLpatAllele = CD(i,j).MLpatAlleleDoublet;
 				}
 			
 			if (MLmatAllele == MISSING) // no reads for this genotype
@@ -4377,24 +4377,24 @@ int CountAllelesInMLGenotypes(void)
 		countA = countC = countG = countT = countN = 0;
 		for (i=0; i<numCells+1; i++)
 			{
-			if (cell[i].site[j].MLmatAllele == A)
+			if (CS(i,j).MLmatAllele == A)
 				countA++;
-			else if (cell[i].site[j].MLmatAllele == C)
+			else if (CS(i,j).MLmatAllele == C)
 				countC++;
-			else if (cell[i].site[j].MLmatAllele == G)
+			else if (CS(i,j).MLmatAllele == G)
 				countG++;
-			else if (cell[i].site[j].MLmatAllele == T)
+			else if (CS(i,j).MLmatAllele == T)
 				countT++;
 			else
 				countN++;
 
-			if (cell[i].site[j].MLpatAllele == A)
+			if (CS(i,j).MLpatAllele == A)
 				countA++;
-			else if (cell[i].site[j].MLpatAllele == C)
+			else if (CS(i,j).MLpatAllele == C)
 				countC++;
-			else if (cell[i].site[j].MLpatAllele == G)
+			else if (CS(i,j).MLpatAllele == G)
 				countG++;
-			else if (cell[i].site[j].MLpatAllele == T)
+			else if (CS(i,j).MLpatAllele == T)
 				countT++;
 			else
 				countN++;
@@ -4666,28 +4666,28 @@ void GenerateReadCounts (long int *seed)
 			StartStream (streamBase, (uint64_t) jj);
 			for (ii=0; ii<numCells+1; ii++)
 				{
-				SiteReadCounts (&cell[ii].site[jj], ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed);
-				if (cell[ii].site[jj].numReads <= 0)
-					cell[ii].site[jj].MLmatAllele = cell[ii].site[jj].MLpatAllele = MISSING;
+				SiteReadCounts (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed);
+				if (CS(ii,jj).numReads <= 0)
+					CS(ii,jj).MLmatAllele = CS(ii,jj).MLpatAllele = MISSING;
 				}
 			streamActive = 0;
 
 			for (ii=0; ii<numCells+1; ii++)
 				{
 				double *g = sbuf + GL_NUM*(size_t)ii;
-				if (cell[ii].site[jj].numReads > 0)
+				if (CS(ii,jj).numReads > 0)
 					{
 					/* rebuild the amplification error matrices of this site exactly as SiteReadCounts did */
-					BuildAmpMatrices (&cell[ii].site[jj], ampMat, ampPat);
-					GenotypeLikelihoods (&cell[ii].site[jj], ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
+					BuildAmpMatrices (&CS(ii,jj), ampMat, ampPat);
+					GenotypeLikelihoods (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
 					}
 				else
 					memset (g, 0, GL_NUM*sizeof(double));
 				/* same criterion as CountAllelesInMLGenotypes: the site is a SNV when an ML allele differs from the reference */
-				al = cell[ii].site[jj].MLmatAllele;
+				al = CS(ii,jj).MLmatAllele;
 				if (al >= A && al <= T && al != allSites[jj].referenceAllele)
 					hasAlt = YES;
-				al = cell[ii].site[jj].MLpatAllele;
+				al = CS(ii,jj).MLpatAllele;
 				if (al >= A && al <= T && al != allSites[jj].referenceAllele)
 					hasAlt = YES;
 				}
@@ -4730,17 +4730,17 @@ void GenerateReadCounts (long int *seed)
 			{
 			if (cell[i].hasDoublet == YES)
 				{
-				countReadsA += cell[i].doublet[j].readCountDoublet[A];
-				countReadsC += cell[i].doublet[j].readCountDoublet[C];
-				countReadsG += cell[i].doublet[j].readCountDoublet[G];
-				countReadsT += cell[i].doublet[j].readCountDoublet[T];
+				countReadsA += CD(i,j).readCountDoublet[A];
+				countReadsC += CD(i,j).readCountDoublet[C];
+				countReadsG += CD(i,j).readCountDoublet[G];
+				countReadsT += CD(i,j).readCountDoublet[T];
 				}
 			else
 				{
-				countReadsA += cell[i].site[j].readCount[A];
-				countReadsC += cell[i].site[j].readCount[C];
-				countReadsG += cell[i].site[j].readCount[G];
-				countReadsT += cell[i].site[j].readCount[T];
+				countReadsA += CS(i,j).readCount[A];
+				countReadsC += CS(i,j).readCount[C];
+				countReadsG += CS(i,j).readCount[G];
+				countReadsT += CS(i,j).readCount[T];
 				}
 			}
 		
@@ -5102,8 +5102,8 @@ const double *GetSiteGL (int i, int j, double *buf)
 	{
 	if (siteGL && siteGL[j])
 		return siteGL[j] + GL_NUM*(size_t)i;
-	if (cell[i].site[j].numReads > 0)
-		SiteGL (&cell[i].site[j], i, j, buf);
+	if (CS(i,j).numReads > 0)
+		SiteGL (&CS(i,j), i, j, buf);
 	else
 		memset (buf, 0, GL_NUM*sizeof(double));
 	return buf;
@@ -5737,12 +5737,12 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 					}
 				
 				/* add doublet information */
-				cell[c1].doublet[j].numReadsDoublet = cell[c1].site[j].numReads + donor.numReads;
+				CD(c1,j).numReadsDoublet = CS(c1,j).numReads + donor.numReads;
 				for (k=0; k<4; k++)
-					cell[c1].doublet[j].readCountDoublet[k] = cell[c1].site[j].readCount[k] + donor.readCount[k];
+					CD(c1,j).readCountDoublet[k] = CS(c1,j).readCount[k] + donor.readCount[k];
 
-				cell[c1].doublet[j].maternalAlleleDoublet = donor.maternalAllele;
-				cell[c1].doublet[j].paternalAlleleDoublet = donor.paternalAllele;
+				CD(c1,j).maternalAlleleDoublet = donor.maternalAllele;
+				CD(c1,j).paternalAlleleDoublet = donor.paternalAllele;
 
 				//fprintf(stderr,"\nln cell\t\tcelltype\tdoublet");
 				/* adding the genotype log likelihoods of two sets of reads (c1 + celldoublet) to get the total doublet likelihoods */
@@ -5750,43 +5750,43 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 					for (l=0; l<4; l++)
 						{
 						if (isinf(GLV(gl1,k,l)) || isinf(GLV(donorGL,k,l)))
-							cell[c1].doublet[j].logGLdoublet[k][l] = -INFINITY;
+							CD(c1,j).logGLdoublet[k][l] = -INFINITY;
 						else
-							cell[c1].doublet[j].logGLdoublet[k][l] = GLV(gl1,k,l) + GLV(donorGL,k,l);
+							CD(c1,j).logGLdoublet[k][l] = GLV(gl1,k,l) + GLV(donorGL,k,l);
 						}
 				
 				if (debug_DL == YES)
 					{
-					fprintf (stderr,"\nCell %d site %d: %c%c", c1+1, j+1, WhichNuc(cell[c1].site[j].maternalAllele), WhichNuc(cell[c1].site[j].paternalAllele));
-					fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d  | total:%d ",   cell[c1].site[j].readCount[A],  cell[c1].site[j].readCount[C],  cell[c1].site[j].readCount[G],  cell[c1].site[j].readCount[T],  cell[c1].site[j].numReads);
-					fprintf (stderr,"\n|reads doublet: A:%d C:%d G:%d T:%d  | total:%d ",   cell[c1].doublet[j].readCountDoublet[A],  cell[c1].doublet[j].readCountDoublet[C],  cell[c1].doublet[j].readCountDoublet[G],  cell[c1].doublet[j].readCountDoublet[T],  cell[c1].doublet[j].numReadsDoublet);
-					fprintf (stderr,"\nmatAmpError = %f",  cell[c1].site[j].maternalSiteAmplificationError);
-					fprintf (stderr,"\npatAmpError = %f",  cell[c1].site[j].paternalSiteAmplificationError);
+					fprintf (stderr,"\nCell %d site %d: %c%c", c1+1, j+1, WhichNuc(CS(c1,j).maternalAllele), WhichNuc(CS(c1,j).paternalAllele));
+					fprintf (stderr,"|\treads: A:%d C:%d G:%d T:%d  | total:%d ",   CS(c1,j).readCount[A],  CS(c1,j).readCount[C],  CS(c1,j).readCount[G],  CS(c1,j).readCount[T],  CS(c1,j).numReads);
+					fprintf (stderr,"\n|reads doublet: A:%d C:%d G:%d T:%d  | total:%d ",   CD(c1,j).readCountDoublet[A],  CD(c1,j).readCountDoublet[C],  CD(c1,j).readCountDoublet[G],  CD(c1,j).readCountDoublet[T],  CD(c1,j).numReadsDoublet);
+					fprintf (stderr,"\nmatAmpError = %f",  CS(c1,j).maternalSiteAmplificationError);
+					fprintf (stderr,"\npatAmpError = %f",  CS(c1,j).paternalSiteAmplificationError);
 					for (k=0; k<4; k++)
 						for (l=0; l<4; l++)
-							fprintf (stderr, "\ndoublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l),  cell[c1].doublet[j].logGLdoublet[k][l]);
+							fprintf (stderr, "\ndoublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l),  CD(c1,j).logGLdoublet[k][l]);
 					fprintf (stderr, "\n");
 					}
 
 				/* obtain unphased GLs by combining GLs from both phases -only heterozygotes */
 				   for (k=0; k<4; k++)
 					   for (l=k+1; l<4; l++)
-						   if (cell[c1].doublet[j].logGLdoublet[k][l] != cell[c1].doublet[j].logGLdoublet[l][k])
+						   if (CD(c1,j).logGLdoublet[k][l] != CD(c1,j).logGLdoublet[l][k])
 							   {
-							   number1 = 0.5 * pow(10.0,cell[c1].doublet[j].logGLdoublet[k][l]);
-							   number2 = 0.5 * pow(10.0,cell[c1].doublet[j].logGLdoublet[l][k]);
-							   cell[c1].doublet[j].logGLdoublet[k][l] = cell[c1].doublet[j].logGLdoublet[l][k] = log10(number1 + number2);
+							   number1 = 0.5 * pow(10.0,CD(c1,j).logGLdoublet[k][l]);
+							   number2 = 0.5 * pow(10.0,CD(c1,j).logGLdoublet[l][k]);
+							   CD(c1,j).logGLdoublet[k][l] = CD(c1,j).logGLdoublet[l][k] = log10(number1 + number2);
 							   //fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
 							   }
 
 				/* find max log10 doublet likelihood  */
-				maxLike = cell[c1].doublet[j].logGLdoublet[A][A];
+				maxLike = CD(c1,j).logGLdoublet[A][A];
 				MLmatAllele = MLpatAllele = A;
 				for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
-						if (cell[c1].doublet[j].logGLdoublet[k][l] > maxLike)
+						if (CD(c1,j).logGLdoublet[k][l] > maxLike)
 							{
-							maxLike = cell[c1].doublet[j].logGLdoublet[k][l];
+							maxLike = CD(c1,j).logGLdoublet[k][l];
 							MLmatAllele = k;
 							MLpatAllele = l;
 							}
@@ -5795,28 +5795,28 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 				for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
 					{
-					cell[c1].doublet[j].normLogGLdoublet[k][l] = cell[c1].doublet[j].logGLdoublet[k][l] - maxLike;
-					cell[c1].doublet[j].normLogGLdoublet[l][k] = cell[c1].doublet[j].normLogGLdoublet[k][l];
+					CD(c1,j).normLogGLdoublet[k][l] = CD(c1,j).logGLdoublet[k][l] - maxLike;
+					CD(c1,j).normLogGLdoublet[l][k] = CD(c1,j).normLogGLdoublet[k][l];
 					}
 
 				//TODO: print GL=-999?
 				/* substitute small numbers for printing */
 				/*for (k=0; k<4; k++)
 					for (l=k; l<4; l++)
-						if (cell[c1].doublet[j].logGLdoublet[k][l] < 1e-6 )
+						if (CD(c1,j).logGLdoublet[k][l] < 1e-6 )
 							{
-							cell[c1].doublet[j].logGLdoublet[l][k] = cell[c1].doublet[j].logGLdoublet[k][l] = smallNumber;
-							cell[c1].doublet[j].normLogGLdoublet[l][k] = cell[c1].doublet[j].normLogGLdoublet[k][l] = smallNumber;
+							CD(c1,j).logGLdoublet[l][k] = CD(c1,j).logGLdoublet[k][l] = smallNumber;
+							CD(c1,j).normLogGLdoublet[l][k] = CD(c1,j).normLogGLdoublet[k][l] = smallNumber;
 							}
 				 */
-				cell[c1].doublet[j].MLmatAlleleDoublet = MLmatAllele;
-				cell[c1].doublet[j].MLpatAlleleDoublet = MLpatAllele;
+				CD(c1,j).MLmatAlleleDoublet = MLmatAllele;
+				CD(c1,j).MLpatAlleleDoublet = MLpatAllele;
 			
 				if (debug_DL == YES)
 					{
 					for (k=0; k<4; k++)
 						for (l=0; l<4; l++)
-							fprintf (stderr, "\nscaled doublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l), cell[c1].doublet[j].normLogGLdoublet[k][l]);
+							fprintf (stderr, "\nscaled doublet log10 GL[%c][%c] = %lf", WhichNuc(k), WhichNuc(l), CD(c1,j).normLogGLdoublet[k][l]);
 					fprintf (stderr, "\n");
 					}
 				}
@@ -5866,15 +5866,15 @@ void PrintCATG (FILE *fp)
 		j = SNVsites[snv];
 		fprintf (fp,"\n");
 		for (i=0; i<numCells+1; i++)
-			fprintf (fp,"%c",WhichIUPAC(cell[i].site[j].MLmatAllele, cell[i].site[j].MLpatAllele));
+			fprintf (fp,"%c",WhichIUPAC(CS(i,j).MLmatAllele, CS(i,j).MLpatAllele));
 		
 			/* decide per cell (the original tested cell[numCells+1].hasDoublet, one element past the end of the array) */
 		for (i=0; i<numCells+1; i++)
 			{
 			if (cell[i].hasDoublet == NO)
-				fprintf (fp,"\t%d,%d,%d,%d", cell[i].site[j].readCount[C], cell[i].site[j].readCount[A], cell[i].site[j].readCount[T], cell[i].site[j].readCount[G]);
+				fprintf (fp,"\t%d,%d,%d,%d", CS(i,j).readCount[C], CS(i,j).readCount[A], CS(i,j).readCount[T], CS(i,j).readCount[G]);
 			else
-				fprintf (fp,"\t%d,%d,%d,%d", cell[i].doublet[j].readCountDoublet[C], cell[i].doublet[j].readCountDoublet[A], cell[i].doublet[j].readCountDoublet[T], cell[i].doublet[j].readCountDoublet[G]);
+				fprintf (fp,"\t%d,%d,%d,%d", CD(i,j).readCountDoublet[C], CD(i,j).readCountDoublet[A], CD(i,j).readCountDoublet[T], CD(i,j).readCountDoublet[G]);
 			}
 		}
 
@@ -5925,53 +5925,53 @@ void PrintPILEUP (FILE *fp)
 		for (i=0; i<numCells+1; i++)
 			{
 			/* PILEUP: NUMBER OF READS */
-			fprintf (fp, "\t%d\t", cell[i].site[j].numReads);
+			fprintf (fp, "\t%d\t", CS(i,j).numReads);
 			
 			/* PILEUP: READ BASES */
 			if (allSites[j].countA > 0)
 				{
 				if (referenceAllele != A)
-					for (k=0; k<cell[i].site[j].readCount[A]; k++)
+					for (k=0; k<CS(i,j).readCount[A]; k++)
 						fprintf (fp, "A");
 				else
-					for (k=0; k<cell[i].site[j].readCount[A]; k++)
+					for (k=0; k<CS(i,j).readCount[A]; k++)
 						fprintf (fp, ".");
 				}
 			
 			if (allSites[j].countC > 0)
 				{
 				if (referenceAllele != C)
-					for (k=0; k<cell[i].site[j].readCount[C]; k++)
+					for (k=0; k<CS(i,j).readCount[C]; k++)
 						fprintf (fp, "C");
 				else
-					for (k=0; k<cell[i].site[j].readCount[C]; k++)
+					for (k=0; k<CS(i,j).readCount[C]; k++)
 						fprintf (fp, ".");
 				}
 
 			if (allSites[j].countG > 0)
 				{
 				if (referenceAllele != G)
-					for (k=0; k<cell[i].site[j].readCount[G]; k++)
+					for (k=0; k<CS(i,j).readCount[G]; k++)
 						fprintf (fp, "G");
 				else
-					for (k=0; k<cell[i].site[j].readCount[G]; k++)
+					for (k=0; k<CS(i,j).readCount[G]; k++)
 						fprintf (fp, ".");
 				}
 
 			if (allSites[j].countT > 0)
 				{
 				if (referenceAllele != T)
-					for (k=0; k<cell[i].site[j].readCount[T]; k++)
+					for (k=0; k<CS(i,j).readCount[T]; k++)
 						fprintf (fp, "T");
 				else
-					for (k=0; k<cell[i].site[j].readCount[T]; k++)
+					for (k=0; k<CS(i,j).readCount[T]; k++)
 						fprintf (fp, ".");
 				}
 
 			fprintf (fp, "\t");
 			
 			/* PILEUP: READ QUALITIES */  /* put always highest quality */
-			for (k=0; k<cell[i].site[j].numReads; k++)
+			for (k=0; k<CS(i,j).numReads; k++)
 				fprintf (fp, "~");
 				}
 	
@@ -6324,7 +6324,7 @@ static void VCFSiteLine (FILE *fp, int j)
 		{
 		double glbuf[GL_NUM];
 		const double *glp = GetSiteGL (i, j, glbuf);
-		VCFCellFields (fp, &cell[i].site[j], glp, cell[i].doublet ? &cell[i].doublet[j] : NULL, cell[i].hasDoublet, &allSites[j], referenceAllele, npairs, pa1, pa2);
+		VCFCellFields (fp, &CS(i,j), glp, cell[i].doublet ? &CD(i,j) : NULL, cell[i].hasDoublet, &allSites[j], referenceAllele, npairs, pa1, pa2);
 		}
 	}
 	}
@@ -6977,9 +6977,9 @@ static void PrintSNVGenotypes (FILE *fp)
 				if (doNGS == NO)
 					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, SNVsites[j])), WhichNuc(GetG(PATERNAL, i, SNVsites[j])));
 				else if (cell[i].hasDoublet == NO)
-					fprintf (fp, " %c%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAllele), WhichNuc(cell[i].site[SNVsites[j]].MLpatAllele));
+					fprintf (fp, " %c%c", WhichNuc(CS(i,SNVsites[j]).MLmatAllele), WhichNuc(CS(i,SNVsites[j]).MLpatAllele));
 				else
-					fprintf (fp, " %c%c", WhichNuc(cell[i].doublet[SNVsites[j]].MLmatAlleleDoublet), WhichNuc(cell[i].doublet[SNVsites[j]].MLpatAlleleDoublet));
+					fprintf (fp, " %c%c", WhichNuc(CD(i,SNVsites[j]).MLmatAlleleDoublet), WhichNuc(CD(i,SNVsites[j]).MLpatAlleleDoublet));
 				}
            fprintf (fp,"\n");
             }
@@ -7081,9 +7081,9 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, sites[j]),GetG(PATERNAL, i, sites[j])));
 					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichIUPAC(cell[i].site[SNVsites[j]].MLmatAllele, cell[i].site[SNVsites[j]].MLpatAllele));
+						fprintf (fp, "%c", WhichIUPAC(CS(i,SNVsites[j]).MLmatAllele, CS(i,SNVsites[j]).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichIUPAC(cell[i].doublet[SNVsites[j]].MLmatAlleleDoublet, cell[i].doublet[SNVsites[j]].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichIUPAC(CD(i,SNVsites[j]).MLmatAlleleDoublet, CD(i,SNVsites[j]).MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -7118,9 +7118,9 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, SNVsites[j])));
 					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLmatAllele));
+						fprintf (fp, "%c", WhichNuc(CS(i,SNVsites[j]).MLmatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].doublet[SNVsites[j]].MLmatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(CD(i,SNVsites[j]).MLmatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				
@@ -7139,9 +7139,9 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, SNVsites[j])));
 					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(cell[i].site[SNVsites[j]].MLpatAllele));
+						fprintf (fp, "%c", WhichNuc(CS(i,SNVsites[j]).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].doublet[SNVsites[j]].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(CD(i,SNVsites[j]).MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -7279,9 +7279,9 @@ static void PrintFullGenotypes (FILE *fp)
 				if (doNGS == NO)
 					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, j)), WhichNuc(GetG(PATERNAL, i, j)));
 				else if (cell[i].hasDoublet == NO)
-					fprintf (fp, " %c%c", WhichNuc(cell[i].site[j].MLmatAllele), WhichNuc(cell[i].site[j].MLpatAllele));
+					fprintf (fp, " %c%c", WhichNuc(CS(i,j).MLmatAllele), WhichNuc(CS(i,j).MLpatAllele));
 				else
-					fprintf (fp, " %c%c", WhichNuc(cell[i].doublet[j].MLmatAlleleDoublet), WhichNuc(cell[i].doublet[j].MLpatAlleleDoublet));
+					fprintf (fp, " %c%c", WhichNuc(CD(i,j).MLmatAlleleDoublet), WhichNuc(CD(i,j).MLpatAlleleDoublet));
 				}
 			fprintf (fp,"\n");
             }
@@ -7374,9 +7374,9 @@ static void PrintFullHaplotypes (FILE *fp)
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
 					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichIUPAC(cell[i].site[j].MLmatAllele, cell[i].site[j].MLpatAllele));
+						fprintf (fp, "%c", WhichIUPAC(CS(i,j).MLmatAllele, CS(i,j).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichIUPAC(cell[i].doublet[j].MLmatAlleleDoublet, cell[i].doublet[j].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichIUPAC(CD(i,j).MLmatAlleleDoublet, CD(i,j).MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
@@ -7413,9 +7413,9 @@ static void PrintFullHaplotypes (FILE *fp)
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, j)));
 					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLmatAllele));
+						fprintf (fp, "%c", WhichNuc(CS(i,j).MLmatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].doublet[j].MLmatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(CD(i,j).MLmatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				
@@ -7435,9 +7435,9 @@ static void PrintFullHaplotypes (FILE *fp)
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, j)));
 					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(cell[i].site[j].MLpatAllele));
+						fprintf (fp, "%c", WhichNuc(CS(i,j).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(cell[i].doublet[j].MLpatAlleleDoublet));
+						fprintf (fp, "%c", WhichNuc(CD(i,j).MLpatAlleleDoublet));
 					}
 				fprintf (fp,"\n");
 				}
