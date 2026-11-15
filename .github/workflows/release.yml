@@ -2,7 +2,8 @@ name: Release
 
 # Manual workflow: run it from the Actions tab (works from a phone browser).
 # It tags the current master as v<version> and publishes a GitHub release
-# using docs/CHANGES-<version>.md as release notes.
+# using docs/CHANGES-<version>.md as release notes, attaches the binaries (binaries.yml) and
+# updates the Homebrew formula and the conda recipe (packaging/).
 
 on:
   workflow_dispatch:
@@ -42,3 +43,29 @@ jobs:
           V="${{ inputs.version }}"
           gh release create "v$V" --target master --title "CellCoal $V" \
             --notes-file "docs/CHANGES-$V.md" --latest
+
+  binaries:
+    needs: release
+    uses: ./.github/workflows/binaries.yml
+    with:
+      tag: v${{ inputs.version }}
+
+  packaging:
+    # writes the Homebrew formula and the conda recipe for the new tag (they need the SHA-256 of the tag's archive)
+    needs: release
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: master
+
+      - name: Update Formula/cellcoal.rb and conda/meta.yaml
+        run: |
+          V="${{ inputs.version }}"
+          curl -fsSL -o src.tar.gz "https://github.com/${{ github.repository }}/archive/refs/tags/v$V.tar.gz"
+          python3 tools/make_packaging.py "$V" src.tar.gz
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add Formula conda/meta.yaml
+          git commit -m "Packaging files for v$V" || exit 0
+          git push origin HEAD:master

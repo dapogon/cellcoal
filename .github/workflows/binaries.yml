@@ -1,0 +1,75 @@
+name: Binaries
+
+# Builds the program for Linux (static, with OpenMP) and macOS (Apple silicon, with libomp bundled).
+# - run it by hand to test the builds (the tarballs are kept as workflow artifacts);
+# - the Release workflow calls it with the tag to attach the tarballs to the release.
+
+on:
+  workflow_dispatch:
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    strategy:
+      matrix:
+        include:
+          - os: ubuntu-22.04
+            name: linux-x86_64
+          - os: macos-14
+            name: macos-arm64
+    runs-on: ${{ matrix.os }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+
+      - name: Install libomp (macOS)
+        if: runner.os == 'macOS'
+        run: brew install libomp
+
+      - name: Build
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then make LDFLAGS=-static; else make; fi
+          V=$(sed -n 's/^VERSION = //p' Makefile)
+          D="cellcoal-$V-${{ matrix.name }}"
+          mkdir -p "$D"
+          cp "bin/cellcoal-$V" "$D/cellcoal"
+          cp tools/bulk_vaf.py "$D/cellcoal-bulk-vaf"
+          cp README.md "docs/CHANGES-$V.md" docs/cellcoal.manual.v2.0.html "$D/"
+          cp -R examples parameters "$D/"
+          if [ "$RUNNER_OS" = "macOS" ]; then
+            L=$(otool -L "$D/cellcoal" | awk '/libomp/{print $1}')
+            if [ -n "$L" ]; then
+              cp "$(brew --prefix libomp)/lib/libomp.dylib" "$D/libomp.dylib"
+              install_name_tool -change "$L" @executable_path/libomp.dylib "$D/cellcoal"
+            fi
+          fi
+          echo "DIR=$D" >> "$GITHUB_ENV"
+
+      - name: Smoke test
+        run: |
+          mkdir t && cd t && "../$DIR/cellcoal" -n2 -s20 -l1000 -u1e-6 -e10000 -b1 -C10 -E0.001 -1 -8 -#3 >out.txt 2>&1
+          test -d Results/snv_genotypes_dir
+
+      - name: Pack
+        run: |
+          tar czf "$DIR.tar.gz" "$DIR"
+          shasum -a 256 "$DIR.tar.gz" > "$DIR.tar.gz.sha256"
+
+      - uses: actions/upload-artifact@v4
+        with:
+          name: ${{ env.DIR }}
+          path: ${{ env.DIR }}.tar.gz*
+
+      - name: Attach to the release
+        if: inputs.tag != ''
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: gh release upload "${{ inputs.tag }}" "$DIR.tar.gz" "$DIR.tar.gz.sha256" --clobber

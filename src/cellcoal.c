@@ -235,6 +235,7 @@ int main (int argc, char **argv)
 	rateVarAmongSites = NO;     	/* rate variation among different sites along the genome */
     alphaSites = infinity;      	/* alpha shape of the gamma distribution for rate variation among sites */
     alphaBranches = infinity;   	/* alpha shape of the gamma distribution for rate variation among lineages */
+    alphaSiteCoverage = 0;			/* between-site coverage dispersion (-O): 0 = none */
     alphaCoverage = infinity;   	/* alpha shape of the gamma distribution for coverage */
 	doSimulateFixedNumMutations = NO;	/* whether to simulate a fixed number of mutations */
 	doUserTree = NO;				/* whether to assume a user tree instead od making the coalescent */
@@ -4363,7 +4364,7 @@ int CountAllelesInObservedGenotypes (void)
 				Geno *c = sparseCols[site];
 				if (c == NULL && !(errCount != NULL && errCount[site] > 0))
 					{
-					/* all the cells are identical to the root (ADO at these sites is not counted) */
+					/* all the cells are identical to the root (ADO at these sites is counted by PrintSiteInfo, when needed) */
 					cnt[slot[data[MATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
 					cnt[slot[data[PATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
 					}
@@ -4765,6 +4766,8 @@ static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, Rea
 
 	/* read counts of all the cells at this site, from the stream of the site */
 	StartStream (streamBase, (uint64_t) jj);
+	/* coverage varies between sites (-O): the depth of every cell at this site is multiplied by a gamma variate with mean 1 */
+	siteCovMult = (alphaSiteCoverage > 0.0) ? RandomGamma (alphaSiteCoverage, &dummySeed) / alphaSiteCoverage : 1.0;
 	for (ii=0; ii<numCells+1; ii++)
 		{
 		SiteReadCounts (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed);
@@ -5073,18 +5076,18 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		{
 		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
 			{
-			numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage, alphaCoverage, seed);
-			numPaternalReads = RandomNegativeBinomial((1.0-allelicImbalance)*coverage, alphaCoverage, seed);
+			numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage*siteCovMult, alphaCoverage, seed);
+			numPaternalReads = RandomNegativeBinomial((1.0-allelicImbalance)*coverage*siteCovMult, alphaCoverage, seed);
 			}
 		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 			{
-			numMaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage, alphaCoverage, seed);
+			numMaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult, alphaCoverage, seed);
 			numPaternalReads = 0;
 			}
 		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 			{
 			numMaternalReads = 0;
-			numPaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage, alphaCoverage, seed);
+			numPaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult, alphaCoverage, seed);
 			}
 		else /* no allele is present (locus dropout/deletion) */
 			{
@@ -5096,18 +5099,18 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		{
 		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
 			{
-			numMaternalReads = RandomPoisson(allelicImbalance*coverage, seed);
-			numPaternalReads = RandomPoisson((1.0-allelicImbalance)*coverage, seed);
+			numMaternalReads = RandomPoisson(allelicImbalance*coverage*siteCovMult, seed);
+			numPaternalReads = RandomPoisson((1.0-allelicImbalance)*coverage*siteCovMult, seed);
 			}
 		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 			{
-			numMaternalReads = RandomPoisson(haploidCoverageReduction*coverage, seed);
+			numMaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult, seed);
 			numPaternalReads = 0;
 			}
 		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 			{
 			numMaternalReads = 0;
-			numPaternalReads = RandomPoisson(haploidCoverageReduction*coverage, seed);
+			numPaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult, seed);
 			}
 		else /* no allele is present (locus dropout/deletion) */
 			{
@@ -7493,6 +7496,26 @@ void ListTimes (int position, FILE *fp)
 static void PrintSiteInfo (FILE *fp, int i)
 	{
 	int j;
+
+	/* In sparse mode the ADO of the sites that do not vary is not counted while the alleles are counted (it would cost
+	   cells x sites operations); it is computed here, only for the sites that are printed. */
+	if (sparseMode == YES && sparseADO == YES)
+		{
+		int	cc, dropped = 0;
+
+		for (cc=0; cc<numCells+1; cc++)
+			{
+			Geno gm = GetG(MATERNAL, cc, i), gp = GetG(PATERNAL, cc, i);
+
+			if (gm == ADO || gm == DELETION)
+				dropped++;
+			if (gp == ADO || gp == DELETION)
+				dropped++;
+			if (gm == ADO || gp == ADO)
+				allSites[i].hasADO = YES;
+			}
+		allSites[i].countDropped = dropped;
+		}
 	fprintf (fp, "\n\nSite %d", i+1);
 	fprintf (fp, "\n isSNV = %d", allSites[i].isSNV);
 	fprintf (fp, "\n isSNP = %d", allSites[i].isSNP);
@@ -8960,6 +8983,8 @@ static void	PrintRunInformation (FILE *fp)
 				fprintf (fp, "\n  mean                                        =   %-3.2fX", coverage);
 				fprintf (fp, "\n  dispersion (alpha)                          =   %-3.2f", alphaCoverage);
 				}
+			if (alphaSiteCoverage > 0.0)
+				fprintf (fp, "\n Coverage dispersion between sites (alpha)    =   %-3.2f", alphaSiteCoverage);
 			fprintf (fp, "\n Haploid coverage reduction                   =   %-3.2f", haploidCoverageReduction);
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
 			if (thereIsEij == YES)
@@ -9131,6 +9156,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		/* NGS */
 		fprintf (fp, " -C%3.2f", coverage);
 		fprintf (fp, " -V%6.4f", alphaCoverage);
+		if (alphaSiteCoverage > 0.0)
+			fprintf (fp, " -O%6.4f", alphaSiteCoverage);
 		fprintf (fp, " -R%2.1e", haploidCoverageReduction);
 		fprintf (fp, " -E%2.1e", sequencingError);
 		fprintf (fp, " -X%3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]
@@ -9232,6 +9259,7 @@ void PrintUsage(FILE *fp)
 
 	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
 	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
+	fprintf (fp,"\n-O: coverage overdispersion between sites, shared by all cells (e.g. -O10)");
 	fprintf (fp,"\n-R: ADO/deletion haploid coverage reduction (e.g. -R0.5)");
 	fprintf (fp,"\n-E: sequencing error (e.g. -E0.001)");
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT (e.g. -X0 1 1 1 1 0 1 1 1 1 0 1 1 1 1 0)");
@@ -9329,6 +9357,7 @@ static void PrintDefaults (FILE *fp)
 	/* NGS */
 	fprintf (fp,"\n-C: sequencing coverage =  %3.2f", coverage);
 	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
+	fprintf (fp,"\n-O: coverage overdispersion between sites =  %6.4f", alphaSiteCoverage);
 	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3], Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
@@ -10475,6 +10504,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					PrintUsage(stderr);
 					}
 				break;
+			case 'O':
+				alphaSiteCoverage = atof(argv[i]);
+				if (alphaSiteCoverage <= 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad between-site coverage dispersion (%f)\n\n", alphaSiteCoverage);
+					PrintUsage(stderr);
+					}
+				break;
             case 'V':
                alphaCoverage = atof(argv[i]);
 				if (alphaCoverage <= 0)
@@ -11250,6 +11287,13 @@ void ReadParametersFromFile (void)
 				if (meanGenotypingError > 0 && doNGS == YES)
 					{
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					PrintUsage(stderr);
+					}
+				break;
+			case 'O':
+				if (fscanf(stdin, "%lf", &alphaSiteCoverage) != 1 || alphaSiteCoverage <= 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad between-site coverage dispersion (%f)\n\n", alphaSiteCoverage);
 					PrintUsage(stderr);
 					}
 				break;

@@ -1,6 +1,6 @@
 PROG = cellcoal
 DASH = -
-VERSION = 2.7.0
+VERSION = 2.8.0
 SRCDIR = src
 OBJDIR = out
 BINDIR = bin
@@ -61,7 +61,18 @@ $(OBJS): $(OBJDIR)/%.o : $(SRCDIR)/%.c $(wildcard $(SRCDIR)/*.h)
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
-.PHONY: clean test
+.PHONY: clean test install
+
+PREFIX ?= /usr/local
+
+# make install [PREFIX=/usr/local] [DESTDIR=...]: installs the program as "cellcoal", the manual and the examples
+install: all
+	install -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/doc/cellcoal $(DESTDIR)$(PREFIX)/share/cellcoal
+	install -m 755 $(BINDIR)/$(PROG)-$(VERSION) $(DESTDIR)$(PREFIX)/bin/$(PROG)
+	install -m 755 tools/bulk_vaf.py $(DESTDIR)$(PREFIX)/bin/cellcoal-bulk-vaf
+	install -m 644 README.md $(wildcard docs/CHANGES-$(VERSION).md) $(DESTDIR)$(PREFIX)/share/doc/cellcoal
+	install -m 644 docs/cellcoal.manual.v2.0.html $(DESTDIR)$(PREFIX)/share/doc/cellcoal
+	cp -R examples parameters $(DESTDIR)$(PREFIX)/share/cellcoal/
 
 test: all
 	./tests/run_tests.sh $(BINDIR)/$(PROG)$(DASH)$(VERSION)

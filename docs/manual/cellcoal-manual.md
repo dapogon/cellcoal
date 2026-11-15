@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.7.0)"
+date: "November, 2026 (CellCoal 2.8.0)"
 ---
 
 # 1. About CellCoal
@@ -19,6 +19,8 @@ Posada D. 2020. CellCoal: coalescent simulation of single-cell sequencing sample
 1.  **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.0.1.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
 
 2.  **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided for the gcc compiler. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.0.1`). The Makefile detects OpenMP support automatically (see section 4.1): it uses `-fopenmp` when the compiler supports it and, on macOS, Homebrew's `libomp` if it is installed (`brew install libomp`); otherwise the program is compiled single-threaded, with identical results. To compile without OpenMP type `make OMPFLAG=`. Compilation flags include `-O3 -ffp-contract=off -fno-math-errno`; please do not add `-ffast-math` or `-march=native` if you need identical results across machines.
+
+    **Alternatives to compiling**: `make install [PREFIX=/usr/local]` installs the program as `cellcoal`, with the manual, the examples and `cellcoal-bulk-vaf`. Each release also has prebuilt tarballs for Linux (x86_64, static) and macOS (Apple silicon) among its assets. With Homebrew: `brew tap dapogon/cellcoal https://github.com/dapogon/cellcoal && brew install cellcoal`. A conda recipe is in the folder *conda* of the repository.
 
 3.  **Run**: `bin/cellcoal-x.y.z`. In this case, the program arguments will be read from a file called *parameters*. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
 
@@ -584,6 +586,10 @@ Alpha shape of the gamma distribution in a Negative Binomial distribution (i.e.,
 
 > Note: A *Negative-binomial* distribution can arise as a mixture of *Poisson* distributions with mean distributed as a Gamma distribution with scale parameter (1 - *prob*)/*prob* and shape parameter *dispersion*, where *prob* = *dispersion*/(*dispersion*+*mu*). The variance is *mu* + *mu*^2^/*dispersion*.
 
+**O#: coverage dispersion between sites: double (0-inf)**
+
+Some sites are covered more than others in all the cells (mappability, capture or amplification bias). With this option the depth expected at each site, in every cell, is multiplied by a gamma variate with mean 1 and shape # (variance 1/#), drawn once per site and shared by all the cells; the smaller the value, the larger the differences between sites. It combines with the dispersion within a site (option -V). For example, with -O3 the squared coefficient of variation of the depth of the pooled (bulk) reads across sites is about 1/3. Without this option sites have no systematic differences in depth.
+
 **R#: haploid coverage: double \[0-1\]**
 
 Expected proportion of reads (*expected* *coverage*, option -C) to be obtained from a haploid template (e.g., after a deletion or ADO) in comparison with the expected coverage for a diploid region.
@@ -849,6 +855,10 @@ Every run writes `Results/run.json` (version 2.6.0 and later), a record of how i
 ## 8.10 Version 2.7.0: CATG and ML genotypes while streaming
 
 Streamed reads (section 8.8) now also write the CATG file (-8) and the maximum-likelihood SNV genotypes (-1) and haplotypes (-2) obtained from the reads. The CATG site lines go to a temporary file that is copied behind the header once the number of SNVs is known; the ML alleles are kept in a compact store of one byte per cell and SNV. The files are identical to those of the stored mode for the same seed, whatever the number of threads (with doublets, the random numbers differ as before). For example, 1,000 cells x 30,000 sites with -1 and -8 needs 191 MB instead of 1.7 GB. Full genotypes and haplotypes (-3, -4), ancestors (-5) and -Y remain unavailable while streaming, and forcing streaming with them is an error.
+
+## 8.11 Version 2.8.0: between-site coverage, ADO count, packaging
+
+Option -O adds coverage variation between sites (see its description in section 6). In sparse mode the allelic dropout of the sites that do not vary is now counted when the information of a site is printed (before it was not counted). The Makefile has an `install` target, the Release workflow attaches Linux and macOS binaries, and a Homebrew formula and a conda recipe are generated for each release. Results of existing runs are identical to 2.7.0.
 
 # 9. References
 

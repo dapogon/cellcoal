@@ -76,6 +76,26 @@ if [ -n "$(find "$TMP/ml0/Results/catg_dir" -type f -size +1k)" ]; then
   if [ "$(norm "$TMP/ml0/Results" | md5sum)" = "$(norm "$TMP/ml1/Results" | md5sum)" ] && [ "$(norm "$TMP/ml1/Results" | md5sum)" = "$(norm "$TMP/ml2/Results" | md5sum)" ]; then ok "CATG, SNV genotypes and haplotypes: stored = streamed (1 and 3 threads)"; else bad "CATG/ML genotypes stored vs streamed"; fi
 else bad "CATG file not produced"; fi
 
+echo "2g3. Coverage dispersion between sites (-O) and ADO counted at every site in sparse mode"
+Q="-n1 -s100 -l2000 -u2e-6 -e10000 -g1e-4 -b1 -C10 -V5 -E0.02 -0 -Z"
+mkdir -p "$TMP/o0" "$TMP/o1" "$TMP/o2"
+(cd "$TMP/o0" && "$BIN" $Q -#4 >/dev/null 2>&1); (cd "$TMP/o1" && CELLCOAL_STREAM=0 "$BIN" $Q -O3 -#4 >/dev/null 2>&1); (cd "$TMP/o2" && CELLCOAL_STREAM=1 "$BIN" $Q -O3 -#4 >/dev/null 2>&1)
+cv() { python3 -c "
+import statistics as st,sys
+d=[float(l.split('\t')[6]) for l in open(sys.argv[1]) if l[:1].isdigit() and l.count('\t')>8]
+m=st.mean(d); print(round(st.pvariance(d)/m**2,4))" "$1"; }
+c0=$(cv "$TMP/o0/Results/bulk"); c1=$(cv "$TMP/o1/Results/bulk")
+close "$c1" 0.3333 0.06 && ok "-O3: squared coefficient of variation of the site depth $c1 (expected 0.333; $c0 without -O)" || bad "-O3 depth dispersion ($c1)"
+if cmp -s "$TMP/o1/Results/bulk" "$TMP/o2/Results/bulk"; then ok "-O, stored vs streamed bulk file"; else bad "-O, stored vs streamed bulk file"; fi
+mkdir -p "$TMP/ad"
+(cd "$TMP/ad" && CELLCOAL_SPARSE=1 "$BIN" -n1 -s20 -l1000 -u1e-6 -e10000 -g1e-4 -b1 -y3 -D0.3 -#4 >o.txt 2>&1)
+fr=$(python3 -c "
+import re
+t=open('$TMP/ad/o.txt',errors='ignore').read()
+v=[int(x) for x in re.findall(r'countDropped = (\d+)',t)]
+print(round(sum(v)/(len(v)*42.0),4))")
+close "$fr" 0.1634 0.02 && ok "sparse ADO counted at invariant sites: allele dropout fraction $fr (expected 0.1634)" || bad "sparse ADO count ($fr)"
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)
