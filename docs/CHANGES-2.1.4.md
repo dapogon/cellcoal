@@ -1,6 +1,6 @@
-# CellCoal 2.5.0 — what changed
+# CellCoal 2.1.4 — what changed
 
-**Output of all existing runs is bit-identical to 2.4.0.**
+**Output of all existing runs is bit-identical to 2.1.3.**
 
 ## Faster bulk runs
 

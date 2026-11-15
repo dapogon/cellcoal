@@ -1,6 +1,6 @@
-# CellCoal 2.4.0 — what changed
+# CellCoal 2.1.3 — what changed
 
-**Output of all existing runs is bit-identical to 2.3.0.**
+**Output of all existing runs is bit-identical to 2.1.2.**
 
 ## New option -Z: no VCF
 
