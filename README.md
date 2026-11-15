@@ -8,9 +8,9 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 ## Getting started
 
-1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.3.0.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
+1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.4.0.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
 
-2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.3.0`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.
+2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.4.0`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.
 
 3. **Run**: `bin/cellcoal-x.y.z`. In this case, the program arguments will be read from a file called *parameters*. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
 
@@ -18,7 +18,7 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 ## Bulk-like VAF distribution
 
-Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells, one line per site (VAF from the simulated reads and the true VAF; size independent of the number of cells), and `python3 tools/bulk_vaf.py --bulk Results/bulk --out vaf.png` plots it. The details below cover the other inputs.
+Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells, one line per site (VAF from the simulated reads and the true VAF; size independent of the number of cells), and `python3 tools/bulk_vaf.py --bulk Results/bulk --out vaf.png` plots it (add `-Z` to skip the VCF when you only need the bulk file). The details below cover the other inputs.
 
 `tools/bulk_vaf.py` (Python with numpy and matplotlib) draws the variant allele frequency (VAF) distribution of the sample as if it were sequenced in bulk.
 
@@ -28,6 +28,10 @@ Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells
   `python3 tools/bulk_vaf.py Results/snv_gen --depth 100 --purity 1.0 --out vaf.png --tsv vaf.tsv`
 
 With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
+
+## What's new in 2.4.0
+
+New option `-Z`: do not write the VCF (needs `-8`, `-9` or `-0`); with `-0` it gives the bulk VAF of thousands of cells in seconds. `tools/bulk_vaf.py` gets `--min-vaf` and `--logy`. Existing output is identical to 2.3.0. See [docs/CHANGES-2.4.0.md](docs/CHANGES-2.4.0.md).
 
 ## What's new in 2.3.0
 

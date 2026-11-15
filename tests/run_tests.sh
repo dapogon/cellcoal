@@ -51,6 +51,11 @@ mkdir -p "$TMP/bk0" "$TMP/bk1"
 (cd "$TMP/bk0" && CELLCOAL_STREAM=0 "$BIN" $C >out.txt 2>&1); (cd "$TMP/bk1" && CELLCOAL_STREAM=1 "$BIN" $C >out.txt 2>&1)
 if [ -s "$TMP/bk0/Results/bulk" ] && cmp -s "$TMP/bk0/Results/bulk" "$TMP/bk1/Results/bulk"; then ok "bulk file, stored vs streamed"; else bad "bulk file, stored vs streamed"; fi
 
+echo "2f. -Z: no VCF, only the bulk file"
+mkdir -p "$TMP/nz"
+(cd "$TMP/nz" && "$BIN" $C -Z >out.txt 2>&1)
+if [ -s "$TMP/nz/Results/bulk" ] && [ ! -e "$TMP/nz/Results/vcf" ] && cmp -s "$TMP/nz/Results/bulk" "$TMP/bk0/Results/bulk"; then ok "-Z"; else bad "-Z"; fi
+
 echo "3. Germline SNPs (-c) are inherited by every cell"
 for b in 0 1; do
   d="$TMP/germ$b"; mkdir -p "$d"

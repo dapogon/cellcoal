@@ -261,7 +261,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">CellCoal manual v2.0</h1>
 <h4 class="author">David Posada</h4>
-<h4 class="date">November, 2026 (CellCoal 2.3.0)</h4>
+<h4 class="date">November, 2026 (CellCoal 2.4.0)</h4>
 
 </div>
 
@@ -785,7 +785,7 @@ p\left(b|A\right) = \sum_{\substack{j = 1 \\ j \neq A}}^{4}{p\left( t_{j} \middl
 [print trees] 6
 [print times] [7]
 [print CATG] [8]
-[print PILEUP] [9] [print bulk read counts] [0]
+[print PILEUP] [9] [print bulk read counts] [0] [no VCF] [Z]
 [print true haplotypes] [Y]
 [print replicates in individual folders] v
 [print consensus IUPAC haplotypes] [x]
@@ -819,6 +819,8 @@ AAAAAAAAAAAA 0,20,0,0 0,20,0,0 0, 20,0,0 0,20,0,0 …</code></pre>
 <p>Prints the read counts in <em>PILEUP</em> format (see <a href="http://samtools.sourceforge.net/pileup.shtml" class="uri">http://samtools.sourceforge.net/pileup.shtml</a>) to a file called <em>pileup</em> inside the <em>Results</em> folder. If the option -v is active, each replicate will be printed to an individual file in a subfolder <em>pileup_dir</em>. It requires simulating reads (option -C).</p>
 <p><strong>0: print pooled (bulk) read counts</strong></p>
 <p>Prints, for every site, the reads pooled over the tumour cells, the bulk VAF and the true VAF to a file called <em>bulk</em> inside the <em>Results</em> folder (subfolder <em>bulk_dir</em> with -v). It requires simulating reads (option -C); see section 8.9.</p>
+<p><strong>Z: do not print the VCF</strong></p>
+<p>Skips the VCF file (the largest read output). It needs another read output: -8 (CATG), -9 (PILEUP) or -0 (bulk).</p>
 <p><strong>Y: print true haplotypes</strong></p>
 <p>Prints the true maternal and paternal haplotypes at all sites to a file called <em>true_hap</em> inside the <em>Results</em> folder. If the option -v is active, each replicate will be printed to an individual file called <em>true_hap.####</em>, in a subfolder <em>true_haplotypes_dir</em> inside the <em>Results</em> folder. If the option -x is active, a single consensus sequence with IUPAC codes will be printed (see option -x below).</p>
 <p><strong>v: print replicates in individual files</strong></p>
@@ -1010,11 +1012,11 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <p>Scaling release. When dense genomes would exceed 2048 MB (environment variable <code>CELLCOAL_DENSE_MB</code>), genomes are stored sparsely (only varying sites keep per-node columns); <code>CELLCOAL_SPARSE=1</code> forces and <code>CELLCOAL_SPARSE=0</code> disables this. Allelic dropout and genotyping errors are then applied lazily by an observation layer (same distributions, different random stream; ADO at invariant sites is not counted). 10,000 cells x 1,000,000 sites runs in about 7 s and 360 MB for genotype outputs. Reads, VCF, CATG and PILEUP are not yet supported in sparse mode, and full-sequence outputs (-4, -5, -Y) stop with an error on data sets above the dense limit. Dense output is identical to 2.0.3.</p>
 
 <h2>8.8 Versions 2.2.0 and 2.3.0</h2>
-<p>Version 2.3.0 adds option <code>-0</code> (section 8.9).</p>
+<p>Version 2.3.0 adds option <code>-0</code> and version 2.4.0 option <code>-Z</code> (no VCF), see section 8.9.</p>
 <p>Streamed reads. When the per-cell, per-site read data would exceed 2048 MB (environment variable <code>CELLCOAL_STREAM_MB</code>), reads and genotype likelihoods are simulated and the VCF and PILEUP files written in blocks of sites, with small memory; <code>CELLCOAL_STREAM=1</code> forces and <code>CELLCOAL_STREAM=0</code> disables it. Results are the same as without streaming for the same seed and any number of threads (doublets use the stream of each site, so their random numbers differ). Only the VCF and PILEUP outputs are available while streaming. The computing time is still proportional to cells x sites and the VCF lists every apparent SNV, so very large read data sets produce very large files.</p>
 
 <h2>8.9 Option -0 and bulk VAF distribution</h2>
-<p>Option <code>-0</code> (needs simulated reads, <code>-C</code>) writes the file <code>bulk</code> (<code>bulk_dir/bulk.NNNN</code> with <code>-v</code>) with one line per site: site, reference, readsA, readsC, readsG, readsT, depth, alt_reads, bulk_vaf, true_alt_alleles and true_vaf. The reads are pooled over the tumour cells, as in a bulk sample, and only sites with alternate reads or a true alternate allele are listed. Its size depends on the number of sites, not cells. <code>python3 tools/bulk_vaf.py --bulk Results/bulk --min-reads 10 --out vaf.png</code> plots the true and read-based VAF distributions.</p>
+<p>Option <code>-0</code> (needs simulated reads, <code>-C</code>) writes the file <code>bulk</code> (<code>bulk_dir/bulk.NNNN</code> with <code>-v</code>) with one line per site: site, reference, readsA, readsC, readsG, readsT, depth, alt_reads, bulk_vaf, true_alt_alleles and true_vaf. The reads are pooled over the tumour cells, as in a bulk sample, and only sites with alternate reads or a true alternate allele are listed. Its size depends on the number of sites, not cells. <code>python3 tools/bulk_vaf.py --bulk Results/bulk --min-reads 10 --out vaf.png</code> plots the true and read-based VAF distributions (<code>--min-vaf</code> hides the sequencing-error floor, <code>--logy</code> uses a log axis). With <code>-Z</code> no VCF is written: 5,000 cells x 20,000 sites with reads and <code>-0 -Z</code> takes about 19 s and writes a 1 MB file.</p>
 <p>The script <code>tools/bulk_vaf.py</code> (Python with numpy and matplotlib) plots the variant allele frequency (VAF) distribution of the sample as if it were sequenced in bulk. With <code>--vcf</code> it uses the simulated reads: the read counts (RC field) of all the tumour cells are pooled and VAF = alternate reads / total reads for every site (the healthy cell is excluded; <code>--min-reads</code> sets a minimum pooled depth). Without it, it takes the SNV genotypes written by <code>-1</code> and computes VAF as the fraction of alternate alleles among the tumour cells, optionally sampling reads at a given depth (<code>--depth</code>) and tumour purity (<code>--purity</code>). <code>--out</code> sets the plot file and <code>--tsv</code> writes the values per site.</p>
 <p>Example: <code>python3 tools/bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 --min-reads 10 --out vaf.png</code>. With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so non-mutated sites appear at the error rate near zero. The VCF grows with cells x sites (about 360 bytes per cell and site), so for thousands of cells keep the number of sites low.</p>
 

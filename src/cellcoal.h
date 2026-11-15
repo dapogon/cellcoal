@@ -160,7 +160,7 @@ static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[4
 static char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
 static char		GLmodel[MAX_NAME];
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome, doSpecificParameterFile;
-static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintBulk, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
+static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintBulk, doPrintVCF, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
 static int		doExponential, doDemographics, doOthsukiInnanCoal, doSimulateData, doSimulateFixedNumMutations, doNGS, doTumorNames, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, doTreeRateSwitches, numTreeRateSwitches, equalBaseFreq, alphabet, thereIsMij, thereIsEij;

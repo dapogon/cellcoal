@@ -20,6 +20,8 @@ import numpy as np
 
 ap = argparse.ArgumentParser()
 ap.add_argument("file", nargs="?")
+ap.add_argument("--min-vaf", type=float, default=0.01, help="with --bulk/--vcf: do not plot sites below this VAF (sequencing error floor); 0 plots all")
+ap.add_argument("--logy", action="store_true", help="logarithmic y axis")
 ap.add_argument("--bulk", default=None, help="bulk file written by CellCoal option -0")
 ap.add_argument("--vcf", default=None, help="VCF file with simulated reads: VAF from the pooled read counts")
 ap.add_argument("--min-reads", type=int, default=1, help="with --vcf: minimum pooled depth of a site")
@@ -51,8 +53,9 @@ if a.bulk:
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
     bins = np.linspace(0, 0.5, a.bins + 1)
-    ax[0].hist(vt[vt > 0], bins=bins, color="#4c72b0"); ax[0].set_title(f"True VAF ({int((vt > 0).sum())} SNVs)")
-    ax[1].hist(vb, bins=bins, color="#dd8452"); ax[1].set_title(f"Bulk VAF from simulated reads ({len(vb)} sites)")
+    tv = vt[vt >= max(a.min_vaf, 1e-12)]; bv = vb[vb >= a.min_vaf]
+    ax[0].hist(tv, bins=bins, color="#4c72b0", log=a.logy); ax[0].set_title(f"True VAF >= {a.min_vaf:g} ({len(tv)} SNVs)")
+    ax[1].hist(bv, bins=bins, color="#dd8452", log=a.logy); ax[1].set_title(f"Bulk VAF from reads >= {a.min_vaf:g} ({len(bv)} of {len(vb)} sites)")
     for x in ax:
         x.set_xlabel("VAF")
     ax[0].set_ylabel("Number of sites")
@@ -92,7 +95,7 @@ if a.vcf:
     matplotlib.use("Agg")
     import matplotlib.pyplot as plt
     fig, ax = plt.subplots(figsize=(6, 4))
-    ax.hist(vaf_obs, bins=np.linspace(0, 0.5, a.bins + 1), color="#dd8452")
+    ax.hist(vaf_obs[vaf_obs >= a.min_vaf], bins=np.linspace(0, 0.5, a.bins + 1), color="#dd8452", log=a.logy)
     ax.set_xlabel("VAF (pooled reads)"); ax.set_ylabel("Number of sites")
     ax.set_title(f"Bulk VAF from simulated reads ({ncells} cells, {nsnv} sites)")
     plt.tight_layout(); plt.savefig(a.out, dpi=150)

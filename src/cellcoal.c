@@ -252,6 +252,7 @@ int main (int argc, char **argv)
 	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
 	doPrintPILEUP = NO;				/* whether to print read counts for SNVs in PILEUP format*/
 	doPrintBulk = NO;				/* whether to print pooled (bulk) read counts and VAF per site */
+	doPrintVCF = YES;				/* whether to print the VCF file when reads are simulated */
 	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
 	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
 	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
@@ -331,6 +332,7 @@ int main (int argc, char **argv)
 		doPrintCATG = NO;
 		doPrintPILEUP = NO;
 		doPrintBulk = NO;
+		doPrintVCF = YES;
    		}
 	
     /* initialize a few variables */
@@ -790,9 +792,9 @@ int main (int argc, char **argv)
 			if (streamMode == YES)
 				{
 				/* reads are simulated, summarized and printed (VCF, PILEUP) in blocks of sites */
-				if (doPrintSeparateReplicates == NO)
+				if (doPrintVCF == YES && doPrintSeparateReplicates == NO)
 					fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
-				StreamReads (&seed, fpVCF, (doPrintPILEUP == YES) ? fpPILEUP : NULL, (doPrintBulk == YES) ? fpBulk : NULL);
+				StreamReads (&seed, (doPrintVCF == YES) ? fpVCF : NULL, (doPrintPILEUP == YES) ? fpPILEUP : NULL, (doPrintBulk == YES) ? fpBulk : NULL);
 				if (doPrintPILEUP == YES && doPrintSeparateReplicates == NO)
 					fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
 				if (doPrintBulk == YES && doPrintSeparateReplicates == NO)
@@ -859,9 +861,12 @@ int main (int argc, char **argv)
 				{
 				if (doNGS == YES)
 					{
-					if (doPrintSeparateReplicates == NO)
-						fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
-					PrintVCF (fpVCF);
+					if (doPrintVCF == YES)
+						{
+						if (doPrintSeparateReplicates == NO)
+							fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
+						PrintVCF (fpVCF);
+						}
 					
 					if (doPrintCATG == YES)
 						{
@@ -959,7 +964,7 @@ int main (int argc, char **argv)
 					fclose (fpFullHaplotypes);
 				if (doPrintTrueHaplotypes == YES)
 					fclose (fpTrueHaplotypes);
-				if (doNGS == YES)
+				if (doNGS == YES && doPrintVCF == YES)
 					fclose (fpVCF);
 				if (doPrintCATG == YES)
 					fclose (fpCATG);
@@ -1048,7 +1053,7 @@ int main (int argc, char **argv)
 			fclose(fpFullHaplotypes);
 		if (doPrintTrueHaplotypes == YES)
 			fclose(fpTrueHaplotypes);
-		if (doNGS == YES)
+		if (doNGS == YES && doPrintVCF == YES)
 			fclose(fpVCF);
 		if (doPrintCATG == YES)
 			fclose(fpCATG);
@@ -2445,6 +2450,11 @@ void DecideSparseMode (void)
 	double	denseMB, limitMB = 2048.0;
 	int		force = -1;
 
+	if (doNGS == YES && doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == NO)
+		{
+		fprintf (stderr, "\nERROR: -Z (no VCF) needs another read output: -8 (CATG), -9 (PILEUP) or -0 (bulk)\n");
+		exit (-1);
+		}
 	sparseMode = NO;
 	streamMode = NO;
 	if (doNGS == YES)
@@ -6807,7 +6817,7 @@ void PrepareGlobalFiles(int argc, char **argv)
             }
 
         /* contains reads counts and genotype likelihoods for every SNV and cell */
-        if (doNGS == YES)
+        if (doNGS == YES && doPrintVCF == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFfile);
             if ((fpVCF = fopen(File, "w")) == NULL)
@@ -6895,7 +6905,7 @@ void PrepareGlobalFiles(int argc, char **argv)
 		fprintf (fpTrueHaplotypes,"%d\n", numDataSets);
 		}
 	
-	if (doNGS == YES)
+	if (doNGS == YES && doPrintVCF == YES)
         {
         /*fprintf (fpVCF, "%s - ",PROGRAM_NAME);
         PrintDate (fpVCF);
@@ -7029,7 +7039,7 @@ void PrepareSeparateFiles(int replicate)
             }
 
         /* contains reads counts and log10 normalized genotype likelihoods for every SNV and cell */
-        if (doNGS == YES)
+        if (doNGS == YES && doPrintVCF == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFdir);
 			mkdir(File,S_IRWXU);
@@ -8731,7 +8741,7 @@ static void	PrintRunInformation (FILE *fp)
 					   fprintf (fp, " in folder \"%s\"", trueHaplotypesDir);
 				   }
 
-			   if (doNGS == YES)
+			   if (doNGS == YES && doPrintVCF == YES)
 				   {
 				   fprintf (fp, "\n Genotype likelihoods (%s model) printed to file \"%s\"", GLmodel, VCFfile);
 				   if (doPrintSeparateReplicates == YES)
@@ -8851,6 +8861,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 			fprintf (fp, " -%d", 9);
 		if (doPrintBulk == YES)
 			fprintf (fp, " -%d", 0);
+		if (doPrintVCF == NO)
+			fprintf (fp, " -%c", 'Z');
 		if (doPrintTrueHaplotypes == YES)
 			fprintf (fp, " -%c", 'Y');
 		if (doPrintSeparateReplicates == YES)
@@ -8934,6 +8946,7 @@ void PrintUsage(FILE *fp)
     fprintf (fp,"\n-8: print read counts in CATG format (e.g. -8)");
 	fprintf (fp,"\n-9: print read counts in PILEUP format (e.g. -9)");
 	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site (e.g. -0)");
+	fprintf (fp,"\n-Z: do not print the VCF file (needs -8, -9 or -0) (e.g. -Z)");
     fprintf (fp,"\n-Y: print true SNV haplotypes to a file (e.g. -Y)");
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
@@ -9029,6 +9042,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-8: print read counts in CATG format =  %d", doPrintCATG);
 	fprintf (fp,"\n-9: print read counts in PILEUP format =  %d", doPrintPILEUP);
 	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site =  %d", doPrintBulk);
+	fprintf (fp,"\n-Z: print the VCF file =  %d", doPrintVCF);
 	fprintf (fp,"\n-Y: print true haplotypes to a file =  %c", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
@@ -10376,6 +10390,9 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					CopyName (userGenomeFile, argv[i], "userGenomeFile");
 				doUserGenome = YES;
 			break;
+			case 'Z':
+				doPrintVCF = NO;
+				break;
 			case '0':
 				doPrintBulk = YES;
 				if (doNGS == NO)
@@ -11191,6 +11208,9 @@ void ReadParametersFromFile (void)
 					}
 				doUserGenome = YES;
 			break;
+			case 'Z':
+				doPrintVCF = NO;
+				break;
 			case '0':
 				doPrintBulk = YES;
 				if (doNGS == NO)
