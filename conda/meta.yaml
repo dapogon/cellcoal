@@ -27,7 +27,7 @@ requirements:
 test:
   commands:
     - mkdir -p t && cd t && cellcoal -n1 -s10 -l200 -u1e-6 -e10000 -b1 -#1
-    - test -d t/Results
+    - test -d Results
 
 about:
   home: https://github.com/dapogon/cellcoal
