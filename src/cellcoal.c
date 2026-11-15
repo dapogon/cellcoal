@@ -4515,6 +4515,108 @@ static void TotalReadCountsAtSite (int j)
 	allSites[j].readCountACGT = countReadsA + countReadsC + countReadsG + countReadsT;
 	}
 
+/* Scratch matrices of a thread that simulates reads */
+typedef struct
+	{
+	double	**ampMat, **ampPat, *sbuf, *probsT;
+	}
+	ReadScratch;
+
+static void NewReadScratch (ReadScratch *rs)
+	{
+	int		t;
+
+	rs->ampMat = (double**) calloc (4, sizeof(double*));
+	rs->ampPat = (double**) calloc (4, sizeof(double*));
+	rs->probsT = (double*) calloc (4, sizeof(double));
+	rs->sbuf = (double*) malloc ((size_t)(numCells+1) * GL_NUM * sizeof(double));
+	if (!rs->ampMat || !rs->ampPat || !rs->sbuf || !rs->probsT)
+		{
+		fprintf (stderr, "Could not allocate the thread amplification matrices\n");
+		exit (-1);
+		}
+	for (t=0; t<4; t++)
+		{
+		rs->ampMat[t] = (double*) calloc (4, sizeof(double));
+		rs->ampPat[t] = (double*) calloc (4, sizeof(double));
+		if (!rs->ampMat[t] || !rs->ampPat[t])
+			{
+			fprintf (stderr, "Could not allocate the thread amplification matrices\n");
+			exit (-1);
+			}
+		}
+	}
+
+static void FreeReadScratch (ReadScratch *rs)
+	{
+	int		t;
+
+	for (t=0; t<4; t++)
+		{
+		free (rs->ampMat[t]);
+		free (rs->ampPat[t]);
+		}
+	free (rs->ampMat);
+	free (rs->ampPat);
+	free (rs->probsT);
+	free (rs->sbuf);
+	}
+
+/* Simulates the reads of all the cells at site jj (and their genotype likelihoods) from the stream of the site. When the
+   reads are streamed, it also fills the true genotypes, adds the doublets and summarizes the site. */
+static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratch *rs)
+	{
+	double	**ampMat = rs->ampMat, **ampPat = rs->ampPat, *sbuf = rs->sbuf, *probsT = rs->probsT;
+	long int	dummySeed = 1;	/* never used: the stream of the site is active */
+	int		ii;
+			int		hasAlt = NO, al;
+	size_t	bytes = (size_t)(numCells+1) * GL_NUM * sizeof(double), before;
+
+	/* read counts of all the cells at this site, from the stream of the site */
+	StartStream (streamBase, (uint64_t) jj);
+	for (ii=0; ii<numCells+1; ii++)
+		{
+		SiteReadCounts (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed);
+		if (CS(ii,jj).numReads <= 0)
+			CS(ii,jj).MLmatAllele = CS(ii,jj).MLpatAllele = MISSING;
+		}
+	streamActive = 0;
+
+	for (ii=0; ii<numCells+1; ii++)
+		{
+		double *g = sbuf + GL_NUM*(size_t)ii;
+		if (CS(ii,jj).numReads > 0)
+			{
+			/* rebuild the amplification error matrices of this site exactly as SiteReadCounts did */
+			BuildAmpMatrices (&CS(ii,jj), ampMat, ampPat);
+			GenotypeLikelihoods (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
+			}
+		else
+			memset (g, 0, GL_NUM*sizeof(double));
+		/* same criterion as CountAllelesInMLGenotypes: the site is a SNV when an ML allele differs from the reference */
+		al = CS(ii,jj).MLmatAllele;
+		if (al >= A && al <= T && al != allSites[jj].referenceAllele)
+			hasAlt = YES;
+		al = CS(ii,jj).MLpatAllele;
+		if (al >= A && al <= T && al != allSites[jj].referenceAllele)
+			hasAlt = YES;
+		}
+	if (hasAlt == YES)
+		{
+		#pragma omp atomic capture
+			{ before = glUsed; glUsed += bytes; }
+		if (before + bytes <= glBudget)
+			{
+			double *keep = (double*) malloc (bytes);
+			if (keep)
+				{
+				memcpy (keep, sbuf, bytes);
+				siteGL[jj] = keep;
+				}
+			}
+		}
+	}
+
 /********************* GenerateReadCounts  ************************/
 /*	For each individual SNV genotype the program will generate read counts
 	given some sequencing depth or coverage. The number of reads follow a Poisson
@@ -4659,90 +4761,14 @@ void GenerateReadCounts (long int *seed)
 
 	#pragma omp parallel
 		{
-		double	**ampMat, **ampPat, *sbuf, *probsT;
-		long int	dummySeed = 1;	/* never used: the stream of the site is active */
-		int		t, ii, jj;
+		ReadScratch	rs;
+		int		jj;
 
-		ampMat = (double**) calloc (4, sizeof(double*));
-		ampPat = (double**) calloc (4, sizeof(double*));
-		probsT = (double*) calloc (4, sizeof(double));
-		sbuf = (double*) malloc ((size_t)(numCells+1) * GL_NUM * sizeof(double));
-		if (!ampMat || !ampPat || !sbuf || !probsT)
-			{
-			fprintf (stderr, "Could not allocate the thread amplification matrices\n");
-			exit (-1);
-			}
-		for (t=0; t<4; t++)
-			{
-			ampMat[t] = (double*) calloc (4, sizeof(double));
-			ampPat[t] = (double*) calloc (4, sizeof(double));
-			if (!ampMat[t] || !ampPat[t])
-				{
-				fprintf (stderr, "Could not allocate the thread amplification matrices\n");
-				exit (-1);
-				}
-			}
-
+		NewReadScratch (&rs);
 		#pragma omp for schedule(static, 8)
 		for (jj=0; jj<numSites; jj++)
-			{
-			int		hasAlt = NO, al;
-			size_t	bytes = (size_t)(numCells+1) * GL_NUM * sizeof(double), before;
-
-			/* read counts of all the cells at this site, from the stream of the site */
-			StartStream (streamBase, (uint64_t) jj);
-			for (ii=0; ii<numCells+1; ii++)
-				{
-				SiteReadCounts (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed);
-				if (CS(ii,jj).numReads <= 0)
-					CS(ii,jj).MLmatAllele = CS(ii,jj).MLpatAllele = MISSING;
-				}
-			streamActive = 0;
-
-			for (ii=0; ii<numCells+1; ii++)
-				{
-				double *g = sbuf + GL_NUM*(size_t)ii;
-				if (CS(ii,jj).numReads > 0)
-					{
-					/* rebuild the amplification error matrices of this site exactly as SiteReadCounts did */
-					BuildAmpMatrices (&CS(ii,jj), ampMat, ampPat);
-					GenotypeLikelihoods (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
-					}
-				else
-					memset (g, 0, GL_NUM*sizeof(double));
-				/* same criterion as CountAllelesInMLGenotypes: the site is a SNV when an ML allele differs from the reference */
-				al = CS(ii,jj).MLmatAllele;
-				if (al >= A && al <= T && al != allSites[jj].referenceAllele)
-					hasAlt = YES;
-				al = CS(ii,jj).MLpatAllele;
-				if (al >= A && al <= T && al != allSites[jj].referenceAllele)
-					hasAlt = YES;
-				}
-			if (hasAlt == YES)
-				{
-				#pragma omp atomic capture
-					{ before = glUsed; glUsed += bytes; }
-				if (before + bytes <= glBudget)
-					{
-					double *keep = (double*) malloc (bytes);
-					if (keep)
-						{
-						memcpy (keep, sbuf, bytes);
-						siteGL[jj] = keep;
-						}
-					}
-				}
-			}
-
-		for (t=0; t<4; t++)
-			{
-			free (ampMat[t]);
-			free (ampPat[t]);
-			}
-		free (ampMat);
-		free (ampPat);
-		free (probsT);
-		free (sbuf);
+			SimulateSiteReads (jj, streamBase, ngsEij, &rs);
+		FreeReadScratch (&rs);
 		}
 	}
 	/* add doublets and reads from them */
@@ -5907,81 +5933,83 @@ void PrintCATG (FILE *fp)
  The byte representing quality runs from 0x21 (lowest quality; '!' in ASCII) to 0x7e (highest quality; '~' in ASCII). Here are the quality value characters in left-to-right increasing order of quality (ASCII):
 
  */
+static void PileupSite (FILE *fp, int j)
+	{
+	int		i, k;
+	int		referenceAllele;
+
+	/* PILEUP: CHROMOSOME */
+	fprintf (fp,"%d", 1);
+	
+	/* PILEUP: POSITION */
+	fprintf (fp,"\t%d", j+1);
+
+	/* PILEUP: REFERENCE allele(s) => healthy root alleles */
+	referenceAllele = allSites[j].referenceAllele;
+	fprintf (fp,"\t%c", WhichNuc(referenceAllele));
+	
+	for (i=0; i<numCells+1; i++)
+		{
+		/* PILEUP: NUMBER OF READS */
+		fprintf (fp, "\t%d\t", CS(i,j).numReads);
+		
+		/* PILEUP: READ BASES */
+		if (allSites[j].countA > 0)
+			{
+			if (referenceAllele != A)
+				for (k=0; k<CS(i,j).readCount[A]; k++)
+					fprintf (fp, "A");
+			else
+				for (k=0; k<CS(i,j).readCount[A]; k++)
+					fprintf (fp, ".");
+			}
+		
+		if (allSites[j].countC > 0)
+			{
+			if (referenceAllele != C)
+				for (k=0; k<CS(i,j).readCount[C]; k++)
+					fprintf (fp, "C");
+			else
+				for (k=0; k<CS(i,j).readCount[C]; k++)
+					fprintf (fp, ".");
+			}
+
+		if (allSites[j].countG > 0)
+			{
+			if (referenceAllele != G)
+				for (k=0; k<CS(i,j).readCount[G]; k++)
+					fprintf (fp, "G");
+			else
+				for (k=0; k<CS(i,j).readCount[G]; k++)
+					fprintf (fp, ".");
+			}
+
+		if (allSites[j].countT > 0)
+			{
+			if (referenceAllele != T)
+				for (k=0; k<CS(i,j).readCount[T]; k++)
+					fprintf (fp, "T");
+			else
+				for (k=0; k<CS(i,j).readCount[T]; k++)
+					fprintf (fp, ".");
+			}
+
+		fprintf (fp, "\t");
+		
+		/* PILEUP: READ QUALITIES */  /* put always highest quality */
+		for (k=0; k<CS(i,j).numReads; k++)
+			fprintf (fp, "~");
+			}
+	
+	fprintf (fp,"\n");
+	}
+
 void PrintPILEUP (FILE *fp)
 	{
-	int		i, j, k, snv;
-	int		referenceAllele;
-	
+	int		snv;
+
 	for (snv=0; snv<numSNVs; snv++)
-		{
-		j = SNVsites[snv];
-
-		/* PILEUP: CHROMOSOME */
-		fprintf (fp,"%d", 1);
-		
-		/* PILEUP: POSITION */
-		fprintf (fp,"\t%d", j+1);
-
-		/* PILEUP: REFERENCE allele(s) => healthy root alleles */
-		referenceAllele = allSites[j].referenceAllele;
-		fprintf (fp,"\t%c", WhichNuc(referenceAllele));
-		
-		for (i=0; i<numCells+1; i++)
-			{
-			/* PILEUP: NUMBER OF READS */
-			fprintf (fp, "\t%d\t", CS(i,j).numReads);
-			
-			/* PILEUP: READ BASES */
-			if (allSites[j].countA > 0)
-				{
-				if (referenceAllele != A)
-					for (k=0; k<CS(i,j).readCount[A]; k++)
-						fprintf (fp, "A");
-				else
-					for (k=0; k<CS(i,j).readCount[A]; k++)
-						fprintf (fp, ".");
-				}
-			
-			if (allSites[j].countC > 0)
-				{
-				if (referenceAllele != C)
-					for (k=0; k<CS(i,j).readCount[C]; k++)
-						fprintf (fp, "C");
-				else
-					for (k=0; k<CS(i,j).readCount[C]; k++)
-						fprintf (fp, ".");
-				}
-
-			if (allSites[j].countG > 0)
-				{
-				if (referenceAllele != G)
-					for (k=0; k<CS(i,j).readCount[G]; k++)
-						fprintf (fp, "G");
-				else
-					for (k=0; k<CS(i,j).readCount[G]; k++)
-						fprintf (fp, ".");
-				}
-
-			if (allSites[j].countT > 0)
-				{
-				if (referenceAllele != T)
-					for (k=0; k<CS(i,j).readCount[T]; k++)
-						fprintf (fp, "T");
-				else
-					for (k=0; k<CS(i,j).readCount[T]; k++)
-						fprintf (fp, ".");
-				}
-
-			fprintf (fp, "\t");
-			
-			/* PILEUP: READ QUALITIES */  /* put always highest quality */
-			for (k=0; k<CS(i,j).numReads; k++)
-				fprintf (fp, "~");
-				}
-	
-		fprintf (fp,"\n");
-
-		}
+		PileupSite (fp, SNVsites[snv]);
 	}
 
 
@@ -6334,9 +6362,9 @@ static void VCFSiteLine (FILE *fp, int j)
 	}
 
 
-void PrintVCF (FILE *fp)
+static void PrintVCFHeader (FILE *fp)
 	{
-	int		i, snv;
+	int		i;
 
 	/* print file header */
 	fprintf (fp,"##fileformat=VCFv4.3");
@@ -6375,7 +6403,14 @@ void PrintVCF (FILE *fp)
 			fprintf (fp,"\t%s", cellNames[i]);
 		fprintf (fp,"\t%s", outCellName);
 		}
-	
+	}
+
+void PrintVCF (FILE *fp)
+	{
+	int		snv;
+
+	PrintVCFHeader (fp);
+
 	/* print only apparent SNVs */
 #ifdef _OPENMP
 	if (omp_get_max_threads() > 1 && numSNVs > 1)
