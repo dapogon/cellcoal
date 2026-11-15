@@ -1,11 +1,16 @@
 name: Binaries
 
 # Builds the program for Linux (static, with OpenMP) and macOS (Apple silicon, with libomp bundled).
-# - run it by hand to test the builds (the tarballs are kept as workflow artifacts);
+# - run it by hand to test the builds (the tarballs are kept as workflow artifacts), or with a tag to attach them to that release;
 # - the Release workflow calls it with the tag to attach the tarballs to the release.
 
 on:
   workflow_dispatch:
+    inputs:
+      tag:
+        description: "Optional: release tag to build and attach the tarballs to (e.g. v2.1.7)"
+        required: false
+        type: string
   workflow_call:
     inputs:
       tag:
@@ -56,7 +61,7 @@ jobs:
       - name: Smoke test
         run: |
           mkdir t && cd t && "../$DIR/cellcoal" -n2 -s20 -l1000 -u1e-6 -e10000 -b1 -C10 -E0.001 -1 -8 -#3 >out.txt 2>&1
-          test -d Results/snv_genotypes_dir
+          test -s Results/snv_gen && test -s Results/catg
 
       - name: Pack
         run: |
