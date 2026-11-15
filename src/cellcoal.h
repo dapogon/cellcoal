@@ -45,6 +45,8 @@ void		PrepareGlobalFiles (int argc, char **argv);
 void		PrepareSeparateFiles (int replicate);
 void		WriteADOCells (const double *rate, int replicate);
 void		KeepCellADO (const double *rate);
+int			ConvertVCFtoBCF (const char *vcfPath, const char *bcfPath);
+extern int	doBCF;	/* --bcf: write the VCF as BCF */
 extern int	adoReplicate;	/* replicate being simulated, for the ADO file */
 void		ReadUserGenome (FILE *fp);
 void		ReadUserTree (FILE *fp);

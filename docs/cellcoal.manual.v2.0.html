@@ -82,6 +82,8 @@ at the command line</a></li>
 <li><a href="#a-ado-rate-of-each-cell" id="toc-a-ado-rate-of-each-cell">6.10a ADO rate of each cell</a></li>
 <li><a href="#c-correlation-between-coverage-and-dropout-cov-ado-corr" id="toc-c-correlation-between-coverage-and-dropout-cov-ado-corr">6.10c
 Correlation between coverage and dropout (–cov-ado-corr)</a></li>
+<li><a href="#d-bcf-output-bcf" id="toc-d-bcf-output-bcf">6.10d BCF
+output (–bcf)</a></li>
 <li><a href="#b-fast-mode-fast" id="toc-b-fast-mode-fast">6.10b Fast
 mode (–fast)</a></li>
 <li><a href="#the-vcf-file" id="toc-the-vcf-file">6.11 The VCF
@@ -1397,6 +1399,26 @@ multipliers are exactly those requested without the option, and the rank
 noisier than the multiplier, so the correlation measured in the data is
 somewhat smaller. Without the option the output is bit-identical to
 previous versions.</p>
+<h2 id="d-bcf-output-bcf">6.10d BCF output (–bcf)</h2>
+<p><code>--bcf</code> (or <code>bcf: true</code> in a configuration
+file) writes the genotype likelihoods as a BCF file instead of a VCF
+file: <code>Results/vcf.bcf</code> (<code>vcf_dir/vcf.NNNN.bcf</code>
+with <code>-v</code>). With several replicates it needs <code>-v</code>,
+because a BCF file cannot hold several data sets; it cannot be combined
+with <code>-z</code> or <code>-Z</code>. The file is BCF 2.2 in a BGZF
+container, as written by bcftools, with the same fields as the VCF (a
+field with the same name has the same values; floats are stored as
+32-bit floats). It can be read with <code>bcftools view</code>,
+<code>bcftools query</code>, htslib, pysam, etc.;
+<code>bcftools index vcf.bcf</code> creates the index.</p>
+<p>The VCF is written first as text and converted when the file is
+closed, so the memory use is the same as without <code>--bcf</code>. If
+zlib was available when the program was compiled (the Makefile checks
+it) the blocks are compressed and the file has about the size of
+<code>vcf.gz</code> (about 4-5 times smaller than the VCF); without zlib
+they are stored without compression. <code>tests/bcf_check.py</code>
+decodes a BCF independently of the program and compares every record
+with the VCF; the CI also checks the files with bcftools.</p>
 <h2 id="b-fast-mode-fast">6.10b Fast mode (–fast)</h2>
 <p><code>--fast</code> (or <code>fast: true</code> in a configuration
 file) makes the simulation of the reads about 20-25% faster. It changes

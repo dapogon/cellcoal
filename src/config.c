@@ -28,7 +28,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"print_times",'7'}, {"print_catg",'8'}, {"print_pileup",'9'}, {"print_bulk",'0'}, {"no_vcf",'Z'},
 	{"gzip_vcf",'z'}, {"min_vaf",'M'}, {"print_true_haplotypes",'Y'}, {"replicate_folders",'v'},
 	{"iupac",'x'}, {"results_folder",'o'}, {"tree_file",'T'}, {"genome_file",'U'}, {"tumor_names",'W'},
-	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"cov_ado_correlation",'\2'}, {NULL,0}
+	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -468,6 +468,8 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			tok = (char*) malloc (8);
 			if (flag == '\1')
 				snprintf (tok, 8, "--fast");
+			else if (flag == '\3')
+				snprintf (tok, 8, "--bcf");
 			else if (flag == '\2')
 				continue;
 			else
@@ -569,7 +571,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	char **out;
 
 	for (i=1; i<*argc; i++)
-		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0)
+		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -607,6 +609,8 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			}
 		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;
+		else if (strcmp (out[i], "--bcf") == 0)
+			doBCF = YES;
 		else
 			out[k++] = out[i];
 		}

@@ -1024,10 +1024,18 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 
 /********************* VCF file (plain or gzip) ************************/
 /* Opens the VCF file, compressing it with gzip when requested (-z): the data is piped to "gzip -c" */
+static char		bcfTextPath[4*MAX_NAME];
+
 FILE *OpenVCF (const char *path)
 	{
 	char	cmd[2*MAX_NAME+32];
 	FILE	*fp;
+
+	if (doBCF == YES)	/* the VCF is written as text next to the result and converted to BCF when it is closed */
+		{
+		snprintf (bcfTextPath, sizeof(bcfTextPath), "%s", path);
+		return fopen (path, "w");
+		}
 
 	if (doZipVCF == NO)
 		return fopen (path, "w");
@@ -1045,6 +1053,20 @@ FILE *OpenVCF (const char *path)
 
 void CloseVCF (FILE *fp)
 	{
+	if (doBCF == YES)
+		{
+		char	bcfPath[4*MAX_NAME+8];
+
+		fclose (fp);
+		snprintf (bcfPath, sizeof(bcfPath), "%s.bcf", bcfTextPath);
+		if (ConvertVCFtoBCF (bcfTextPath, bcfPath) != 0)
+			{
+			fprintf (stderr, "\n!!! Could not write the BCF file %s\n\n", bcfPath);
+			exit (-1);
+			}
+		remove (bcfTextPath);
+		return;
+		}
 	if (doZipVCF == YES)
 		pclose (fp);
 	else

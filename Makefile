@@ -7,7 +7,7 @@ BINDIR = bin
 
 CC ?= gcc
 
-_OBJS = cellcoal.o globals.o tree.o mutation.o observation.o reads.o reads_output.o output.o rng.o options.o config.o eigen.o signatures.o
+_OBJS = cellcoal.o globals.o tree.o mutation.o observation.o reads.o reads_output.o output.o rng.o options.o config.o bcf.o eigen.o signatures.o
 OBJS=$(patsubst %,$(OBJDIR)/%,$(_OBJS))
 
 # -ffp-contract=off keeps floating-point results bit-identical to the original code
@@ -45,6 +45,12 @@ endif
 CFLAGS ?= -Wall $(PROFILING) -O3 -ffp-contract=off -fno-math-errno $(OMP_CFLAGS) $(WARN) -DUSE_COLORS
 
 LIBS = -lm
+
+# zlib compresses the BGZF blocks of the BCF output (--bcf); without it the BCF is written uncompressed
+ifneq ($(shell printf '\043include <zlib.h>\nint main(void){return 0;}\n' | $(CC) -x c - -lz -o /dev/null 2>/dev/null && echo yes),)
+CPPFLAGS += -DHAVE_ZLIB
+LIBS += -lz
+endif
 
 CPPFLAGS += -D_XOPEN_SOURCE=500 -D_GNU_SOURCE
 ifeq ($(shell uname -s),Darwin)

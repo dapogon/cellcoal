@@ -252,6 +252,34 @@ if python3 -c "import numpy" 2>/dev/null; then
 else echo "  skip (numpy not installed)"; fi
 if "$BIN" --cov-ado-corr 0.5 -s5 2>&1 | grep -q 'needs coverage variation among cells (-J) and ADO variation'; then ok "--cov-ado-corr needs -J and -P"; else bad "cov-ado validation"; fi
 
+echo "2g11. BCF output (--bcf)"
+BQ="-n2 -s30 -l1500 -u3e-6 -e10000 -b1 -C8 -V5 -E0.01 -A0.05 0.01 0 -D0.1 -B0.1 0.005 -J3 -O3 -v -#9"
+mkdir -p "$TMP/bf1" "$TMP/bf2" "$TMP/bf3"
+(cd "$TMP/bf1" && "$BIN" --bcf $BQ >/dev/null 2>&1)
+(cd "$TMP/bf2" && "$BIN" $BQ >/dev/null 2>&1)
+(cd "$TMP/bf3" && CELLCOAL_STREAM=1 CELLCOAL_STREAM_MB=1 "$BIN" --bcf $BQ >/dev/null 2>&1)
+(cd "$TMP/bf3" && mkdir -p txt && cd txt && CELLCOAL_STREAM=1 CELLCOAL_STREAM_MB=1 "$BIN" $BQ >/dev/null 2>&1)
+if [ -s "$TMP/bf1/Results/vcf_dir/vcf.0001.bcf" ] && [ ! -e "$TMP/bf1/Results/vcf_dir/vcf.0001" ]; then ok "--bcf writes vcf.NNNN.bcf (no VCF text left)"; else bad "--bcf files"; fi
+for i in 0001 0002; do
+  if python3 "$ROOT/tests/bcf_check.py" "$TMP/bf1/Results/vcf_dir/vcf.$i.bcf" "$TMP/bf2/Results/vcf_dir/vcf.$i" >"$TMP/bcfchk.txt" 2>&1; then ok "BCF replicate $i equals the VCF ($(cat "$TMP/bcfchk.txt"))"; else bad "BCF replicate $i"; head -5 "$TMP/bcfchk.txt"; fi
+done
+if python3 "$ROOT/tests/bcf_check.py" "$TMP/bf3/Results/vcf_dir/vcf.0001.bcf" "$TMP/bf3/txt/Results/vcf_dir/vcf.0001" >"$TMP/bcfchk.txt" 2>&1; then ok "streamed BCF equals the streamed VCF"; else bad "streamed BCF"; head -5 "$TMP/bcfchk.txt"; fi
+if command -v bcftools >/dev/null 2>&1; then
+  f="$TMP/bf1/Results/vcf_dir/vcf.0001.bcf"; v="$TMP/bf2/Results/vcf_dir/vcf.0001"
+  n1=$(bcftools view -H "$f" 2>/dev/null | wc -l | tr -d " "); n2=$(grep -v '^#' "$v" | grep -c "$(printf '\t')")
+  bcftools query -f '%POS\t%REF\t%ALT[\t%DP]\n' "$f" 2>/dev/null | md5sum > "$TMP/q1.txt"
+  python3 - "$v" <<'PY' | md5sum > "$TMP/q2.txt"
+import sys
+for l in open(sys.argv[1]):
+    if l[0] == '#' or '\t' not in l: continue
+    p = l.rstrip('\n').split('\t'); i = p[8].split(':').index('DP')
+    print('\t'.join([p[1], p[3], p[4]] + [c.split(':')[i] for c in p[9:]]))
+PY
+  if [ "$n1" = "$n2" ] && [ "$n1" -gt 100 ] && cmp -s "$TMP/q1.txt" "$TMP/q2.txt"; then ok "bcftools reads the BCF: $n1 records, positions, alleles and DP equal the VCF"; else bad "bcftools reading ($n1 vs $n2)"; bcftools view -H "$f" 2>&1 | head -3; fi
+  bcftools index "$f" >/dev/null 2>&1 && ok "bcftools can index the BCF" || bad "bcftools index"
+else echo "  skip (bcftools not installed)"; fi
+if "$BIN" --bcf -z -s5 2>&1 | grep -q 'cannot be combined' && "$BIN" --bcf -n3 -s5 2>&1 | grep -q 'needs -v'; then ok "--bcf option checks"; else bad "--bcf option checks"; fi
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)

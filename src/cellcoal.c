@@ -300,6 +300,19 @@ int main (int argc, char **argv)
 	strcpy(parameterFile, "parameters");
 	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
 	ReadParametersFromCommandLine (argc, argv);
+	if (doBCF == YES)
+		{
+		if (doZipVCF == YES || doPrintVCF == NO)
+			{
+			fprintf (stderr, "\n!!! PARAMETER ERROR: --bcf replaces the VCF file: it cannot be combined with -z or -Z\n\n");
+			exit (-1);
+			}
+		if (numDataSets > 1 && doPrintSeparateReplicates == NO)
+			{
+			fprintf (stderr, "\n!!! PARAMETER ERROR: --bcf with several replicates needs -v (one BCF file per replicate)\n\n");
+			exit (-1);
+			}
+		}
 	if (covAdoCorr != 0.0 && (alphaCellCoverage <= 0.0 || doADOcell == NO))
 		{
 		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-ado-corr needs coverage variation among cells (-J) and ADO variation among cells (-P)\n\n");

@@ -26,6 +26,11 @@ jobs:
         run: |
           python3 -m pip install --user numpy matplotlib 2>/dev/null || python3 -m pip install --user --break-system-packages numpy matplotlib
 
+      - name: Install bcftools (to check the BCF output)
+        run: |
+          if [ "$RUNNER_OS" = "Linux" ]; then sudo apt-get update -qq && sudo apt-get install -y bcftools; else brew install bcftools; fi
+          bcftools --version | head -1
+
       - name: Build
         run: make
 
@@ -34,3 +39,4 @@ jobs:
           python3 -c "import numpy, matplotlib; print('plots: numpy', numpy.__version__, 'matplotlib', matplotlib.__version__)"
           make test | tee test.log
           ! grep -q 'skip (matplotlib' test.log
+          grep -q 'bcftools reads' test.log
