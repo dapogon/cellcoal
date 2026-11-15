@@ -327,6 +327,8 @@ extern double				*cellAdoRate;	/* ADO rate of every cell (kept only when covAdoC
 extern int					fastMode;	/* --fast: cheaper samplers and log10/10^x for the reads (same distributions, different random numbers) */
 double	Log10Approx (double x);
 double	Pow10Approx (double x);
+void	Log10Batch (const double *x, double *y, int n);
+void	Pow10Batch (const double *x, double *y, int n);
 extern __thread uint64_t	streamState;
 
 static inline uint64_t SplitMix64 (uint64_t *x)

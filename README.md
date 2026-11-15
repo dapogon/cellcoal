@@ -29,6 +29,10 @@ Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells
 
 With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
+## Unreleased (next 2.2.x)
+
+`--fast` is now about 20-25% faster than the default: the genotype likelihoods are computed in `double` with vectorizable batch logarithms and powers (`tests/fast_stats.py` compares them with the exact code). Without `--fast` nothing changes.
+
 ## What's new in 2.2.0
 
 `--fast` (or `fast: true` in a `--config` file) simulates the reads about 10-15% faster with the same distributions but different random numbers (so a seed gives different reads); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. `--cov-ado-corr RHO` correlates the coverage (`-J`) and the ADO rate (`-P`) of the cells. With `-P`, the ADO rate drawn for each cell is written to the new file `ado_cells`. `--config` errors now give the line and column and suggest the correct key for a misspelled one. Also in this release: `plots all` (every plot plus a `report.html`), CI and packaging tests (Homebrew, conda). Without the new options the output is bit-identical to 2.1.9. See [docs/CHANGES-2.2.0.md](docs/CHANGES-2.2.0.md).

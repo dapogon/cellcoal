@@ -176,6 +176,65 @@ double Pow10Approx (double x)
 	return p * v.d;
 	}
 
+
+/* Batch versions of Log10Approx / Pow10Approx for up to 16 values (--fast). The loops have no calls and no data-dependent
+   branches in the main pass, so the compiler can vectorize them; the rare special values (x <= 0, not finite or
+   subnormal for the logarithm; |x| > 300 or NaN for the power) are repaired afterwards with the scalar functions. */
+void Log10Batch (const double *x, double *y, int n)
+	{
+	int		i, special = 0;
+
+	for (i=0; i<n; i++)
+		{
+		union { double d; uint64_t u; } v;
+		double	m, f, f2, r;
+		int		e;
+		uint64_t	big;
+
+		v.d = x[i];
+		e = (int)((v.u >> 52) & 0x7FF) - 1023;
+		special |= !(x[i] > 1e-300 && x[i] < 1e300);
+		v.u = (v.u & 0x000FFFFFFFFFFFFFULL) | 0x3FF0000000000000ULL;
+		m = v.d;
+		big = m > 1.4142135623730951;
+		m = big ? m * 0.5 : m;
+		e += (int) big;
+		f = (m - 1.0) / (m + 1.0);
+		f2 = f * f;
+		r = 2.0 * f * (1.0 + f2 * (1.0/3 + f2 * (1.0/5 + f2 * (1.0/7 + f2 * (1.0/9 + f2 * (1.0/11 + f2 * (1.0/13 + f2 * (1.0/15))))))));
+		y[i] = (r + e * 0.6931471805599453) * 0.4342944819032518;
+		}
+	if (special)
+		for (i=0; i<n; i++)
+			if (!(x[i] > 1e-300 && x[i] < 1e300))
+				y[i] = Log10Approx (x[i]);
+	}
+
+void Pow10Batch (const double *x, double *y, int n)
+	{
+	int		i, special = 0;
+
+	for (i=0; i<n; i++)
+		{
+		union { double d; uint64_t u; } v;
+		double	t, r, p;
+		int		ni;
+
+		special |= !(x[i] >= -300.0 && x[i] <= 300.0);
+		t = x[i] * 3.321928094887362;
+		t = t < -1000.0 ? -1000.0 : (t > 1000.0 ? 1000.0 : t);
+		ni = (int)(t + (t >= 0 ? 0.5 : -0.5));
+		r = (t - ni) * 0.6931471805599453;
+		p = 1.0 + r * (1.0 + r * (1.0/2 + r * (1.0/6 + r * (1.0/24 + r * (1.0/120 + r * (1.0/720 + r * (1.0/5040 + r * (1.0/40320 + r * (1.0/362880 + r * (1.0/3628800))))))))));
+		v.u = (uint64_t)(ni + 1023) << 52;
+		y[i] = p * v.d;
+		}
+	if (special)
+		for (i=0; i<n; i++)
+			if (!(x[i] >= -300.0 && x[i] <= 300.0))
+				y[i] = Pow10Approx (x[i]);
+	}
+
 /* Poisson by inversion with a single uniform (lambda < 30) or the PTRS transformed rejection of Hormann (1993) */
 static int PoissonFast (double lambda, long int *seed)
 	{

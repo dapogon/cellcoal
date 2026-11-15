@@ -781,6 +781,68 @@ static inline double Pow10Fast (double x)
 	return pow (10.0, x);
 	}
 
+/* --fast version of the general model: the same quantities as the exact code below, computed in double with the
+   16 genotypes as arrays so that the logarithms and powers go through the batch (vectorizable) functions.
+   term1 = sum over reads of count * log10 (m p1 + (1-m) p2); term2, term3 = the same with p1, p2 only.
+   P(D|G) = (1-ADO) 10^term1 + ADO m 10^term2 + ADO (1-m) 10^term3, evaluated relative to the largest term. */
+static void GLGeneralFast (const int *readCount, double pA1[4][4], double pA2[4][4], double lgA1[4][4], double lgA2[4][4], double ado, double mai, double (*logGL)[4])
+	{
+	double	T2a[4], T3a[4], term1[16], mx[16], arg1[16], arg2[16], arg3[16], p1[16], p2[16], p3[16], gl[16], lg[16], x[16], L[16];
+	int		a1, a2, g, k, read;
+
+	for (g=0; g<16; g++)
+		term1[g] = 0.0;
+	if (ado != 1)
+		for (read=0; read<4; read++)
+			if (readCount[read] > 0)
+				{
+				for (a1=0; a1<4; a1++)
+					for (a2=0; a2<4; a2++)
+						x[a1*4+a2] = mai * pA1[a1][read] + (1.0 - mai) * pA2[a2][read];
+				Log10Batch (x, L, 16);
+				for (g=0; g<16; g++)
+					term1[g] += readCount[read] * L[g];
+				}
+	for (k=0; k<4; k++)
+		{
+		T2a[k] = T3a[k] = 0.0;
+		if (ado != 0)
+			for (read=0; read<4; read++)
+				if (readCount[read] > 0)
+					{
+					T2a[k] += readCount[read] * lgA1[k][read];
+					T3a[k] += readCount[read] * lgA2[k][read];
+					}
+		}
+	for (g=0; g<16; g++)
+		{
+		double t1 = term1[g], t2 = (ado != 0) ? T2a[g >> 2] : 0.0, t3 = (ado != 0) ? T3a[g & 3] : 0.0, m;
+
+		if (ado == 0)
+			m = t1;
+		else if (ado == 1)
+			m = t3 > t2 ? t3 : t2;
+		else
+			{
+			m = t1;
+			m = t2 > m ? t2 : m;
+			m = t3 > m ? t3 : m;
+			}
+		mx[g] = m;
+		arg1[g] = (ado == 1) ? 0.0 : t1 - m;	/* the unused terms get 0 (their weight is 0), never an overflowing power */
+		arg2[g] = (ado == 0) ? 0.0 : t2 - m;
+		arg3[g] = (ado == 0) ? 0.0 : t3 - m;
+		}
+	Pow10Batch (arg1, p1, 16);
+	Pow10Batch (arg2, p2, 16);
+	Pow10Batch (arg3, p3, 16);
+	for (g=0; g<16; g++)
+		gl[g] = (1.0 - ado) * p1[g] + ado * mai * p2[g] + ado * (1.0 - mai) * p3[g];
+	Log10Batch (gl, lg, 16);
+	for (g=0; g<16; g++)
+		logGL[g >> 2][g & 3] = (gl[g] != gl[g]) ? -INFINITY : mx[g] + lg[g];
+	}
+
 /* ******************** GenotypeLikelihoods  ************************/
 /*
  Calculate genotype likelihoods (GLs) for a given site and cell given the simulated reads
@@ -1113,6 +1175,10 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 				}
 			}
 
+		if (fastMode)
+			GLGeneralFast (readCount, pA1tab, pA2tab, lgA1tab, lgA2tab, alleleDropoutRate, meanAllelicImbalance, logGL);
+		else
+			{
 		/* term2 depends only on a1 and term3 only on a2: sum them once per allele (same additions, same order) */
 		for (k=0; k<4; k++)
 			{
@@ -1212,6 +1278,8 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 				*/
 				} // genotypes
 		
+			}
+
 		if (debug_GL == YES)
 			{
 			fprintf (stderr,"\ncell %d site %d: %c%c", i+1, j+1, WhichNuc(maternalAllele), WhichNuc(paternalAllele));
@@ -1234,7 +1302,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 				{
 				number1 = 0.5 * Pow10Fast(logGL[a1][a2]);
 				number2 = 0.5 * Pow10Fast(logGL[a2][a1]);
-				logGL[a1][a2] = logGL[a2][a1] = log10(number1 + number2);
+				logGL[a1][a2] = logGL[a2][a1] = fastMode ? Log10Approx (number1 + number2) : log10(number1 + number2);
 				//fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
 				}
 

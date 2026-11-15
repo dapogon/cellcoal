@@ -17,9 +17,12 @@ WORK = sys.argv[2] if len(sys.argv) > 2 else tempfile.mkdtemp()
 CONFIGS = {
     "default":  "-n1 -s60 -l1500 -u1e-6 -C25 -E0.005 -A0.02 0.01 0 -D0.1 -1 -#{seed}",
     "doublets/dispersion": "-n1 -s60 -l1500 -u1e-6 -C12 -V8 -O3 -J5 -B0.1 0.005 -E0.01 -A0.05 0.02 0 -P0.1 0.01 -Q0.1 0.01 -#{seed}",
+    "no amplification error": "-n1 -s60 -l1500 -u1e-6 -C6 -E0.01 -D0.1 -#{seed}",
     "high coverage": "-n1 -s30 -l800 -u1e-6 -C80 -E0.01 -A0.05 0.01 0 -#{seed}",
 }
 SEEDS = {"exact": [11, 12, 13, 14], "fast": [11, 12, 13, 14]}
+
+KEYED = {}
 
 def run(args, seed, mode):
     d = os.path.join(WORK, "%s_%d" % (mode, seed))
@@ -37,10 +40,11 @@ def run(args, seed, mode):
             p = line.rstrip("\n").split("\t")
             fmt = p[8].split(":")
             iGT, iDP, iRC, iG = fmt.index("GT"), fmt.index("DP"), fmt.index("RC"), fmt.index("G10")
-            for cell in p[9:]:
+            for ci, cell in enumerate(p[9:]):
                 x = cell.split(":")
                 if len(x) < len(fmt):
                     continue
+                KEYED[(mode, args, seed, p[2], ci)] = (x[iRC], x[iG])
                 dp.append(int(x[iDP]))
                 rc.append([int(v) for v in x[iRC].split(",")] if x[iRC] != "." else [0, 0, 0, 0])
                 g = [float(v) if v != "." else -999.0 for v in x[iG].split(",")]
@@ -85,4 +89,21 @@ for name, args in CONFIGS.items():
         bad = p < 1e-4 or abs(z) > 4.0
         fail |= bad
         print("  %-45s KS p=%.3g  z=%+.2f  %s" % (what, p, z, "FAIL" if bad else "ok"))
+# direct check of the vectorized likelihoods: cells and sites that happen to have the same read counts in both modes
+# must have the same G10 values (up to the rounding to 2 decimals of the VCF). Only in the scenario without amplification
+# error: with -A the error of every cell and site is random and differs between the modes.
+same = worst = 0
+for key, (rc, g) in KEYED.items():
+    if key[0] != "fast" or rc == "." or "-A" in key[1]:
+        continue
+    other = KEYED.get(("exact",) + key[1:])
+    if other is None or other[0] != rc or g == "." or other[1] == ".":
+        continue
+    a = [float(v) if v != "." else -999.0 for v in g.split(",")]
+    b = [float(v) if v != "." else -999.0 for v in other[1].split(",")]
+    same += 1
+    worst = max(worst, max(abs(u - v) for u, v in zip(a, b)))
+bad = same < 1000 or worst > 0.0101
+fail |= bad
+print("same read counts in both modes: %d cell-sites, largest difference in G10 = %.3f  %s" % (same, worst, "FAIL" if bad else "ok"))
 sys.exit(1 if fail else 0)

@@ -802,15 +802,15 @@ It works as a Gaussian copula on the ranks: the coverage multipliers that `-J` h
 
 ## 6.10b Fast mode (--fast)
 
-`--fast` (or `fast: true` in a configuration file) makes the simulation of the reads about 10-15% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:
+`--fast` (or `fast: true` in a configuration file) makes the simulation of the reads about 20-25% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:
 
 - Poisson numbers of reads: inversion with a single uniform number (mean < 30) or the transformed rejection method PTRS of Hormann (1993), instead of multiplying uniform numbers until a threshold is crossed;
 - binomial numbers of error reads: geometric jumps between the errors, one logarithm per error instead of one uniform number per read;
-- the base-10 logarithms and powers of the genotype likelihoods use a polynomial approximation with a relative error below 1e-12 instead of the C library.
+- the genotype likelihoods are computed in `double` with the 16 genotypes as arrays: the base-10 logarithms and powers use a polynomial approximation with a relative error below 1e-12 instead of the C library, in loops without calls that the compiler vectorizes.
 
 The distributions are the same as in the default mode, but the random numbers are consumed in a different order, so a given seed gives different reads (and likelihoods in the last digits). As in the default mode, results do not depend on the number of threads. Without `--fast` the output is bit-identical to previous versions.
 
-`tests/fast_stats.py` checks that the distributions agree: it runs the same seeds with and without `--fast` in three scenarios (plain, with doublets and coverage dispersion, with high coverage) and compares depth, read counts of each nucleotide, error reads and genotype likelihoods with Kolmogorov-Smirnov and z tests. The same test detects a 2% change in the mean coverage.
+`tests/fast_stats.py` checks that the distributions agree: it runs the same seeds with and without `--fast` in three scenarios (plain, with doublets and coverage dispersion, with high coverage) and compares depth, read counts of each nucleotide, error reads and genotype likelihoods with Kolmogorov-Smirnov and z tests. The same test detects a 2% change in the mean coverage, and checks directly that cells and sites with the same read counts in both modes have the same genotype likelihoods (without amplification error, whose per-site value is random).
 
 ## 6.11 The VCF file
 
