@@ -235,6 +235,10 @@ extern int			streamBlock;		/* number of sites in a block */
 extern int			*doubletDonor;	/* donor cell of each doublet cell when streaming */
 extern int			sparseADO;
 extern int			*errCount;
+void		StoreFullBlock (int j0, int nb);
+void		LoadFullRow (int i);
+void		FullMLPair (int i, int j, int *m, int *p);
+void		CloseFullStore (void);
 Geno		ObservedAllele (int genome, int node, int site, Geno trueAllele);
 void		SparseAllelicDropout (long int *seed);
 void		SparseGenotypeError (long int *seed);

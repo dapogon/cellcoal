@@ -944,6 +944,9 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 				StoreMLAlleles (nSNVs - nq + q, blockSNVs[q]);
 			}
 
+		if (doPrintFullGenotypes == YES || doPrintFullHaplotypes == YES)
+			StoreFullBlock (j0, nb);
+
 		/* CATG lines of the block, built in parallel and written in order to the temporary body file */
 		if (fpCATGbody)
 			for (i=0; i<nq; i+=chunk)
@@ -1088,3 +1091,100 @@ int VCFSitePasses (int j)
 	return ((double) alt / (double) depth >= minVAFvcf) ? YES : NO;
 	}
 
+
+
+/********************* ML alleles of all the sites (-3, -4 with reads) ************************/
+/* The full genotype and haplotype files list the ML alleles of every site. When the reads are streamed the window of
+   sites does not keep them, so StreamReads writes them by blocks into a temporary file (one byte per cell and site, the
+   maternal allele in the low nibble, the paternal in the high nibble, 15 = missing) laid out by rows (cells), and the
+   files are written row by row from it. */
+static FILE			*fullStore = NULL;
+static unsigned char	*fullRow = NULL;
+
+void StoreFullBlock (int j0, int nb)
+	{
+	int		i, j, m, p;
+	unsigned char *buf = (unsigned char*) malloc (nb);
+
+	if (!buf)
+		{
+		fprintf (stderr, "Could not allocate the block of ML alleles\n");
+		exit (-1);
+		}
+	if (fullStore == NULL)
+		{
+		fullStore = tmpfile ();
+		if (!fullStore)
+			{
+			fprintf (stderr, "Could not open a temporary file for the full genotypes\n");
+			exit (-1);
+			}
+		}
+	for (i=0; i<numCells+1; i++)
+		{
+		for (j=0; j<nb; j++)
+			{
+			if (cell[i].hasDoublet == NO)
+				{
+				m = CS(i,j0+j).MLmatAllele;
+				p = CS(i,j0+j).MLpatAllele;
+				}
+			else
+				{
+				m = CD(i,j0+j).MLmatAlleleDoublet;
+				p = CD(i,j0+j).MLpatAlleleDoublet;
+				}
+			buf[j] = (unsigned char) (((m == MISSING) ? 15 : m) | (((p == MISSING) ? 15 : p) << 4));
+			}
+		if (fseeko (fullStore, (off_t) i * (off_t) numSites + (off_t) j0, SEEK_SET) != 0 || fwrite (buf, 1, nb, fullStore) != (size_t) nb)
+			{
+			fprintf (stderr, "Could not write the temporary file of full genotypes\n");
+			exit (-1);
+			}
+		}
+	free (buf);
+	}
+
+/* when streaming, loads the ML alleles of the cell i (all the sites) */
+void LoadFullRow (int i)
+	{
+	if (streamMode == NO || doNGS == NO)
+		return;
+	if (fullRow == NULL)
+		fullRow = (unsigned char*) malloc (numSites);
+	if (!fullRow || fseeko (fullStore, (off_t) i * (off_t) numSites, SEEK_SET) != 0 || fread (fullRow, 1, numSites, fullStore) != (size_t) numSites)
+		{
+		fprintf (stderr, "Could not read the temporary file of full genotypes\n");
+		exit (-1);
+		}
+	}
+
+void FullMLPair (int i, int j, int *m, int *p)
+	{
+	if (streamMode == YES)
+		{
+		unsigned char b = fullRow[j];
+
+		*m = ((b & 15) == 15) ? MISSING : (int) (b & 15);
+		*p = ((b >> 4) == 15) ? MISSING : (int) (b >> 4);
+		}
+	else if (cell[i].hasDoublet == NO)
+		{
+		*m = CS(i,j).MLmatAllele;
+		*p = CS(i,j).MLpatAllele;
+		}
+	else
+		{
+		*m = CD(i,j).MLmatAlleleDoublet;
+		*p = CD(i,j).MLpatAlleleDoublet;
+		}
+	}
+
+void CloseFullStore (void)
+	{
+	if (fullStore)
+		fclose (fullStore);
+	fullStore = NULL;
+	free (fullRow);
+	fullRow = NULL;
+	}

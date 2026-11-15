@@ -903,7 +903,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 
 void PrintFullGenotypes (FILE *fp)
     {
-    int		i, j;
+    int		i, j, ml1 = MISSING, ml2 = MISSING;
 		
 	if (doPrintAncestors == YES && doNGS == NO)
         fprintf (fp, "%d %d\n", numCells+3, numSites);
@@ -914,6 +914,7 @@ void PrintFullGenotypes (FILE *fp)
         {
         for (i=0; i<numCells+1; i++)
             {
+	LoadFullRow (i);
             if (i == numCells)
                 fprintf (fp,"%s ", outCellName);
 			else
@@ -927,10 +928,11 @@ void PrintFullGenotypes (FILE *fp)
 				{
 				if (doNGS == NO)
 					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, j)), WhichNuc(GetG(PATERNAL, i, j)));
-				else if (cell[i].hasDoublet == NO)
-					fprintf (fp, " %c%c", WhichNuc(CS(i,j).MLmatAllele), WhichNuc(CS(i,j).MLpatAllele));
 				else
-					fprintf (fp, " %c%c", WhichNuc(CD(i,j).MLmatAlleleDoublet), WhichNuc(CD(i,j).MLpatAlleleDoublet));
+					{
+					FullMLPair (i, j, &ml1, &ml2);
+					fprintf (fp, " %c%c", WhichNuc(ml1), WhichNuc(ml2));
+					}
 				}
 			fprintf (fp,"\n");
             }
@@ -984,7 +986,7 @@ void PrintFullGenotypes (FILE *fp)
 
 void PrintFullHaplotypes (FILE *fp)
     {
-    int		 i, j;
+    int		 i, j, ml1 = MISSING, ml2 = MISSING;
 		
 	if (doPrintIUPAChaplotypes == NO)
 		{
@@ -1007,6 +1009,7 @@ void PrintFullHaplotypes (FILE *fp)
 			{
 			for (i=0; i<numCells+1; i++)
 				{
+	LoadFullRow (i);
 				/* print IUPAC haplotype */
 				if (i == numCells)
 					fprintf (fp,"%s ", outCellName);
@@ -1022,10 +1025,11 @@ void PrintFullHaplotypes (FILE *fp)
 					{
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
-					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichIUPAC(CS(i,j).MLmatAllele, CS(i,j).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichIUPAC(CD(i,j).MLmatAlleleDoublet, CD(i,j).MLpatAlleleDoublet));
+						{
+						FullMLPair (i, j, &ml1, &ml2);
+						fprintf (fp, "%c", WhichIUPAC(ml1, ml2));
+						}
 					}
 				fprintf (fp,"\n");
 				}
@@ -1045,6 +1049,7 @@ void PrintFullHaplotypes (FILE *fp)
 			{
 			for (i=0; i<numCells+1; i++)
 				{
+	LoadFullRow (i);
 				/* print maternal haplotype */
 				if (i == numCells)
 					fprintf (fp,"%sm  ", outCellName);
@@ -1061,10 +1066,11 @@ void PrintFullHaplotypes (FILE *fp)
 					{
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, j)));
-					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(CS(i,j).MLmatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(CD(i,j).MLmatAlleleDoublet));
+						{
+						FullMLPair (i, j, &ml1, &ml2);
+						fprintf (fp, "%c", WhichNuc(ml1));
+						}
 					}
 				fprintf (fp,"\n");
 				
@@ -1083,10 +1089,11 @@ void PrintFullHaplotypes (FILE *fp)
 					{
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, j)));
-					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(CS(i,j).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(CD(i,j).MLpatAlleleDoublet));
+						{
+						FullMLPair (i, j, &ml1, &ml2);
+						fprintf (fp, "%c", WhichNuc(ml2));
+						}
 					}
 				fprintf (fp,"\n");
 				}
