@@ -1,0 +1,35 @@
+{% set version = "2.1.7" %}
+
+package:
+  name: cellcoal
+  version: {{ version }}
+
+source:
+  url: https://github.com/dapogon/cellcoal/archive/refs/tags/v{{ version }}.tar.gz
+  sha256: 0a548c7dab3ab01dfd619f412ce99b98bba51b9d9bd17e30225dc3bab54b5ae9
+
+build:
+  number: 0
+
+requirements:
+  build:
+    - {{ compiler('c') }}
+    - make
+  host:
+    - llvm-openmp  # [osx]
+    - libgomp      # [linux]
+  run:
+    - llvm-openmp  # [osx]
+    - libgomp      # [linux]
+    - python       # for cellcoal-bulk-vaf
+    - matplotlib-base
+
+test:
+  commands:
+    - mkdir -p t && cd t && cellcoal -n1 -s10 -l200 -u1e-6 -e10000 -b1 -#1
+    - test -d t/Results
+
+about:
+  home: https://github.com/dapogon/cellcoal
+  license: GPL-2.0-or-later
+  summary: Coalescent simulator of single-cell NGS data
