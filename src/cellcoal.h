@@ -71,7 +71,8 @@ static void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, doub
 static void	BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat);
 static void	SiteGL (CellSiteStr *c, int i, int j, double *glOut);
 static const double	*GetSiteGL (int i, int j, double *buf);
-static void 	MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
+static void 	SetupDoublets (long int *seed, long windowSites);
+static void 	SetupCellCoverage (long int *seed);
 extern char		WhichNuc (int nucleotide);
 static int		WhichNucChar (char nucleotide);
 static char		WhichMut (int state);
@@ -182,7 +183,7 @@ static double 	cumCountMLgenotypeErrors, cumCountMLgenotypeErrorsSq, meanMLgenot
 static double 	cumCountCalledGenotypes, cumCountCalledGenotypesSq, meanCalledGenotypes, varCalledGenotypes;
 static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
 static double	Cijk[256], Root[4];
-static double	SNPrate, alphaCoverage, alphaSiteCoverage;
+static double	SNPrate, alphaCoverage, alphaSiteCoverage, alphaCellCoverage;
 static int		OUTGROUP_ROOT, INGROUP_ROOT;
 
 /* Genotype storage. In dense mode, data[genome][node][site] holds the genotype of every node at every site.
@@ -291,6 +292,7 @@ FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *
    number), so that the sites can be simulated in parallel and the result does not depend on the number of
    threads or on the order in which they are processed. While a thread has a stream active, RandomUniform
    ignores the seed it is given and draws from the stream instead. */
+static double			*cellCovMult = NULL;	/* between-cell coverage multiplier of every cell (-J) */
 static __thread double		siteCovMult = 1.0;	/* between-site coverage multiplier of the site being simulated (-O) */
 static __thread int			streamActive = 0;
 static __thread uint64_t	streamState;

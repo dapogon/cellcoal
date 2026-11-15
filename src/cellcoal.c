@@ -235,6 +235,7 @@ int main (int argc, char **argv)
 	rateVarAmongSites = NO;     	/* rate variation among different sites along the genome */
     alphaSites = infinity;      	/* alpha shape of the gamma distribution for rate variation among sites */
     alphaBranches = infinity;   	/* alpha shape of the gamma distribution for rate variation among lineages */
+    alphaCellCoverage = 0;			/* between-cell coverage dispersion (-J): 0 = none */
     alphaSiteCoverage = 0;			/* between-site coverage dispersion (-O): 0 = none */
     alphaCoverage = infinity;   	/* alpha shape of the gamma distribution for coverage */
 	doSimulateFixedNumMutations = NO;	/* whether to simulate a fixed number of mutations */
@@ -1029,6 +1030,8 @@ int main (int argc, char **argv)
             free (allSites);
             free (SNVsites);
             free (mlStore);
+            free (cellCovMult);
+            cellCovMult = NULL;
             mlStore = NULL;
             mlStoreCap = 0;
 			free (variantSites);
@@ -4805,8 +4808,9 @@ static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, Rea
 		if (al >= A && al <= T && al != allSites[jj].referenceAllele)
 			hasAlt = YES;
 		}
-	/* doublets (streamed reads): the reads of a donor cell are added to those of the doublet cell, from the same stream */
-	if (streamMode == YES && doubletDonor != NULL)
+	/* doublets: the reads of a donor cell are added to those of the doublet cell, from the same stream of the site
+	   (stored and streamed reads therefore give the same data) */
+	if (doubletDonor != NULL)
 		for (ii=0; ii<numCells; ii++)
 			if (cell[ii].hasDoublet == YES)
 				DoubletAtSite (ii, doubletDonor[ii], jj, sbuf + GL_NUM*(size_t)ii, probsT, ngsEij, ampMat, ampPat, &dummySeed);
@@ -4979,6 +4983,8 @@ void GenerateReadCounts (long int *seed)
 	uint64_t	streamBase;
 	long int	s1, s2;
 
+	SetupDoublets (seed, numSites);
+	SetupCellCoverage (seed);
 	RandomUniform (seed);
 	s1 = *seed;
 	RandomUniform (seed);
@@ -4997,9 +5003,8 @@ void GenerateReadCounts (long int *seed)
 		FreeReadScratch (&rs);
 		}
 	}
-	/* add doublets and reads from them */
-	if (meanDoubletRate > 0)
-		MakeDoublets(probs, ngsEij, ampEijmat, ampEijpat, seed);
+	free (doubletDonor);	/* the doublets were added site by site above */
+	doubletDonor = NULL;
 
 	/* count alternate alleles in total reads */
 	for (j=0; j<numSites; j++)
@@ -5076,18 +5081,18 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		{
 		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
 			{
-			numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage*siteCovMult, alphaCoverage, seed);
-			numPaternalReads = RandomNegativeBinomial((1.0-allelicImbalance)*coverage*siteCovMult, alphaCoverage, seed);
+			numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
+			numPaternalReads = RandomNegativeBinomial((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
 			}
 		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 			{
-			numMaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult, alphaCoverage, seed);
+			numMaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
 			numPaternalReads = 0;
 			}
 		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 			{
 			numMaternalReads = 0;
-			numPaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult, alphaCoverage, seed);
+			numPaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
 			}
 		else /* no allele is present (locus dropout/deletion) */
 			{
@@ -5099,18 +5104,18 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		{
 		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
 			{
-			numMaternalReads = RandomPoisson(allelicImbalance*coverage*siteCovMult, seed);
-			numPaternalReads = RandomPoisson((1.0-allelicImbalance)*coverage*siteCovMult, seed);
+			numMaternalReads = RandomPoisson(allelicImbalance*coverage*siteCovMult*cellCovMult[i], seed);
+			numPaternalReads = RandomPoisson((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i], seed);
 			}
 		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 			{
-			numMaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult, seed);
+			numMaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], seed);
 			numPaternalReads = 0;
 			}
 		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 			{
 			numMaternalReads = 0;
-			numPaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult, seed);
+			numPaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], seed);
 			}
 		else /* no allele is present (locus dropout/deletion) */
 			{
@@ -6041,57 +6046,6 @@ static void DoubletAtSite (int c1, int c2, int j, const double *gl1, double *pro
 	}
 
 
-void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed)
-	{
-	int		c1, c2;
-	int 	j;
-	int		debug_DL;
-	double	doubletRate;
-	double bufGL[GL_NUM];
-	const double *gl1;
-
-	debug_DL = NO;
-	if (debug_DL == YES)
-		fprintf(stderr,"\n\n\n********Doublet read counts and likelihoods");
-
-	/* choose whether a tumor cell will become a doublet */
-	for (c1=0; c1<numCells;c1++)
-		{
-		doubletRate = RandomBetaMeanVar(meanDoubletRate, varDoubletRate, seed);
-		if (RandomUniform(seed) < doubletRate)
-			{
-			cell[c1].hasDoublet = YES;
-			
-			/* select a cell genotype from the tumor sample */
-			c2 = RandomUniformTo (numCells,seed);
-
-			/* data for the doublet cell; the donor cell genotype is processed site by site in a scratch variable */
-			cell[c1].doublet = (DoubletSiteStr*) calloc (numSites, sizeof(DoubletSiteStr));
-			if (!cell[c1].doublet)
-				{
-				fprintf (stderr, "Could not allocate the cell[%d].doublet structure\n", c1);
-				exit (-1);
-				}
-
-			/* get read counts and likelihoods for this cell genotype for all sites */
-			for (j=0; j<numSites; j++) // produce doublet read counts for all sites
-				{
-				gl1 = GetSiteGL (c1, j, bufGL);
-				DoubletAtSite (c1, c2, j, gl1, probs, ngsEij, ampEijmat, ampEijpat, seed);
-				}
-			
-			} // if we do doublet for c1
-		} //c1
-	
-	/*
-	if (debug_DL == YES)
-		//exit(1);
-	*/
-	
-	}
-
-
-
 /********************* PrintCATG  ************************/
 /**	CATG output format with read counts
 	http://nbviewer.jupyter.org/gist/dereneaton/d2fd4e70d29f5ee5d195/testing_cat.ipynb#View-the-.cat-results-files
@@ -6790,6 +6744,52 @@ static void PrintBulk (FILE *fp)
 		BulkSite (fp, j);
 	}
 
+/********************* SetupCellCoverage  ************************/
+/* Coverage varies between cells (-J): the depth expected in every cell is multiplied by a gamma variate with mean 1,
+   drawn once per cell and replicate from the main random stream (the same in stored and streamed reads). */
+static void SetupCellCoverage (long int *seed)
+	{
+	int	i;
+
+	free (cellCovMult);
+	cellCovMult = (double*) malloc ((numCells+1) * sizeof(double));
+	if (!cellCovMult)
+		{
+		fprintf (stderr, "Could not allocate the cell coverage multipliers\n");
+		exit (-1);
+		}
+	for (i=0; i<numCells+1; i++)
+		cellCovMult[i] = (alphaCellCoverage > 0.0) ? RandomGamma (alphaCellCoverage, seed) / alphaCellCoverage : 1.0;
+	}
+
+/********************* SetupDoublets  ************************/
+/* Chooses which cells are doublets and their donor cells (from the main random stream), and allocates the window of sites
+   of the doublet cells. The reads of the doublets are then simulated site by site, from the stream of each site. */
+static void SetupDoublets (long int *seed, long windowSites)
+	{
+	int		i;
+	double	doubletRate;
+
+	if (meanDoubletRate <= 0)
+		return;
+	doubletDonor = (int*) calloc (numCells, sizeof(int));
+	for (i=0; i<numCells; i++)
+		{
+		doubletRate = RandomBetaMeanVar (meanDoubletRate, varDoubletRate, seed);
+		if (RandomUniform (seed) < doubletRate)
+			{
+			cell[i].hasDoublet = YES;
+			doubletDonor[i] = RandomUniformTo (numCells, seed);
+			cell[i].doublet = (DoubletSiteStr*) calloc (windowSites, sizeof(DoubletSiteStr));
+			if (!cell[i].doublet)
+				{
+				fprintf (stderr, "Could not allocate the doublet window of cell %d\n", i);
+				exit (-1);
+				}
+			}
+		}
+	}
+
 /********************* StreamReads  ************************/
 /* Simulates the reads of very large data sets without storing them. Sites are processed in blocks: the reads and genotype
    likelihoods of all the cells are simulated (in parallel over the sites of the block, each site with its own random
@@ -6810,28 +6810,8 @@ static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE
 		ngsEij[i] = (double*) calloc (4, sizeof(double));
 	SetupReadModel (ngsEij);
 
-	/* doublets: which cells are doublets and their donors */
-	if (meanDoubletRate > 0)
-		{
-		double doubletRate;
-
-		doubletDonor = (int*) calloc (numCells, sizeof(int));
-		for (i=0; i<numCells; i++)
-			{
-			doubletRate = RandomBetaMeanVar (meanDoubletRate, varDoubletRate, seed);
-			if (RandomUniform (seed) < doubletRate)
-				{
-				cell[i].hasDoublet = YES;
-				doubletDonor[i] = RandomUniformTo (numCells, seed);
-				cell[i].doublet = (DoubletSiteStr*) calloc (streamBlock, sizeof(DoubletSiteStr));
-				if (!cell[i].doublet)
-					{
-					fprintf (stderr, "Could not allocate the doublet window of cell %d\n", i);
-					exit (-1);
-					}
-				}
-			}
-		}
+	SetupDoublets (seed, streamBlock);
+	SetupCellCoverage (seed);
 
 	RandomUniform (seed);
 	s1 = *seed;
@@ -8985,6 +8965,8 @@ static void	PrintRunInformation (FILE *fp)
 				}
 			if (alphaSiteCoverage > 0.0)
 				fprintf (fp, "\n Coverage dispersion between sites (alpha)    =   %-3.2f", alphaSiteCoverage);
+			if (alphaCellCoverage > 0.0)
+				fprintf (fp, "\n Coverage dispersion between cells (alpha)    =   %-3.2f", alphaCellCoverage);
 			fprintf (fp, "\n Haploid coverage reduction                   =   %-3.2f", haploidCoverageReduction);
 			fprintf (fp, "\n Sequencing error                             =   %2.1e", sequencingError);
 			if (thereIsEij == YES)
@@ -9158,6 +9140,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 		fprintf (fp, " -V%6.4f", alphaCoverage);
 		if (alphaSiteCoverage > 0.0)
 			fprintf (fp, " -O%6.4f", alphaSiteCoverage);
+		if (alphaCellCoverage > 0.0)
+			fprintf (fp, " -J%6.4f", alphaCellCoverage);
 		fprintf (fp, " -R%2.1e", haploidCoverageReduction);
 		fprintf (fp, " -E%2.1e", sequencingError);
 		fprintf (fp, " -X%3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]
@@ -9260,6 +9244,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
 	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
 	fprintf (fp,"\n-O: coverage overdispersion between sites, shared by all cells (e.g. -O10)");
+	fprintf (fp,"\n-J: coverage overdispersion between cells, shared by all sites (e.g. -J10)");
 	fprintf (fp,"\n-R: ADO/deletion haploid coverage reduction (e.g. -R0.5)");
 	fprintf (fp,"\n-E: sequencing error (e.g. -E0.001)");
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT (e.g. -X0 1 1 1 1 0 1 1 1 1 0 1 1 1 1 0)");
@@ -9358,6 +9343,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-C: sequencing coverage =  %3.2f", coverage);
 	fprintf (fp,"\n-V: sequencing coverage overdispersion =  %6.4f", alphaCoverage);
 	fprintf (fp,"\n-O: coverage overdispersion between sites =  %6.4f", alphaSiteCoverage);
+	fprintf (fp,"\n-J: coverage overdispersion between cells =  %6.4f", alphaCellCoverage);
 	fprintf (fp,"\n-R: haploid coverage reduction =  %2.1e", haploidCoverageReduction);
 	fprintf (fp,"\n-E: sequencing error =  %2.1e", sequencingError);
 	fprintf (fp,"\n-X: error matrix ACGT x ACGT = %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3], Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
@@ -10504,6 +10490,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					PrintUsage(stderr);
 					}
 				break;
+			case 'J':
+				alphaCellCoverage = atof(argv[i]);
+				if (alphaCellCoverage <= 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad between-cell coverage dispersion (%f)\n\n", alphaCellCoverage);
+					PrintUsage(stderr);
+					}
+				break;
 			case 'O':
 				alphaSiteCoverage = atof(argv[i]);
 				if (alphaSiteCoverage <= 0)
@@ -11287,6 +11281,13 @@ void ReadParametersFromFile (void)
 				if (meanGenotypingError > 0 && doNGS == YES)
 					{
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot specify a coverage larger than 0, which implies read count generation, and a genotyping error at the same time\n\n");
+					PrintUsage(stderr);
+					}
+				break;
+			case 'J':
+				if (fscanf(stdin, "%lf", &alphaCellCoverage) != 1 || alphaCellCoverage <= 0)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad between-cell coverage dispersion (%f)\n\n", alphaCellCoverage);
 					PrintUsage(stderr);
 					}
 				break;

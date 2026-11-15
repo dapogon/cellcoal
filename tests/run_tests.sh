@@ -69,7 +69,7 @@ nf=$(grep -a -vc '^#' "$TMP/fl/Results/vcf"); np=$(grep -a -vc '^#' "$TMP/pl/Res
 if [ "$nf" -gt 0 ] && [ "$nf" -lt "$np" ]; then ok "-M reduces the VCF ($np -> $nf sites)"; else bad "-M reduces the VCF"; fi
 
 echo "2g2. Streamed CATG and ML genotype/haplotype files (-1 -2 -8) equal the stored ones, any thread count"
-C="-n2 -s30 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -m0 -v -C20 -V5 -E0.001 -A0.05 0.01 0 -1 -2 -8 -9 -#79"
+C="-n2 -s30 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -m0 -v -C20 -V5 -E0.001 -A0.05 0.01 0 -B0.3 0.001 -1 -2 -8 -9 -#79"
 mkdir -p "$TMP/ml0" "$TMP/ml1" "$TMP/ml2"
 (cd "$TMP/ml0" && CELLCOAL_STREAM=0 "$BIN" $C >out.txt 2>&1); (cd "$TMP/ml1" && CELLCOAL_STREAM=1 OMP_NUM_THREADS=1 "$BIN" $C >out.txt 2>&1); (cd "$TMP/ml2" && CELLCOAL_STREAM=1 OMP_NUM_THREADS=3 "$BIN" $C >out.txt 2>&1)
 if [ -n "$(find "$TMP/ml0/Results/catg_dir" -type f -size +1k)" ]; then
@@ -115,6 +115,25 @@ close "$bV" 0.0 0.01 && ok "-V4: bulk depth CV^2 $bV (independent noise averages
 close "$bO" 0.333 0.05 && ok "-O3: bulk depth CV^2 $bO (expected 0.333, shared by all the cells)" || bad "-O3 bulk CV^2 ($bO)"
 close "$bVO" 0.333 0.05 && ok "-V4 -O3: bulk depth CV^2 $bVO (only -O remains; per cell $cVO > $cV)" || bad "-V4 -O3 bulk CV^2 ($bVO)"
 python3 -c "import sys; sys.exit(0 if $cVO > $cO > $cV else 1)" && ok "per-cell depth CV^2 grows when the sources are combined ($cV, $cO, $cVO)" || bad "combined per-cell CV^2"
+
+echo "2g5. Coverage between cells (-J) and doublets: same data stored and streamed"
+Q="-n1 -s100 -l1500 -u1e-6 -e10000 -g1e-4 -b1 -C10 -E0.05 -0 -J4"
+mkdir -p "$TMP/j0" "$TMP/j1" "$TMP/jd0" "$TMP/jd1"
+(cd "$TMP/j0" && CELLCOAL_STREAM=0 "$BIN" $Q -9 -#4 >/dev/null 2>&1); (cd "$TMP/j1" && CELLCOAL_STREAM=1 "$BIN" $Q -9 -#4 >/dev/null 2>&1)
+if [ "$(norm "$TMP/j0/Results" | md5sum)" = "$(norm "$TMP/j1/Results" | md5sum)" ] && [ -s "$TMP/j0/Results/bulk" ]; then ok "-J: stored = streamed"; else bad "-J: stored vs streamed"; fi
+(cd "$TMP/jd0" && CELLCOAL_STREAM=0 "$BIN" $Q -B0.3 0.01 -1 -8 -9 -#4 >/dev/null 2>&1); (cd "$TMP/jd1" && CELLCOAL_STREAM=1 "$BIN" $Q -B0.3 0.01 -1 -8 -9 -#4 >/dev/null 2>&1)
+if [ "$(norm "$TMP/jd0/Results" | md5sum)" = "$(norm "$TMP/jd1/Results" | md5sum)" ] && [ -s "$TMP/jd0/Results/bulk" ]; then ok "doublets: stored = streamed (same random numbers)"; else bad "doublets: stored vs streamed"; fi
+cellcv=$(python3 -c "
+import statistics as st,sys
+n=[0]*101; k=0
+for l in open('$TMP/j0/Results/vcf',errors='ignore'):
+    if l.startswith('1\t'):
+        k+=1
+        f=l.rstrip('\n').split('\t')
+        for c,x in enumerate(f[9:-1]): n[c]+=int(x.split(':')[1])
+m=[x/k for x in n[:100]]
+print(round(st.pvariance(m)/st.mean(m)**2,4))")
+close "$cellcv" 0.25 0.08 && ok "-J4: CV^2 of the mean depth between cells $cellcv (expected 0.25)" || bad "-J4 between-cell depth ($cellcv)"
 
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
@@ -236,9 +255,9 @@ PY
 (cd "$TMP/imb" && "$BIN" -n1 -s20 -l5000 -u1e-6 -e10000 -g0 -b1 -C60 -V1000 -E0 -I0.7 0.001 -v -#5 >/dev/null 2>&1)
 r=$(python3 "$TMP/reads.py" imb "$TMP/imb/Results/vcf_dir/vcf.0001")
 close $r 0.70 0.02 && ok "allelic imbalance (-I0.7): maternal read fraction $r" || bad "allelic imbalance: $r (expected 0.70)"
-(cd "$TMP/dbl" && "$BIN" -n1 -s100 -l3000 -u1e-6 -e10000 -g0 -b1 -C30 -V1000 -E0 -B0.2 0.001 -v -#5 >/dev/null 2>&1)
+(cd "$TMP/dbl" && "$BIN" -n1 -s300 -l1500 -u1e-6 -e10000 -g0 -b1 -C30 -V1000 -E0 -B0.2 0.001 -v -#5 >/dev/null 2>&1)
 r=$(python3 "$TMP/reads.py" dbl "$TMP/dbl/Results/vcf_dir/vcf.0001")
-close $r 0.20 0.08 && ok "doublets (-B0.2): fraction of doublet cells $r" || bad "doublets: $r (expected 0.20)"
+close $r 0.20 0.05 && ok "doublets (-B0.2): fraction of doublet cells $r" || bad "doublets: $r (expected 0.20)"
 (cd "$TMP/sig" && "$BIN" -n1 -s20 -l500000 -u1e-8 -e10000 -g0 -b1 -S1 1 1.0 -C20 -V1000 -E0 -v -#5 >/dev/null 2>&1)
 r=($(python3 "$TMP/reads.py" sig "$TMP/sig/Results/vcf_dir/vcf.0001"))
 close ${r[0]} 0.675 0.05 && ok "signature 1: C>T fraction ${r[0]} (expected 0.675)" || bad "signature 1: C>T ${r[0]} (expected 0.675)"
