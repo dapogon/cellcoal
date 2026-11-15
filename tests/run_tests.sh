@@ -278,6 +278,18 @@ PY
   if [ "$n1" = "$n2" ] && [ "$n1" -gt 100 ] && cmp -s "$TMP/q1.txt" "$TMP/q2.txt"; then ok "bcftools reads the BCF: $n1 records, positions, alleles and DP equal the VCF"; else bad "bcftools reading ($n1 vs $n2)"; bcftools view -H "$f" 2>&1 | head -3; fi
   bcftools index "$f" >/dev/null 2>&1 && ok "bcftools can index the BCF" || bad "bcftools index"
 else echo "  skip (bcftools not installed)"; fi
+echo "2g11b. The BCF index (.bcf.csi) is written by the program and is correct (several bins)"
+BX="-n1 -s12 -l70000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.01 -v -#9"
+mkdir -p "$TMP/bx1" "$TMP/bx2"
+(cd "$TMP/bx1" && "$BIN" --bcf $BX >/dev/null 2>&1); (cd "$TMP/bx2" && "$BIN" $BX >/dev/null 2>&1)
+if [ -s "$TMP/bx1/Results/vcf_dir/vcf.0001.bcf.csi" ] && python3 "$ROOT/tests/bcf_check.py" "$TMP/bx1/Results/vcf_dir/vcf.0001.bcf" "$TMP/bx2/Results/vcf_dir/vcf.0001" >"$TMP/bcfchk.txt" 2>&1 && grep -q "CSI ok" "$TMP/bcfchk.txt"; then ok "CSI index checked independently ($(grep 'CSI ok' "$TMP/bcfchk.txt"))"; else bad "CSI index"; head -5 "$TMP/bcfchk.txt"; fi
+if command -v bcftools >/dev/null 2>&1; then
+  f="$TMP/bx1/Results/vcf_dir/vcf.0001.bcf"; v="$TMP/bx2/Results/vcf_dir/vcf.0001"
+  nidx=$(bcftools index -n "$f" 2>/dev/null); ntxt=$(grep -v '^#' "$v" | grep -c "$(printf '\t')")
+  r1=$(bcftools view -H -r 1:20000-50000 "$f" 2>/dev/null | cut -f2 | md5sum)
+  r2=$(grep -v '^#' "$v" | grep "$(printf '\t')" | awk -F'\t' '$2>=20000 && $2<=50000 {print $2}' | md5sum)
+  if [ "$nidx" = "$ntxt" ] && [ "$ntxt" -gt 50 ] && [ "$r1" = "$r2" ]; then ok "bcftools uses our .csi: $nidx records, region query equals the VCF"; else bad "bcftools with our .csi (count $nidx vs $ntxt)"; bcftools view -H -r 1:20000-50000 "$f" 2>&1 | head -3; fi
+fi
 if "$BIN" --bcf -z -s5 2>&1 | grep -q 'cannot be combined' && "$BIN" --bcf -n3 -s5 2>&1 | grep -q 'needs -v'; then ok "--bcf option checks"; else bad "--bcf option checks"; fi
 
 echo "2g12. Cache of genotype likelihoods (same counts and amplification errors) does not change the results"

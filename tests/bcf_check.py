@@ -4,7 +4,9 @@
 Usage: bcf_check.py FILE.bcf FILE.vcf
 Decodes the BGZF/BCF 2.2 file following the specification (independently of the C converter) and compares every
 record, INFO and FORMAT value with the VCF text: strings and integers exactly, floats as float32 of the printed text.
-Also checks the BGZF structure (BC extra field, end-of-file marker). Needs only the standard library."""
+Also checks the BGZF structure (BC extra field, end-of-file marker) and the CSI index FILE.bcf.csi: every record must lie in a chunk
+of its bin (virtual offsets computed independently from the BGZF blocks), with consistent loffsets and statistics.
+Needs only the standard library."""
 import gzip, struct, sys
 
 def bgzf_blocks_ok(path):
@@ -74,11 +76,39 @@ for l in open(vcf):
     if l[0] == "#" or "\t" not in l: continue
     vrecs.append(l.rstrip("\n").split("\t"))
 
+def block_table(path):
+    data = open(path, "rb").read()
+    pos = 0; tab = []; u = 0
+    while pos < len(data):
+        bsize = struct.unpack_from("<H", data, pos + 16)[0] + 1
+        isize = struct.unpack_from("<I", data, pos + bsize - 4)[0]
+        tab.append((pos, u, isize)); u += isize; pos += bsize
+    return tab
+
+blocks = block_table(bcf)
+def voff(u):
+    for caddr, ustart, size in blocks:          # the block holding the byte u (empty blocks hold nothing)
+        if size and ustart <= u < ustart + size:
+            return (caddr << 16) | (u - ustart)
+    return (blocks[-1][0] << 16)                 # end of the data: start of the end-of-file block
+
+size_of = {caddr: size for caddr, _, size in blocks}
+next_of = {blocks[i][0]: blocks[i+1][0] for i in range(len(blocks) - 1)}
+def norm(v):
+    """(block, offset) with offset == block size is the same place as (next block, 0), as htslib reports it"""
+    caddr, off = v >> 16, v & 0xFFFF
+    if caddr in size_of and off == size_of[caddr] and caddr in next_of:
+        return next_of[caddr] << 16
+    return v
+
+recs = []
 nrec = 0
 while r.p < len(r.b):
+    ustart = r.p
     ls, li = r.u32(), r.u32()
     sh = R(r.take(ls)); ind = R(r.take(li))
     chrom, pos, rlen = sh.i32(), sh.i32(), sh.i32()
+    recs.append((ustart, r.p, chrom, pos, rlen))
     qual = struct.unpack("<I", sh.take(4))[0]
     ninfo = struct.unpack("<H", sh.take(2))[0]; nallele = struct.unpack("<H", sh.take(2))[0]
     w = sh.u32(); nsamp, nfmt = w & 0xFFFFFF, w >> 24
@@ -143,4 +173,54 @@ while r.p < len(r.b):
                     assert g == int(wv), (key, s, g, wv)
             assert len(got) == len(want) or (want == ["."] and got == [None]), (key, s, got, want)
 assert nrec == len(vrecs), (nrec, len(vrecs))
+
+# ---- CSI index ----
+csi = bcf + ".csi"
+bgzf_blocks_ok(csi)
+c = R(gzip.open(csi).read())
+assert c.take(4) == b"CSI\x01", "CSI magic"
+min_shift, depth, l_aux, nref = c.i32(), c.i32(), c.i32(), None
+c.take(l_aux); nref = c.i32()
+ncontig = len([l for l in hdr if l.startswith("##contig=")])
+assert nref == ncontig, ("n_ref", nref, ncontig)
+assert (1 << (min_shift + 3 * depth)) > max(p + 1 for _, _, _, p, _ in recs), "depth does not cover the contig"
+meta_bin = ((1 << (3 * (depth + 1))) - 1) // 7 + 1
+bins = []
+for _ in range(nref):
+    d = {}
+    for _ in range(c.i32()):
+        b = c.u32(); loff = struct.unpack("<Q", c.take(8))[0]; chunks = []
+        for _ in range(c.i32()):
+            chunks.append(struct.unpack("<QQ", c.take(16)))
+        d[b] = (loff, chunks)
+    bins.append(d)
+tail = c.take(8) if c.p < len(c.b) else b""     # optional count of records without coordinate
+assert c.p == len(c.b), "trailing bytes in the index"
+
+def reg2bin(beg, end):
+    end -= 1; s_ = min_shift; t = ((1 << (3 * depth)) - 1) // 7
+    for l in range(depth, 0, -1):
+        if beg >> s_ == end >> s_: return t + (beg >> s_)
+        s_ += 3; t -= 1 << (3 * l)
+    return 0
+
+firstvo = {}
+for ustart, uend, chrom, pos, rlen in recs:
+    b = reg2bin(pos, pos + max(rlen, 1))
+    loff, chunks = bins[chrom][b]                 # KeyError = the bin is missing
+    vs, ve = norm(voff(ustart)), norm(voff(uend))
+    assert any(norm(cb) <= vs and ve <= norm(ce) for cb, ce in chunks), ("record not in a chunk", pos)
+    firstvo.setdefault((chrom, b), vs)
+for chrom in range(nref):
+    for b, (loff, chunks) in bins[chrom].items():
+        if b == meta_bin:
+            continue
+        assert loff <= firstvo[(chrom, b)], ("loffset", b)
+        assert chunks == sorted(chunks) and all(chunks[i][1] <= chunks[i+1][0] for i in range(len(chunks) - 1)), ("chunks", b)
+    n_recs = [x for x in recs if x[2] == chrom]
+    if n_recs:
+        (_, (m0, m1)), = [(None, bins[chrom][meta_bin][1][1])]
+        assert (m0, m1) == (len(n_recs), 0), ("n_mapped/unmapped", m0, m1)
+        assert tuple(norm(x) for x in bins[chrom][meta_bin][1][0]) == (norm(voff(n_recs[0][0])), norm(voff(n_recs[-1][1]))), "offset range"
+print("CSI ok: %d bins" % sum(len(d) for d in bins))
 print("BCF ok: %d records, %d samples, %d BGZF blocks" % (nrec, len(samples), nblocks))

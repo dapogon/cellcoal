@@ -31,7 +31,7 @@ With simulated reads, sequencing and amplification errors give almost every site
 
 ## Unreleased (next 2.2.x)
 
-`--bcf` writes the likelihoods as a BCF file (`vcf.bcf`) instead of the VCF; it reads with bcftools/htslib, and has about the size of `vcf.gz` (4-5 times smaller than the VCF). A per-thread **cache of genotype likelihoods** (cells and sites with the same read counts and amplification errors share them) makes the reads about 30% faster at low coverage without `-A`, with bit-identical output. `--fast` is now about 25-30% faster than the default: the genotype likelihoods are computed in `double` with vectorizable batch logarithms and powers (`tests/fast_stats.py` compares them with the exact code). Without `--fast` nothing changes.
+`--bcf` writes the likelihoods as a BCF file (`vcf.bcf`) instead of the VCF; it reads with bcftools/htslib, and has about the size of `vcf.gz` (4-5 times smaller than the VCF). The program also writes its CSI index (`vcf.bcf.csi`), so region queries work at once. **Streamed reads now work with `-3 -4 -5 -Y`** (full ML genotypes and haplotypes, ancestors, true haplotypes): 200 cells x 60,000 sites with `-3 -4 -Y` use 106 MB instead of 825 MB, with identical files. A per-thread **cache of genotype likelihoods** (cells and sites with the same read counts and amplification errors share them) makes the reads about 30% faster at low coverage without `-A`, with bit-identical output. `--fast` is now about 25-30% faster than the default: the genotype likelihoods are computed in `double` with vectorizable batch logarithms and powers (`tests/fast_stats.py` compares them with the exact code). Without `--fast` nothing changes.
 
 ## What's new in 2.2.0
 

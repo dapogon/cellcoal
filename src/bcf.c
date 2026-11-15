@@ -585,6 +585,170 @@ static void ConvertRecord (Bytes *rec, char *line, int nsamples, long lineNo)
 	}
 
 /* Converts the VCF text file vcfPath into the BCF file bcfPath; returns 0 if all went well */
+/* ---------- CSI index ---------- */
+/* Virtual file offset (BGZF block address << 16 | offset inside the block) of the next byte written */
+static uint64_t BgzfTell (Bgzf *b)
+	{
+	return ((uint64_t) ftello (b->fp) << 16) | (uint64_t) b->n;
+	}
+
+typedef struct { int tid; uint32_t bin; uint64_t beg, end; } CsiChunk;
+typedef struct
+	{
+	CsiChunk *c;
+	size_t	n, cap;
+	int		curTid;
+	int64_t	curBin;
+	uint64_t curBeg;
+	uint64_t firstOff[8], lastEnd[8];	/* range of the offsets of the records of each contig */
+	long	nrec[8];
+	} CsiIndex;
+
+/* bin of the interval [beg,end) (0-based) in a CSI index of the given minimum shift and depth */
+static int CsiReg2Bin (int64_t beg, int64_t end, int minShift, int depth)
+	{
+	int		l, s = minShift;
+	int64_t	t = (((int64_t)1 << (3*depth)) - 1) / 7;	/* first bin of the lowest level */
+
+	for (--end, l=depth; l>0; --l, s+=3, t -= (int64_t)1 << (3*l))
+		if (beg >> s == end >> s)
+			return (int) (t + (beg >> s));
+	return 0;
+	}
+
+static void CsiPushChunk (CsiIndex *x, int tid, uint32_t bin, uint64_t beg, uint64_t end)
+	{
+	if (x->n == x->cap)
+		{
+		x->cap = x->cap ? 2 * x->cap : 1024;
+		x->c = (CsiChunk*) realloc (x->c, x->cap * sizeof(CsiChunk));
+		if (!x->c)
+			{
+			fprintf (stderr, "Out of memory writing the BCF index\n");
+			exit (-1);
+			}
+		}
+	x->c[x->n].tid = tid; x->c[x->n].bin = bin; x->c[x->n].beg = beg; x->c[x->n].end = end;
+	x->n++;
+	}
+
+/* registers a record (starting at the virtual offset off and ending at endOff) with its contig, 0-based position and length;
+   consecutive records of the same bin share a chunk */
+static void CsiAdd (CsiIndex *x, int minShift, int depth, int tid, int64_t pos, int64_t rlen, uint64_t off, uint64_t endOff)
+	{
+	int64_t bin = CsiReg2Bin (pos, pos + (rlen > 0 ? rlen : 1), minShift, depth);
+	int		first = (x->nrec[tid] == 0);
+	long	total = 0;
+	int		t;
+
+	for (t=0; t<8; t++)
+		total += x->nrec[t];
+	if (first)
+		x->firstOff[tid] = off;
+	if (total > 0 && (tid != x->curTid || bin != x->curBin))
+		CsiPushChunk (x, x->curTid, (uint32_t) x->curBin, x->curBeg, off);
+	if (total == 0 || tid != x->curTid || bin != x->curBin)
+		{
+		x->curTid = tid; x->curBin = bin; x->curBeg = off;
+		}
+	x->lastEnd[tid] = endOff;
+	x->nrec[tid]++;
+	}
+
+static int CmpChunk (const void *a, const void *b)
+	{
+	const CsiChunk *x = (const CsiChunk*) a, *y = (const CsiChunk*) b;
+
+	if (x->tid != y->tid)
+		return x->tid < y->tid ? -1 : 1;
+	if (x->bin != y->bin)
+		return x->bin < y->bin ? -1 : 1;
+	return (x->beg > y->beg) - (x->beg < y->beg);
+	}
+
+static void BPut64 (Bytes *b, uint64_t v)
+	{
+	BPut32 (b, (uint32_t) (v & 0xFFFFFFFFu));
+	BPut32 (b, (uint32_t) (v >> 32));
+	}
+
+/* Writes the CSI index (min_shift 14 like "bcftools index"; the depth grows to cover the contig) in a BGZF file.
+   CellCoal records are one base long, so they fall in the bins of the lowest level; every bin is a run of consecutive
+   records and has a chunk per run, and its loffset is the first record of the bin. Each contig also has the usual
+   pseudo-bin with its range of offsets and its number of records. */
+static int WriteCsi (CsiIndex *x, int minShift, int depth, int nref, const char *path)
+	{
+	FILE	*fp = fopen (path, "wb");
+	Bytes	b = {0,0,0};
+	Bgzf	bz;
+	int		tid;
+	size_t	i = 0, j, k, first;
+	uint32_t metaBin = (uint32_t) ((((int64_t)1 << (3*(depth+1))) - 1) / 7 + 1);
+
+	if (!fp)
+		return -1;
+	{
+	long total = 0;
+	int t;
+
+	for (t=0; t<8; t++)
+		total += x->nrec[t];
+	if (total > 0)
+		CsiPushChunk (x, x->curTid, (uint32_t) x->curBin, x->curBeg, x->lastEnd[x->curTid]);
+	}
+	if (x->n > 1)
+		qsort (x->c, x->n, sizeof(CsiChunk), CmpChunk);
+
+	BPutRaw (&b, "CSI\1", 4);
+	BPut32 (&b, (uint32_t) minShift);
+	BPut32 (&b, (uint32_t) depth);
+	BPut32 (&b, 0);			/* l_aux */
+	BPut32 (&b, (uint32_t) nref);
+	for (tid=0; tid<nref; tid++)
+		{
+		size_t nbin = 0;
+
+		first = i;
+		for (j=i; j<x->n && x->c[j].tid == tid; j++)
+			if (j == first || x->c[j].bin != x->c[j-1].bin)
+				nbin++;
+		i = j;
+		BPut32 (&b, (uint32_t) (nbin + (x->nrec[tid] > 0 ? 1 : 0)));
+		for (j=first; j<i; j=k)
+			{
+			uint32_t bin = x->c[j].bin;
+
+			for (k=j; k<i && x->c[k].bin == bin; k++)
+				;
+			BPut32 (&b, bin);
+			BPut64 (&b, x->c[j].beg);			/* loffset */
+			BPut32 (&b, (uint32_t) (k - j));
+			for (; j<k; j++)
+				{
+				BPut64 (&b, x->c[j].beg);
+				BPut64 (&b, x->c[j].end);
+				}
+			}
+		if (x->nrec[tid] > 0)
+			{
+			BPut32 (&b, metaBin);
+			BPut64 (&b, 0);
+			BPut32 (&b, 2);
+			BPut64 (&b, x->firstOff[tid]);
+			BPut64 (&b, x->lastEnd[tid]);
+			BPut64 (&b, (uint64_t) x->nrec[tid]);	/* mapped */
+			BPut64 (&b, 0);						/* unmapped */
+			}
+		}
+	BPut64 (&b, 0);			/* records without coordinate */
+
+	bz.fp = fp; bz.n = 0;
+	BgzfWrite (&bz, b.d, b.n);
+	BgzfClose (&bz);
+	free (b.d);
+	return fclose (fp);
+	}
+
 int ConvertVCFtoBCF (const char *vcfPath, const char *bcfPath)
 	{
 	FILE	*in = fopen (vcfPath, "r"), *out = fopen (bcfPath, "wb");
@@ -596,10 +760,15 @@ int ConvertVCFtoBCF (const char *vcfPath, const char *bcfPath)
 	Bytes	text = {0,0,0}, rec = {0,0,0};
 	Bgzf	bz;
 	char	magic[5] = {'B','C','F',2,2};
+	CsiIndex csi;
+	int		csiDepth = 5;
 
 	if (!in || !out)
 		return -1;
 	CrcInit ();
+	memset (&csi, 0, sizeof(csi));
+	while (((int64_t)1 << (14 + 3*csiDepth)) <= (int64_t) numSites + 1)
+		csiDepth++;
 	ndict = 0; ncontig = 0;
 	bz.fp = out; bz.n = 0;
 
@@ -679,10 +848,28 @@ int ConvertVCFtoBCF (const char *vcfPath, const char *bcfPath)
 		if (len == 0 || line[0] == '#' || strchr (line, '\t') == NULL)
 			continue;	/* blank lines and replicate markers */
 		ConvertRecord (&rec, line, nsamples, lineNo);
+		{
+		uint64_t off = BgzfTell (&bz);
+		uint32_t tid, pos, rlen;
+
 		BgzfWrite (&bz, rec.d, rec.n);
+		memcpy (&tid, rec.d + 8, 4); memcpy (&pos, rec.d + 12, 4); memcpy (&rlen, rec.d + 16, 4);	/* little-endian hosts */
+		if (tid < 8)
+			CsiAdd (&csi, 14, csiDepth, (int) tid, (int64_t) pos, (int64_t) rlen, off, BgzfTell (&bz));
+		}
 		}
 	BgzfClose (&bz);
 	free (text.d); free (rec.d); free (line);
 	fclose (in);
-	return fclose (out);
+	if (fclose (out) != 0)
+		return -1;
+	{
+	char	csiPath[4*MAX_NAME+16];
+	int		rc;
+
+	snprintf (csiPath, sizeof(csiPath), "%s.csi", bcfPath);
+	rc = WriteCsi (&csi, 14, csiDepth, ncontig, csiPath);
+	free (csi.c);
+	return rc;
+	}
 	}

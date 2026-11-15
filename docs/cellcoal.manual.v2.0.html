@@ -108,6 +108,9 @@ memory</a></li>
 2.0.3</a></li>
 <li><a href="#version-2.1.0-sparse-genomes" id="toc-version-2.1.0-sparse-genomes">8.7 Version 2.1.0: sparse
 genomes</a></li>
+<li><a href="#f-streamed-reads-with-the-full-genotype-and-haplotype-files" id="toc-f-streamed-reads-with-the-full-genotype-and-haplotype-files">6.10f
+Streamed reads with the full genotype and haplotype files</a></li>
+<li><a href="#g-index-of-the-bcf-file" id="toc-g-index-of-the-bcf-file">6.10g Index of the BCF file</a></li>
 <li><a href="#version-2.1.1-streamed-reads" id="toc-version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</a></li>
 <li><a href="#versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options" id="toc-versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
@@ -1411,8 +1414,10 @@ with <code>-z</code> or <code>-Z</code>. The file is BCF 2.2 in a BGZF
 container, as written by bcftools, with the same fields as the VCF (a
 field with the same name has the same values; floats are stored as
 32-bit floats). It can be read with <code>bcftools view</code>,
-<code>bcftools query</code>, htslib, pysam, etc.;
-<code>bcftools index vcf.bcf</code> creates the index.</p>
+<code>bcftools query</code>, htslib, pysam, etc.; the program also
+writes the CSI index (<code>vcf.bcf.csi</code>, section 6.10g), so
+region queries (<code>bcftools view -r 1:1000-2000 vcf.bcf</code>) work
+at once.</p>
 <p>The VCF is written first as text and converted when the file is
 closed, so the memory use is the same as without <code>--bcf</code>. If
 zlib was available when the program was compiled (the Makefile checks
@@ -1631,6 +1636,40 @@ sites runs in about 7 s and 360 MB for genotype outputs. Reads, VCF,
 CATG and PILEUP are not yet supported in sparse mode, and full-sequence
 outputs (-4, -5, -Y) stop with an error on data sets above the dense
 limit. Dense output is identical to 2.0.3.</p>
+<h2 id="f-streamed-reads-with-the-full-genotype-and-haplotype-files">6.10f
+Streamed reads with the full genotype and haplotype files</h2>
+<p>The large-memory outputs can now also be used with streamed reads
+(section 8.8): the full ML genotypes (<code>-3</code>) and haplotypes
+(<code>-4</code>), the ancestors (<code>-5</code>) and the true
+haplotypes (<code>-Y</code>). The maximum-likelihood alleles of every
+site are written block by block to a temporary file (one byte per cell
+and site) and the files are produced from it row by row, so the memory
+use is that of the streamed reads and not that of all the genomes (200
+cells x 60,000 sites with <code>-3 -4 -Y</code>: 106 MB instead of 825
+MB). <code>-5</code> and <code>-Y</code> read the genomes, which sparse
+storage keeps compactly. The files are identical to those of the stored
+mode for the same seed and any number of threads
+(<code>tests/run_tests.sh</code>, section 2g13). The temporary file has
+<code>cells x sites</code> bytes, which is about a third of the full
+genotype file; the files themselves still have
+<code>cells x sites</code> characters per haplotype, so very large
+genomes produce very large files.</p>
+<h2 id="g-index-of-the-bcf-file">6.10g Index of the BCF file</h2>
+<p>With <code>--bcf</code> the program writes <code>vcf.bcf.csi</code>
+(<code>vcf_dir/vcf.NNNN.bcf.csi</code> with <code>-v</code>) next to
+every BCF file: a CSI index (minimum shift 14, as
+<code>bcftools index -c</code> makes, with more levels if the contig is
+longer than 512 Mb). The records of CellCoal are one base long, so every
+record is in a bin of the lowest level and each bin is a run of
+consecutive records; each bin has one chunk, its loffset is its first
+record, and each contig has the usual pseudo-bin with the offsets of its
+first and last records and the number of records (what
+<code>bcftools index -n</code> and <code>-s</code> report).
+<code>tests/bcf_check.py</code> decodes the index independently and
+checks that every record is inside a chunk of its bin, the loffsets, the
+order of the chunks and the statistics; the CI also queries a region
+with bcftools and compares it with the VCF. Delete or rebuild the index
+with <code>bcftools index -f</code> if you modify the BCF.</p>
 <h2 id="version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</h2>
 <p>Streamed reads. When the per-cell, per-site read data would exceed
@@ -1643,10 +1682,10 @@ and any number of threads (from version 2.1.8 the doublets also use the
 stream of each site in both modes; before, stored reads used the main
 stream). VCF, PILEUP and bulk (-0) were the only outputs available while
 streaming until version 2.1.6, which adds CATG (-8) and the SNV
-genotypes and haplotypes with reads (-1, -2); -3, -4, -5 and -Y are
-still not available. The computing time is still proportional to cells x
-sites and the VCF lists every apparent SNV, so very large read data sets
-produce very large files.</p>
+genotypes and haplotypes with reads (-1, -2); -3, -4, -5 and -Y were not
+available until the version after 2.2.0 (section 6.10f). The computing
+time is still proportional to cells x sites and the VCF lists every
+apparent SNV, so very large read data sets produce very large files.</p>
 <h2 id="versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
 Versions 2.1.2 to 2.1.4: bulk read counts, VCF options</h2>
 <p>Version 2.1.2 adds option <code>-0</code>, version 2.1.3 option
