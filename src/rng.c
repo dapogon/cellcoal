@@ -367,6 +367,10 @@ int RandomPoisson (double lambda, long int *seed)
 			}
 		}
 
+	/* a mean of billions is absurd here (the callers reject such numbers of mutations); the loop below would need
+	   that many draws and its counter would overflow */
+	if (lambda > 2.0e9)
+		return 2000000000;
 	sum = 0;
 	poissonNumber = -1;
 	while (sum <= 1.0)
@@ -661,7 +665,18 @@ double RandomGamma2 (double s, long int *seed)
      */
     double			r ,d, f, g, x;
     static __thread double	b, h, ss=0;
-	
+
+    /* for an enormous shape (above 1e7) the gamma is practically normal (mean s, variance s), and Best's rejection
+       loop would not terminate because b+f loses all precision */
+    if (s > 1e7)
+        {
+        do {
+            r = RandomUniform(seed);
+            d = RandomUniform(seed);
+            x = s + sqrt(s) * sqrt(-2.0*log(r > 0.0 ? r : 1e-300)) * cos(6.283185307179586*d);
+            } while (x <= 0.0);
+        return x;
+        }
     if (s!=ss)
     {
         b  = s-1.0;

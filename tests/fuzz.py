@@ -9,7 +9,7 @@ Failing inputs are printed so they can be reproduced. Needs only the standard li
 import json, os, random, re, subprocess, sys, tempfile, time
 
 args = sys.argv[1:]
-binary = args[0]
+binary = os.path.abspath(args[0])
 def opt(name, default):
     return type(default)(args[args.index(name) + 1]) if name in args else default
 runs, seed, budget = opt("--runs", 300), opt("--seed", 1), opt("--time", 0.0)

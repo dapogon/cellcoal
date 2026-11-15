@@ -310,6 +310,16 @@ else bad "full genotype/haplotype files not produced"; fi
 echo "2g14. Biological validation: coalescent, mutations, site frequency spectrum, reads and dropout agree with theory (tests/theory.py)"
 if python3 "$ROOT/tests/theory.py" "$BIN" >"$TMP/theory.txt" 2>&1; then ok "$(tail -1 "$TMP/theory.txt")"; else bad "theory"; grep FAIL "$TMP/theory.txt" | head -8; fi
 
+echo "2g15. Enormous gamma shapes (found by tests/fuzz.py) terminate; the fuzzer finds no crash on a short run"
+mkdir -p "$TMP/gh"
+if (cd "$TMP/gh" && python3 - "$BIN" <<'PY'
+import subprocess, sys
+for o in ("-a1e308", "-J1e308", "-O1e308", "-V1e308", "-i1e308"):
+    subprocess.run([sys.argv[1], "-n1", "-s8", "-l200", "-u1e-6", "-e1000", "-b1", "-C5", "-V1", "-E0.001", o], capture_output=True, timeout=60, check=True)
+PY
+); then ok "huge gamma shapes (-a -J -O -V -i 1e308) finish"; else bad "huge gamma shape hangs or fails"; fi
+if python3 "$ROOT/tests/fuzz.py" "$BIN" --runs 60 --seed 11 >"$TMP/fuzz.txt" 2>&1; then ok "$(tail -1 "$TMP/fuzz.txt")"; else bad "fuzz"; head -6 "$TMP/fuzz.txt"; fi
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)

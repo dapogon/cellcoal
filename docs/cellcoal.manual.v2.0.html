@@ -111,6 +111,8 @@ genomes</a></li>
 <li><a href="#f-streamed-reads-with-the-full-genotype-and-haplotype-files" id="toc-f-streamed-reads-with-the-full-genotype-and-haplotype-files">6.10f
 Streamed reads with the full genotype and haplotype files</a></li>
 <li><a href="#g-index-of-the-bcf-file" id="toc-g-index-of-the-bcf-file">6.10g Index of the BCF file</a></li>
+<li><a href="#h-tests-sanitizers-fuzzing-compilers-and-theory" id="toc-h-tests-sanitizers-fuzzing-compilers-and-theory">6.10h Tests:
+sanitizers, fuzzing, compilers and theory</a></li>
 <li><a href="#version-2.1.1-streamed-reads" id="toc-version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</a></li>
 <li><a href="#versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options" id="toc-versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
@@ -1672,6 +1674,52 @@ checks that every record is inside a chunk of its bin, the loffsets, the
 order of the chunks and the statistics; the CI also queries a region
 with bcftools and compares it with the VCF. Delete or rebuild the index
 with <code>bcftools index -f</code> if you modify the BCF.</p>
+<h2 id="h-tests-sanitizers-fuzzing-compilers-and-theory">6.10h Tests:
+sanitizers, fuzzing, compilers and theory</h2>
+<p>Beyond the regression suite (<code>make test</code>), the CI checks
+the program in several other ways, all of which can be run locally.</p>
+<ul>
+<li><strong>Compilers and OpenMP.</strong> The suite also runs with
+clang and with gcc and clang without OpenMP (<code>make CC=clang</code>,
+<code>make OMPFLAG=</code>); the results must be identical.</li>
+<li><strong>Sanitizers.</strong> A build with AddressSanitizer and
+UndefinedBehaviorSanitizer runs the whole suite:
+<code>make CFLAGS=&quot;-Wall -O1 -g -ffp-contract=off -fsanitize=address,undefined -fopenmp -DUSE_COLORS&quot; LDFLAGS=&quot;-fsanitize=address,undefined&quot;</code>,
+then <code>ASAN_OPTIONS=detect_leaks=0 make test</code>.</li>
+<li><strong>Fuzzing.</strong>
+<code>python3 tests/fuzz.py bin/cellcoal-x.y.z --runs 400 --seed 1</code>
+gives the program random, often invalid, options and values, and
+randomly damaged YAML and JSON configuration files. An invalid input
+must be rejected with a message; a crash, a hang or a sanitizer report
+is a failure and the offending command or file is printed. It found a
+2-byte heap overflow in the BCF writer (present in 2.2.0 and 2.2.1), a
+hang with an enormous gamma shape (for example <code>-a1e308</code>) and
+two integer overflows with absurd values; all are fixed after
+2.2.1.</li>
+<li><strong>Coverage.</strong> The CI builds with
+<code>--coverage</code>, runs the suite and writes the line coverage of
+every source file (<code>tools/gcov_summary.py</code>) in the summary of
+the job.</li>
+<li><strong>Theory.</strong>
+<code>python3 tests/theory.py bin/cellcoal-x.y.z</code> (a few seconds,
+also part of <code>make test</code>) checks that the model is right, not
+only stable: (1) in a constant population the waiting time with k
+lineages is exponential with mean 2N/(k(k-1)) and the total tree length
+has mean 2N times the sum of 1/i; (2) with exponential growth the time
+to the coalescence of two cells agrees with the numerical integral of
+its distribution; (3) under the diploid infinite-sites model the number
+of mutations is Theta times the sum of 1/i (Theta = 4 N mu L) and the
+site frequency spectrum of the true genotypes is Theta/i; (4) the depth
+of the reads has the expected mean and variance (each chromosome has a
+negative binomial depth with mean C/2 and dispersion V, so the variance
+of a cell is C + C^2/2V), the fraction of error reads is the sequencing
+error (estimated at low rates with a zero-truncated likelihood, because
+the bulk file lists only sites with alternate reads), and a genotype
+loses an allele with probability D and both with probability (1 - sqrt(1
+- D))^2. Seeds are fixed, so the result is reproducible; each statistic
+is a z-score that must be below 4, which detects a change of a few
+percent in the rates.</li>
+</ul>
 <h2 id="version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</h2>
 <p>Streamed reads. When the per-cell, per-site read data would exceed
