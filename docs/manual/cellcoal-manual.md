@@ -971,3 +971,8 @@ Zafar H, Wang Y, Nakhleh L, Navin N, Chen K. 2016. Monovar: single-nucleotide va
 ## 8.14 Version 2.2.0: fast mode, ADO per cell, coverage-ADO correlation
 
 `--fast` (section 6.10b) simulates the reads 10-15% faster with the same distributions; the ADO rate of every cell (`-P`) is written to `ado_cells` (6.10a); `--cov-ado-corr RHO` correlates the coverage and the ADO rate of the cells (6.10c); `--config` errors give the line and column and suggest the correct key; `plots all` writes every plot and a report. Without the new options the output is identical to 2.1.9.
+
+
+## 8.15 Version 2.2.1: BCF, streaming with -3 -4 -5 -Y, faster reads
+
+`--bcf` writes the likelihoods as BCF with its CSI index (6.10d, 6.10g); streamed reads work with `-3 -4 -5 -Y` (6.10f); an exact cache of genotype likelihoods (6.10e) speeds up the default mode and `--fast` is 25-30% faster than the default. Without the new options the output is bit-identical to 2.2.0.

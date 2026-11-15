@@ -134,6 +134,8 @@ Version 2.1.9: modules, configuration files, summary plots</a></li>
 <li><a href="#version-2.2.0-fast-mode-ado-per-cell-coverage-ado-correlation" id="toc-version-2.2.0-fast-mode-ado-per-cell-coverage-ado-correlation">8.14
 Version 2.2.0: fast mode, ADO per cell, coverage-ADO
 correlation</a></li>
+<li><a href="#version-2.2.1-bcf-streaming-with--3--4--5--y-faster-reads" id="toc-version-2.2.1-bcf-streaming-with--3--4--5--y-faster-reads">8.15
+Version 2.2.1: BCF, streaming with -3 -4 -5 -Y, faster reads</a></li>
 </ul></li>
 </ul>
 </nav>
@@ -1868,5 +1870,12 @@ of the cells (6.10c); <code>--config</code> errors give the line and
 column and suggest the correct key; <code>plots all</code> writes every
 plot and a report. Without the new options the output is identical to
 2.1.9.</p>
+<h2 id="version-2.2.1-bcf-streaming-with--3--4--5--y-faster-reads">8.15
+Version 2.2.1: BCF, streaming with -3 -4 -5 -Y, faster reads</h2>
+<p><code>--bcf</code> writes the likelihoods as BCF with its CSI index
+(6.10d, 6.10g); streamed reads work with <code>-3 -4 -5 -Y</code>
+(6.10f); an exact cache of genotype likelihoods (6.10e) speeds up the
+default mode and <code>--fast</code> is 25-30% faster than the default.
+Without the new options the output is bit-identical to 2.2.0.</p>
 </body>
 </html>
