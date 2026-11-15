@@ -159,7 +159,7 @@ YML
 (cd "$TMP/cf2" && "$BIN" --config "$TMP/c.yaml" >/dev/null 2>&1)
 if [ -d "$TMP/cf0/Results/pileup_dir" ] && [ "$(norm "$TMP/cf0/Results" | md5sum)" = "$(norm "$TMP/cf1/Results" | md5sum)" ]; then ok "--config run.json reproduces the run"; else bad "--config run.json"; fi
 if [ "$(norm "$TMP/cf0/Results" | md5sum)" = "$(norm "$TMP/cf2/Results" | md5sum)" ]; then ok "--config YAML with long names = command line"; else bad "--config YAML"; fi
-(cd "$TMP/cf3" && "$BIN" --config "$TMP/c.yaml" -n1 >/dev/null 2>&1); n=$(ls "$TMP/cf3/Results/snv_genotypes_dir" 2>/dev/null | wc -l)
+(cd "$TMP/cf3" && "$BIN" --config "$TMP/c.yaml" -n1 >/dev/null 2>&1); n=$(ls "$TMP/cf3/Results/snv_genotypes_dir" 2>/dev/null | wc -l | tr -d " ")
 [ "$n" = "1" ] && ok "options after --config override the file (-n1)" || bad "override after --config ($n)"
 echo '{"foo": 1}' > "$TMP/bad.json"
 if "$BIN" --config "$TMP/bad.json" 2>&1 | grep -q 'unknown option: foo'; then ok "unknown option in a config file is an error"; else bad "unknown option in config"; fi
