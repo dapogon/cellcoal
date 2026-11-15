@@ -57,7 +57,10 @@ static void		PrintPILEUP (FILE *fp);
 static void		AllelicDropout (long int *seed);
 static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
-static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut);
+static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut, FILE *fpCATGbody);
+static void 	PrintCATGHeader (FILE *fp);
+static unsigned char	*mlStore = NULL;
+static long				mlStoreCap = 0;
 static void 	PrintBulk (FILE *fp);
 static void 	WriteRunRecord (double wallSecs, double cpuSecs);
 static int 	VCFSitePasses (int j);
@@ -202,6 +205,7 @@ static double		minVAFvcf = 0.0;	/* the VCF lists only sites whose pooled VAF in 
 static struct timespec	wallStart;	/* start of the run, for the elapsed (wall clock) time */
 static int			readsOnly = 0;		/* only the pooled (bulk) read file is printed: no genotype likelihoods are needed */
 static int			streamMode = 0;		/* reads are simulated and printed in blocks of sites (see StreamReads) */
+static FILE			*catgBody = NULL;	/* temporary file with the CATG site lines of a streamed replicate */
 static int			streamBlock = 0;		/* number of sites in a block */
 static int			*doubletDonor = NULL;	/* donor cell of each doublet cell when streaming */
 static int			sparseADO = 0;

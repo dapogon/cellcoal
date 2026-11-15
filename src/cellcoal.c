@@ -800,7 +800,31 @@ int main (int argc, char **argv)
 				/* reads are simulated, summarized and printed (VCF, PILEUP) in blocks of sites */
 				if (doPrintVCF == YES && doPrintSeparateReplicates == NO)
 					fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
-				StreamReads (&seed, (doPrintVCF == YES) ? fpVCF : NULL, (doPrintPILEUP == YES) ? fpPILEUP : NULL, (doPrintBulk == YES) ? fpBulk : NULL);
+				if (doPrintCATG == YES)
+					{
+					catgBody = tmpfile ();
+					if (!catgBody)
+						{
+						fprintf (stderr, "Could not open a temporary file for the CATG output\n");
+						exit (-1);
+						}
+					}
+				StreamReads (&seed, (doPrintVCF == YES) ? fpVCF : NULL, (doPrintPILEUP == YES) ? fpPILEUP : NULL, (doPrintBulk == YES) ? fpBulk : NULL, catgBody);
+				if (doPrintCATG == YES)
+					{
+					char	cbuf[65536];
+					size_t	n;
+
+					PrintCATGHeader (fpCATG);
+					rewind (catgBody);
+					while ((n = fread (cbuf, 1, sizeof(cbuf), catgBody)) > 0)
+						fwrite (cbuf, 1, n, fpCATG);
+					fprintf (fpCATG, "\n");
+					fclose (catgBody);
+					catgBody = NULL;
+					if (doPrintSeparateReplicates == NO)
+						fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
+					}
 				if (doPrintPILEUP == YES && doPrintSeparateReplicates == NO)
 					fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
 				if (doPrintBulk == YES && doPrintSeparateReplicates == NO)
@@ -1003,6 +1027,9 @@ int main (int argc, char **argv)
               free(allSites[i].alternateAlleles);
             free (allSites);
             free (SNVsites);
+            free (mlStore);
+            mlStore = NULL;
+            mlStoreCap = 0;
 			free (variantSites);
             free (DefaultModelSites);
             free (AltModelSites);
@@ -2550,14 +2577,14 @@ void DecideSparseMode (void)
 			streamForce = (atoi (env) != 0);
 		if ((env = getenv ("CELLCOAL_STREAM_MB")) != NULL && atof (env) > 0)
 			streamLimitMB = atof (env);
-		supported = (doPrintCATG == NO && doPrintSNVgenotypes == NO && doPrintSNVhaplotypes == NO && doPrintTrueHaplotypes == NO &&
+		supported = (doPrintTrueHaplotypes == NO &&
 					 doPrintFullHaplotypes == NO && doPrintFullGenotypes == NO && doPrintAncestors == NO);
-		readsOnly = (doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == YES);
+		readsOnly = (doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == YES && doPrintSNVgenotypes == NO && doPrintSNVhaplotypes == NO);
 		if (streamForce == 1 || (streamForce == -1 && (cellMB > streamLimitMB || readsOnly == YES) && supported == YES))
 			{
 			if (supported == NO)
 				{
-				fprintf (stderr, "\nERROR: streamed reads only support the VCF and PILEUP outputs (not -1 -2 -3 -4 -5 -Y, CATG or ancestors). Unset CELLCOAL_STREAM or do not use those outputs.\n");
+				fprintf (stderr, "\nERROR: streamed reads support the VCF, PILEUP, bulk, CATG and ML SNV genotype/haplotype outputs (not -4 -5 -Y or ancestors). Unset CELLCOAL_STREAM or do not use those outputs.\n");
 				exit (-1);
 				}
 			streamMode = YES;
@@ -6079,34 +6106,91 @@ void MakeDoublets (double *probs, double **ngsEij, double **ampEijmat, double **
 	AAAAAAAAAAAA	0,20,0,0	0,20,0,0	0, 20,0,0	0,20,0,0 ...
 	...
 */
-void PrintCATG (FILE *fp)
+/* Maximum likelihood alleles of the SNV sites. When the reads are streamed the window of sites does not hold them
+   any more, so they are kept in a compact store: one byte per cell and SNV (maternal allele in the low nibble,
+   paternal in the high nibble, 15 = missing). */
+static void MLPairAt (int i, int q, int *m, int *p)
 	{
-	int	i, j, snv;
+	int j = SNVsites[q];
+
+	if (streamMode == YES)
+		{
+		unsigned char b = mlStore[(long) q * (numCells+1) + i];
+
+		*m = ((b & 15) == 15) ? MISSING : (int) (b & 15);
+		*p = ((b >> 4) == 15) ? MISSING : (int) (b >> 4);
+		}
+	else if (cell[i].hasDoublet == NO)
+		{
+		*m = CS(i,j).MLmatAllele;
+		*p = CS(i,j).MLpatAllele;
+		}
+	else
+		{
+		*m = CD(i,j).MLmatAlleleDoublet;
+		*p = CD(i,j).MLpatAlleleDoublet;
+		}
+	}
+
+/* ML alleles of the site j (the q-th SNV) of all the cells, taken from the window into the store */
+static void StoreMLAlleles (int q, int j)
+	{
+	int		i, m, p;
+	unsigned char *dst = mlStore + (long) q * (numCells+1);
+
+	for (i=0; i<numCells+1; i++)
+		{
+		if (cell[i].hasDoublet == NO)
+			{
+			m = CS(i,j).MLmatAllele;
+			p = CS(i,j).MLpatAllele;
+			}
+		else
+			{
+			m = CD(i,j).MLmatAlleleDoublet;
+			p = CD(i,j).MLpatAlleleDoublet;
+			}
+		dst[i] = (unsigned char) (((m == MISSING) ? 15 : m) | (((p == MISSING) ? 15 : p) << 4));
+		}
+	}
+
+static void PrintCATGHeader (FILE *fp)
+	{
+	int	i;
 
 	fprintf (fp,"%d %d\n",numCells+1, numSNVs);
 	for (i=0; i<numCells; i++)
 		fprintf (fp,"%s%04d ", inCellName,i+1);
 
 	fprintf (fp,"%s ", outCellName);
+	}
 
-		
-	for (snv=0; snv<numSNVs; snv++)
+/* one line of the CATG file: starts with a newline, then the IUPAC codes and the read counts of the cells */
+static void CATGSiteLine (FILE *fp, int j)
+	{
+	int	i;
+
+	fprintf (fp,"\n");
+	for (i=0; i<numCells+1; i++)
+		fprintf (fp,"%c",WhichIUPAC(CS(i,j).MLmatAllele, CS(i,j).MLpatAllele));
+
+		/* decide per cell (the original tested cell[numCells+1].hasDoublet, one element past the end of the array) */
+	for (i=0; i<numCells+1; i++)
 		{
-		j = SNVsites[snv];
-		fprintf (fp,"\n");
-		for (i=0; i<numCells+1; i++)
-			fprintf (fp,"%c",WhichIUPAC(CS(i,j).MLmatAllele, CS(i,j).MLpatAllele));
-		
-			/* decide per cell (the original tested cell[numCells+1].hasDoublet, one element past the end of the array) */
-		for (i=0; i<numCells+1; i++)
-			{
-			if (cell[i].hasDoublet == NO)
-				fprintf (fp,"\t%d,%d,%d,%d", CS(i,j).readCount[C], CS(i,j).readCount[A], CS(i,j).readCount[T], CS(i,j).readCount[G]);
-			else
-				fprintf (fp,"\t%d,%d,%d,%d", CD(i,j).readCountDoublet[C], CD(i,j).readCountDoublet[A], CD(i,j).readCountDoublet[T], CD(i,j).readCountDoublet[G]);
-			}
+		if (cell[i].hasDoublet == NO)
+			fprintf (fp,"\t%d,%d,%d,%d", CS(i,j).readCount[C], CS(i,j).readCount[A], CS(i,j).readCount[T], CS(i,j).readCount[G]);
+		else
+			fprintf (fp,"\t%d,%d,%d,%d", CD(i,j).readCountDoublet[C], CD(i,j).readCountDoublet[A], CD(i,j).readCountDoublet[T], CD(i,j).readCountDoublet[G]);
 		}
+	}
 
+void PrintCATG (FILE *fp)
+	{
+	int	snv;
+
+	PrintCATGHeader (fp);
+	for (snv=0; snv<numSNVs; snv++)
+		CATGSiteLine (fp, SNVsites[snv]);
 	fprintf (fp,"\n");
 	}
 
@@ -6708,7 +6792,7 @@ static void PrintBulk (FILE *fp)
    likelihoods of all the cells are simulated (in parallel over the sites of the block, each site with its own random
    stream, as in GenerateReadCounts), the sites that look like SNVs are printed (VCF, PILEUP), and the block is discarded.
    The window of sites held in cell[].site starts at siteOff. */
-static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut)
+static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut, FILE *fpCATGbody)
 	{
 	int			i, j, j0, nb, q, nq, nSNVs = 0;
 	double		**ngsEij;
@@ -6787,6 +6871,54 @@ static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE
 				{
 				SNVsites[nSNVs++] = j;
 				blockSNVs[nq++] = j;
+				}
+
+		/* maximum likelihood alleles of the block's SNVs, kept for the genotype and haplotype files */
+		if ((doPrintSNVgenotypes == YES || doPrintSNVhaplotypes == YES) && nq > 0)
+			{
+			long need = (long) nSNVs * (numCells+1);
+
+			if (need > mlStoreCap)
+				{
+				long newCap = need + need / 2 + (long) (numCells+1) * 1024;
+				unsigned char *t = (unsigned char*) realloc (mlStore, (size_t) newCap);
+
+				if (!t)
+					{
+					fprintf (stderr, "Could not allocate the store of ML alleles\n");
+					exit (-1);
+					}
+				mlStore = t;
+				mlStoreCap = newCap;
+				}
+			#pragma omp parallel for schedule(dynamic,1)
+			for (q=0; q<nq; q++)
+				StoreMLAlleles (nSNVs - nq + q, blockSNVs[q]);
+			}
+
+		/* CATG lines of the block, built in parallel and written in order to the temporary body file */
+		if (fpCATGbody)
+			for (i=0; i<nq; i+=chunk)
+				{
+				int		m = (nq - i < chunk) ? nq - i : chunk;
+
+				#pragma omp parallel for schedule(dynamic,1)
+				for (q=0; q<m; q++)
+					{
+					FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+					if (!ms)
+						{
+						fprintf (stderr, "Could not open a memory stream for the CATG line\n");
+						exit (-1);
+						}
+					CATGSiteLine (ms, blockSNVs[i+q]);
+					fclose (ms);
+					}
+				for (q=0; q<m; q++)
+					{
+					fwrite (lineBuf[q], 1, lineLen[q], fpCATGbody);
+					free (lineBuf[q]);
+					}
 				}
 
 		/* VCF lines of the block, built in parallel and written in order */
@@ -7472,12 +7604,15 @@ static void PrintSNVGenotypes (FILE *fp)
 				}
 			for (j=0; j<numSNVs; j++)
 				{
+				int	mm, pp;
+
 				if (doNGS == NO)
 					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, SNVsites[j])), WhichNuc(GetG(PATERNAL, i, SNVsites[j])));
-				else if (cell[i].hasDoublet == NO)
-					fprintf (fp, " %c%c", WhichNuc(CS(i,SNVsites[j]).MLmatAllele), WhichNuc(CS(i,SNVsites[j]).MLpatAllele));
 				else
-					fprintf (fp, " %c%c", WhichNuc(CD(i,SNVsites[j]).MLmatAlleleDoublet), WhichNuc(CD(i,SNVsites[j]).MLpatAlleleDoublet));
+					{
+					MLPairAt (i, j, &mm, &pp);
+					fprintf (fp, " %c%c", WhichNuc(mm), WhichNuc(pp));
+					}
 				}
            fprintf (fp,"\n");
             }
@@ -7578,10 +7713,12 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					{
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, sites[j]),GetG(PATERNAL, i, sites[j])));
-					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichIUPAC(CS(i,SNVsites[j]).MLmatAllele, CS(i,SNVsites[j]).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichIUPAC(CD(i,SNVsites[j]).MLmatAlleleDoublet, CD(i,SNVsites[j]).MLpatAlleleDoublet));
+						{
+						int mm, pp;
+						MLPairAt (i, j, &mm, &pp);
+						fprintf (fp, "%c", WhichIUPAC(mm, pp));
+						}
 					}
 				fprintf (fp,"\n");
 				}
@@ -7615,10 +7752,12 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					{
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, SNVsites[j])));
-					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(CS(i,SNVsites[j]).MLmatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(CD(i,SNVsites[j]).MLmatAlleleDoublet));
+						{
+						int mm, pp;
+						MLPairAt (i, j, &mm, &pp);
+						fprintf (fp, "%c", WhichNuc(mm));
+						}
 					}
 				fprintf (fp,"\n");
 				
@@ -7636,10 +7775,12 @@ static void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 					{
 					if (doNGS == NO)
 						fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, SNVsites[j])));
-					else if (cell[i].hasDoublet == NO)
-						fprintf (fp, "%c", WhichNuc(CS(i,SNVsites[j]).MLpatAllele));
 					else
-						fprintf (fp, "%c", WhichNuc(CD(i,SNVsites[j]).MLpatAlleleDoublet));
+						{
+						int mm, pp;
+						MLPairAt (i, j, &mm, &pp);
+						fprintf (fp, "%c", WhichNuc(pp));
+						}
 					}
 				fprintf (fp,"\n");
 				}

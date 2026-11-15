@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.6.0)"
+date: "November, 2026 (CellCoal 2.7.0)"
 ---
 
 # 1. About CellCoal
@@ -826,7 +826,7 @@ Scaling release. When dense genomes would exceed 2048 MB (environment variable `
 
 ## 8.8 Version 2.2.0: streamed reads
 
-Streamed reads. When the per-cell, per-site read data would exceed 2048 MB (environment variable `CELLCOAL_STREAM_MB`), reads and genotype likelihoods are simulated and the VCF and PILEUP files written in blocks of sites, with small memory; `CELLCOAL_STREAM=1` forces and `CELLCOAL_STREAM=0` disables it. Results are the same as without streaming for the same seed and any number of threads (doublets use the stream of each site, so their random numbers differ). Only the VCF and PILEUP outputs are available while streaming. The computing time is still proportional to cells x sites and the VCF lists every apparent SNV, so very large read data sets produce very large files.
+Streamed reads. When the per-cell, per-site read data would exceed 2048 MB (environment variable `CELLCOAL_STREAM_MB`), reads and genotype likelihoods are simulated and the VCF and PILEUP files written in blocks of sites, with small memory; `CELLCOAL_STREAM=1` forces and `CELLCOAL_STREAM=0` disables it. Results are the same as without streaming for the same seed and any number of threads (doublets use the stream of each site, so their random numbers differ). VCF, PILEUP and bulk (-0) were the only outputs available while streaming until version 2.7.0, which adds CATG (-8) and the SNV genotypes and haplotypes with reads (-1, -2); -3, -4, -5 and -Y are still not available. The computing time is still proportional to cells x sites and the VCF lists every apparent SNV, so very large read data sets produce very large files.
 
 ## 8.9 Versions 2.3.0 to 2.5.0: bulk read counts, VCF options
 
@@ -845,6 +845,10 @@ Example: `python3 tools/bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 --min-reads 1
 Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.
 
 Every run writes `Results/run.json` (version 2.6.0 and later), a record of how it was run: program version, command line, seed, number of replicates, cells and sites, number of threads, the `CELLCOAL_*` and `OMP_NUM_THREADS` environment variables that were set, the genome storage (dense or sparse) and read mode (stored or streamed) that were used, compiler, OpenMP, and the elapsed (wall clock) and CPU seconds. Together with the version, the command line and the seed it is all that is needed to repeat a run. The time reported at the end of a run is now the elapsed time, followed by the CPU time.
+
+## 8.10 Version 2.7.0: CATG and ML genotypes while streaming
+
+Streamed reads (section 8.8) now also write the CATG file (-8) and the maximum-likelihood SNV genotypes (-1) and haplotypes (-2) obtained from the reads. The CATG site lines go to a temporary file that is copied behind the header once the number of SNVs is known; the ML alleles are kept in a compact store of one byte per cell and SNV. The files are identical to those of the stored mode for the same seed, whatever the number of threads (with doublets, the random numbers differ as before). For example, 1,000 cells x 30,000 sites with -1 and -8 needs 191 MB instead of 1.7 GB. Full genotypes and haplotypes (-3, -4), ancestors (-5) and -Y remain unavailable while streaming, and forcing streaming with them is an error.
 
 # 9. References
 

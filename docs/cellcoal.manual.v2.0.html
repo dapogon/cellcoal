@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.6.0)</p>
+<p class="date">November, 2026 (CellCoal 2.7.0)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -105,6 +105,8 @@ Versions 2.3.0 to 2.5.0: bulk read counts, VCF options</a></li>
 Bulk VAF distribution</a></li>
 <li><a href="#reproducibility-and-the-run-record" id="toc-reproducibility-and-the-run-record">8.11 Reproducibility and the
 run record</a></li>
+<li><a href="#version-2.7.0-catg-and-ml-genotypes-while-streaming" id="toc-version-2.7.0-catg-and-ml-genotypes-while-streaming">8.10
+Version 2.7.0: CATG and ML genotypes while streaming</a></li>
 </ul></li>
 <li><a href="#references" id="toc-references">9. References</a></li>
 </ul>
@@ -1446,10 +1448,12 @@ written in blocks of sites, with small memory;
 <code>CELLCOAL_STREAM=1</code> forces and <code>CELLCOAL_STREAM=0</code>
 disables it. Results are the same as without streaming for the same seed
 and any number of threads (doublets use the stream of each site, so
-their random numbers differ). Only the VCF and PILEUP outputs are
-available while streaming. The computing time is still proportional to
-cells x sites and the VCF lists every apparent SNV, so very large read
-data sets produce very large files.</p>
+their random numbers differ). VCF, PILEUP and bulk (-0) were the only
+outputs available while streaming until version 2.7.0, which adds CATG
+(-8) and the SNV genotypes and haplotypes with reads (-1, -2); -3, -4,
+-5 and -Y are still not available. The computing time is still
+proportional to cells x sites and the VCF lists every apparent SNV, so
+very large read data sets produce very large files.</p>
 <h2 id="versions-2.3.0-to-2.5.0-bulk-read-counts-vcf-options">8.9
 Versions 2.3.0 to 2.5.0: bulk read counts, VCF options</h2>
 <p>Version 2.3.0 adds option <code>-0</code>, version 2.4.0 option
@@ -1507,6 +1511,19 @@ elapsed (wall clock) and CPU seconds. Together with the version, the
 command line and the seed it is all that is needed to repeat a run. The
 time reported at the end of a run is now the elapsed time, followed by
 the CPU time.</p>
+<h2 id="version-2.7.0-catg-and-ml-genotypes-while-streaming">8.10
+Version 2.7.0: CATG and ML genotypes while streaming</h2>
+<p>Streamed reads (section 8.8) now also write the CATG file (-8) and
+the maximum-likelihood SNV genotypes (-1) and haplotypes (-2) obtained
+from the reads. The CATG site lines go to a temporary file that is
+copied behind the header once the number of SNVs is known; the ML
+alleles are kept in a compact store of one byte per cell and SNV. The
+files are identical to those of the stored mode for the same seed,
+whatever the number of threads (with doublets, the random numbers differ
+as before). For example, 1,000 cells x 30,000 sites with -1 and -8 needs
+191 MB instead of 1.7 GB. Full genotypes and haplotypes (-3, -4),
+ancestors (-5) and -Y remain unavailable while streaming, and forcing
+streaming with them is an error.</p>
 <h1 id="references">9. References</h1>
 <p>Alexandrov LB et al. 2013. Signatures of mutational processes in
 human cancer. <em>Nature</em> 22: 415-421.</p>
