@@ -29,6 +29,10 @@ Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells
 
 With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
+## Unreleased (next 2.1.x)
+
+`--fast` (or `fast: true` in a `--config` file) simulates the reads about 10-15% faster with the same distributions but different random numbers (so a seed gives different reads); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. `--config` errors now give the line and column and suggest the correct key for a misspelled one.
+
 ## What's new in 2.1.9
 
 The source is split into modules (`src/tree.c`, `mutation.c`, `observation.c`, `reads.c`, `reads_output.c`, `output.c`, `rng.c`, `options.c`, `config.c`, `globals.c`; the main program is `cellcoal.c`); output and speed are unchanged. **Configuration files**: `bin/cellcoal-2.1.9 --config examples/config.example.yaml` reads the options from a JSON or YAML file (option letters or long names such as `cells`, `coverage`), and `Results/run.json` now has an `options` object that can be passed to `--config` to repeat a run. **Summary plots**: `python3 tools/cellcoal_plots.py depth|missing|heatmap ...` (and `all Results` for every plot plus a `report.html`, from the next release) (depth per cell, site and genotype; genotypes without reads; genotype heatmap). See [docs/CHANGES-2.1.9.md](docs/CHANGES-2.1.9.md).

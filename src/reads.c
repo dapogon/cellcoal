@@ -776,6 +776,8 @@ static inline double Pow10Fast (double x)
 		return 1.0;
 	if (x < -400.0)
 		return 0.0;
+	if (fastMode)
+		return Pow10Approx (x);
 	return pow (10.0, x);
 	}
 
@@ -804,7 +806,7 @@ static inline double Log10Memo (double x, double *keys, double *vals, int *n)
 		if (keys[m] == x)
 			return vals[m];
 	keys[*n] = x;
-	vals[*n] = log10 (x);
+	vals[*n] = fastMode ? Log10Approx (x) : log10 (x);
 	return vals[(*n)++];
 	}
 
@@ -1230,8 +1232,8 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		for (a2=a1+1; a2<4; a2++)
 			if (logGL[a1][a2] != logGL[a2][a1])
 				{
-				number1 = 0.5 * pow(10.0,logGL[a1][a2]);
-				number2 = 0.5 * pow(10.0,logGL[a2][a1]);
+				number1 = 0.5 * Pow10Fast(logGL[a1][a2]);
+				number2 = 0.5 * Pow10Fast(logGL[a2][a1]);
 				logGL[a1][a2] = logGL[a2][a1] = log10(number1 + number2);
 				//fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
 				}

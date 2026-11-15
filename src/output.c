@@ -2273,6 +2273,8 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
 	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
+	fprintf (fp,"\n--fast: faster read simulation (same distributions, different random numbers; see the manual)");
+	fprintf (fp,"\n--config FILE: read the options from a JSON or YAML file");
 	fprintf (fp,"\n-T: user-tree file (e.g. -Tusertree)");
 	fprintf (fp,"\n-U: user genome (e.g. -Uusergenome)");
 	fprintf (fp,"\n-W: use tumor nomenclature for cells (e.g. -W)");

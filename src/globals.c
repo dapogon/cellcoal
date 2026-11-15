@@ -80,4 +80,5 @@ FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *
 double			*cellCovMult = NULL;	/* between-cell coverage multiplier of every cell (-J) */
 __thread double		siteCovMult = 1.0;	/* between-site coverage multiplier of the site being simulated (-O) */
 __thread int			streamActive = 0;
+int					fastMode = 0;
 __thread uint64_t	streamState;

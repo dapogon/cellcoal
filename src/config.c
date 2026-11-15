@@ -28,7 +28,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"print_times",'7'}, {"print_catg",'8'}, {"print_pileup",'9'}, {"print_bulk",'0'}, {"no_vcf",'Z'},
 	{"gzip_vcf",'z'}, {"min_vaf",'M'}, {"print_true_haplotypes",'Y'}, {"replicate_folders",'v'},
 	{"iupac",'x'}, {"results_folder",'o'}, {"tree_file",'T'}, {"genome_file",'U'}, {"tumor_names",'W'},
-	{"verbosity",'y'}, {"seed",'#'}, {NULL,0}
+	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -335,8 +335,11 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			{
 			if (it->boolValue == NO)
 				continue;
-			tok = (char*) malloc (3);
-			snprintf (tok, 3, "-%c", flag);
+			tok = (char*) malloc (8);
+			if (flag == '\1')
+				snprintf (tok, 8, "--fast");
+			else
+				snprintf (tok, 8, "-%c", flag);
 			out[(*n)++] = tok;
 			continue;
 			}
@@ -423,11 +426,11 @@ static int ConfigTokens (const char *path, char **out)
 /* Replaces "--config FILE" in the arguments by the options of the file (the program name stays first) */
 char **ExpandConfigArgs (int *argc, char **argv)
 	{
-	int i, n = 0, found = NO;
+	int i, k, n = 0, found = NO;
 	char **out;
 
 	for (i=1; i<*argc; i++)
-		if (strcmp (argv[i], "--config") == 0)
+		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -452,6 +455,15 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		else
 			out[n++] = argv[i];
 		}
+	/* --fast (from the command line or a configuration file) switches on the fast mode and is not passed on */
+	for (i=1, k=1; i<n; i++)
+		{
+		if (strcmp (out[i], "--fast") == 0)
+			fastMode = YES;
+		else
+			out[k++] = out[i];
+		}
+	n = k;
 	out[n] = NULL;
 	*argc = n;
 	return out;

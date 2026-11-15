@@ -125,6 +125,134 @@ int RandomUniformTo (int max, long int *seed)
 
 
 
+
+/************************ fast mode (--fast) ******************************/
+/* Used only for the reads (per-site streams) when --fast is given. The distributions are the same as in the exact
+   samplers, but the random numbers are consumed differently, so the data sets differ for a given seed. */
+
+/* log10 with a relative error below 1e-13: x = m 2^e with m in [sqrt(1/2), sqrt(2)), log m = 2 atanh ((m-1)/(m+1)) */
+double Log10Approx (double x)
+	{
+	union { double d; uint64_t u; } v;
+	double	m, f, f2, r;
+	int		e;
+
+	if (!(x > 0.0) || !(x < INFINITY))
+		return log10 (x);
+	v.d = x;
+	if ((v.u >> 52) == 0)	/* subnormal */
+		return log10 (x);
+	e = (int)(v.u >> 52) - 1023;
+	v.u = (v.u & 0x000FFFFFFFFFFFFFULL) | 0x3FF0000000000000ULL;
+	m = v.d;				/* [1,2) */
+	if (m > 1.4142135623730951)
+		{
+		m *= 0.5;
+		e++;
+		}
+	f = (m - 1.0) / (m + 1.0);
+	f2 = f * f;
+	r = 2.0 * f * (1.0 + f2 * (1.0/3 + f2 * (1.0/5 + f2 * (1.0/7 + f2 * (1.0/9 + f2 * (1.0/11 + f2 * (1.0/13 + f2 * (1.0/15))))))));
+	return (r + e * 0.6931471805599453) * 0.4342944819032518;
+	}
+
+/* 10^x with a relative error below 1e-12 (0 below -400, library for huge arguments) */
+double Pow10Approx (double x)
+	{
+	union { double d; uint64_t u; } v;
+	double	y, n, r, p;
+	int		ni;
+
+	if (x == 0.0)
+		return 1.0;
+	if (x < -300.0 || x > 300.0 || x != x)
+		return x < -400.0 ? 0.0 : pow (10.0, x);
+	y = x * 3.321928094887362;		/* log2 (10) */
+	ni = (int)(y + (y >= 0 ? 0.5 : -0.5));
+	n = ni;
+	r = (y - n) * 0.6931471805599453;	/* |r| <= 0.3466 */
+	p = 1.0 + r * (1.0 + r * (1.0/2 + r * (1.0/6 + r * (1.0/24 + r * (1.0/120 + r * (1.0/720 + r * (1.0/5040 + r * (1.0/40320 + r * (1.0/362880 + r * (1.0/3628800))))))))));
+	v.u = (uint64_t)(ni + 1023) << 52;	/* 2^ni, normal range since |x| <= 300 */
+	return p * v.d;
+	}
+
+/* Poisson by inversion with a single uniform (lambda < 30) or the PTRS transformed rejection of Hormann (1993) */
+static int PoissonFast (double lambda, long int *seed)
+	{
+	if (lambda < 30.0)
+		{
+		double	p = exp (-lambda), cdf, u;
+		int		k = 0;
+
+		u = RandomUniform (seed);
+		cdf = p;
+		while (u > cdf && k < 1000)
+			{
+			k++;
+			p *= lambda / k;
+			cdf += p;
+			}
+		return k;
+		}
+	else
+		{
+		double	slam = sqrt (lambda), loglam = log (lambda);
+		double	b = 0.931 + 2.53 * slam, a = -0.059 + 0.02483 * b;
+		double	invalpha = 1.1239 + 1.1328 / (b - 3.4), vr = 0.9277 - 3.6224 / (b - 2.0);
+		double	U, V, us;
+		long	k;
+
+		for (;;)
+			{
+			U = RandomUniform (seed) - 0.5;
+			V = RandomUniform (seed);
+			us = 0.5 - fabs (U);
+			k = (long) floor ((2.0 * a / us + b) * U + lambda + 0.43);
+			if (us >= 0.07 && V <= vr)
+				return (int) k;
+			if (k < 0 || (us < 0.013 && V > us))
+				continue;
+			if (log (V) + log (invalpha) - log (a / (us * us) + b) <= -lambda + k * loglam - lgamma (k + 1.0))
+				return (int) k;
+			}
+		}
+	}
+
+/* binomial by geometric jumps between successes (exact; one log per success instead of one uniform per trial) */
+static int BinomialFast (double prob, int numTrials, long int *seed)
+	{
+	double	lq;
+	int		pos = 0, count = 0, flip = 0;
+
+	if (prob > 0.5)
+		{
+		prob = 1.0 - prob;
+		flip = 1;
+		}
+	if (prob < 0.25 && numTrials > 8)
+		{
+		lq = log1p (-prob);
+		for (;;)
+			{
+			double jump = 1.0 + floor (log (RandomUniform (seed)) / lq);
+
+			if (jump > (double)(numTrials - pos))
+				break;
+			pos += (int) jump;
+			count++;
+			}
+		}
+	else
+		{
+		uint64_t	thr53 = (uint64_t)(prob * 9007199254740992.0);
+		int			i;
+
+		for (i=0; i<numTrials; i++)
+			count += (SplitMix64 (&streamState) >> 11) < thr53;
+		}
+	return flip ? numTrials - count : count;
+	}
+
 /********************* RandomPoisson ********************/
 /* Generates a random number from a Poisson distibution with
  mean lambda.
@@ -140,6 +268,8 @@ int RandomPoisson (double lambda, long int *seed)
 	   so we multiply the uniforms and only fall back to the exact sum of logs (using the stored
 	   uniforms) when the product is within 1e-9 (relative) of the threshold. The number of uniforms
 	   consumed and the returned value are identical to the original algorithm. */
+	if (fastMode && streamActive && lambda > 0.0)
+		return PoissonFast (lambda, seed);
 	if (lambda > 0.0 && lambda < 500.0)
 		{
 		enum { CAP = 4096 };
@@ -234,6 +364,8 @@ int RandomBinomial (double prob, int numTrials, long int *seed)
 			return 0;
 		if (prob >= 1.0)
 			return numTrials > 0 ? numTrials : 0;
+		if (fastMode)
+			return BinomialFast (prob, numTrials, seed);
 		thr53 = (uint64_t)(prob * 9007199254740992.0);
 		for (sum=0, i=0; i<numTrials; i++)
 			sum += (SplitMix64 (&streamState) >> 11) < thr53;

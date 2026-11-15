@@ -319,6 +319,9 @@ extern FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplot
 extern double			*cellCovMult;	/* between-cell coverage multiplier of every cell (-J) */
 extern __thread double		siteCovMult;	/* between-site coverage multiplier of the site being simulated (-O) */
 extern __thread int			streamActive;
+extern int					fastMode;	/* --fast: cheaper samplers and log10/10^x for the reads (same distributions, different random numbers) */
+double	Log10Approx (double x);
+double	Pow10Approx (double x);
 extern __thread uint64_t	streamState;
 
 static inline uint64_t SplitMix64 (uint64_t *x)

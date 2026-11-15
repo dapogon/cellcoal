@@ -180,6 +180,25 @@ if python3 -c "import matplotlib, numpy" 2>/dev/null; then
   if [ -s "$TMP/pl3/plots/report.html" ] && grep -q 'base64' "$TMP/pl3/plots/report.html" && [ -s "$TMP/pl3/plots/vaf.png" ] && [ -s "$TMP/pl3/plots/heatmap.png" ]; then ok "'all' writes the plots and a self-contained report.html"; else bad "cellcoal_plots.py all"; fi
 else echo "  skip (matplotlib not installed)"; fi
 
+echo "2g8. Fast mode (--fast)"
+FQ="-n1 -s40 -l1000 -u1e-6 -e10000 -b1 -C20 -V5 -E0.005 -D0.1 -A0.05 0.01 0 -B0.1 0.005 -1 -2 -8 -#31"
+mkdir -p "$TMP/fa1" "$TMP/fa2" "$TMP/fa3" "$TMP/fa4"
+(cd "$TMP/fa1" && OMP_NUM_THREADS=1 "$BIN" --fast $FQ >/dev/null 2>&1)
+(cd "$TMP/fa2" && OMP_NUM_THREADS=3 "$BIN" --fast $FQ >/dev/null 2>&1)
+(cd "$TMP/fa3" && "$BIN" $FQ >/dev/null 2>&1)
+printf 'fast: true\n' > "$TMP/fast.yaml"
+(cd "$TMP/fa4" && OMP_NUM_THREADS=1 "$BIN" --config "$TMP/fast.yaml" $FQ >/dev/null 2>&1)
+if [ -s "$TMP/fa1/Results/vcf" ] && [ "$(norm "$TMP/fa1/Results" | md5sum)" = "$(norm "$TMP/fa2/Results" | md5sum)" ]; then ok "--fast: same results with 1 and 3 threads"; else bad "--fast threads"; fi
+[ "$(norm "$TMP/fa1/Results" | md5sum)" != "$(norm "$TMP/fa3/Results" | md5sum)" ] && ok "--fast changes the random numbers of the reads" || bad "--fast has no effect"
+mkdir -p "$TMP/fa5" "$TMP/fa6"
+(cd "$TMP/fa5" && "$BIN" --fast -n2 -s30 -l800 -u1e-6 -e10000 -b1 -C10 -Y -#31 >/dev/null 2>&1)
+(cd "$TMP/fa6" && "$BIN" -n2 -s30 -l800 -u1e-6 -e10000 -b1 -C10 -Y -#31 >/dev/null 2>&1)
+[ -s "$TMP/fa5/Results/true_hap" ] && cmp -s "$TMP/fa5/Results/true_hap" "$TMP/fa6/Results/true_hap" && ok "--fast keeps tree, mutations and true genotypes" || bad "--fast changed the genotypes"
+[ "$(norm "$TMP/fa1/Results" | md5sum)" = "$(norm "$TMP/fa4/Results" | md5sum)" ] && ok "fast: true in a config file = --fast" || bad "fast in config"
+if python3 -c "import numpy" 2>/dev/null; then
+  if python3 "$ROOT/tests/fast_stats.py" "$BIN" "$TMP/fastcmp" > "$TMP/fast_stats.txt" 2>&1; then ok "--fast: DP, read counts and likelihoods have the same distributions (KS and z tests)"; else bad "--fast distributions"; cat "$TMP/fast_stats.txt" | head -30; fi
+else echo "  skip (numpy not installed)"; fi
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)
