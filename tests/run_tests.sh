@@ -96,6 +96,26 @@ v=[int(x) for x in re.findall(r'countDropped = (\d+)',t)]
 print(round(sum(v)/(len(v)*42.0),4))")
 close "$fr" 0.1634 0.02 && ok "sparse ADO counted at invariant sites: allele dropout fraction $fr (expected 0.1634)" || bad "sparse ADO count ($fr)"
 
+echo "2g4. Coverage heterogeneity: -V is noise independent in every cell (averages out in the bulk), -O is shared by all the cells (does not)"
+cvstat() { python3 -c "
+import statistics as st,sys
+dp=[]
+for l in open(sys.argv[1]+'/vcf',errors='ignore'):
+    if l.startswith('1\t'):
+        f=l.rstrip('\n').split('\t'); dp+=[int(x.split(':')[1]) for x in f[9:-1]]
+b=[float(l.split('\t')[6]) for l in open(sys.argv[1]+'/bulk') if l[:1].isdigit() and l.count('\t')>8]
+cv=lambda d: st.pvariance(d)/st.mean(d)**2
+print(round(cv(dp),4), round(cv(b),4))" "$1"; }
+Q="-n1 -s100 -l1500 -u1e-6 -e10000 -g1e-4 -b1 -C10 -E0.05 -0"
+for k in V O VO; do mkdir -p "$TMP/cv$k"; done
+(cd "$TMP/cvV" && "$BIN" $Q -V4 -#4 >/dev/null 2>&1); (cd "$TMP/cvO" && "$BIN" $Q -O3 -#4 >/dev/null 2>&1); (cd "$TMP/cvVO" && "$BIN" $Q -V4 -O3 -#4 >/dev/null 2>&1)
+read cV bV <<< "$(cvstat "$TMP/cvV/Results")"; read cO bO <<< "$(cvstat "$TMP/cvO/Results")"; read cVO bVO <<< "$(cvstat "$TMP/cvVO/Results")"
+close "$cV" 0.225 0.03 && ok "-V4: depth CV^2 per cell $cV (expected 0.225)" || bad "-V4 per-cell depth CV^2 ($cV)"
+close "$bV" 0.0 0.01 && ok "-V4: bulk depth CV^2 $bV (independent noise averages out)" || bad "-V4 bulk CV^2 ($bV)"
+close "$bO" 0.333 0.05 && ok "-O3: bulk depth CV^2 $bO (expected 0.333, shared by all the cells)" || bad "-O3 bulk CV^2 ($bO)"
+close "$bVO" 0.333 0.05 && ok "-V4 -O3: bulk depth CV^2 $bVO (only -O remains; per cell $cVO > $cV)" || bad "-V4 -O3 bulk CV^2 ($bVO)"
+python3 -c "import sys; sys.exit(0 if $cVO > $cO > $cV else 1)" && ok "per-cell depth CV^2 grows when the sources are combined ($cV, $cO, $cVO)" || bad "combined per-cell CV^2"
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)
