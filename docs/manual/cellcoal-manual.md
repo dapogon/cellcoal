@@ -782,6 +782,14 @@ The keys are the option letters (`"s": 20`, `"A": [0.05, 0.01, 0]`, `"1": true`)
 
 `Results/run.json` has an `options` object with the options of that run, including the seed that was used, and it can be given directly to `--config`: `bin/cellcoal-x.y.z --config Results/run.json` repeats the run (same program version and number of cells and sites, any number of threads).
 
+Errors in the file are reported with the line and column and the text of the line, and a misspelled key suggests the closest option name:
+
+```
+!!! CONFIG ERROR in run.json, line 3, column 3: unknown option: cell  (did you mean 'cells'?)
+     3 |   "cell": 5,
+       |   ^
+```
+
 ## 6.10b Fast mode (--fast)
 
 `--fast` (or `fast: true` in a configuration file) makes the simulation of the reads about 10-15% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:

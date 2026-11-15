@@ -32,13 +32,63 @@ static const struct { const char *name; char flag; } optionNames[] =
 	};
 
 #define CFG_MAX_TOKENS 4096
-typedef struct { char *key; char *vals[64]; int nvals; int isBool; int boolValue; int objStart, objEnd; } CfgItem;
+typedef struct { char *key; char *vals[64]; int nvals; int isBool; int boolValue; int objStart, objEnd; int line, col; } CfgItem;
 typedef struct { CfgItem *items; int n, cap; } CfgList;
+
+/* the text of the file being read (a copy that the parsers do not modify), to show the line of an error */
+static char *cfgOrig = NULL;
+
+/* prints the line of the file with a caret under the column of the error */
+static void CfgShowLine (int line, int col)
+	{
+	const char *p = cfgOrig;
+	int k;
+
+	if (!p || line < 1)
+		return;
+	for (k=1; k<line && p; k++)
+		{
+		p = strchr (p, '\n');
+		if (p)
+			p++;
+		}
+	if (!p)
+		return;
+	fprintf (stderr, "  %4d | ", line);
+	for (; *p && *p != '\n' && *p != '\r'; p++)
+		fputc (*p, stderr);
+	fprintf (stderr, "\n       | %*s^\n", col > 1 ? col - 1 : 0, "");
+	}
+
+static void CfgErrorAt (const char *path, int line, int col, const char *msg, const char *what, const char *hint)
+	{
+	if (line > 0)
+		fprintf (stderr, "\n!!! CONFIG ERROR in %s, line %d, column %d: %s%s%s", path, line, col, msg, (what && *what) ? ": " : "", (what) ? what : "");
+	else
+		fprintf (stderr, "\n!!! CONFIG ERROR in %s: %s%s%s", path, msg, (what && *what) ? ": " : "", (what) ? what : "");
+	if (hint && *hint)
+		fprintf (stderr, "  (did you mean '%s'?)", hint);
+	fprintf (stderr, "\n");
+	CfgShowLine (line, col);
+	fprintf (stderr, "\n");
+	exit (-1);
+	}
 
 static void CfgError (const char *path, const char *msg, const char *what)
 	{
-	fprintf (stderr, "\n!!! CONFIG ERROR in %s: %s%s%s\n\n", path, msg, (what && *what) ? ": " : "", (what) ? what : "");
-	exit (-1);
+	CfgErrorAt (path, 0, 0, msg, what, NULL);
+	}
+
+/* line and column (1-based) of the character at pos in text */
+static void PosToLineCol (const char *text, int pos, int *line, int *col)
+	{
+	int k, ln = 1, start = 0;
+
+	for (k=0; k<pos && text[k]; k++)
+		if (text[k] == '\n')
+			{ ln++; start = k + 1; }
+	*line = ln;
+	*col = pos - start + 1;
 	}
 
 static CfgItem *CfgNew (CfgList *l, char *key)
@@ -64,12 +114,25 @@ static CfgItem *CfgNew (CfgList *l, char *key)
 static void CfgAddVal (CfgItem *it, char *v, const char *path)
 	{
 	if (it->nvals >= 64)
-		CfgError (path, "too many values for the key", it->key);
+		CfgErrorAt (path, it->line, it->col, "too many values for the key", it->key, NULL);
 	it->vals[it->nvals++] = v;
 	}
 
 /* ---------- JSON ---------- */
 typedef struct { char *s; int pos; const char *path; } JP;
+
+/* error at the current position of the JSON text (cfgOrig has the same offsets as the text being parsed) */
+static void JErr (JP *p, const char *msg, const char *what)
+	{
+	int line, col;
+
+	if (cfgOrig)
+		{
+		PosToLineCol (cfgOrig, p->pos, &line, &col);
+		CfgErrorAt (p->path, line, col, msg, what, NULL);
+		}
+	CfgError (p->path, msg, what);
+	}
 
 static void JSkip (JP *p)
 	{
@@ -83,13 +146,16 @@ static char *JString (JP *p)
 	char *start, *q;
 
 	if (p->s[p->pos] != '"')
-		CfgError (p->path, "a string was expected", p->s + p->pos);
+		{
+		char got[2] = {p->s[p->pos], 0};
+		JErr (p, p->s[p->pos] ? "a quoted string (a key) was expected, found" : "the file ended while a quoted key was expected", got);
+		}
 	p->pos++;
 	start = q = p->s + p->pos;
 	while (p->s[p->pos] != '"')
 		{
 		if (p->s[p->pos] == '\0')
-			CfgError (p->path, "unterminated string", NULL);
+			JErr (p, "unterminated string", NULL);
 		if (p->s[p->pos] == '\\' && p->s[p->pos+1] != '\0')
 			{
 			char c = p->s[++p->pos];
@@ -113,7 +179,7 @@ static char *JScalarCopy (JP *p, const char *delims, const char *what)
 	while (p->s[p->pos] && strchr (delims, p->s[p->pos]) == NULL)
 		p->pos++;
 	if (p->pos == s0)
-		CfgError (p->path, "a value was expected for", what);
+		JErr (p, "a value was expected for", what);
 	copy = (char*) malloc (p->pos - s0 + 1);
 	memcpy (copy, p->s + s0, p->pos - s0);
 	copy[p->pos - s0] = '\0';
@@ -136,14 +202,14 @@ static void JValue (JP *p, CfgItem *it)
 			if (p->s[p->pos] == '"')
 				CfgAddVal (it, JString (p), p->path);
 			else if (p->s[p->pos] == '[' || p->s[p->pos] == '{')
-				CfgError (p->path, "nested arrays or objects are not allowed in a value of", it->key);
+				JErr (p, "nested arrays or objects are not allowed in a value of", it->key);
 			else
 				CfgAddVal (it, JScalarCopy (p, ",] \t\r\n", it->key), p->path);
 			JSkip (p);
 			if (p->s[p->pos] == ',')
 				{ p->pos++; JSkip (p); }
 			else if (p->s[p->pos] != ']')
-				CfgError (p->path, "',' or ']' was expected in", it->key);
+				JErr (p, "',' or ']' was expected in", it->key);
 			}
 		p->pos++;
 		}
@@ -156,7 +222,7 @@ static void JValue (JP *p, CfgItem *it)
 			{
 			char c = p->s[p->pos];
 			if (c == '\0')
-				CfgError (p->path, "unterminated object in", it->key);
+				JErr (p, "unterminated object in", it->key);
 			if (inStr)
 				{ if (c == '\\') p->pos++; else if (c == '"') inStr = 0; }
 			else if (c == '"')
@@ -186,24 +252,31 @@ static void JObject (JP *p, CfgList *l)
 	{
 	JSkip (p);
 	if (p->s[p->pos] != '{')
-		CfgError (p->path, "a JSON object was expected", NULL);
+		JErr (p, "a JSON object was expected", NULL);
 	p->pos++;
 	JSkip (p);
 	while (p->s[p->pos] != '}')
 		{
-		char *key = JString (p);
-		CfgItem *it = CfgNew (l, key);
+		int keyPos;
+		char *key;
+		CfgItem *it;
+
+		keyPos = p->pos;
+		key = JString (p);
+		it = CfgNew (l, key);
+		if (cfgOrig)
+			PosToLineCol (cfgOrig, keyPos, &it->line, &it->col);
 
 		JSkip (p);
 		if (p->s[p->pos] != ':')
-			CfgError (p->path, "':' was expected after", key);
+			JErr (p, "':' was expected after", key);
 		p->pos++;
 		JValue (p, it);
 		JSkip (p);
 		if (p->s[p->pos] == ',')
 			{ p->pos++; JSkip (p); }
 		else if (p->s[p->pos] != '}')
-			CfgError (p->path, "',' or '}' was expected after", key);
+			JErr (p, "',' or '}' was expected after", key);
 		}
 	p->pos++;
 	}
@@ -246,11 +319,14 @@ static void YamlParse (char *s, CfgList *l, const char *path)
 	{
 	char *line, *next;
 	CfgItem *last = NULL;
+	int lineNo = 0;
 
 	for (line = s; line; line = next)
 		{
-		char *c, *colon, *inStr = NULL;
-		int q = 0;
+		char *c, *colon, *inStr = NULL, *raw = line;
+		int q = 0, col;
+
+		lineNo++;
 
 		next = strchr (line, '\n');
 		if (next)
@@ -267,26 +343,29 @@ static void YamlParse (char *s, CfgList *l, const char *path)
 		line = YTrim (line);
 		if (*line == '\0' || strcmp (line, "---") == 0)
 			continue;
+		col = (int) (line - raw) + 1;
 		if (line[0] == '-' && (line[1] == ' ' || line[1] == '\t'))
 			{
 			if (!last)
-				CfgError (path, "a list item without a key", line);
+				CfgErrorAt (path, lineNo, col, "a list item ('-') without a key before it", NULL, NULL);
 			last->isBool = NO;
 			CfgAddVal (last, YUnquote (YTrim (line + 1)), path);
 			continue;
 			}
 		colon = strchr (line, ':');
 		if (!colon)
-			CfgError (path, "a line 'key: value' was expected", line);
+			CfgErrorAt (path, lineNo, col, "a line 'key: value' was expected", line, NULL);
 		*colon = '\0';
 		last = CfgNew (l, YUnquote (YTrim (line)));
+		last->line = lineNo;
+		last->col = col;
 		colon = YTrim (colon + 1);
 		if (*colon == '[')
 			{
 			char *end = strrchr (colon, ']'), *tok, *save = NULL;
 
 			if (!end)
-				CfgError (path, "']' is missing", last->key);
+				CfgErrorAt (path, lineNo, col, "']' is missing in the list of", last->key, NULL);
 			*end = '\0';
 			for (tok = strtok_r (colon + 1, ",", &save); tok; tok = strtok_r (NULL, ",", &save))
 				{
@@ -301,16 +380,67 @@ static void YamlParse (char *s, CfgList *l, const char *path)
 	}
 
 /* ---------- from items to options ---------- */
-static int KeyToFlag (const char *key, const char *path)
+/* edit distance between two keys (case-insensitive; '-' and ' ' count as '_') */
+static int EditDistance (const char *a, const char *b)
 	{
+	int la = (int) strlen (a), lb = (int) strlen (b), i, j, d[64][64];
+
+	if (la > 63 || lb > 63)
+		return 99;
+	for (i=0; i<=la; i++)
+		d[i][0] = i;
+	for (j=0; j<=lb; j++)
+		d[0][j] = j;
+	for (i=1; i<=la; i++)
+		for (j=1; j<=lb; j++)
+			{
+			char x = a[i-1], y = b[j-1];
+			int cost, m;
+
+			if (x == '-' || x == ' ') x = '_';
+			if (y == '-' || y == ' ') y = '_';
+			cost = (tolower ((unsigned char) x) != tolower ((unsigned char) y));
+			m = d[i-1][j-1] + cost;
+			if (d[i-1][j] + 1 < m) m = d[i-1][j] + 1;
+			if (d[i][j-1] + 1 < m) m = d[i][j-1] + 1;
+			d[i][j] = m;
+			}
+	return d[la][lb];
+	}
+
+/* the known long name closest to a mistyped key, or NULL if none is close enough */
+static const char *SimilarKey (const char *key)
+	{
+	int i, best = 99, dist, limit = (int) strlen (key) / 3;
+	const char *name = NULL;
+
+	if (limit < 2)
+		limit = 2;
+	for (i=0; optionNames[i].name; i++)
+		{
+		dist = EditDistance (key, optionNames[i].name);
+		if (dist < best)
+			{ best = dist; name = optionNames[i].name; }
+		}
+	return (best <= limit) ? name : NULL;
+	}
+
+static int KeyToFlag (const CfgItem *it, const char *path)
+	{
+	const char *key = it->key;
 	int i;
 
-	if (key[0] != '\0' && key[1] == '\0')
-		return key[0];
 	for (i=0; optionNames[i].name; i++)
 		if (strcmp (optionNames[i].name, key) == 0)
 			return optionNames[i].flag;
-	CfgError (path, "unknown option", key);
+	if (key[0] != '\0' && key[1] == '\0')
+		{
+		for (i=0; optionNames[i].name; i++)
+			if (optionNames[i].flag == key[0])
+				return key[0];
+		CfgErrorAt (path, it->line, it->col, "unknown option letter", key, NULL);
+		}
+	CfgErrorAt (path, it->line, it->col, "unknown option", key, SimilarKey (key));
 	return 0;
 	}
 
@@ -328,9 +458,9 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			{
 			if (onlyKnown)
 				continue;
-			CfgError (path, "the key has no value", it->key);
+			CfgErrorAt (path, it->line, it->col, "the key has no value", it->key, NULL);
 			}
-		flag = KeyToFlag (it->key, path);
+		flag = KeyToFlag (it, path);
 		if (it->isBool == YES && it->nvals == 0)
 			{
 			if (it->boolValue == NO)
@@ -389,6 +519,8 @@ static char *ReadWholeFile (const char *path)
 static int ConfigTokens (const char *path, char **out)
 	{
 	char *text = ReadWholeFile (path), *p = text;
+
+	cfgOrig = strdup (text);
 	CfgList l = {NULL, 0, 0};
 	int n = 0, i, hasOptions = NO;
 

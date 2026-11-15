@@ -164,6 +164,14 @@ if [ "$(norm "$TMP/cf0/Results" | md5sum)" = "$(norm "$TMP/cf2/Results" | md5sum
 echo '{"foo": 1}' > "$TMP/bad.json"
 if "$BIN" --config "$TMP/bad.json" 2>&1 | grep -q 'unknown option: foo'; then ok "unknown option in a config file is an error"; else bad "unknown option in config"; fi
 
+printf '{\n  "cells": 20,\n  "cell": 5\n}\n' > "$TMP/typo.json"
+msg=$("$BIN" --config "$TMP/typo.json" 2>&1)
+if echo "$msg" | grep -q 'line 3, column 3: unknown option: cell' && echo "$msg" | grep -q "did you mean 'cells'" && echo "$msg" | grep -q '"cell": 5'; then ok "config typo: line, column, source line and 'did you mean'"; else bad "config typo message"; fi
+printf '# c\ncells: 20\n  mutation_rte: 1e-6\n' > "$TMP/typo.yaml"
+if "$BIN" --config "$TMP/typo.yaml" 2>&1 | grep -q "line 3, column 3: unknown option: mutation_rte.*did you mean 'mutation_rate'"; then ok "config YAML typo is located and corrected"; else bad "config YAML typo message"; fi
+printf '{\n  "cells": 20\n  "sites": 100\n}\n' > "$TMP/syn.json"
+if "$BIN" --config "$TMP/syn.json" 2>&1 | grep -q "line 3, column 3: ',' or '}' was expected"; then ok "config JSON syntax error gives line and column"; else bad "config JSON syntax message"; fi
+
 echo "2g7. Summary plots (tools/cellcoal_plots.py)"
 if python3 -c "import matplotlib, numpy" 2>/dev/null; then
   mkdir -p "$TMP/pl2"
