@@ -156,6 +156,9 @@ void FreeReadScratch (ReadScratch *rs);
 void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratch *rs);
 void SetupReadModel (double **ngsEij);
 
+char **ExpandConfigArgs (int *argc, char **argv);
+void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent);
+
 /* Global variables */
 extern TreeNode		*treeNodes, *coalTreeMRCA, *healthyRoot, *healthyTip;
 extern SiteStr			*allSites;

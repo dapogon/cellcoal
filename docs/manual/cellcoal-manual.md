@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.1.8)"
+date: "November, 2026 (CellCoal 2.1.9)"
 ---
 
 # 1. About CellCoal
@@ -772,7 +772,17 @@ By default, the parameter file is called *parameters*. Alternatively, the user c
 
 `bin/cellcoal-x.y.z -Fexamples/parameters.ISM.binary`
 
-## 6.10 The VCF file
+## 6.10 Configuration files (--config)
+
+A run can be described in a JSON or YAML file instead of a long list of options:
+
+`bin/cellcoal-x.y.z --config examples/config.example.yaml`
+
+The keys are the option letters (`"s": 20`, `"A": [0.05, 0.01, 0]`, `"1": true`) or the long names: `replicates` (-n), `cells` (-s), `sites` (-l), `population_size` (-e), `growth_rate` (-g), `mutation_rate` (-u), `ado` (-D), `coverage` (-C), `coverage_dispersion` (-V), `coverage_dispersion_sites` (-O), `coverage_dispersion_cells` (-J), `sequencing_error` (-E), `amplification_error` (-A), `doublet_rate` (-B), `print_snv_genotypes` (-1), `print_catg` (-8), `print_pileup` (-9), `print_bulk` (-0), `replicate_folders` (-v), `seed` (-#) and so on for every option (the complete list is in `src/config.c`). Values can be numbers, strings, `true` (the option without a value), `false` (the option is left out) or lists. The YAML dialect is deliberately small: `key: value`, `key: [a, b]`, `- item` lines and `#` comments, without nesting. The file is turned into the usual options, so options written after `--config` override it (`--config run.yaml -n1`), and `--config` can appear anywhere in the command line.
+
+`Results/run.json` has an `options` object with the options of that run, including the seed that was used, and it can be given directly to `--config`: `bin/cellcoal-x.y.z --config Results/run.json` repeats the run (same program version and number of cells and sites, any number of threads).
+
+## 6.11 The VCF file
 
 When reads are simulated (option -C), CellCoal writes a *vcf* file (VCF v4.3) with one line per SNV site and one column per cell (plus the outgroup cell). If the option -v is active, each replicate is written to a separate file inside the *vcf_dir* subfolder. The INFO fields are `AA` (ancestral allele), `NS` (number of samples with data), `AF` (true alternate allele frequency, ignoring doublets) and `SOMATIC`. Sites for which fewer than half of the samples have data are flagged with the filter `s50`. For each cell, the FORMAT fields are:
 
@@ -850,6 +860,14 @@ The script `tools/bulk_vaf.py` (Python with numpy and matplotlib) plots the vari
 
 Example: `python3 tools/bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 --min-reads 10 --out vaf.png`. With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so non-mutated sites appear at the error rate near zero. The VCF grows with cells x sites (about 360 bytes per cell and site), so for thousands of cells keep the number of sites low.
 
+Other summary plots are made by `tools/cellcoal_plots.py` (numpy and matplotlib; the VCF can be gzip-compressed):
+
+- `python3 tools/cellcoal_plots.py depth Results/vcf_dir/vcf.0001` draws the mean depth per cell, the pooled depth per site and the depth of a genotype next to a Poisson with the same mean, and prints the squared coefficients of variation between cells and between sites (about 1/alpha with options -J and -O) and the variance-to-mean ratio of the depth of a genotype (1 for a Poisson).
+- `python3 tools/cellcoal_plots.py missing Results/vcf_dir/vcf.0001` draws the genotypes without reads, per cell and per site (allelic dropout, deletions and low coverage).
+- `python3 tools/cellcoal_plots.py heatmap Results/snv_genotypes_dir/snv_gen.0001` draws a cells x SNVs heatmap coloured by the number of alleles that differ from the healthy cell (as healthy, one allele, both alleles, missing), with the SNVs ordered from the most to the least shared and the cells ordered by their shared variants.
+
+Each command writes a PNG (`--out`), can write the per-cell numbers (`--tsv`) and prints a short summary.
+
 ## 8.11 Reproducibility and the run record
 
 Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.
@@ -867,6 +885,10 @@ Option -O adds coverage variation between sites (see its description in section 
 ## 8.12 Version 2.1.8: coverage between cells, doublets in one random stream
 
 Option -J adds coverage variation between cells (see section 6). The reads of doublets are now simulated site by site from the stream of each site, in stored and in streamed reads, so both modes give the same data for the same seed. Data sets with doublets therefore differ from those of version 2.1.7 (the doublet cells and donors are now chosen before the per-site streams are started); data sets without doublets are identical.
+
+## 8.13 Version 2.1.9: modules, configuration files, summary plots
+
+The source is divided in modules (`tree.c`, `mutation.c`, `observation.c`, `reads.c`, `reads_output.c`, `output.c`, `rng.c`, `options.c`, `config.c`, `globals.c` and the main program in `cellcoal.c`) instead of one file of 11,600 lines; the program and its output are the same, with the same speed. `--config` reads a JSON or YAML file (section 6.10) and `Results/run.json` records the options of the run so that it can be repeated. `tools/cellcoal_plots.py` draws the depth per cell, per site and per genotype (`depth`), the genotypes without reads (`missing`) and a heatmap of the genotypes (`heatmap`); see section 4.1.
 
 # 9. References
 

@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.1.8)</p>
+<p class="date">November, 2026 (CellCoal 2.1.9)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -77,7 +77,9 @@ options</a></li>
 options</a></li>
 <li><a href="#parameter-file-name-at-the-command-line" id="toc-parameter-file-name-at-the-command-line">6.9 Parameter file name
 at the command line</a></li>
-<li><a href="#the-vcf-file" id="toc-the-vcf-file">6.10 The VCF
+<li><a href="#configuration-files-config" id="toc-configuration-files-config">6.10 Configuration files
+(–config)</a></li>
+<li><a href="#the-vcf-file" id="toc-the-vcf-file">6.11 The VCF
 file</a></li>
 </ul></li>
 <li><a href="#default-settings" id="toc-default-settings">7. Default
@@ -112,6 +114,8 @@ Version 2.1.7: between-site coverage, ADO count, packaging</a></li>
 <li><a href="#version-2.1.8-coverage-between-cells-doublets-in-one-random-stream" id="toc-version-2.1.8-coverage-between-cells-doublets-in-one-random-stream">8.12
 Version 2.1.8: coverage between cells, doublets in one random
 stream</a></li>
+<li><a href="#version-2.1.9-modules-configuration-files-summary-plots" id="toc-version-2.1.9-modules-configuration-files-summary-plots">8.13
+Version 2.1.9: modules, configuration files, summary plots</a></li>
 </ul></li>
 <li><a href="#references" id="toc-references">9. References</a></li>
 </ul>
@@ -1314,7 +1318,40 @@ at the command line</h2>
 Alternatively, the user can indicate the name of the parameter file name
 at the command line with the <strong>option -F</strong>, like this:</p>
 <p><code>bin/cellcoal-x.y.z -Fexamples/parameters.ISM.binary</code></p>
-<h2 id="the-vcf-file">6.10 The VCF file</h2>
+<h2 id="configuration-files-config">6.10 Configuration files
+(–config)</h2>
+<p>A run can be described in a JSON or YAML file instead of a long list
+of options:</p>
+<p><code>bin/cellcoal-x.y.z --config examples/config.example.yaml</code></p>
+<p>The keys are the option letters (<code>&quot;s&quot;: 20</code>,
+<code>&quot;A&quot;: [0.05, 0.01, 0]</code>, <code>&quot;1&quot;: true</code>) or the long
+names: <code>replicates</code> (-n), <code>cells</code> (-s),
+<code>sites</code> (-l), <code>population_size</code> (-e),
+<code>growth_rate</code> (-g), <code>mutation_rate</code> (-u),
+<code>ado</code> (-D), <code>coverage</code> (-C),
+<code>coverage_dispersion</code> (-V),
+<code>coverage_dispersion_sites</code> (-O),
+<code>coverage_dispersion_cells</code> (-J),
+<code>sequencing_error</code> (-E), <code>amplification_error</code>
+(-A), <code>doublet_rate</code> (-B), <code>print_snv_genotypes</code>
+(-1), <code>print_catg</code> (-8), <code>print_pileup</code> (-9),
+<code>print_bulk</code> (-0), <code>replicate_folders</code> (-v),
+<code>seed</code> (-#) and so on for every option (the complete list is
+in <code>src/config.c</code>). Values can be numbers, strings,
+<code>true</code> (the option without a value), <code>false</code> (the
+option is left out) or lists. The YAML dialect is deliberately small:
+<code>key: value</code>, <code>key: [a, b]</code>, <code>- item</code>
+lines and <code>#</code> comments, without nesting. The file is turned
+into the usual options, so options written after <code>--config</code>
+override it (<code>--config run.yaml -n1</code>), and
+<code>--config</code> can appear anywhere in the command line.</p>
+<p><code>Results/run.json</code> has an <code>options</code> object with
+the options of that run, including the seed that was used, and it can be
+given directly to <code>--config</code>:
+<code>bin/cellcoal-x.y.z --config Results/run.json</code> repeats the
+run (same program version and number of cells and sites, any number of
+threads).</p>
+<h2 id="the-vcf-file">6.11 The VCF file</h2>
 <p>When reads are simulated (option -C), CellCoal writes a <em>vcf</em>
 file (VCF v4.3) with one line per SNV site and one column per cell (plus
 the outgroup cell). If the option -v is active, each replicate is
@@ -1536,6 +1573,26 @@ every site a few alternate reads, so non-mutated sites appear at the
 error rate near zero. The VCF grows with cells x sites (about 360 bytes
 per cell and site), so for thousands of cells keep the number of sites
 low.</p>
+<p>Other summary plots are made by <code>tools/cellcoal_plots.py</code>
+(numpy and matplotlib; the VCF can be gzip-compressed):</p>
+<ul>
+<li><code>python3 tools/cellcoal_plots.py depth Results/vcf_dir/vcf.0001</code>
+draws the mean depth per cell, the pooled depth per site and the depth
+of a genotype next to a Poisson with the same mean, and prints the
+squared coefficients of variation between cells and between sites (about
+1/alpha with options -J and -O) and the variance-to-mean ratio of the
+depth of a genotype (1 for a Poisson).</li>
+<li><code>python3 tools/cellcoal_plots.py missing Results/vcf_dir/vcf.0001</code>
+draws the genotypes without reads, per cell and per site (allelic
+dropout, deletions and low coverage).</li>
+<li><code>python3 tools/cellcoal_plots.py heatmap Results/snv_genotypes_dir/snv_gen.0001</code>
+draws a cells x SNVs heatmap coloured by the number of alleles that
+differ from the healthy cell (as healthy, one allele, both alleles,
+missing), with the SNVs ordered from the most to the least shared and
+the cells ordered by their shared variants.</li>
+</ul>
+<p>Each command writes a PNG (<code>--out</code>), can write the
+per-cell numbers (<code>--tsv</code>) and prints a short summary.</p>
 <h2 id="reproducibility-and-the-run-record">8.11 Reproducibility and the
 run record</h2>
 <p>Read counts are generated from one independent random stream per
@@ -1583,6 +1640,21 @@ for the same seed. Data sets with doublets therefore differ from those
 of version 2.1.7 (the doublet cells and donors are now chosen before the
 per-site streams are started); data sets without doublets are
 identical.</p>
+<h2 id="version-2.1.9-modules-configuration-files-summary-plots">8.13
+Version 2.1.9: modules, configuration files, summary plots</h2>
+<p>The source is divided in modules (<code>tree.c</code>,
+<code>mutation.c</code>, <code>observation.c</code>,
+<code>reads.c</code>, <code>reads_output.c</code>,
+<code>output.c</code>, <code>rng.c</code>, <code>options.c</code>,
+<code>config.c</code>, <code>globals.c</code> and the main program in
+<code>cellcoal.c</code>) instead of one file of 11,600 lines; the
+program and its output are the same, with the same speed.
+<code>--config</code> reads a JSON or YAML file (section 6.10) and
+<code>Results/run.json</code> records the options of the run so that it
+can be repeated. <code>tools/cellcoal_plots.py</code> draws the depth
+per cell, per site and per genotype (<code>depth</code>), the genotypes
+without reads (<code>missing</code>) and a heatmap of the genotypes
+(<code>heatmap</code>); see section 4.1.</p>
 <h1 id="references">9. References</h1>
 <p>Alexandrov LB et al. 2013. Signatures of mutational processes in
 human cancer. <em>Nature</em> 22: 415-421.</p>

@@ -1,13 +1,13 @@
 PROG = cellcoal
 DASH = -
-VERSION = 2.1.8
+VERSION = 2.1.9
 SRCDIR = src
 OBJDIR = out
 BINDIR = bin
 
 CC ?= gcc
 
-_OBJS = cellcoal.o globals.o tree.o mutation.o observation.o reads.o reads_output.o output.o rng.o options.o eigen.o signatures.o
+_OBJS = cellcoal.o globals.o tree.o mutation.o observation.o reads.o reads_output.o output.o rng.o options.o config.o eigen.o signatures.o
 OBJS=$(patsubst %,$(OBJDIR)/%,$(_OBJS))
 
 # -ffp-contract=off keeps floating-point results bit-identical to the original code
@@ -70,6 +70,7 @@ install: all
 	install -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/doc/cellcoal $(DESTDIR)$(PREFIX)/share/cellcoal
 	install -m 755 $(BINDIR)/$(PROG)-$(VERSION) $(DESTDIR)$(PREFIX)/bin/$(PROG)
 	install -m 755 tools/bulk_vaf.py $(DESTDIR)$(PREFIX)/bin/cellcoal-bulk-vaf
+	install -m 755 tools/cellcoal_plots.py $(DESTDIR)$(PREFIX)/bin/cellcoal-plots
 	install -m 644 README.md $(wildcard docs/CHANGES-$(VERSION).md) $(DESTDIR)$(PREFIX)/share/doc/cellcoal
 	install -m 644 docs/cellcoal.manual.v2.0.html $(DESTDIR)$(PREFIX)/share/doc/cellcoal
 	cp -R examples parameters $(DESTDIR)$(PREFIX)/share/cellcoal/

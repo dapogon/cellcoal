@@ -298,6 +298,7 @@ int main (int argc, char **argv)
 	*/
 
 	strcpy(parameterFile, "parameters");
+	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
 	ReadParametersFromCommandLine (argc, argv);
 	if (argc < 2 || doSpecificParameterFile == YES)
         {
@@ -1208,6 +1209,23 @@ void WriteRunRecord (double wallSecs, double cpuSecs)
 	JsonString (fp, VERSION_NUMBER);
 	fprintf (fp, ",\n  \"finished\": \"%s\",\n  \"command_line\": ", when);
 	JsonString (fp, CommandLine ? CommandLine : "");
+	{
+	/* the options of the run (a valid --config file), with the seed that was used */
+	char	*cmd = (char*) calloc (strlen (CommandLine ? CommandLine : "") + 64, 1), *tok, *save = NULL, *copy = strdup (CommandLine ? CommandLine : "");
+
+	for (tok = strtok_r (copy, " ", &save); tok; tok = strtok_r (NULL, " ", &save))
+		{
+		if (tok[0] == '-' && tok[1] == '#')
+			continue;
+		strcat (cmd, tok);
+		strcat (cmd, " ");
+		}
+	snprintf (cmd + strlen (cmd), 48, "-#%ld", originalSeed);
+	fprintf (fp, ",\n  \"options\": ");
+	WriteOptionsJson (fp, cmd, "  ");
+	free (cmd);
+	free (copy);
+	}
 	fprintf (fp, ",\n  \"seed\": %ld,\n  \"replicates\": %d,\n  \"cells\": %d,\n  \"sites\": %d,\n", originalSeed, numDataSets, numCells, numSites);
 	fprintf (fp, "  \"threads\": %d,\n  \"results_dir\": ", threads);
 	JsonString (fp, resultsDir);
