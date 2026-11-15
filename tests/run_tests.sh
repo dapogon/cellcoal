@@ -221,6 +221,37 @@ print(len(v), round(sum(v)/len(v),2), all(0<x<1 for x in v))" "$TMP/$d/Results/a
 done
 [ "$(grep -c '^\[#' "$TMP/ac1/Results/ado_cells")" = 2 ] && ok "ado_cells has one section per replicate" || bad "ado_cells replicates"
 
+echo "2g10. Correlation between the coverage and the ADO rate of the cells (--cov-ado-corr)"
+cat > "$TMP/covado.py" <<'PY'
+import sys, numpy as np
+d = sys.argv[1]
+ado = [float(l.split('\t')[1]) for l in open(d + '/Results/ado_cells') if l[0] != '[' and not l.startswith('cell\tado')]
+dp = None
+for l in open(d + '/Results/vcf'):
+    if l.startswith('#CHROM'): dp = np.zeros(len(l.split('\t')) - 9); continue
+    if dp is None or l[0] in '#[' or '\t' not in l: continue
+    p = l.split('\t'); i = p[8].split(':').index('DP')
+    for k, c in enumerate(p[9:]):
+        x = c.split(':')
+        if len(x) > i and x[i] != '.': dp[k] += int(x[i])
+ado = np.array(ado[:len(dp)]); r = lambda a: np.argsort(np.argsort(a))
+print(round(float(np.corrcoef(r(ado), r(dp))[0, 1]), 3))
+PY
+if python3 -c "import numpy" 2>/dev/null; then
+  CQ="-n1 -s300 -l3000 -u1e-6 -e10000 -b1 -C20 -J4 -P0.2 0.02 -#8"
+  mkdir -p "$TMP/cv0" "$TMP/cv1" "$TMP/cv2"
+  (cd "$TMP/cv0" && "$BIN" $CQ >/dev/null 2>&1)
+  (cd "$TMP/cv1" && "$BIN" --cov-ado-corr -0.8 $CQ >/dev/null 2>&1)
+  printf 'cov_ado_correlation: 0.8\n' > "$TMP/covado.yaml"
+  (cd "$TMP/cv2" && "$BIN" --config "$TMP/covado.yaml" $CQ >/dev/null 2>&1)
+  c0=$(python3 "$TMP/covado.py" "$TMP/cv0"); c1=$(python3 "$TMP/covado.py" "$TMP/cv1"); c2=$(python3 "$TMP/covado.py" "$TMP/cv2")
+  python3 -c "import sys; sys.exit(0 if abs($c0) < 0.25 else 1)" && ok "no correlation without the option ($c0)" || bad "cov-ado baseline ($c0)"
+  python3 -c "import sys; sys.exit(0 if $c1 < -0.6 else 1)" && ok "--cov-ado-corr -0.8: more dropout, less coverage ($c1)" || bad "cov-ado negative ($c1)"
+  python3 -c "import sys; sys.exit(0 if $c2 > 0.5 else 1)" && ok "cov_ado_correlation: 0.8 in a config file ($c2)" || bad "cov-ado positive ($c2)"
+  cmp -s "$TMP/cv0/Results/ado_cells" "$TMP/cv1/Results/ado_cells" && ok "the ADO rates themselves do not change" || bad "cov-ado changed the ADO rates"
+else echo "  skip (numpy not installed)"; fi
+if "$BIN" --cov-ado-corr 0.5 -s5 2>&1 | grep -q 'needs coverage variation among cells (-J) and ADO variation'; then ok "--cov-ado-corr needs -J and -P"; else bad "cov-ado validation"; fi
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)

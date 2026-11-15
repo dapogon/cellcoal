@@ -794,6 +794,12 @@ Errors in the file are reported with the line and column and the text of the lin
 
 With `-P` (allelic dropout varying among cells) the ADO rate of every cell is drawn from a beta distribution. These rates are written to the file `ado_cells` (`ado_cells_dir/ado_cells.NNNN` with `-v`): one section `[#replicate]` per replicate with the columns `cell` and `ado_rate`, including the outgroup (healthy) cell. This is the rate of the cell itself; the dropout probability of a genotype also combines it with the rate of its site (`-Q`).
 
+## 6.10c Correlation between coverage and dropout (--cov-ado-corr)
+
+In real data the cells that amplify badly often have both low coverage and high allelic dropout. `--cov-ado-corr RHO` (or `cov_ado_correlation: RHO` in a configuration file), with RHO between -1 and 1, correlates the coverage multiplier of the cells (`-J`) with their ADO rate (`-P`); both options are required. RHO < 0 means that cells with more dropout have less coverage (the usual case), RHO > 0 the opposite, and 0 (the default) no relation.
+
+It works as a Gaussian copula on the ranks: the coverage multipliers that `-J` has drawn are reassigned to the cells so that their ranks follow `RHO z + sqrt(1-RHO^2) e`, where `z` are the normal scores of the ranks of the ADO rates and `e` is standard normal noise. Only the assignment changes, so the ADO rates (see `ado_cells`) and the distribution of the coverage multipliers are exactly those requested without the option, and the rank (Spearman) correlation of the two is close to RHO. The observed depth is noisier than the multiplier, so the correlation measured in the data is somewhat smaller. Without the option the output is bit-identical to previous versions.
+
 ## 6.10b Fast mode (--fast)
 
 `--fast` (or `fast: true` in a configuration file) makes the simulation of the reads about 10-15% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:

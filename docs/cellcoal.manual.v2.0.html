@@ -80,6 +80,8 @@ at the command line</a></li>
 <li><a href="#configuration-files-config" id="toc-configuration-files-config">6.10 Configuration files
 (–config)</a></li>
 <li><a href="#a-ado-rate-of-each-cell" id="toc-a-ado-rate-of-each-cell">6.10a ADO rate of each cell</a></li>
+<li><a href="#c-correlation-between-coverage-and-dropout-cov-ado-corr" id="toc-c-correlation-between-coverage-and-dropout-cov-ado-corr">6.10c
+Correlation between coverage and dropout (–cov-ado-corr)</a></li>
 <li><a href="#b-fast-mode-fast" id="toc-b-fast-mode-fast">6.10b Fast
 mode (–fast)</a></li>
 <li><a href="#the-vcf-file" id="toc-the-vcf-file">6.11 The VCF
@@ -1369,6 +1371,27 @@ section <code>[#replicate]</code> per replicate with the columns
 (healthy) cell. This is the rate of the cell itself; the dropout
 probability of a genotype also combines it with the rate of its site
 (<code>-Q</code>).</p>
+<h2 id="c-correlation-between-coverage-and-dropout-cov-ado-corr">6.10c
+Correlation between coverage and dropout (–cov-ado-corr)</h2>
+<p>In real data the cells that amplify badly often have both low
+coverage and high allelic dropout. <code>--cov-ado-corr RHO</code> (or
+<code>cov_ado_correlation: RHO</code> in a configuration file), with RHO
+between -1 and 1, correlates the coverage multiplier of the cells
+(<code>-J</code>) with their ADO rate (<code>-P</code>); both options
+are required. RHO &lt; 0 means that cells with more dropout have less
+coverage (the usual case), RHO &gt; 0 the opposite, and 0 (the default)
+no relation.</p>
+<p>It works as a Gaussian copula on the ranks: the coverage multipliers
+that <code>-J</code> has drawn are reassigned to the cells so that their
+ranks follow <code>RHO z + sqrt(1-RHO^2) e</code>, where <code>z</code>
+are the normal scores of the ranks of the ADO rates and <code>e</code>
+is standard normal noise. Only the assignment changes, so the ADO rates
+(see <code>ado_cells</code>) and the distribution of the coverage
+multipliers are exactly those requested without the option, and the rank
+(Spearman) correlation of the two is close to RHO. The observed depth is
+noisier than the multiplier, so the correlation measured in the data is
+somewhat smaller. Without the option the output is bit-identical to
+previous versions.</p>
 <h2 id="b-fast-mode-fast">6.10b Fast mode (–fast)</h2>
 <p><code>--fast</code> (or <code>fast: true</code> in a configuration
 file) makes the simulation of the reads about 10-15% faster. It changes

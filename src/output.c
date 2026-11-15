@@ -2273,6 +2273,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
 	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
+	fprintf (fp,"\n--cov-ado-corr RHO: correlation (-1..1) between the coverage (-J) and the ADO rate (-P) of the cells (e.g. --cov-ado-corr -0.5)");
 	fprintf (fp,"\n--fast: faster read simulation (same distributions, different random numbers; see the manual)");
 	fprintf (fp,"\n--config FILE: read the options from a JSON or YAML file");
 	fprintf (fp,"\n-T: user-tree file (e.g. -Tusertree)");

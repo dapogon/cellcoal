@@ -300,6 +300,11 @@ int main (int argc, char **argv)
 	strcpy(parameterFile, "parameters");
 	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
 	ReadParametersFromCommandLine (argc, argv);
+	if (covAdoCorr != 0.0 && (alphaCellCoverage <= 0.0 || doADOcell == NO))
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-ado-corr needs coverage variation among cells (-J) and ADO variation among cells (-P)\n\n");
+		exit (-1);
+		}
 	if (argc < 2 || doSpecificParameterFile == YES)
         {
 		readingParameterFile = YES;

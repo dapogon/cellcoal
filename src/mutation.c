@@ -265,7 +265,10 @@ void SparseAllelicDropout (long int *seed)
 		for (i=0; i<numCells+1; i++)
 			sparseAdoCell[i] = (doADOcell == YES) ? RandomBetaMeanVar(meanADOcell, varADOcell, seed) : 0;
 		if (doADOcell == YES)
+			{
 			WriteADOCells (sparseAdoCell, adoReplicate);
+			KeepCellADO (sparseAdoCell);
+			}
 		for (j=0; j<numSites; j++)
 			sparseAdoSite[j] = (doADOsite == YES) ? RandomBetaMeanVar(meanADOsite, varADOsite, seed) : 0;
 		}

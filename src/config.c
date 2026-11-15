@@ -28,7 +28,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"print_times",'7'}, {"print_catg",'8'}, {"print_pileup",'9'}, {"print_bulk",'0'}, {"no_vcf",'Z'},
 	{"gzip_vcf",'z'}, {"min_vaf",'M'}, {"print_true_haplotypes",'Y'}, {"replicate_folders",'v'},
 	{"iupac",'x'}, {"results_folder",'o'}, {"tree_file",'T'}, {"genome_file",'U'}, {"tumor_names",'W'},
-	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {NULL,0}
+	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"cov_ado_correlation",'\2'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -468,6 +468,8 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			tok = (char*) malloc (8);
 			if (flag == '\1')
 				snprintf (tok, 8, "--fast");
+			else if (flag == '\2')
+				continue;
 			else
 				snprintf (tok, 8, "-%c", flag);
 			out[(*n)++] = tok;
@@ -477,7 +479,12 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			{
 			if (*n >= CFG_MAX_TOKENS - 1)
 				CfgError (path, "too many options", NULL);
-			if (v == 0)
+			if (v == 0 && flag == '\2')
+				{
+				out[(*n)++] = strdup ("--cov-ado-corr");
+				tok = strdup (it->vals[0]);
+				}
+			else if (v == 0)
 				{
 				size_t len = strlen (it->vals[0]) + 3;
 				tok = (char*) malloc (len);
@@ -562,7 +569,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	char **out;
 
 	for (i=1; i<*argc; i++)
-		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0)
+		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -590,7 +597,15 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	/* --fast (from the command line or a configuration file) switches on the fast mode and is not passed on */
 	for (i=1, k=1; i<n; i++)
 		{
-		if (strcmp (out[i], "--fast") == 0)
+		if (strcmp (out[i], "--cov-ado-corr") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--cov-ado-corr needs a value between -1 and 1", NULL);
+			covAdoCorr = atof (out[++i]);
+			if (!(covAdoCorr >= -1.0 && covAdoCorr <= 1.0))
+				CfgError ("the command line", "--cov-ado-corr has to be between -1 and 1", out[i]);
+			}
+		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;
 		else
 			out[k++] = out[i];

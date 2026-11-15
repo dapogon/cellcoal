@@ -44,6 +44,7 @@ void 	PrintCommandLine (FILE *fp, int argc,char **argv);
 void		PrepareGlobalFiles (int argc, char **argv);
 void		PrepareSeparateFiles (int replicate);
 void		WriteADOCells (const double *rate, int replicate);
+void		KeepCellADO (const double *rate);
 extern int	adoReplicate;	/* replicate being simulated, for the ADO file */
 void		ReadUserGenome (FILE *fp);
 void		ReadUserTree (FILE *fp);
@@ -321,6 +322,8 @@ extern FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplot
 extern double			*cellCovMult;	/* between-cell coverage multiplier of every cell (-J) */
 extern __thread double		siteCovMult;	/* between-site coverage multiplier of the site being simulated (-O) */
 extern __thread int			streamActive;
+extern double				covAdoCorr;	/* --cov-ado-corr: correlation between the coverage and the ADO rate of the cells */
+extern double				*cellAdoRate;	/* ADO rate of every cell (kept only when covAdoCorr != 0) */
 extern int					fastMode;	/* --fast: cheaper samplers and log10/10^x for the reads (same distributions, different random numbers) */
 double	Log10Approx (double x);
 double	Pow10Approx (double x);

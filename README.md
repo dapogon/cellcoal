@@ -31,7 +31,7 @@ With simulated reads, sequencing and amplification errors give almost every site
 
 ## Unreleased (next 2.1.x)
 
-`--fast` (or `fast: true` in a `--config` file) simulates the reads about 10-15% faster with the same distributions but different random numbers (so a seed gives different reads); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. With `-P`, the ADO rate drawn for each cell is written to the new file `ado_cells`. `--config` errors now give the line and column and suggest the correct key for a misspelled one.
+`--fast` (or `fast: true` in a `--config` file) simulates the reads about 10-15% faster with the same distributions but different random numbers (so a seed gives different reads); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. `--cov-ado-corr RHO` correlates the coverage (`-J`) and the ADO rate (`-P`) of the cells. With `-P`, the ADO rate drawn for each cell is written to the new file `ado_cells`. `--config` errors now give the line and column and suggest the correct key for a misspelled one.
 
 ## What's new in 2.1.9
 

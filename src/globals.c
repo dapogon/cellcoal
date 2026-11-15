@@ -81,5 +81,7 @@ double			*cellCovMult = NULL;	/* between-cell coverage multiplier of every cell 
 __thread double		siteCovMult = 1.0;	/* between-site coverage multiplier of the site being simulated (-O) */
 __thread int			streamActive = 0;
 int					fastMode = 0;
+double				covAdoCorr = 0.0;
+double				*cellAdoRate = NULL;
 int					adoReplicate = 0;
 __thread uint64_t	streamState;

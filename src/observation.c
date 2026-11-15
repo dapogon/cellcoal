@@ -47,7 +47,10 @@ void AllelicDropout (long int *seed)
 		for (i=0; i<numCells+1; i++)
 			ADOrateCell[i] = (doADOcell == YES) ? RandomBetaMeanVar(meanADOcell, varADOcell, seed) : 0;
 		if (doADOcell == YES)
+			{
 			WriteADOCells (ADOrateCell, adoReplicate);
+			KeepCellADO (ADOrateCell);
+			}
 		for (j=0; j<numSites; j++)
 			ADOrateSite[j] = (doADOsite == YES) ? RandomBetaMeanVar(meanADOsite, varADOsite, seed) : 0;
 		}

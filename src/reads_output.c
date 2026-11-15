@@ -706,6 +706,107 @@ void PrintBulk (FILE *fp)
 		BulkSite (fp, j);
 	}
 
+/* inverse of the standard normal distribution function (Acklam's rational approximation, relative error < 1.2e-9) */
+static double NormalQuantile (double p)
+	{
+	static const double a[] = {-3.969683028665376e+01, 2.209460984245205e+02, -2.759285104469687e+02, 1.383577518672690e+02, -3.066479806614716e+01, 2.506628277459239e+00};
+	static const double b[] = {-5.447609879822406e+01, 1.615858368580409e+02, -1.556989798598866e+02, 6.680131188771972e+01, -1.328068155288572e+01};
+	static const double c[] = {-7.784894002430293e-03, -3.223964580411365e-01, -2.400758277161838e+00, -2.549732539343734e+00, 4.374664141464968e+00, 2.938163982698783e+00};
+	static const double d[] = {7.784695709041462e-03, 3.224671290700398e-01, 2.445134137142996e+00, 3.754408661907416e+00};
+	double q, r;
+
+	if (p < 0.02425)
+		{
+		q = sqrt (-2.0 * log (p));
+		return (((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+		}
+	if (p > 1.0 - 0.02425)
+		{
+		q = sqrt (-2.0 * log (1.0 - p));
+		return -(((((c[0]*q+c[1])*q+c[2])*q+c[3])*q+c[4])*q+c[5]) / ((((d[0]*q+d[1])*q+d[2])*q+d[3])*q+1.0);
+		}
+	q = p - 0.5;
+	r = q * q;
+	return (((((a[0]*r+a[1])*r+a[2])*r+a[3])*r+a[4])*r+a[5])*q / (((((b[0]*r+b[1])*r+b[2])*r+b[3])*r+b[4])*r+1.0);
+	}
+
+static const double	*sortKey;
+static int CmpByKey (const void *x, const void *y)
+	{
+	double a = sortKey[*(const int*)x], b = sortKey[*(const int*)y];
+
+	if (a < b) return -1;
+	if (a > b) return 1;
+	return *(const int*)x - *(const int*)y;
+	}
+
+/* keeps the ADO rate of every cell (drawn with -P) for the correlation with the coverage (--cov-ado-corr) */
+void KeepCellADO (const double *rate)
+	{
+	if (covAdoCorr == 0.0)
+		return;
+	free (cellAdoRate);
+	cellAdoRate = (double*) malloc ((numCells+1) * sizeof(double));
+	if (!cellAdoRate)
+		{
+		fprintf (stderr, "Could not allocate the cell ADO rates\n");
+		exit (-1);
+		}
+	memcpy (cellAdoRate, rate, (numCells+1) * sizeof(double));
+	}
+
+/* Gaussian-copula style correlation between the ADO rate and the coverage multiplier of the cells (--cov-ado-corr rho).
+   The coverage multipliers already drawn (gamma, -J) are reassigned to the cells so that their ranks follow
+   s = rho z + sqrt(1-rho^2) e, where z are the normal scores of the ranks of the ADO rates (beta, -P) and e is standard
+   normal noise. Only the assignment changes: the distributions of both quantities are exactly the requested ones.
+   rho > 0: cells with more dropout have more coverage; rho < 0: cells with more dropout have less coverage. */
+static void CorrelateCoverageWithADO (long int *seed)
+	{
+	int		i, n = numCells, *byAdo, *byScore;
+	double	*z, *score, *cov, u1, u2, e;
+
+	byAdo = (int*) malloc (n * sizeof(int));
+	byScore = (int*) malloc (n * sizeof(int));
+	z = (double*) malloc (n * sizeof(double));
+	score = (double*) malloc (n * sizeof(double));
+	cov = (double*) malloc (n * sizeof(double));
+	if (!byAdo || !byScore || !z || !score || !cov)
+		{
+		fprintf (stderr, "Could not allocate the coverage-ADO correlation\n");
+		exit (-1);
+		}
+	for (i=0; i<n; i++)
+		byAdo[i] = byScore[i] = i;
+	sortKey = cellAdoRate;
+	qsort (byAdo, n, sizeof(int), CmpByKey);
+	for (i=0; i<n; i++)
+		z[byAdo[i]] = NormalQuantile ((i + 0.5) / n);
+	for (i=0; i<n; i++)
+		{
+		u1 = RandomUniform (seed);
+		u2 = RandomUniform (seed);
+		e = sqrt (-2.0 * log (u1)) * cos (2.0 * M_PI * u2);
+		score[i] = covAdoCorr * z[i] + sqrt (1.0 - covAdoCorr * covAdoCorr) * e;
+		}
+	sortKey = score;
+	qsort (byScore, n, sizeof(int), CmpByKey);
+	for (i=0; i<n; i++)
+		cov[i] = cellCovMult[i];
+	sortKey = cov;
+	qsort (byAdo, n, sizeof(int), CmpByKey);	/* byAdo now holds the cells' coverage order (reused as scratch) */
+	{
+	/* k-th smallest coverage value goes to the cell with the k-th smallest score */
+	double *sorted = (double*) malloc (n * sizeof(double));
+
+	for (i=0; i<n; i++)
+		sorted[i] = cov[byAdo[i]];
+	for (i=0; i<n; i++)
+		cellCovMult[byScore[i]] = sorted[i];
+	free (sorted);
+	}
+	free (byAdo); free (byScore); free (z); free (score); free (cov);
+	}
+
 /********************* SetupCellCoverage  ************************/
 /* Coverage varies between cells (-J): the depth expected in every cell is multiplied by a gamma variate with mean 1,
    drawn once per cell and replicate from the main random stream (the same in stored and streamed reads). */
@@ -722,6 +823,8 @@ void SetupCellCoverage (long int *seed)
 		}
 	for (i=0; i<numCells+1; i++)
 		cellCovMult[i] = (alphaCellCoverage > 0.0) ? RandomGamma (alphaCellCoverage, seed) / alphaCellCoverage : 1.0;
+	if (covAdoCorr != 0.0 && cellAdoRate != NULL && numCells > 1)
+		CorrelateCoverageWithADO (seed);
 	}
 
 /********************* SetupDoublets  ************************/
