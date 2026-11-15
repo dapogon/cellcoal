@@ -444,7 +444,48 @@ static void ConvertRecord (Bytes *rec, char *line, int nsamples, long lineNo)
 			FailLine (lineNo, "undeclared FORMAT key");
 		kind = dict[kd[k]].kind;
 		PutTypedInt (&indiv, kd[k]);
-		if (kind == K_STRING)
+		if (strcmp (keys[k], "GT") == 0)
+			{
+			/* genotypes are integer vectors in BCF: (allele + 1) << 1 | phased, 0 for a missing allele (htslib requires this for GT) */
+			int ploidy = 1;
+			char *z;
+
+			for (z=cell[0][k]; *z; z++)
+				if (*z == '|' || *z == '/')
+					ploidy++;
+			PutDesc (&indiv, T_INT8, ploidy);
+			for (s=0; s<nsamples; s++)
+				{
+				int np = 0;
+
+				z = cell[s][k];
+				while (np < ploidy)
+					{
+					int allele = -1, phased = 0;
+
+					if (np > 0)
+						{
+						if (*z != '|' && *z != '/')
+							FailLine (lineNo, "inconsistent ploidy in GT");
+						phased = (*z == '|');
+						z++;
+						}
+					if (*z == '.')
+						z++;
+					else if (*z >= '0' && *z <= '9')
+						{
+						allele = 0;
+						while (*z >= '0' && *z <= '9')
+							allele = allele * 10 + (*z++ - '0');
+						}
+					else
+						FailLine (lineNo, "bad GT");
+					BPut8 (&indiv, (unsigned)(((allele + 1) << 1) | phased));
+					np++;
+					}
+				}
+			}
+		else if (kind == K_STRING)
 			{
 			size_t mx = 0;
 

@@ -114,6 +114,12 @@ while r.p < len(r.b):
         t, n = typed_len(ind)
         for s in range(nsamp):
             txt = v[9 + s].split(":")[fk_i]
+            if key == "GT":
+                assert t == 1, "GT must be an integer vector"
+                g = vec(ind, t, n)
+                text_gt = "".join(("." if (x >> 1) == 0 else str((x >> 1) - 1)) + ("" if i == n - 1 else ("|" if g[i + 1] & 1 else "/")) for i, x in enumerate(g))
+                assert text_gt == txt, ("GT", s, g, txt)
+                continue
             if t == 7:
                 got = ind.take(n).decode().rstrip("\0"); assert got == txt, (key, s, got, txt)
                 continue
