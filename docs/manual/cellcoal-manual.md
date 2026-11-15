@@ -949,3 +949,7 @@ Tavaré S. 1986. Some probabilistic and statistical problems in the analysis of 
 Yang Z. 1996. Among-site rate variation and its impact on phylogenetic analysis. *Trends in Ecology and Evolution* 11:367-372.
 
 Zafar H, Wang Y, Nakhleh L, Navin N, Chen K. 2016. Monovar: single-nucleotide variant detection in single cells. Nat Meth. 13:505–507.
+
+## 8.14 Version 2.2.0: fast mode, ADO per cell, coverage-ADO correlation
+
+`--fast` (section 6.10b) simulates the reads 10-15% faster with the same distributions; the ADO rate of every cell (`-P`) is written to `ado_cells` (6.10a); `--cov-ado-corr RHO` correlates the coverage and the ADO rate of the cells (6.10c); `--config` errors give the line and column and suggest the correct key; `plots all` writes every plot and a report. Without the new options the output is identical to 2.1.9.

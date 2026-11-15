@@ -122,7 +122,12 @@ stream</a></li>
 <li><a href="#version-2.1.9-modules-configuration-files-summary-plots" id="toc-version-2.1.9-modules-configuration-files-summary-plots">8.13
 Version 2.1.9: modules, configuration files, summary plots</a></li>
 </ul></li>
-<li><a href="#references" id="toc-references">9. References</a></li>
+<li><a href="#references" id="toc-references">9. References</a>
+<ul>
+<li><a href="#version-2.2.0-fast-mode-ado-per-cell-coverage-ado-correlation" id="toc-version-2.2.0-fast-mode-ado-per-cell-coverage-ado-correlation">8.14
+Version 2.2.0: fast mode, ADO per cell, coverage-ADO
+correlation</a></li>
+</ul></li>
 </ul>
 </nav>
 <h1 id="about-cellcoal">1. About CellCoal</h1>
@@ -1772,5 +1777,15 @@ phylogenetic analysis. <em>Trends in Ecology and Evolution</em>
 <p>Zafar H, Wang Y, Nakhleh L, Navin N, Chen K. 2016. Monovar:
 single-nucleotide variant detection in single cells. Nat Meth.
 13:505–507.</p>
+<h2 id="version-2.2.0-fast-mode-ado-per-cell-coverage-ado-correlation">8.14
+Version 2.2.0: fast mode, ADO per cell, coverage-ADO correlation</h2>
+<p><code>--fast</code> (section 6.10b) simulates the reads 10-15% faster
+with the same distributions; the ADO rate of every cell
+(<code>-P</code>) is written to <code>ado_cells</code> (6.10a);
+<code>--cov-ado-corr RHO</code> correlates the coverage and the ADO rate
+of the cells (6.10c); <code>--config</code> errors give the line and
+column and suggest the correct key; <code>plots all</code> writes every
+plot and a report. Without the new options the output is identical to
+2.1.9.</p>
 </body>
 </html>

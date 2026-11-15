@@ -8,9 +8,9 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 ## Getting started
 
-1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.1.9.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
+1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.2.0.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
 
-2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.1.9`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.
+2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.2.0`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.
 
 3. **Run**: `bin/cellcoal-x.y.z`. In this case, the program arguments will be read from a file called *parameters*. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
 
@@ -29,9 +29,9 @@ Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells
 
 With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
-## Unreleased (next 2.1.x)
+## What's new in 2.2.0
 
-`--fast` (or `fast: true` in a `--config` file) simulates the reads about 10-15% faster with the same distributions but different random numbers (so a seed gives different reads); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. `--cov-ado-corr RHO` correlates the coverage (`-J`) and the ADO rate (`-P`) of the cells. With `-P`, the ADO rate drawn for each cell is written to the new file `ado_cells`. `--config` errors now give the line and column and suggest the correct key for a misspelled one.
+`--fast` (or `fast: true` in a `--config` file) simulates the reads about 10-15% faster with the same distributions but different random numbers (so a seed gives different reads); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. `--cov-ado-corr RHO` correlates the coverage (`-J`) and the ADO rate (`-P`) of the cells. With `-P`, the ADO rate drawn for each cell is written to the new file `ado_cells`. `--config` errors now give the line and column and suggest the correct key for a misspelled one. Also in this release: `plots all` (every plot plus a `report.html`), CI and packaging tests (Homebrew, conda). Without the new options the output is bit-identical to 2.1.9. See [docs/CHANGES-2.2.0.md](docs/CHANGES-2.2.0.md).
 
 ## What's new in 2.1.9
 
