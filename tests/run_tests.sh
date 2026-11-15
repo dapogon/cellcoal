@@ -13,6 +13,7 @@ fail=0
 ok()  { echo "  ok   $1"; }
 bad() { echo "  FAIL $1"; fail=1; }
 # print the results of a run without lines that change between runs (dates, times, command line)
+close() { python3 -c "import sys; sys.exit(0 if abs($1-$2)<=$3 else 1)"; }
 norm() { (cd "$1" && find . -type f ! -name run.json | sort | xargs grep -v -i -e "fileDate" -e "Time processing" -e "date" -e "Command" -e "time" -e "CellCoal" -e "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]" 2>/dev/null); }
 
 echo "Binary: $BIN"
@@ -72,6 +73,28 @@ mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)
 if python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['seed']==99 and d['replicates']==2 and d['cells']==20 and d['sites']==300 and '-#99' in d['command_line'] and d['wall_seconds']>=0" "$TMP/rj/Results/run.json" 2>/dev/null; then ok "run.json"; else bad "run.json"; fi
 
+echo "2i. Statistical checks of the pooled reads (bulk file)"
+cat > "$TMP/bulkstat.py" <<'PY'
+import sys
+# usage: bulkstat.py <bulk file> -> total depth, mean bulk VAF, mean true VAF, correlation of the two
+rows = [l.rstrip("\n").split("\t") for l in open(sys.argv[1])]
+rows = [r for r in rows if len(r) == 11 and r[0] != "site"]
+dep = sum(int(r[6]) for r in rows)
+b = [float(r[8]) for r in rows]; t = [float(r[10]) for r in rows]
+n = len(rows); mb = sum(b)/n; mt = sum(t)/n
+cov = sum((x-mb)*(y-mt) for x, y in zip(b, t)); vb = sum((x-mb)**2 for x in b); vt = sum((y-mt)**2 for y in t)
+print(dep, round(mb, 5), round(mt, 5), round(cov/((vb*vt)**0.5), 4))
+PY
+Q="-n40 -s100 -l1500 -u2e-7 -e10000 -g0 -b1 -C5 -V1 -0 -Z -#11"
+mkdir -p "$TMP/vf" "$TMP/d0" "$TMP/d1" "$TMP/d2"
+(cd "$TMP/vf" && "$BIN" $Q -E0 >/dev/null 2>&1); r=($(python3 "$TMP/bulkstat.py" "$TMP/vf/Results/bulk"))
+close $(python3 -c "print(${r[1]}/${r[2]})") 1.0 0.05 && ok "bulk VAF vs true VAF: mean ${r[1]} vs ${r[2]}" || bad "bulk VAF vs true VAF: mean ${r[1]} vs ${r[2]}"
+close ${r[3]} 1.0 0.03 && ok "bulk VAF vs true VAF: correlation ${r[3]}" || bad "bulk VAF vs true VAF: correlation ${r[3]}"
+(cd "$TMP/d0" && CELLCOAL_STREAM=0 "$BIN" $Q -E0.01 >/dev/null 2>&1); (cd "$TMP/d1" && CELLCOAL_STREAM=0 "$BIN" $Q -E0.01 -B0.3 0.001 >/dev/null 2>&1); (cd "$TMP/d2" && CELLCOAL_STREAM=1 "$BIN" $Q -E0.01 -B0.3 0.001 >/dev/null 2>&1)
+r0=($(python3 "$TMP/bulkstat.py" "$TMP/d0/Results/bulk")); r1=($(python3 "$TMP/bulkstat.py" "$TMP/d1/Results/bulk")); r2=($(python3 "$TMP/bulkstat.py" "$TMP/d2/Results/bulk"))
+close $(python3 -c "print(${r1[0]}/${r0[0]})") 1.3 0.07 && ok "doublets (-B0.3), stored reads: depth x$(python3 -c "print(round(${r1[0]}/${r0[0]},3))") (expected 1.3)" || bad "doublets, stored reads"
+close $(python3 -c "print(${r2[0]}/${r0[0]})") 1.3 0.07 && ok "doublets (-B0.3), streamed reads: depth x$(python3 -c "print(round(${r2[0]}/${r0[0]},3))") (expected 1.3)" || bad "doublets, streamed reads"
+
 echo "3. Germline SNPs (-c) are inherited by every cell"
 for b in 0 1; do
   d="$TMP/germ$b"; mkdir -p "$d"
@@ -114,7 +137,6 @@ for c,g in obs.items():
             het+=1; chg+=(g[si]!=t); miss+=(g[si]=='??')
 print(round(chg/het,4), round(chgall/tot,4), round(miss/het,4))
 PY
-close() { python3 -c "import sys; sys.exit(0 if abs($1-$2)<=$3 else 1)"; }
 M="-n1 -s30 -l3000 -u3e-6 -e10000 -g0 -b1 -1 -Y -#5"
 mkdir -p "$TMP/ado" "$TMP/gen" "$TMP/fj"
 (cd "$TMP/ado" && "$BIN" $M -D0.3 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/ado/Results"))
@@ -122,6 +144,14 @@ close ${r[0]} 0.30 0.03 && ok "fixed ADO (-D0.3): ${r[0]} changed het genotypes 
 close ${r[2]} 0.027 0.012 && ok "ADO both alleles: ${r[2]} (expected 0.027)" || bad "ADO both alleles: ${r[2]} (expected 0.027)"
 (cd "$TMP/gen" && "$BIN" $M -G0.1 0.001 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/gen/Results"))
 close ${r[1]} 0.10 0.01 && ok "genotyping error (-G0.1): ${r[1]} (expected 0.10)" || bad "genotyping error: ${r[1]} (expected 0.10)"
+
+echo "2j. ADO and genotyping errors in sparse mode match the requested rates"
+mkdir -p "$TMP/sado" "$TMP/sgen"
+(cd "$TMP/sado" && CELLCOAL_SPARSE=1 "$BIN" $M -D0.3 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/sado/Results"))
+close ${r[0]} 0.30 0.03 && ok "sparse fixed ADO (-D0.3): ${r[0]} (expected 0.30)" || bad "sparse fixed ADO: ${r[0]} (expected 0.30)"
+(cd "$TMP/sgen" && CELLCOAL_SPARSE=1 "$BIN" $M -G0.1 0.001 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/sgen/Results"))
+close ${r[1]} 0.10 0.01 && ok "sparse genotyping error (-G0.1): ${r[1]} (expected 0.10)" || bad "sparse genotyping error: ${r[1]} (expected 0.10)"
+
 (cd "$TMP/fj" && "$BIN" -n20 -s20 -l1000 -u1e-6 -e10000 -g0 -b1 -j50 -y1 -#5 >out.txt 2>&1)
 m=$(strings "$TMP/fj/Results/log" | grep "Mean number of mutation events" | awk '{print $NF}')
 [ "$m" = "50.00" ] && ok "fixed number of mutations (-j50): $m" || bad "fixed number of mutations: $m (expected 50.00)"
