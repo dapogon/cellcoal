@@ -276,7 +276,7 @@ for l in open(sys.argv[1]):
     print('\t'.join([p[1], p[3], p[4]] + [c.split(':')[i] for c in p[9:]]))
 PY
   if [ "$n1" = "$n2" ] && [ "$n1" -gt 100 ] && cmp -s "$TMP/q1.txt" "$TMP/q2.txt"; then ok "bcftools reads the BCF: $n1 records, positions, alleles and DP equal the VCF"; else bad "bcftools reading ($n1 vs $n2)"; bcftools view -H "$f" 2>&1 | head -3; fi
-  bcftools index "$f" >/dev/null 2>&1 && ok "bcftools can index the BCF" || bad "bcftools index"
+  bcftools index -f "$f" >/dev/null 2>&1 && ok "bcftools can (re)index the BCF" || bad "bcftools index"
 else echo "  skip (bcftools not installed)"; fi
 echo "2g11b. The BCF index (.bcf.csi) is written by the program and is correct (several bins)"
 BX="-n1 -s12 -l70000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.01 -v -#9"
@@ -306,6 +306,19 @@ mkdir -p "$TMP/fu0" "$TMP/fu1" "$TMP/fu2"
 if [ -n "$(find "$TMP/fu0/Results/full_genotypes_dir" -type f -size +1k)" ] && [ -n "$(find "$TMP/fu1/Results/full_haplotypes_dir" -type f -size +1k)" ] && [ -n "$(find "$TMP/fu1/Results/true_haplotypes_dir" -type f -size +1k)" ]; then
   if [ "$(norm "$TMP/fu0/Results" | md5sum)" = "$(norm "$TMP/fu1/Results" | md5sum)" ] && [ "$(norm "$TMP/fu1/Results" | md5sum)" = "$(norm "$TMP/fu2/Results" | md5sum)" ]; then ok "-3 -4 -5 -Y: stored = streamed (1 and 3 threads)"; else bad "full genotypes/haplotypes stored vs streamed"; fi
 else bad "full genotype/haplotype files not produced"; fi
+
+echo "2g14. Biological validation: coalescent, mutations, site frequency spectrum, reads and dropout agree with theory (tests/theory.py)"
+if python3 "$ROOT/tests/theory.py" "$BIN" >"$TMP/theory.txt" 2>&1; then ok "$(tail -1 "$TMP/theory.txt")"; else bad "theory"; grep FAIL "$TMP/theory.txt" | head -8; fi
+
+echo "2g15. Enormous gamma shapes (found by tests/fuzz.py) terminate; the fuzzer finds no crash on a short run"
+mkdir -p "$TMP/gh"
+if (cd "$TMP/gh" && python3 - "$BIN" <<'PY'
+import subprocess, sys
+for o in ("-a1e308", "-J1e308", "-O1e308", "-V1e308", "-i1e308"):
+    subprocess.run([sys.argv[1], "-n1", "-s8", "-l200", "-u1e-6", "-e1000", "-b1", "-C5", "-V1", "-E0.001", o], capture_output=True, timeout=60, check=True)
+PY
+); then ok "huge gamma shapes (-a -J -O -V -i 1e308) finish"; else bad "huge gamma shape hangs or fails"; fi
+if python3 "$ROOT/tests/fuzz.py" "$BIN" --runs 60 --seed 11 >"$TMP/fuzz.txt" 2>&1; then ok "$(tail -1 "$TMP/fuzz.txt")"; else bad "fuzz"; head -6 "$TMP/fuzz.txt"; fi
 
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"

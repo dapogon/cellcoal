@@ -2322,7 +2322,7 @@ void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-L: cell death rate =  %2.1e", deathRate);
 	fprintf (fp,"\n-h: number of demographic periods = %d", numPeriods);
 	for (i=1; i<=numPeriods; i++)
-		fprintf (fp, "\n  period %d =  %d %d %d", i, Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
+		fprintf (fp, "\n  period %d =  %d %d %lld", i, Nbegin[i], Nend[i], (long long) cumDuration[i] - (long long) cumDuration[i-1]);
 
 
 	/* Post-coalescent */
