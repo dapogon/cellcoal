@@ -99,6 +99,8 @@ Bug fixes (genotyping error, allelic dropout variation, memory safety), 3–4× 
 
 ## Tests
 
+The CI also builds with clang and without OpenMP, runs the suite under AddressSanitizer/UBSan, fuzzes the options and the `--config` parser (`tests/fuzz.py`), reports code coverage, and `tests/theory.py` (part of `make test`) validates the model against theory: coalescent waiting times, growth, number and site frequency spectrum of mutations, depth, sequencing error and dropout. See section 6.10h of the manual.
+
 `make test` runs a small regression suite (`tests/run_tests.sh`): the example parameter files, identical results with 1 and 2 threads, reproducibility with the same seed, and inheritance of germline SNPs (`-c`), and that the observed rates of allelic dropout (`-D`), genotyping error (`-G`) the fixed number of mutations (`-j`), allelic imbalance (`-I`), doublets (`-B`), ADO per cell (`-P`) and the spectrum of mutational signature 1 match the expected values. It also checks that sparse genome storage gives the same output as dense storage and the same ADO and genotyping-error rates, that streamed reads give the same VCF, PILEUP and bulk file as stored reads, that `-0`, `-Z`, `-z` and `-M` behave, that the pooled (bulk) VAF of the reads agrees with the true VAF (ratio of means and correlation), that doublets multiply the pooled depth by the expected factor with stored and streamed reads, and the content of `run.json`. It does not depend on exact floating-point output, so it can be run on any platform.
 
 ## Validation

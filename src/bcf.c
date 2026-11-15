@@ -136,7 +136,7 @@ static void BNeed (Bytes *b, size_t k)
 		}
 	}
 static void BPut8 (Bytes *b, unsigned v) { BNeed (b, 1); b->d[b->n++] = (unsigned char) v; }
-static void BPut16 (Bytes *b, unsigned v) { BNeed (b, 2); Put32le (b->d + b->n, v & 0xFFFF); b->n += 2; }
+static void BPut16 (Bytes *b, unsigned v) { BNeed (b, 2); b->d[b->n] = v & 0xFF; b->d[b->n+1] = (v >> 8) & 0xFF; b->n += 2; }
 static void BPut32 (Bytes *b, uint32_t v) { BNeed (b, 4); Put32le (b->d + b->n, v); b->n += 4; }
 static void BPutFloat (Bytes *b, float f) { uint32_t u; memcpy (&u, &f, 4); BPut32 (b, u); }
 static void BPutRaw (Bytes *b, const void *p, size_t k) { BNeed (b, k); memcpy (b->d + b->n, p, k); b->n += k; }

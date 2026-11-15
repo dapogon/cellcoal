@@ -307,6 +307,9 @@ if [ -n "$(find "$TMP/fu0/Results/full_genotypes_dir" -type f -size +1k)" ] && [
   if [ "$(norm "$TMP/fu0/Results" | md5sum)" = "$(norm "$TMP/fu1/Results" | md5sum)" ] && [ "$(norm "$TMP/fu1/Results" | md5sum)" = "$(norm "$TMP/fu2/Results" | md5sum)" ]; then ok "-3 -4 -5 -Y: stored = streamed (1 and 3 threads)"; else bad "full genotypes/haplotypes stored vs streamed"; fi
 else bad "full genotype/haplotype files not produced"; fi
 
+echo "2g14. Biological validation: coalescent, mutations, site frequency spectrum, reads and dropout agree with theory (tests/theory.py)"
+if python3 "$ROOT/tests/theory.py" "$BIN" >"$TMP/theory.txt" 2>&1; then ok "$(tail -1 "$TMP/theory.txt")"; else bad "theory"; grep FAIL "$TMP/theory.txt" | head -8; fi
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)

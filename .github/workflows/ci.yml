@@ -40,3 +40,68 @@ jobs:
           make test | tee test.log
           ! grep -q 'skip (matplotlib' test.log
           grep -q 'bcftools reads' test.log
+
+  # The same tests with other compilers and without OpenMP (results must not depend on either)
+  variants:
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - {name: "clang",             cc: clang, omp: "default"}
+          - {name: "gcc, no OpenMP",    cc: gcc,   omp: "none"}
+          - {name: "clang, no OpenMP",  cc: clang, omp: "none"}
+    name: variant (${{ matrix.name }})
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bcftools clang libomp-dev
+          python3 -m pip install --user numpy matplotlib 2>/dev/null || python3 -m pip install --user --break-system-packages numpy matplotlib
+      - name: Build
+        run: |
+          if [ "${{ matrix.omp }}" = "none" ]; then make CC=${{ matrix.cc }} OMPFLAG=; else make CC=${{ matrix.cc }}; fi
+      - name: Test
+        run: make test
+
+  # AddressSanitizer and UndefinedBehaviorSanitizer: the tests, then a fuzzer of the command line and of --config
+  sanitize:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bcftools
+          python3 -m pip install --user numpy matplotlib 2>/dev/null || python3 -m pip install --user --break-system-packages numpy matplotlib
+      - name: Build with sanitizers
+        run: make CFLAGS="-Wall -O1 -g -ffp-contract=off -fno-math-errno -fsanitize=address,undefined -fno-omit-frame-pointer -fopenmp -DUSE_COLORS" LDFLAGS="-fsanitize=address,undefined"
+      - name: Test
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: make test
+      - name: Fuzz the options and the configuration parser
+        env:
+          ASAN_OPTIONS: detect_leaks=0
+          UBSAN_OPTIONS: halt_on_error=1:print_stacktrace=1
+        run: |
+          for seed in 1 2 3; do python3 tests/fuzz.py bin/cellcoal-$(sed -n 's/^VERSION = //p' Makefile) --runs 400 --seed $seed; done
+
+  # Line coverage of the tests (informative: written to the job summary)
+  coverage:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Install packages
+        run: |
+          sudo apt-get update -qq
+          sudo apt-get install -y bcftools
+          python3 -m pip install --user numpy matplotlib 2>/dev/null || python3 -m pip install --user --break-system-packages numpy matplotlib
+      - name: Build with coverage
+        run: make CFLAGS="-Wall -O0 -g -ffp-contract=off -fno-math-errno --coverage -fopenmp -DUSE_COLORS" LDFLAGS="--coverage"
+      - name: Test
+        run: make test
+      - name: Coverage summary
+        run: python3 tools/gcov_summary.py out | tee -a "$GITHUB_STEP_SUMMARY"
