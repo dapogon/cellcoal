@@ -16,6 +16,10 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 4. **Inspect results**: Once the run is finished, different output files will be written by default inside a folder called *Results* (or the folder given with `-o`).
 
+## Bulk-like VAF distribution
+
+`tools/bulk_vaf.py` turns the SNV genotypes (`-1`) into a VAF histogram, as in a bulk sample (optional read sampling at a given depth and tumour purity): `python3 tools/bulk_vaf.py Results/snv_gen --depth 100 --purity 1.0 --out vaf.png`.
+
 ## What's new in 2.2.0
 
 Streamed reads: for very large data sets, reads, genotype likelihoods and the VCF/PILEUP files are produced in blocks of sites with small memory. Existing output is identical to 2.1.0. See [docs/CHANGES-2.2.0.md](docs/CHANGES-2.2.0.md).
