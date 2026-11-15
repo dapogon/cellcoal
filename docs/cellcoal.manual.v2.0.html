@@ -79,6 +79,7 @@ options</a></li>
 at the command line</a></li>
 <li><a href="#configuration-files-config" id="toc-configuration-files-config">6.10 Configuration files
 (–config)</a></li>
+<li><a href="#a-ado-rate-of-each-cell" id="toc-a-ado-rate-of-each-cell">6.10a ADO rate of each cell</a></li>
 <li><a href="#b-fast-mode-fast" id="toc-b-fast-mode-fast">6.10b Fast
 mode (–fast)</a></li>
 <li><a href="#the-vcf-file" id="toc-the-vcf-file">6.11 The VCF
@@ -1358,6 +1359,16 @@ of the line, and a misspelled key suggests the closest option name:</p>
 <pre><code>!!! CONFIG ERROR in run.json, line 3, column 3: unknown option: cell  (did you mean &#39;cells&#39;?)
      3 |   &quot;cell&quot;: 5,
        |   ^</code></pre>
+<h2 id="a-ado-rate-of-each-cell">6.10a ADO rate of each cell</h2>
+<p>With <code>-P</code> (allelic dropout varying among cells) the ADO
+rate of every cell is drawn from a beta distribution. These rates are
+written to the file <code>ado_cells</code>
+(<code>ado_cells_dir/ado_cells.NNNN</code> with <code>-v</code>): one
+section <code>[#replicate]</code> per replicate with the columns
+<code>cell</code> and <code>ado_rate</code>, including the outgroup
+(healthy) cell. This is the rate of the cell itself; the dropout
+probability of a genotype also combines it with the rate of its site
+(<code>-Q</code>).</p>
 <h2 id="b-fast-mode-fast">6.10b Fast mode (–fast)</h2>
 <p><code>--fast</code> (or <code>fast: true</code> in a configuration
 file) makes the simulation of the reads about 10-15% faster. It changes

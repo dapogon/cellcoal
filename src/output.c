@@ -2391,3 +2391,45 @@ void PrintDefaults (FILE *fp)
 	}
 
 
+
+
+/* Writes the allelic dropout rate drawn for every cell (-P) to the file ado_cells (or ado_cells_dir/ado_cells.NNNN with -v).
+   This is the rate of the cell itself; the ADO of a genotype also depends on the rate of its site (-Q). */
+void WriteADOCells (const double *rate, int replicate)
+	{
+	char	file[4*MAX_NAME];
+	FILE	*fp;
+	int		i;
+
+	if (doPrintSeparateReplicates == YES)
+		{
+		snprintf (file, sizeof(file), "%s/ado_cells_dir", resultsDir);
+		mkdir (file, S_IRWXU);
+		snprintf (file, sizeof(file), "%s/ado_cells_dir/ado_cells.%04d", resultsDir, replicate+1);
+		fp = fopen (file, "w");
+		}
+	else
+		{
+		snprintf (file, sizeof(file), "%s/ado_cells", resultsDir);
+		fp = fopen (file, replicate == 0 ? "w" : "a");
+		}
+	if (!fp)
+		{
+		fprintf (stderr, "Can't open \"%s\"\n", file);
+		exit (-1);
+		}
+	if (doPrintSeparateReplicates == NO)
+		fprintf (fp, "[#%d]\n", replicate+1);
+	fprintf (fp, "cell\tado_rate\n");
+	for (i=0; i<numCells+1; i++)
+		{
+		if (i == numCells)
+			fprintf (fp, "%s", outCellName);
+		else if (doUserTree == NO)
+			fprintf (fp, "%s%04d", inCellName, i+1);
+		else
+			fprintf (fp, "%s", cellNames[i]);
+		fprintf (fp, "\t%.6f\n", rate[i]);
+		}
+	fclose (fp);
+	}

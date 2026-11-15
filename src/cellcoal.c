@@ -776,6 +776,7 @@ int main (int argc, char **argv)
 			/* do alellic dropout */
 			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
 				{
+				adoReplicate = dataSetNum;
 				if (sparseMode == YES)
 					SparseAllelicDropout(&seed);
 				else

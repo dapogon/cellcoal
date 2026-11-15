@@ -207,6 +207,20 @@ if python3 -c "import numpy" 2>/dev/null; then
   if python3 "$ROOT/tests/fast_stats.py" "$BIN" "$TMP/fastcmp" > "$TMP/fast_stats.txt" 2>&1; then ok "--fast: DP, read counts and likelihoods have the same distributions (KS and z tests)"; else bad "--fast distributions"; cat "$TMP/fast_stats.txt" | head -30; fi
 else echo "  skip (numpy not installed)"; fi
 
+echo "2g9. ADO rate of every cell (-P) is written to ado_cells"
+mkdir -p "$TMP/ac1" "$TMP/ac2"
+(cd "$TMP/ac1" && "$BIN" -n2 -s300 -l50 -u1e-6 -e10000 -b1 -C5 -P0.2 0.01 -#4 >/dev/null 2>&1)
+(cd "$TMP/ac2" && CELLCOAL_SPARSE=1 "$BIN" -n1 -s300 -l50 -u1e-6 -e10000 -b1 -C5 -P0.2 0.01 -#4 >/dev/null 2>&1)
+for d in ac1 ac2; do
+  r=$(python3 -c "
+import sys
+rows=[l.split() for l in open(sys.argv[1]) if l[0] != '[' and not l.startswith('cell\tado')][:301]
+v=[float(x[1]) for x in rows]
+print(len(v), round(sum(v)/len(v),2), all(0<x<1 for x in v))" "$TMP/$d/Results/ado_cells" 2>/dev/null)
+  [ "$r" = "301 0.2 True" ] && ok "ado_cells ($d): 300 cells + outgroup, mean 0.2" || bad "ado_cells $d ($r)"
+done
+[ "$(grep -c '^\[#' "$TMP/ac1/Results/ado_cells")" = 2 ] && ok "ado_cells has one section per replicate" || bad "ado_cells replicates"
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)

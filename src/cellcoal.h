@@ -43,6 +43,8 @@ void		ReadParametersFromCommandLine (int argc, char **argv);
 void 	PrintCommandLine (FILE *fp, int argc,char **argv);
 void		PrepareGlobalFiles (int argc, char **argv);
 void		PrepareSeparateFiles (int replicate);
+void		WriteADOCells (const double *rate, int replicate);
+extern int	adoReplicate;	/* replicate being simulated, for the ADO file */
 void		ReadUserGenome (FILE *fp);
 void		ReadUserTree (FILE *fp);
 void		FreeUserTree (void);

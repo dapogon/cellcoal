@@ -790,6 +790,10 @@ Errors in the file are reported with the line and column and the text of the lin
        |   ^
 ```
 
+## 6.10a ADO rate of each cell
+
+With `-P` (allelic dropout varying among cells) the ADO rate of every cell is drawn from a beta distribution. These rates are written to the file `ado_cells` (`ado_cells_dir/ado_cells.NNNN` with `-v`): one section `[#replicate]` per replicate with the columns `cell` and `ado_rate`, including the outgroup (healthy) cell. This is the rate of the cell itself; the dropout probability of a genotype also combines it with the rate of its site (`-Q`).
+
 ## 6.10b Fast mode (--fast)
 
 `--fast` (or `fast: true` in a configuration file) makes the simulation of the reads about 10-15% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:
