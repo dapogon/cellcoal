@@ -84,6 +84,8 @@ at the command line</a></li>
 Correlation between coverage and dropout (–cov-ado-corr)</a></li>
 <li><a href="#d-bcf-output-bcf" id="toc-d-bcf-output-bcf">6.10d BCF
 output (–bcf)</a></li>
+<li><a href="#e-cache-of-genotype-likelihoods" id="toc-e-cache-of-genotype-likelihoods">6.10e Cache of genotype
+likelihoods</a></li>
 <li><a href="#b-fast-mode-fast" id="toc-b-fast-mode-fast">6.10b Fast
 mode (–fast)</a></li>
 <li><a href="#the-vcf-file" id="toc-the-vcf-file">6.11 The VCF
@@ -1419,9 +1421,23 @@ it) the blocks are compressed and the file has about the size of
 they are stored without compression. <code>tests/bcf_check.py</code>
 decodes a BCF independently of the program and compares every record
 with the VCF; the CI also checks the files with bcftools.</p>
+<h2 id="e-cache-of-genotype-likelihoods">6.10e Cache of genotype
+likelihoods</h2>
+<p>The log10 genotype likelihoods of a cell and site depend only on its
+four read counts and on its amplification errors. Each thread keeps a
+cache of the likelihoods already computed, so cells and sites with the
+same counts share them. It is exact (the output is bit-identical, also
+without <code>--fast</code>) and helps most at low coverage with a
+common amplification error (no <code>-A</code>, or the same value
+everywhere): the simulation of the reads is then about 30% faster. When
+the amplification error is random in every cell and site
+(<code>-A</code> with variance) there are no repetitions and the cache
+switches itself off after 4096 lookups.
+<code>CELLCOAL_NO_GL_CACHE=1</code> disables it; the tests use it to
+check that it does not change the results.</p>
 <h2 id="b-fast-mode-fast">6.10b Fast mode (–fast)</h2>
 <p><code>--fast</code> (or <code>fast: true</code> in a configuration
-file) makes the simulation of the reads about 20-25% faster. It changes
+file) makes the simulation of the reads about 25-30% faster. It changes
 only how the read data are sampled, never the tree, the mutations or the
 true genotypes:</p>
 <ul>
@@ -1433,8 +1449,8 @@ crossed;</li>
 one logarithm per error instead of one uniform number per read;</li>
 <li>the genotype likelihoods are computed in <code>double</code> with
 the 16 genotypes as arrays: the base-10 logarithms and powers use a
-polynomial approximation with a relative error below 1e-12 instead of
-the C library, in loops without calls that the compiler vectorizes.</li>
+polynomial approximation with a relative error below 1e-8 instead of the
+C library, in loops without calls that the compiler vectorizes.</li>
 </ul>
 <p>The distributions are the same as in the default mode, but the random
 numbers are consumed in a different order, so a given seed gives

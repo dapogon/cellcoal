@@ -130,7 +130,7 @@ int RandomUniformTo (int max, long int *seed)
 /* Used only for the reads (per-site streams) when --fast is given. The distributions are the same as in the exact
    samplers, but the random numbers are consumed differently, so the data sets differ for a given seed. */
 
-/* log10 with a relative error below 1e-13: x = m 2^e with m in [sqrt(1/2), sqrt(2)), log m = 2 atanh ((m-1)/(m+1)) */
+/* log10 with a absolute error below 1e-9: x = m 2^e with m in [sqrt(1/2), sqrt(2)), log m = 2 atanh ((m-1)/(m+1)) */
 double Log10Approx (double x)
 	{
 	union { double d; uint64_t u; } v;
@@ -152,11 +152,11 @@ double Log10Approx (double x)
 		}
 	f = (m - 1.0) / (m + 1.0);
 	f2 = f * f;
-	r = 2.0 * f * (1.0 + f2 * (1.0/3 + f2 * (1.0/5 + f2 * (1.0/7 + f2 * (1.0/9 + f2 * (1.0/11 + f2 * (1.0/13 + f2 * (1.0/15))))))));
+	r = 2.0 * f * (1.0 + f2 * (1.0/3 + f2 * (1.0/5 + f2 * (1.0/7 + f2 * (1.0/9)))));
 	return (r + e * 0.6931471805599453) * 0.4342944819032518;
 	}
 
-/* 10^x with a relative error below 1e-12 (0 below -400, library for huge arguments) */
+/* 10^x with a relative error below 1e-8 (0 below -400, library for huge arguments) */
 double Pow10Approx (double x)
 	{
 	union { double d; uint64_t u; } v;
@@ -171,7 +171,7 @@ double Pow10Approx (double x)
 	ni = (int)(y + (y >= 0 ? 0.5 : -0.5));
 	n = ni;
 	r = (y - n) * 0.6931471805599453;	/* |r| <= 0.3466 */
-	p = 1.0 + r * (1.0 + r * (1.0/2 + r * (1.0/6 + r * (1.0/24 + r * (1.0/120 + r * (1.0/720 + r * (1.0/5040 + r * (1.0/40320 + r * (1.0/362880 + r * (1.0/3628800))))))))));
+	p = 1.0 + r * (1.0 + r * (1.0/2 + r * (1.0/6 + r * (1.0/24 + r * (1.0/120 + r * (1.0/720 + r * (1.0/5040 + r * (1.0/40320))))))));
 	v.u = (uint64_t)(ni + 1023) << 52;	/* 2^ni, normal range since |x| <= 300 */
 	return p * v.d;
 	}
@@ -201,7 +201,7 @@ void Log10Batch (const double *x, double *y, int n)
 		e += (int) big;
 		f = (m - 1.0) / (m + 1.0);
 		f2 = f * f;
-		r = 2.0 * f * (1.0 + f2 * (1.0/3 + f2 * (1.0/5 + f2 * (1.0/7 + f2 * (1.0/9 + f2 * (1.0/11 + f2 * (1.0/13 + f2 * (1.0/15))))))));
+		r = 2.0 * f * (1.0 + f2 * (1.0/3 + f2 * (1.0/5 + f2 * (1.0/7 + f2 * (1.0/9)))));
 		y[i] = (r + e * 0.6931471805599453) * 0.4342944819032518;
 		}
 	if (special)
@@ -225,7 +225,7 @@ void Pow10Batch (const double *x, double *y, int n)
 		t = t < -1000.0 ? -1000.0 : (t > 1000.0 ? 1000.0 : t);
 		ni = (int)(t + (t >= 0 ? 0.5 : -0.5));
 		r = (t - ni) * 0.6931471805599453;
-		p = 1.0 + r * (1.0 + r * (1.0/2 + r * (1.0/6 + r * (1.0/24 + r * (1.0/120 + r * (1.0/720 + r * (1.0/5040 + r * (1.0/40320 + r * (1.0/362880 + r * (1.0/3628800))))))))));
+		p = 1.0 + r * (1.0 + r * (1.0/2 + r * (1.0/6 + r * (1.0/24 + r * (1.0/120 + r * (1.0/720 + r * (1.0/5040 + r * (1.0/40320))))))));
 		v.u = (uint64_t)(ni + 1023) << 52;
 		y[i] = p * v.d;
 		}

@@ -843,6 +843,17 @@ static void GLGeneralFast (const int *readCount, double pA1[4][4], double pA2[4]
 		logGL[g >> 2][g & 3] = (gl[g] != gl[g]) ? -INFINITY : mx[g] + lg[g];
 	}
 
+/* Cache of the log10 genotype likelihoods of one thread. They depend only on the read counts and on the amplification errors
+   of the cell and site (everything else is a constant of the run), so cell-sites with the same counts, which are very common
+   when the coverage is low and the amplification error is the same for all of them, share the result (bit-identical).
+   When the amplification error is random in every cell and site there are no repetitions and the cache switches itself off. */
+typedef struct { int rc[4]; double matErr, patErr; double gl[16]; unsigned char valid; } GLCacheEntry;
+#define GLCACHE_SIZE 4096
+static __thread GLCacheEntry	*glCache = NULL;
+static __thread long			glLookups = 0, glHits = 0;
+static __thread int				glCacheOff = 0;
+static int						glCacheEnv = -1;	/* CELLCOAL_NO_GL_CACHE=1 switches the cache off (to check that it does not change the results) */
+
 /* ******************** GenotypeLikelihoods  ************************/
 /*
  Calculate genotype likelihoods (GLs) for a given site and cell given the simulated reads
@@ -894,6 +905,7 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 	double	logGLm[4][4] = {{0}}, normLogGLm[4][4] = {{0}};
 	double	L1tab[4][4][4], memoKeys[32], memoVals[32];
 	int		memoN;
+	GLCacheEntry	*cacheEntry;
 	
 	numReads = c->numReads;
 	readCount = c->readCount;
@@ -979,6 +991,48 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 		}
 	
 	
+	/* genotype likelihoods already computed for the same counts and amplification errors in this thread */
+	cacheEntry = NULL;
+	if (glCacheEnv < 0)
+		{
+		const char *e = getenv ("CELLCOAL_NO_GL_CACHE");
+
+		glCacheEnv = (e != NULL && e[0] == '1') ? 1 : 0;
+		}
+	if (glCacheEnv == 1)
+		glCacheOff = 1;
+	if (glCacheOff == 0 && fix_parameters == NO && debug_GL == NO)
+		{
+		uint64_t	hk, kb[2];
+
+		if (glCache == NULL)
+			{
+			glCache = (GLCacheEntry*) calloc (GLCACHE_SIZE, sizeof(GLCacheEntry));
+			if (glCache == NULL)
+				glCacheOff = 1;
+			}
+		if (glCache != NULL)
+			{
+			memcpy (kb, &maternalSiteAmplificationError, 8);
+			memcpy (kb + 1, &paternalSiteAmplificationError, 8);
+			hk = ((uint64_t)(unsigned) readCount[0] * 0x9E3779B97F4A7C15ULL) ^ ((uint64_t)(unsigned) readCount[1] * 0xC2B2AE3D27D4EB4FULL)
+				^ ((uint64_t)(unsigned) readCount[2] * 0x165667B19E3779F9ULL) ^ ((uint64_t)(unsigned) readCount[3] * 0x27D4EB2F165667C5ULL)
+				^ (kb[0] * 0x9E3779B97F4A7C15ULL) ^ (kb[1] * 0xC2B2AE3D27D4EB4FULL);
+			hk ^= hk >> 29;
+			cacheEntry = &glCache[(hk * 0xD6E8FEB86659FD93ULL) >> (64 - 12)];
+			glLookups++;
+			if (cacheEntry->valid && cacheEntry->rc[0] == readCount[0] && cacheEntry->rc[1] == readCount[1] && cacheEntry->rc[2] == readCount[2]
+				&& cacheEntry->rc[3] == readCount[3] && cacheEntry->matErr == maternalSiteAmplificationError && cacheEntry->patErr == paternalSiteAmplificationError)
+				{
+				memcpy (logGLm, cacheEntry->gl, sizeof(cacheEntry->gl));
+				glHits++;
+				goto glDone;
+				}
+			if (glLookups == 4096 && glHits * 16 < glLookups)	/* fewer than 1 in 16 repeated: not worth it */
+				glCacheOff = 1;
+			}
+		}
+
 	/************************** MODEL 0 (GATK) *************************************/
 	/* MODEL 0: genotype log10 likelihoods according to the observed read assuming a single sequencing error independent of the nucleotides involved, and no amplification error */
 	/* extended from Korneliussen 2013 BMCBioinf
@@ -1306,6 +1360,15 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 				//fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
 				}
 
+	if (cacheEntry != NULL)
+		{
+		memcpy (cacheEntry->rc, readCount, sizeof(cacheEntry->rc));
+		cacheEntry->matErr = maternalSiteAmplificationError;
+		cacheEntry->patErr = paternalSiteAmplificationError;
+		memcpy (cacheEntry->gl, logGLm, sizeof(cacheEntry->gl));
+		cacheEntry->valid = 1;
+		}
+glDone:
 	if (debug_GL == YES)
 		{
 		//PrintSiteInfo (stderr, SNVsites[snv]);

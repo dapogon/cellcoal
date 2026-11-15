@@ -806,13 +806,17 @@ It works as a Gaussian copula on the ranks: the coverage multipliers that `-J` h
 
 The VCF is written first as text and converted when the file is closed, so the memory use is the same as without `--bcf`. If zlib was available when the program was compiled (the Makefile checks it) the blocks are compressed and the file has about the size of `vcf.gz` (about 4-5 times smaller than the VCF); without zlib they are stored without compression. `tests/bcf_check.py` decodes a BCF independently of the program and compares every record with the VCF; the CI also checks the files with bcftools.
 
+## 6.10e Cache of genotype likelihoods
+
+The log10 genotype likelihoods of a cell and site depend only on its four read counts and on its amplification errors. Each thread keeps a cache of the likelihoods already computed, so cells and sites with the same counts share them. It is exact (the output is bit-identical, also without `--fast`) and helps most at low coverage with a common amplification error (no `-A`, or the same value everywhere): the simulation of the reads is then about 30% faster. When the amplification error is random in every cell and site (`-A` with variance) there are no repetitions and the cache switches itself off after 4096 lookups. `CELLCOAL_NO_GL_CACHE=1` disables it; the tests use it to check that it does not change the results.
+
 ## 6.10b Fast mode (--fast)
 
-`--fast` (or `fast: true` in a configuration file) makes the simulation of the reads about 20-25% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:
+`--fast` (or `fast: true` in a configuration file) makes the simulation of the reads about 25-30% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:
 
 - Poisson numbers of reads: inversion with a single uniform number (mean < 30) or the transformed rejection method PTRS of Hormann (1993), instead of multiplying uniform numbers until a threshold is crossed;
 - binomial numbers of error reads: geometric jumps between the errors, one logarithm per error instead of one uniform number per read;
-- the genotype likelihoods are computed in `double` with the 16 genotypes as arrays: the base-10 logarithms and powers use a polynomial approximation with a relative error below 1e-12 instead of the C library, in loops without calls that the compiler vectorizes.
+- the genotype likelihoods are computed in `double` with the 16 genotypes as arrays: the base-10 logarithms and powers use a polynomial approximation with a relative error below 1e-8 instead of the C library, in loops without calls that the compiler vectorizes.
 
 The distributions are the same as in the default mode, but the random numbers are consumed in a different order, so a given seed gives different reads (and likelihoods in the last digits). As in the default mode, results do not depend on the number of threads. Without `--fast` the output is bit-identical to previous versions.
 

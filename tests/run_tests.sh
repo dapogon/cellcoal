@@ -280,6 +280,13 @@ PY
 else echo "  skip (bcftools not installed)"; fi
 if "$BIN" --bcf -z -s5 2>&1 | grep -q 'cannot be combined' && "$BIN" --bcf -n3 -s5 2>&1 | grep -q 'needs -v'; then ok "--bcf option checks"; else bad "--bcf option checks"; fi
 
+echo "2g12. Cache of genotype likelihoods (same counts and amplification errors) does not change the results"
+GQ="-n1 -s60 -l2000 -u2e-6 -e10000 -b1 -C6 -E0.01 -D0.1 -B0.1 0.005 -1 -8 -#12"
+mkdir -p "$TMP/gc1" "$TMP/gc2"
+(cd "$TMP/gc1" && "$BIN" $GQ >/dev/null 2>&1)
+(cd "$TMP/gc2" && CELLCOAL_NO_GL_CACHE=1 "$BIN" $GQ >/dev/null 2>&1)
+if [ -s "$TMP/gc1/Results/vcf" ] && [ "$(norm "$TMP/gc1/Results" | md5sum)" = "$(norm "$TMP/gc2/Results" | md5sum)" ]; then ok "VCF and CATG identical with and without the cache"; else bad "genotype likelihood cache changes the results"; fi
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)
