@@ -59,6 +59,7 @@ static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
 static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut);
 static void 	PrintBulk (FILE *fp);
+static void 	WriteRunRecord (double wallSecs, double cpuSecs);
 static int 	VCFSitePasses (int j);
 static FILE *	OpenVCF (const char *path);
 static void 	CloseVCF (FILE *fp);
@@ -198,6 +199,7 @@ static long			siteOff = 0;
 #define CS(i,j)	(cell[i].site[(long)(j) - siteOff])
 #define CD(i,j)	(cell[i].doublet[(long)(j) - siteOff])
 static double		minVAFvcf = 0.0;	/* the VCF lists only sites whose pooled VAF in reads is at least this */
+static struct timespec	wallStart;	/* start of the run, for the elapsed (wall clock) time */
 static int			readsOnly = 0;		/* only the pooled (bulk) read file is printed: no genotype likelihoods are needed */
 static int			streamMode = 0;		/* reads are simulated and printed in blocks of sites (see StreamReads) */
 static int			streamBlock = 0;		/* number of sites in a block */

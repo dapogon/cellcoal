@@ -13,7 +13,7 @@ fail=0
 ok()  { echo "  ok   $1"; }
 bad() { echo "  FAIL $1"; fail=1; }
 # print the results of a run without lines that change between runs (dates, times, command line)
-norm() { (cd "$1" && find . -type f | sort | xargs grep -v -i -e "fileDate" -e "Time processing" -e "date" -e "Command" -e "time" -e "CellCoal" -e "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]" 2>/dev/null); }
+norm() { (cd "$1" && find . -type f ! -name run.json | sort | xargs grep -v -i -e "fileDate" -e "Time processing" -e "date" -e "Command" -e "time" -e "CellCoal" -e "[0-9][0-9]:[0-9][0-9]:[0-9][0-9]" 2>/dev/null); }
 
 echo "Binary: $BIN"
 echo "1. Example parameter files"
@@ -66,6 +66,11 @@ if [ "$(gzip -dc "$TMP/gz/Results/vcf.gz" | grep -v -i filedate | md5sum)" = "$(
 (cd "$TMP/fl" && "$BIN" $D -M0.02 >out.txt 2>&1); (cd "$TMP/fs" && CELLCOAL_STREAM=1 "$BIN" $D -M0.02 >out.txt 2>&1)
 nf=$(grep -a -vc '^#' "$TMP/fl/Results/vcf"); np=$(grep -a -vc '^#' "$TMP/pl/Results/vcf")
 if [ "$nf" -gt 0 ] && [ "$nf" -lt "$np" ]; then ok "-M reduces the VCF ($np -> $nf sites)"; else bad "-M reduces the VCF"; fi
+
+echo "2h. Run record (run.json)"
+mkdir -p "$TMP/rj"
+(cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)
+if python3 -c "import json,sys; d=json.load(open(sys.argv[1])); assert d['seed']==99 and d['replicates']==2 and d['cells']==20 and d['sites']==300 and '-#99' in d['command_line'] and d['wall_seconds']>=0" "$TMP/rj/Results/run.json" 2>/dev/null; then ok "run.json"; else bad "run.json"; fi
 
 echo "3. Germline SNPs (-c) are inherited by every cell"
 for b in 0 1; do

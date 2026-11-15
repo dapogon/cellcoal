@@ -1,6 +1,6 @@
 PROG = cellcoal
 DASH = -
-VERSION = 2.5.0
+VERSION = 2.6.0
 SRCDIR = src
 OBJDIR = out
 BINDIR = bin
@@ -57,7 +57,7 @@ $(BINDIR)/$(PROG)-$(VERSION) : $(OBJS)
 	mkdir -p $(BINDIR)
 	$(CC) $(LDFLAGS) $(OMP_LDFLAGS) -o $@ $+ $(LIBS)
 
-$(OBJS): $(OBJDIR)/%.o : $(SRCDIR)/%.c
+$(OBJS): $(OBJDIR)/%.o : $(SRCDIR)/%.c $(wildcard $(SRCDIR)/*.h)
 	mkdir -p $(OBJDIR)
 	$(CC) $(CFLAGS) $(CPPFLAGS) -c -o $@ $<
 
