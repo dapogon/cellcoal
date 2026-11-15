@@ -1,4 +1,4 @@
-# CellCoal 2.2.0 — what changed
+# CellCoal 2.1.1 — what changed
 
 Reads (VCF and PILEUP) for data sets whose per-cell, per-site data would not fit in memory. **Output of all existing runs is bit-identical to 2.1.0.**
 
