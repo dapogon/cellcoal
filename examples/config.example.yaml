@@ -1,0 +1,20 @@
+# CellCoal run described in a YAML file:  bin/cellcoal-x.y.z --config examples/config.example.yaml
+# Keys are the long names (or the option letters, e.g. "s: 20"). Options written after --config override the file.
+replicates: 2
+cells: 50
+sites: 5000
+population_size: 10000
+growth_rate: 1e-4
+mutation_rate: 1e-6
+alphabet: 1                       # 1 = DNA
+ado: 0.05                         # allelic dropout
+coverage: 8
+coverage_dispersion: 5            # within a genotype (negative binomial)
+coverage_dispersion_sites: 4      # between sites, shared by all cells
+coverage_dispersion_cells: 6      # between cells, shared by all sites
+sequencing_error: 0.001
+amplification_error: [0.05, 0.01, 0]
+print_snv_genotypes: true
+print_pileup: true
+replicate_folders: true
+seed: 42

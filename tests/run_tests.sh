@@ -135,6 +135,48 @@ m=[x/k for x in n[:100]]
 print(round(st.pvariance(m)/st.mean(m)**2,4))")
 close "$cellcv" 0.25 0.08 && ok "-J4: CV^2 of the mean depth between cells $cellcv (expected 0.25)" || bad "-J4 between-cell depth ($cellcv)"
 
+echo "2g6. Configuration files (--config): JSON, YAML and the options of run.json reproduce a command line"
+Q="-n2 -s20 -l500 -u1e-6 -e10000 -b1 -C10 -E0.001 -A0.05 0.01 0 -1 -9 -v -#7"
+mkdir -p "$TMP/cf0" "$TMP/cf1" "$TMP/cf2" "$TMP/cf3"
+(cd "$TMP/cf0" && "$BIN" $Q >/dev/null 2>&1)
+(cd "$TMP/cf1" && "$BIN" --config "$TMP/cf0/Results/run.json" >/dev/null 2>&1)
+cat > "$TMP/c.yaml" <<'YML'
+# same run as a YAML file
+replicates: 2
+cells: 20
+sites: 500
+mutation_rate: 1e-6
+population_size: 10000
+alphabet: 1
+coverage: 10
+sequencing_error: 0.001
+amplification_error: [0.05, 0.01, 0]
+print_snv_genotypes: true
+print_pileup: true
+replicate_folders: true
+seed: 7
+YML
+(cd "$TMP/cf2" && "$BIN" --config "$TMP/c.yaml" >/dev/null 2>&1)
+if [ -d "$TMP/cf0/Results/pileup_dir" ] && [ "$(norm "$TMP/cf0/Results" | md5sum)" = "$(norm "$TMP/cf1/Results" | md5sum)" ]; then ok "--config run.json reproduces the run"; else bad "--config run.json"; fi
+if [ "$(norm "$TMP/cf0/Results" | md5sum)" = "$(norm "$TMP/cf2/Results" | md5sum)" ]; then ok "--config YAML with long names = command line"; else bad "--config YAML"; fi
+(cd "$TMP/cf3" && "$BIN" --config "$TMP/c.yaml" -n1 >/dev/null 2>&1); n=$(ls "$TMP/cf3/Results/snv_genotypes_dir" 2>/dev/null | wc -l | tr -d " ")
+[ "$n" = "1" ] && ok "options after --config override the file (-n1)" || bad "override after --config ($n)"
+echo '{"foo": 1}' > "$TMP/bad.json"
+if "$BIN" --config "$TMP/bad.json" 2>&1 | grep -q 'unknown option: foo'; then ok "unknown option in a config file is an error"; else bad "unknown option in config"; fi
+
+echo "2g7. Summary plots (tools/cellcoal_plots.py)"
+if python3 -c "import matplotlib, numpy" 2>/dev/null; then
+  mkdir -p "$TMP/pl2"
+  (cd "$TMP/pl2" && "$BIN" -n1 -s30 -l2000 -u3e-6 -e10000 -b1 -C8 -V5 -E0.001 -D0.1 -1 -v -#3 >/dev/null 2>&1)
+  ok_all=1
+  for c in "depth Results/vcf_dir/vcf.0001" "missing Results/vcf_dir/vcf.0001" "heatmap Results/snv_genotypes_dir/snv_gen.0001"; do
+    set -- $c
+    (cd "$TMP/pl2" && python3 "$ROOT/tools/cellcoal_plots.py" $1 $2 --out "$1.png" >/dev/null 2>&1) || ok_all=0
+    [ -s "$TMP/pl2/$1.png" ] || ok_all=0
+  done
+  [ $ok_all = 1 ] && ok "depth, missing and heatmap plots are written" || bad "summary plots"
+else echo "  skip (matplotlib not installed)"; fi
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)

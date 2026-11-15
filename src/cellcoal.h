@@ -24,200 +24,219 @@
 
 #include "definitions.h"
 
+/* Scratch matrices of a thread that simulates reads */
+typedef struct
+	{
+	double	**ampMat, **ampPat, *sbuf, *probsT;
+	}
+	ReadScratch;
+
 /* Prototypes */
-static void 	PrintHeader (FILE *fp);
+void 	PrintHeader (FILE *fp);
 extern void 	PrintUsage (FILE *fp);
-static void 	PrintDate (FILE *fp);
-static void 	PrintDefaults (FILE *fp);
-static void		ReadUntil (FILE *fv, char stopChar, char *what);
-static void		PrintRunInformation (FILE *fp);
-static void		ReadParametersFromFile (void);
-static void		ReadParametersFromCommandLine (int argc, char **argv);
-static void 	PrintCommandLine (FILE *fp, int argc,char **argv);
-static void		PrepareGlobalFiles (int argc, char **argv);
-static void		PrepareSeparateFiles (int replicate);
-static void		ReadUserGenome (FILE *fp);
-static void		ReadUserTree (FILE *fp);
-static void		FreeUserTree (void);
-static void		CheckTree (char *treeString);
-static void 	RelabelUserTree (TreeNode *p);
-static void		PrintTree (TreeNode *treeRoot, FILE *fp);
-static void		WriteTree (TreeNode *p, FILE *fp);
-static void		PrintTimes (int listPosition, FILE *fp);
-static void		ListTimes (int position, FILE *fp);
-static void		PrintSNVGenotypes (FILE *fp);
-static void		PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants);
-static void 	PrintFullGenotypes (FILE *fp);
-static void 	PrintFullHaplotypes (FILE *fp);
-static void 	PrintTrueFullHaplotypes (FILE *fp);
-static void		PrintSiteInfo (FILE *fp, int site);
-static void		PrintCATG (FILE *fp);
-static void		PrintVCF (FILE *fp);
-static void		PrintPILEUP (FILE *fp);
-static void		AllelicDropout (long int *seed);
-static void		GenotypeError (long int *seed);
-static void		GenerateReadCounts (long int *seed);
-static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut, FILE *fpCATGbody);
-static void 	PrintCATGHeader (FILE *fp);
-static unsigned char	*mlStore = NULL;
-static long				mlStoreCap = 0;
-static void 	PrintBulk (FILE *fp);
-static void 	WriteRunRecord (double wallSecs, double cpuSecs);
-static int 	VCFSitePasses (int j);
-static FILE *	OpenVCF (const char *path);
-static void 	CloseVCF (FILE *fp);
-static void 	SiteReadCounts (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
-static void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut);
-static void	BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat);
-static void	SiteGL (CellSiteStr *c, int i, int j, double *glOut);
-static const double	*GetSiteGL (int i, int j, double *buf);
-static void 	SetupDoublets (long int *seed, long windowSites);
-static void 	SetupCellCoverage (long int *seed);
+void 	PrintDate (FILE *fp);
+void 	PrintDefaults (FILE *fp);
+void		ReadUntil (FILE *fv, char stopChar, char *what);
+void		PrintRunInformation (FILE *fp);
+void		ReadParametersFromFile (void);
+void		ReadParametersFromCommandLine (int argc, char **argv);
+void 	PrintCommandLine (FILE *fp, int argc,char **argv);
+void		PrepareGlobalFiles (int argc, char **argv);
+void		PrepareSeparateFiles (int replicate);
+void		ReadUserGenome (FILE *fp);
+void		ReadUserTree (FILE *fp);
+void		FreeUserTree (void);
+void		CheckTree (char *treeString);
+void 	RelabelUserTree (TreeNode *p);
+void		PrintTree (TreeNode *treeRoot, FILE *fp);
+void		WriteTree (TreeNode *p, FILE *fp);
+void		PrintTimes (int listPosition, FILE *fp);
+void		ListTimes (int position, FILE *fp);
+void		PrintSNVGenotypes (FILE *fp);
+void		PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants);
+void 	PrintFullGenotypes (FILE *fp);
+void 	PrintFullHaplotypes (FILE *fp);
+void 	PrintTrueFullHaplotypes (FILE *fp);
+void		PrintSiteInfo (FILE *fp, int site);
+void		PrintCATG (FILE *fp);
+void		PrintVCF (FILE *fp);
+void		PrintPILEUP (FILE *fp);
+void		AllelicDropout (long int *seed);
+void		GenotypeError (long int *seed);
+void		GenerateReadCounts (long int *seed);
+void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut, FILE *fpCATGbody);
+void 	PrintCATGHeader (FILE *fp);
+extern unsigned char	*mlStore;
+extern long				mlStoreCap;
+void 	PrintBulk (FILE *fp);
+void 	WriteRunRecord (double wallSecs, double cpuSecs);
+int 	VCFSitePasses (int j);
+FILE *	OpenVCF (const char *path);
+void 	CloseVCF (FILE *fp);
+void 	SiteReadCounts (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
+void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut);
+void	BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat);
+void	SiteGL (CellSiteStr *c, int i, int j, double *glOut);
+const double	*GetSiteGL (int i, int j, double *buf);
+void 	SetupDoublets (long int *seed, long windowSites);
+void 	SetupCellCoverage (long int *seed);
 extern char		WhichNuc (int nucleotide);
-static int		WhichNucChar (char nucleotide);
-static char		WhichMut (int state);
-static char		WhichIUPAC (int allele1, int allele2);
-static char 	WhichConsensusBinary (int allele1, int allele2);
-static void     MakeCoalescenceTree (int numCells, int N, long int *seed);
-static int		Index (TreeNode *p);
-static int 		Label (TreeNode *p);
-static void 	EvolveSitesOnTree (TreeNode *p, int genome, long int *seed);
-static void		RelabelNodes (TreeNode *p);
-static void     MakeTreeNonClock (TreeNode *p, long int *seed);
-static void		TreeRateSwitch (TreeNode *p, long int *seed);
-static void 	BranchRateSwitch (TreeNode *p, float multiplier, int *numTips, long int *seed);
-static void     InitializeGenomes (TreeNode *p, long int *seed);
-static void     AddGermlineVariation (long int *seed);
-static void     InheritRootGenome (TreeNode *p);
-static void     SimulateMk2 (TreeNode *p, int genome, long int *seed);
-static void     SimulateMk2forSite (TreeNode *p, int genome, int site, long int *seed);
-static void 	SimulateISM (TreeNode *p,  int genome, int doISMhaploid, long int *seed);
-static void 	SimulateISMforSite (TreeNode *p,  int genome, int site, int doISMhaploid, long int *seed);
-static void 	SimulateISMDNAforSite (TreeNode *p,  int genome, int site, int doISMhaploid, long int *seed);
-static void 	SimulateFiniteDNA (TreeNode *p, int genome, long int *seed);
-static void		SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed);
-static void				FreeTriNucleotides (void);
+int		WhichNucChar (char nucleotide);
+char		WhichMut (int state);
+char		WhichIUPAC (int allele1, int allele2);
+char 	WhichConsensusBinary (int allele1, int allele2);
+void     MakeCoalescenceTree (int numCells, int N, long int *seed);
+int		Index (TreeNode *p);
+int 		Label (TreeNode *p);
+void 	EvolveSitesOnTree (TreeNode *p, int genome, long int *seed);
+void		RelabelNodes (TreeNode *p);
+void     MakeTreeNonClock (TreeNode *p, long int *seed);
+void		TreeRateSwitch (TreeNode *p, long int *seed);
+void 	BranchRateSwitch (TreeNode *p, float multiplier, int *numTips, long int *seed);
+void     InitializeGenomes (TreeNode *p, long int *seed);
+void     AddGermlineVariation (long int *seed);
+void     InheritRootGenome (TreeNode *p);
+void     SimulateMk2 (TreeNode *p, int genome, long int *seed);
+void     SimulateMk2forSite (TreeNode *p, int genome, int site, long int *seed);
+void 	SimulateISM (TreeNode *p,  int genome, int doISMhaploid, long int *seed);
+void 	SimulateISMforSite (TreeNode *p,  int genome, int site, int doISMhaploid, long int *seed);
+void 	SimulateISMDNAforSite (TreeNode *p,  int genome, int site, int doISMhaploid, long int *seed);
+void 	SimulateFiniteDNA (TreeNode *p, int genome, long int *seed);
+void		SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed);
+void				FreeTriNucleotides (void);
 void 	SimulateSignatureISM (TreeNode *p,  int genome, long int *seed);
-static void		SimulateSignatureISMforSite (TreeNode *p,  int genome, int site, int newState, long int *seed);
-static void		SimulateTriNucFreqGenome (int cell, long int *seed);
-static void 	CountTriNucFrequencies (Geno *genome_array, int genome);
-static int		ChooseTrinucleotideSite (long int *seed, int *newState, int genome);
-static void		FillSubstitutionMatrix (double ch_prob[4][4], double branchLength);
-static void		JCmodel (double Pij[4][4], double branchLength);
-static void		HKYmodel (double Pij[4][4], double branchLength);
-static void		GTRmodel (double Pij[4][4], double branchLength);
-static void 	EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed);
-static void 	EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed);
-static void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed);
-static void		SimulateCNLOHforSite (TreeNode *p, int genome, int site, long int *seed);
-static int 		CountTrueVariants(void);
-static int		CountAllelesInObservedGenotypes (void);
-static int		CountAllelesInMLGenotypes (void);
-static double	SumBranches (TreeNode *p);
-static double 	RandomUniform (long int *seed);
-static int 		RandomUniformTo (int max, long int *seed);
-static int		RandomPoisson (double lambda, long int *seed);
-static double	RandomExponential (double mean, long int *seed);
-static int		RandomBinomial (double prob, int numTrials, long int *seed);
-static int		RandomNegativeBinomial (double mean, double dispersion,  long int *seed);
-static double	RandomBetaMeanVar (double mean, double var, long int *seed);
+void		SimulateSignatureISMforSite (TreeNode *p,  int genome, int site, int newState, long int *seed);
+void		SimulateTriNucFreqGenome (int cell, long int *seed);
+void 	CountTriNucFrequencies (Geno *genome_array, int genome);
+int		ChooseTrinucleotideSite (long int *seed, int *newState, int genome);
+void		FillSubstitutionMatrix (double ch_prob[4][4], double branchLength);
+void		JCmodel (double Pij[4][4], double branchLength);
+void		HKYmodel (double Pij[4][4], double branchLength);
+void		GTRmodel (double Pij[4][4], double branchLength);
+void 	EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed);
+void 	EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed);
+void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed);
+void		SimulateCNLOHforSite (TreeNode *p, int genome, int site, long int *seed);
+int 		CountTrueVariants(void);
+int		CountAllelesInObservedGenotypes (void);
+int		CountAllelesInMLGenotypes (void);
+double	SumBranches (TreeNode *p);
+double 	RandomUniform (long int *seed);
+int 		RandomUniformTo (int max, long int *seed);
+int		RandomPoisson (double lambda, long int *seed);
+double	RandomExponential (double mean, long int *seed);
+int		RandomBinomial (double prob, int numTrials, long int *seed);
+int		RandomNegativeBinomial (double mean, double dispersion,  long int *seed);
+double	RandomBetaMeanVar (double mean, double var, long int *seed);
 /* static double	RandomBeta (double alpha, double beta, long int *seed);*/
-static double	RandomGamma (double shape, long int *seed);
-static double	RandomGamma1 (double s, long int *seed);
-static double	RandomGamma2 (double s, long int *seed);
-static int		ChooseUniformState (double *freq, long int *seed);
-static int		Unlink_callback (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf);
-static int		RemoveDir(char *path);
-static int 		CheckMatrixSymmetry(double matrix[4][4]);
-static void 	RecordTriNucObservation(TriNucStr *trin, int site);
-static void 	RemoveTriNucObservation(TriNucStr *trin, int site);
-static void		AllocateCellStructure (void);
+double	RandomGamma (double shape, long int *seed);
+double	RandomGamma1 (double s, long int *seed);
+double	RandomGamma2 (double s, long int *seed);
+int		ChooseUniformState (double *freq, long int *seed);
+int		Unlink_callback (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf);
+int		RemoveDir(char *path);
+int 		CheckMatrixSymmetry(double matrix[4][4]);
+void 	RecordTriNucObservation(TriNucStr *trin, int site);
+void 	RemoveTriNucObservation(TriNucStr *trin, int site);
+void		AllocateCellStructure (void);
 #ifdef COUNT_ML_GENOTYPE_ERRORS
-	static int		CompareGenotypes (int a1, int a2, int b1, int b2);
-	static void		CountMLGenotypingErrors (void);
+	int		CompareGenotypes (int a1, int a2, int b1, int b2);
+	void		CountMLGenotypingErrors (void);
 #endif
 
 extern int 		EigenREV (double Root[], double Cijk[]);
 extern void		PrepareGeneticSignatures(void);
 
+
+/* Functions shared between modules */
+void MLPairAt (int i, int q, int *m, int *p);
+int MLCountsAtSite (int j);
+void NewReadScratch (ReadScratch *rs);
+void FreeReadScratch (ReadScratch *rs);
+void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratch *rs);
+void SetupReadModel (double **ngsEij);
+
+char **ExpandConfigArgs (int *argc, char **argv);
+void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent);
+
 /* Global variables */
-TreeNode		*treeNodes, *coalTreeMRCA, *healthyRoot, *healthyTip;
-SiteStr			*allSites;
-TriNucStr		*triNucleotideMaternal, *triNucleotidePaternal;
-CellStr			*cell;
-long int		userSeed, originalSeed;
-static Geno		***data;
-static int      *SNVsites, *DefaultModelSites, *AltModelSites, *variantSites;
-static int		tipLabel, intLabel;
-static int		ploidy, numCells, N, *Nbegin, *Nend,  *cumDuration, numSites, numDataSets, numPeriods, maxTreeRateSwitches;
-static int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutations, altModel;
-static int		numCA, numMU, numDEL, numCNLOH, numProposedMU, numSNVs, numFixedMutations, numSNVmaternal, zeroSNVs;
-static int		numISMdeletions, numISMCNLOH, stringPrecision;
-static double	meanNumSNVs, meanNumCA, meanNumMU, meanNumDEL, meanNumCNLOH;
-static double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountMLgenotypeErrors, cumCountCalledGenotypes;
-static double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
-static double	varNumMU, varNumSNVs, varNumDEL, varNumCNLOH;
-static double	expNumMU, expVarNumMU;
-static double	theta, healthyTipBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
-static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
-static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], trueHaplotypesFile[MAX_NAME],MLhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
-static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], PILEUPfile[MAX_NAME], bulkFile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME], parameterFile[MAX_NAME];
-static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], trueHaplotypesDir[MAX_NAME], MLhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
-static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME], PILEUPdir[MAX_NAME], bulkDir[MAX_NAME];
-static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[4*MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames, *treeRateInfo;
-static char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
-static char		GLmodel[MAX_NAME];
-static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome, doSpecificParameterFile;
-static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintBulk, doPrintVCF, doZipVCF, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
-static int		doExponential, doDemographics, doOthsukiInnanCoal, doSimulateData, doSimulateFixedNumMutations, doNGS, doTumorNames, taxonNamesAreChars;
-static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
-static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, doTreeRateSwitches, numTreeRateSwitches, equalBaseFreq, alphabet, thereIsMij, thereIsEij;
-static double	*periodGrowth, growthRate, birthRate, deathRate, *treeRateSwitchMultiplier;
-static double	meanGenotypingError, varGenotypingError, sequencingError;
-static double	fixedADOrate, doADOcell, meanADOcell, varADOcell, doADOsite, meanADOsite, varADOsite, thereisADO;
-static double	doAllelicImbalance, meanAllelicImbalance, varAllelicImbalance;
-static double	coverage, haploidCoverageReduction;
-static double	meanAmplificationError, varAmplificationError, meanDoubletRate, varDoubletRate;
-static double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
-static double 	cumCountMLgenotypeErrors, cumCountMLgenotypeErrorsSq, meanMLgenotypeError, varMLgenotypeError;
-static double 	cumCountCalledGenotypes, cumCountCalledGenotypesSq, meanCalledGenotypes, varCalledGenotypes;
-static double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
-static double	Cijk[256], Root[4];
-static double	SNPrate, alphaCoverage, alphaSiteCoverage, alphaCellCoverage;
-static int		OUTGROUP_ROOT, INGROUP_ROOT;
+extern TreeNode		*treeNodes, *coalTreeMRCA, *healthyRoot, *healthyTip;
+extern SiteStr			*allSites;
+extern TriNucStr		*triNucleotideMaternal, *triNucleotidePaternal;
+extern CellStr			*cell;
+extern long int		userSeed, originalSeed;
+extern Geno		***data;
+extern int      *SNVsites, *DefaultModelSites, *AltModelSites, *variantSites;
+extern int		tipLabel, intLabel;
+extern int		ploidy, numCells, N, *Nbegin, *Nend,  *cumDuration, numSites, numDataSets, numPeriods, maxTreeRateSwitches;
+extern int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutations, altModel;
+extern int		numCA, numMU, numDEL, numCNLOH, numProposedMU, numSNVs, numFixedMutations, numSNVmaternal, zeroSNVs;
+extern int		numISMdeletions, numISMCNLOH, stringPrecision;
+extern double	meanNumSNVs, meanNumCA, meanNumMU, meanNumDEL, meanNumCNLOH;
+extern double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountMLgenotypeErrors, cumCountCalledGenotypes;
+extern double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
+extern double	varNumMU, varNumSNVs, varNumDEL, varNumCNLOH;
+extern double	expNumMU, expVarNumMU;
+extern double	theta, healthyTipBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
+extern double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
+extern char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], trueHaplotypesFile[MAX_NAME],MLhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
+extern char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], PILEUPfile[MAX_NAME], bulkFile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME], parameterFile[MAX_NAME];
+extern char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], trueHaplotypesDir[MAX_NAME], MLhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
+extern char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME], PILEUPdir[MAX_NAME], bulkDir[MAX_NAME];
+extern char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[4*MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames, *treeRateInfo;
+extern char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
+extern char		GLmodel[MAX_NAME];
+extern int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome, doSpecificParameterFile;
+extern int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintBulk, doPrintVCF, doZipVCF, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
+extern int		doExponential, doDemographics, doOthsukiInnanCoal, doSimulateData, doSimulateFixedNumMutations, doNGS, doTumorNames, taxonNamesAreChars;
+extern int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
+extern int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, doTreeRateSwitches, numTreeRateSwitches, equalBaseFreq, alphabet, thereIsMij, thereIsEij;
+extern double	*periodGrowth, growthRate, birthRate, deathRate, *treeRateSwitchMultiplier;
+extern double	meanGenotypingError, varGenotypingError, sequencingError;
+extern double	fixedADOrate, doADOcell, meanADOcell, varADOcell, doADOsite, meanADOsite, varADOsite, thereisADO;
+extern double	doAllelicImbalance, meanAllelicImbalance, varAllelicImbalance;
+extern double	coverage, haploidCoverageReduction;
+extern double	meanAmplificationError, varAmplificationError, meanDoubletRate, varDoubletRate;
+extern double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
+extern double 	cumCountMLgenotypeErrors, cumCountMLgenotypeErrorsSq, meanMLgenotypeError, varMLgenotypeError;
+extern double 	cumCountCalledGenotypes, cumCountCalledGenotypesSq, meanCalledGenotypes, varCalledGenotypes;
+extern double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
+extern double	Cijk[256], Root[4];
+extern double	SNPrate, alphaCoverage, alphaSiteCoverage, alphaCellCoverage;
+extern int		OUTGROUP_ROOT, INGROUP_ROOT;
 
 /* Genotype storage. In dense mode, data[genome][node][site] holds the genotype of every node at every site.
    In sparse mode (very large data sets), only the genome of the root is stored densely (data[genome][OUTGROUP_ROOT]);
    a site where some node differs from the root gets a column sparseCols[site] with the genotypes of all the nodes
    (maternal nodes first, then paternal). Sites without a column are identical to the root in all the nodes. */
-static int		sparseMode = 0;
-static Geno		**sparseCols = NULL;
-static int		numNodes = 0;
-static long		numSparseCols = 0;
+extern int		sparseMode;
+extern Geno		**sparseCols;
+extern int		numNodes;
+extern long		numSparseCols;
 /* In sparse mode, ADO and genotyping errors are not written in the genomes (that would create a column for almost
    every site): they are computed on the fly for the cells (see ObservedAllele) once obsActive is set. */
-static int			obsActive = 0;
+extern int			obsActive;
 /* Per-cell, per-site data lives in cell[i].site / cell[i].doublet. When it is streamed (see StreamReads), those arrays only
    hold a window of sites starting at siteOff; otherwise siteOff is 0 and they hold all the sites. */
-static long			siteOff = 0;
+extern long			siteOff;
 #define CS(i,j)	(cell[i].site[(long)(j) - siteOff])
 #define CD(i,j)	(cell[i].doublet[(long)(j) - siteOff])
-static double		minVAFvcf = 0.0;	/* the VCF lists only sites whose pooled VAF in reads is at least this */
-static struct timespec	wallStart;	/* start of the run, for the elapsed (wall clock) time */
-static int			readsOnly = 0;		/* only the pooled (bulk) read file is printed: no genotype likelihoods are needed */
-static int			streamMode = 0;		/* reads are simulated and printed in blocks of sites (see StreamReads) */
-static FILE			*catgBody = NULL;	/* temporary file with the CATG site lines of a streamed replicate */
-static int			streamBlock = 0;		/* number of sites in a block */
-static int			*doubletDonor = NULL;	/* donor cell of each doublet cell when streaming */
-static int			sparseADO = 0;
-static int			*errCount = NULL;
-static Geno		ObservedAllele (int genome, int node, int site, Geno trueAllele);
-static void		SparseAllelicDropout (long int *seed);
-static void		SparseGenotypeError (long int *seed);
-static void		ResetObservationLayer (void);
-static Geno		*NewSparseColumn (int site);
-static void		DecideSparseMode (void);
-static void		ResetSparseColumns (void);
+extern double		minVAFvcf;	/* the VCF lists only sites whose pooled VAF in reads is at least this */
+extern struct timespec	wallStart;	/* start of the run, for the elapsed (wall clock) time */
+extern int			readsOnly;		/* only the pooled (bulk) read file is printed: no genotype likelihoods are needed */
+extern int			streamMode;		/* reads are simulated and printed in blocks of sites (see StreamReads) */
+extern FILE			*catgBody;	/* temporary file with the CATG site lines of a streamed replicate */
+extern int			streamBlock;		/* number of sites in a block */
+extern int			*doubletDonor;	/* donor cell of each doublet cell when streaming */
+extern int			sparseADO;
+extern int			*errCount;
+Geno		ObservedAllele (int genome, int node, int site, Geno trueAllele);
+void		SparseAllelicDropout (long int *seed);
+void		SparseGenotypeError (long int *seed);
+void		ResetObservationLayer (void);
+Geno		*NewSparseColumn (int site);
+void		DecideSparseMode (void);
+void		ResetSparseColumns (void);
 static inline Geno GetG (int genome, int node, int site)
 	{
 	if (__builtin_expect (sparseMode, 0) && node != OUTGROUP_ROOT)
@@ -247,18 +266,18 @@ static inline Geno SetG (int genome, int node, int site, Geno value)
 	data[genome][node][site] = value;
 	return value;
 	}
-static int		readingParameterFile, simulateOnlyTwoTemplates;
-static int 		doGATK, do2T, do4T, doGATK_ADO, do2T_ADO, do4T_ADO;
-static double	**siteGL;	/* per site: genotype likelihoods of all cells (GL_NUM doubles each), kept only for SNV sites and within the memory budget; NULL otherwise (recomputed when needed) */
-static size_t	glBudget, glUsed;
-static int		TipNodeNum, IntNodeNum;
-static char		*maternalUserGenome, *paternalUserGenome;
-static int		complementBase[4] = {3,2,1,0};
-static int		targetTriChange[6] = {0,2,3,0,1,2};
-static int		*triMutationsCounter;
-static int		numUserSignatures;
-static double	*signatureWeight;
-static int		*signatureID;
+extern int		readingParameterFile, simulateOnlyTwoTemplates;
+extern int 		doGATK, do2T, do4T, doGATK_ADO, do2T_ADO, do4T_ADO;
+extern double	**siteGL;	/* per site: genotype likelihoods of all cells (GL_NUM doubles each), kept only for SNV sites and within the memory budget; NULL otherwise (recomputed when needed) */
+extern size_t	glBudget, glUsed;
+extern int		TipNodeNum, IntNodeNum;
+extern char		*maternalUserGenome, *paternalUserGenome;
+extern int		complementBase[4];
+extern int		targetTriChange[6];
+extern int		*triMutationsCounter;
+extern int		numUserSignatures;
+extern double	*signatureWeight;
+extern int		*signatureID;
 extern double 	Qij[16], mr;
 extern double 	***selectedSignature;
 extern double	****geneticSignature;
@@ -277,13 +296,18 @@ static inline Geno GetTrueG (int genome, int node, int site)
 	}
 
 #ifdef CHECK_MUT_DISTRIBUTION
-static int		*MutCount, *SiteMut, dataSetsWithSNVs;
-static double	sumPos, meansumPos;
+extern int		*MutCount, *SiteMut, dataSetsWithSNVs;
+extern double	sumPos, meansumPos;
 #endif
 
 /* File pointers */
-FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpMLhaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpPILEUP, *fpBulk, *fpLog, *fpUserTree, *fpUserGenome, *fpSims;
+extern FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpMLhaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpPILEUP, *fpBulk, *fpLog, *fpUserTree, *fpUserGenome, *fpSims;
 
+
+/* per-cell, per-site data are needed for NGS reads and for the haplotype, full-genotype and ancestor outputs (see main) */
+#define NEED_CELL_SITES (doNGS == YES || doPrintSNVhaplotypes == YES || doPrintTrueHaplotypes == YES || \
+                         doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || \
+                         doPrintCATG == YES || doPrintPILEUP == YES || doPrintBulk == YES || doPrintAncestors == YES)
 
 #endif /* coaltumor_h */
 
@@ -292,10 +316,10 @@ FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *
    number), so that the sites can be simulated in parallel and the result does not depend on the number of
    threads or on the order in which they are processed. While a thread has a stream active, RandomUniform
    ignores the seed it is given and draws from the stream instead. */
-static double			*cellCovMult = NULL;	/* between-cell coverage multiplier of every cell (-J) */
-static __thread double		siteCovMult = 1.0;	/* between-site coverage multiplier of the site being simulated (-O) */
-static __thread int			streamActive = 0;
-static __thread uint64_t	streamState;
+extern double			*cellCovMult;	/* between-cell coverage multiplier of every cell (-J) */
+extern __thread double		siteCovMult;	/* between-site coverage multiplier of the site being simulated (-O) */
+extern __thread int			streamActive;
+extern __thread uint64_t	streamState;
 
 static inline uint64_t SplitMix64 (uint64_t *x)
 	{
