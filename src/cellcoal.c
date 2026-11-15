@@ -905,6 +905,7 @@ int main (int argc, char **argv)
 					fprintf (fpFullHaplotypes, "[#%d]\n", dataSetNum+1);
                 PrintFullHaplotypes(fpFullHaplotypes);
 				}
+			CloseFullStore ();
 		
 			if (alphabet == DNA && streamMode == NO)
 				{

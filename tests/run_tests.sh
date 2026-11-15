@@ -278,6 +278,18 @@ PY
   if [ "$n1" = "$n2" ] && [ "$n1" -gt 100 ] && cmp -s "$TMP/q1.txt" "$TMP/q2.txt"; then ok "bcftools reads the BCF: $n1 records, positions, alleles and DP equal the VCF"; else bad "bcftools reading ($n1 vs $n2)"; bcftools view -H "$f" 2>&1 | head -3; fi
   bcftools index "$f" >/dev/null 2>&1 && ok "bcftools can index the BCF" || bad "bcftools index"
 else echo "  skip (bcftools not installed)"; fi
+echo "2g11b. The BCF index (.bcf.csi) is written by the program and is correct (several bins)"
+BX="-n1 -s12 -l70000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.01 -v -#9"
+mkdir -p "$TMP/bx1" "$TMP/bx2"
+(cd "$TMP/bx1" && "$BIN" --bcf $BX >/dev/null 2>&1); (cd "$TMP/bx2" && "$BIN" $BX >/dev/null 2>&1)
+if [ -s "$TMP/bx1/Results/vcf_dir/vcf.0001.bcf.csi" ] && python3 "$ROOT/tests/bcf_check.py" "$TMP/bx1/Results/vcf_dir/vcf.0001.bcf" "$TMP/bx2/Results/vcf_dir/vcf.0001" >"$TMP/bcfchk.txt" 2>&1 && grep -q "CSI ok" "$TMP/bcfchk.txt"; then ok "CSI index checked independently ($(grep 'CSI ok' "$TMP/bcfchk.txt"))"; else bad "CSI index"; head -5 "$TMP/bcfchk.txt"; fi
+if command -v bcftools >/dev/null 2>&1; then
+  f="$TMP/bx1/Results/vcf_dir/vcf.0001.bcf"; v="$TMP/bx2/Results/vcf_dir/vcf.0001"
+  nidx=$(bcftools index -n "$f" 2>/dev/null); ntxt=$(grep -v '^#' "$v" | grep -c "$(printf '\t')")
+  r1=$(bcftools view -H -r 1:20000-50000 "$f" 2>/dev/null | cut -f2 | md5sum)
+  r2=$(grep -v '^#' "$v" | grep "$(printf '\t')" | awk -F'\t' '$2>=20000 && $2<=50000 {print $2}' | md5sum)
+  if [ "$nidx" = "$ntxt" ] && [ "$ntxt" -gt 50 ] && [ "$r1" = "$r2" ]; then ok "bcftools uses our .csi: $nidx records, region query equals the VCF"; else bad "bcftools with our .csi (count $nidx vs $ntxt)"; bcftools view -H -r 1:20000-50000 "$f" 2>&1 | head -3; fi
+fi
 if "$BIN" --bcf -z -s5 2>&1 | grep -q 'cannot be combined' && "$BIN" --bcf -n3 -s5 2>&1 | grep -q 'needs -v'; then ok "--bcf option checks"; else bad "--bcf option checks"; fi
 
 echo "2g12. Cache of genotype likelihoods (same counts and amplification errors) does not change the results"
@@ -286,6 +298,14 @@ mkdir -p "$TMP/gc1" "$TMP/gc2"
 (cd "$TMP/gc1" && "$BIN" $GQ >/dev/null 2>&1)
 (cd "$TMP/gc2" && CELLCOAL_NO_GL_CACHE=1 "$BIN" $GQ >/dev/null 2>&1)
 if [ -s "$TMP/gc1/Results/vcf" ] && [ "$(norm "$TMP/gc1/Results" | md5sum)" = "$(norm "$TMP/gc2/Results" | md5sum)" ]; then ok "VCF and CATG identical with and without the cache"; else bad "genotype likelihood cache changes the results"; fi
+
+echo "2g13. Streamed reads also work with the full genotype/haplotype files (-3 -4) and -5 -Y: same files as stored reads, any thread count"
+C="-n2 -s30 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -m0 -v -C20 -V5 -E0.001 -A0.05 0.01 0 -B0.3 0.001 -P0.1 0.01 -1 -3 -4 -5 -Y -8 -9 -#79"
+mkdir -p "$TMP/fu0" "$TMP/fu1" "$TMP/fu2"
+(cd "$TMP/fu0" && CELLCOAL_SPARSE=1 CELLCOAL_STREAM=0 "$BIN" $C >out.txt 2>&1); (cd "$TMP/fu1" && CELLCOAL_STREAM=1 OMP_NUM_THREADS=1 "$BIN" $C >out.txt 2>&1); (cd "$TMP/fu2" && CELLCOAL_STREAM=1 OMP_NUM_THREADS=3 "$BIN" $C >out.txt 2>&1)
+if [ -n "$(find "$TMP/fu0/Results/full_genotypes_dir" -type f -size +1k)" ] && [ -n "$(find "$TMP/fu1/Results/full_haplotypes_dir" -type f -size +1k)" ] && [ -n "$(find "$TMP/fu1/Results/true_haplotypes_dir" -type f -size +1k)" ]; then
+  if [ "$(norm "$TMP/fu0/Results" | md5sum)" = "$(norm "$TMP/fu1/Results" | md5sum)" ] && [ "$(norm "$TMP/fu1/Results" | md5sum)" = "$(norm "$TMP/fu2/Results" | md5sum)" ]; then ok "-3 -4 -5 -Y: stored = streamed (1 and 3 threads)"; else bad "full genotypes/haplotypes stored vs streamed"; fi
+else bad "full genotype/haplotype files not produced"; fi
 
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"

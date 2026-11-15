@@ -394,16 +394,11 @@ void DecideSparseMode (void)
 			streamForce = (atoi (env) != 0);
 		if ((env = getenv ("CELLCOAL_STREAM_MB")) != NULL && atof (env) > 0)
 			streamLimitMB = atof (env);
-		supported = (doPrintTrueHaplotypes == NO &&
-					 doPrintFullHaplotypes == NO && doPrintFullGenotypes == NO && doPrintAncestors == NO);
-		readsOnly = (doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == YES && doPrintSNVgenotypes == NO && doPrintSNVhaplotypes == NO);
+		supported = YES;	/* -3 and -4 (ML alleles of all the sites) are kept in a temporary file, -5 and -Y read the genomes */
+		readsOnly = (doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == YES && doPrintSNVgenotypes == NO && doPrintSNVhaplotypes == NO &&
+					doPrintFullGenotypes == NO && doPrintFullHaplotypes == NO);
 		if (streamForce == 1 || (streamForce == -1 && (cellMB > streamLimitMB || readsOnly == YES) && supported == YES))
 			{
-			if (supported == NO)
-				{
-				fprintf (stderr, "\nERROR: streamed reads support the VCF, PILEUP, bulk, CATG and ML SNV genotype/haplotype outputs (not -4 -5 -Y or ancestors). Unset CELLCOAL_STREAM or do not use those outputs.\n");
-				exit (-1);
-				}
 			streamMode = YES;
 			sparseMode = YES;
 			return;
@@ -420,12 +415,6 @@ void DecideSparseMode (void)
 	if (force == 1 || (force == -1 && denseMB > limitMB))
 		sparseMode = YES;
 
-	if (sparseMode == YES && denseMB > limitMB && (doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || doPrintTrueHaplotypes == YES))
-		{
-		/* These outputs write every site of every cell: (cells x sites) characters per file. */
-		fprintf (stderr, "\nERROR: this data set is too large for full-sequence outputs (-4, -5, -Y): they write (cells x sites) characters and need about %.0f MB of genomes. Use SNV outputs (-1, -2, -3) or reduce the size; CELLCOAL_DENSE_MB raises the limit.\n", denseMB);
-		exit (-1);
-		}
 	if (sparseMode == YES && noisy > 1)
 		fprintf (stderr, "\nUsing sparse genome storage (dense genomes would need %.0f MB)\n", denseMB);
 	}
