@@ -39,6 +39,12 @@ echo "2c. A large data set runs in sparse mode (2000 cells x 1,000,000 sites)"
 mkdir -p "$TMP/big"
 if (cd "$TMP/big" && "$BIN" -n1 -s2000 -l1000000 -u1e-8 -e10000 -g0 -b1 -D0.1 -G1e-6 1e-13 -1 -#5 >out.txt 2>&1) && [ -n "$(find "$TMP/big/Results/snv_gen" -type f -size +1k 2>/dev/null)" ]; then ok "2000 x 1e6 sites"; else bad "2000 x 1e6 sites"; fi
 
+echo "2d. Streamed reads (blocks of sites) give the same VCF and PILEUP as storing all the reads"
+C="-n2 -s30 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -m0 -v -C20 -V5 -E0.001 -A0.05 0.01 0 -9 -P0.1 0.01 -#79"
+mkdir -p "$TMP/rs0" "$TMP/rs1"
+(cd "$TMP/rs0" && CELLCOAL_SPARSE=1 CELLCOAL_STREAM=0 "$BIN" $C >out.txt 2>&1); (cd "$TMP/rs1" && CELLCOAL_STREAM=1 "$BIN" $C >out.txt 2>&1)
+if [ -d "$TMP/rs0/Results/vcf_dir" ] && [ "$(norm "$TMP/rs0/Results" | md5sum)" = "$(norm "$TMP/rs1/Results" | md5sum)" ]; then ok "stored vs streamed reads"; else bad "stored vs streamed reads"; fi
+
 echo "3. Germline SNPs (-c) are inherited by every cell"
 for b in 0 1; do
   d="$TMP/germ$b"; mkdir -p "$d"

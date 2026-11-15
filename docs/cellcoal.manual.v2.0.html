@@ -261,7 +261,7 @@ div.tocify {
 
 <h1 class="title toc-ignore">CellCoal manual v2.0</h1>
 <h4 class="author">David Posada</h4>
-<h4 class="date">November, 2026 (CellCoal 2.1.0)</h4>
+<h4 class="date">November, 2026 (CellCoal 2.2.0)</h4>
 
 </div>
 
@@ -1007,7 +1007,10 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <h2>8.7 Version 2.1.0</h2>
 <p>Scaling release. When dense genomes would exceed 2048 MB (environment variable <code>CELLCOAL_DENSE_MB</code>), genomes are stored sparsely (only varying sites keep per-node columns); <code>CELLCOAL_SPARSE=1</code> forces and <code>CELLCOAL_SPARSE=0</code> disables this. Allelic dropout and genotyping errors are then applied lazily by an observation layer (same distributions, different random stream; ADO at invariant sites is not counted). 10,000 cells x 1,000,000 sites runs in about 7 s and 360 MB for genotype outputs. Reads, VCF, CATG and PILEUP are not yet supported in sparse mode, and full-sequence outputs (-4, -5, -Y) stop with an error on data sets above the dense limit. Dense output is identical to 2.0.3.</p>
 
-<h2>8.8 Reproducibility</h2>
+<h2>8.8 Version 2.2.0</h2>
+<p>Streamed reads. When the per-cell, per-site read data would exceed 2048 MB (environment variable <code>CELLCOAL_STREAM_MB</code>), reads and genotype likelihoods are simulated and the VCF and PILEUP files written in blocks of sites, with small memory; <code>CELLCOAL_STREAM=1</code> forces and <code>CELLCOAL_STREAM=0</code> disables it. Results are the same as without streaming for the same seed and any number of threads (doublets use the stream of each site, so their random numbers differ). Only the VCF and PILEUP outputs are available while streaming. The computing time is still proportional to cells x sites and the VCF lists every apparent SNV, so very large read data sets produce very large files.</p>
+
+<h2>8.9 Reproducibility</h2>
 <p>Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.</p>
 </div>
 <div id="references" class="section level1">
