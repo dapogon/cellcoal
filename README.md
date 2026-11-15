@@ -18,7 +18,14 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 ## Bulk-like VAF distribution
 
-`tools/bulk_vaf.py` turns the SNV genotypes (`-1`) into a VAF histogram, as in a bulk sample (optional read sampling at a given depth and tumour purity): `python3 tools/bulk_vaf.py Results/snv_gen --depth 100 --purity 1.0 --out vaf.png`.
+`tools/bulk_vaf.py` (Python with numpy and matplotlib) draws the variant allele frequency (VAF) distribution of the sample as if it were sequenced in bulk.
+
+- **From the simulated reads** (VCF made with `-C`, `-V`, ...): the reads (RC field) of all the tumour cells are pooled, and VAF = alternate reads / total reads at each site. The healthy cell is excluded.
+  `python3 tools/bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 --min-reads 10 --out vaf.png --tsv vaf.tsv`
+- **From the genotypes** (`-1`): VAF is the fraction of alternate alleles among the tumour cells; a bulk experiment is mimicked by sampling reads at a given depth and tumour purity.
+  `python3 tools/bulk_vaf.py Results/snv_gen --depth 100 --purity 1.0 --out vaf.png --tsv vaf.tsv`
+
+With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
 ## What's new in 2.2.0
 

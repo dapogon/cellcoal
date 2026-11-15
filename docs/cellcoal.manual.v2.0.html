@@ -1010,7 +1010,11 @@ AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…</code></pre>
 <h2>8.8 Version 2.2.0</h2>
 <p>Streamed reads. When the per-cell, per-site read data would exceed 2048 MB (environment variable <code>CELLCOAL_STREAM_MB</code>), reads and genotype likelihoods are simulated and the VCF and PILEUP files written in blocks of sites, with small memory; <code>CELLCOAL_STREAM=1</code> forces and <code>CELLCOAL_STREAM=0</code> disables it. Results are the same as without streaming for the same seed and any number of threads (doublets use the stream of each site, so their random numbers differ). Only the VCF and PILEUP outputs are available while streaming. The computing time is still proportional to cells x sites and the VCF lists every apparent SNV, so very large read data sets produce very large files.</p>
 
-<h2>8.9 Reproducibility</h2>
+<h2>8.9 Bulk VAF distribution</h2>
+<p>The script <code>tools/bulk_vaf.py</code> (Python with numpy and matplotlib) plots the variant allele frequency (VAF) distribution of the sample as if it were sequenced in bulk. With <code>--vcf</code> it uses the simulated reads: the read counts (RC field) of all the tumour cells are pooled and VAF = alternate reads / total reads for every site (the healthy cell is excluded; <code>--min-reads</code> sets a minimum pooled depth). Without it, it takes the SNV genotypes written by <code>-1</code> and computes VAF as the fraction of alternate alleles among the tumour cells, optionally sampling reads at a given depth (<code>--depth</code>) and tumour purity (<code>--purity</code>). <code>--out</code> sets the plot file and <code>--tsv</code> writes the values per site.</p>
+<p>Example: <code>python3 tools/bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 --min-reads 10 --out vaf.png</code>. With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so non-mutated sites appear at the error rate near zero. The VCF grows with cells x sites (about 360 bytes per cell and site), so for thousands of cells keep the number of sites low.</p>
+
+<h2>8.10 Reproducibility</h2>
 <p>Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.</p>
 </div>
 <div id="references" class="section level1">
