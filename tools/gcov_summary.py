@@ -6,14 +6,14 @@ Runs gcov on every object, reads the .gcov files and prints a Markdown table (al
 with the executed/executable lines of each file and the total. Standard library only."""
 import glob, os, re, subprocess, sys, tempfile
 
-obj = sys.argv[1]
+obj = os.path.abspath(sys.argv[1])
 tot_exec = tot_lines = 0
 rows = []
 with tempfile.TemporaryDirectory() as tmp:
     # gcov finds the sources by the paths recorded at compile time (src/x.c, relative to the repository root)
     os.symlink(os.path.abspath("src"), os.path.join(tmp, "src"))
     for gcda in sorted(glob.glob(os.path.join(obj, "*.gcda"))):
-        subprocess.run(["gcov", "-o", obj, os.path.abspath(gcda)], cwd=tmp, capture_output=True)
+        subprocess.run(["gcov", "-o", obj, gcda], cwd=tmp, capture_output=True)
     for g in sorted(glob.glob(os.path.join(tmp, "*.c.gcov"))):
         name = None; ex = ln = 0
         for l in open(g, errors="replace"):
