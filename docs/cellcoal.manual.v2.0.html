@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.6.0)</p>
+<p class="date">November, 2026 (CellCoal 2.1.5)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -97,10 +97,10 @@ memory</a></li>
 2.0.3</a></li>
 <li><a href="#version-2.1.0-sparse-genomes" id="toc-version-2.1.0-sparse-genomes">8.7 Version 2.1.0: sparse
 genomes</a></li>
-<li><a href="#version-2.2.0-streamed-reads" id="toc-version-2.2.0-streamed-reads">8.8 Version 2.2.0: streamed
+<li><a href="#version-2.1.1-streamed-reads" id="toc-version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</a></li>
-<li><a href="#versions-2.3.0-to-2.5.0-bulk-read-counts-vcf-options" id="toc-versions-2.3.0-to-2.5.0-bulk-read-counts-vcf-options">8.9
-Versions 2.3.0 to 2.5.0: bulk read counts, VCF options</a></li>
+<li><a href="#versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options" id="toc-versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
+Versions 2.1.2 to 2.1.4: bulk read counts, VCF options</a></li>
 <li><a href="#bulk-vaf-distribution" id="toc-bulk-vaf-distribution">8.10
 Bulk VAF distribution</a></li>
 <li><a href="#reproducibility-and-the-run-record" id="toc-reproducibility-and-the-run-record">8.11 Reproducibility and the
@@ -1437,7 +1437,7 @@ sites runs in about 7 s and 360 MB for genotype outputs. Reads, VCF,
 CATG and PILEUP are not yet supported in sparse mode, and full-sequence
 outputs (-4, -5, -Y) stop with an error on data sets above the dense
 limit. Dense output is identical to 2.0.3.</p>
-<h2 id="version-2.2.0-streamed-reads">8.8 Version 2.2.0: streamed
+<h2 id="version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</h2>
 <p>Streamed reads. When the per-cell, per-site read data would exceed
 2048 MB (environment variable <code>CELLCOAL_STREAM_MB</code>), reads
@@ -1450,10 +1450,10 @@ their random numbers differ). Only the VCF and PILEUP outputs are
 available while streaming. The computing time is still proportional to
 cells x sites and the VCF lists every apparent SNV, so very large read
 data sets produce very large files.</p>
-<h2 id="versions-2.3.0-to-2.5.0-bulk-read-counts-vcf-options">8.9
-Versions 2.3.0 to 2.5.0: bulk read counts, VCF options</h2>
-<p>Version 2.3.0 adds option <code>-0</code>, version 2.4.0 option
-<code>-Z</code> (no VCF) and version 2.5.0 options <code>-z</code> (gzip
+<h2 id="versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
+Versions 2.1.2 to 2.1.4: bulk read counts, VCF options</h2>
+<p>Version 2.1.2 adds option <code>-0</code>, version 2.1.3 option
+<code>-Z</code> (no VCF) and version 2.1.4 options <code>-z</code> (gzip
 VCF) and <code>-M</code> (minimum pooled VAF in the VCF); runs that only
 need the bulk file (<code>-0 -Z</code>) skip the genotype likelihoods
 and are faster.</p>
@@ -1497,7 +1497,7 @@ run record</h2>
 <p>Read counts are generated from one independent random stream per
 site. For a given seed, the output is identical regardless of the number
 of threads. See section 4.1.</p>
-<p>Every run writes <code>Results/run.json</code> (version 2.6.0 and
+<p>Every run writes <code>Results/run.json</code> (version 2.1.5 and
 later), a record of how it was run: program version, command line, seed,
 number of replicates, cells and sites, number of threads, the
 <code>CELLCOAL_*</code> and <code>OMP_NUM_THREADS</code> environment
