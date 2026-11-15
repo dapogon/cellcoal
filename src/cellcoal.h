@@ -57,7 +57,8 @@ static void		PrintPILEUP (FILE *fp);
 static void		AllelicDropout (long int *seed);
 static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
-static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout);
+static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut);
+static void 	PrintBulk (FILE *fp);
 static void 	SiteReadCounts (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
 static void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut);
 static void	BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat);
@@ -152,14 +153,14 @@ static double	expNumMU, expVarNumMU;
 static double	theta, healthyTipBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
 static double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
 static char		SNVgenotypesFile[MAX_NAME], SNVhaplotypesFile[MAX_NAME], trueHaplotypesFile[MAX_NAME],MLhaplotypesFile[MAX_NAME], fullGenotypesFile[MAX_NAME], fullHaplotypesFile[MAX_NAME];
-static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], PILEUPfile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME], parameterFile[MAX_NAME];
+static char		treeFile[MAX_NAME], timesFile[MAX_NAME], CATGfile[MAX_NAME], VCFfile[MAX_NAME], PILEUPfile[MAX_NAME], bulkFile[MAX_NAME], logFile[MAX_NAME], settingsFile[MAX_NAME], userTreeFile[MAX_NAME], userGenomeFile[MAX_NAME], parameterFile[MAX_NAME];
 static char		SNVgenotypesDir[MAX_NAME], SNVhaplotypesDir[MAX_NAME], trueHaplotypesDir[MAX_NAME], MLhaplotypesDir[MAX_NAME], fullGenotypesDir[MAX_NAME], fullHaplotypesDir[MAX_NAME];
-static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME], PILEUPdir[MAX_NAME];
+static char		treeDir[MAX_NAME], timesDir[MAX_NAME], CATGdir[MAX_NAME], VCFdir[MAX_NAME], PILEUPdir[MAX_NAME], bulkDir[MAX_NAME];
 static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[4*MAX_NAME], *CommandLine, *treeString, *taxonName, **cellNames, *treeRateInfo;
 static char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
 static char		GLmodel[MAX_NAME];
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome, doSpecificParameterFile;
-static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
+static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintBulk, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
 static int		doExponential, doDemographics, doOthsukiInnanCoal, doSimulateData, doSimulateFixedNumMutations, doNGS, doTumorNames, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, doTreeRateSwitches, numTreeRateSwitches, equalBaseFreq, alphabet, thereIsMij, thereIsEij;
@@ -269,7 +270,7 @@ static double	sumPos, meansumPos;
 #endif
 
 /* File pointers */
-FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpMLhaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpPILEUP, *fpLog, *fpUserTree, *fpUserGenome, *fpSims;
+FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpMLhaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpPILEUP, *fpBulk, *fpLog, *fpUserTree, *fpUserGenome, *fpSims;
 
 
 #endif /* coaltumor_h */

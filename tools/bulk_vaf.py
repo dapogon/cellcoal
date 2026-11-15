@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Bulk-like VAF distribution from CellCoal output.
 
-Two sources:
+Three sources:
+  * the bulk file written by CellCoal option -0 (--bulk): already pooled over the cells, one line per site, with the VAF of
+    the simulated reads and the true VAF. Smallest and fastest input, also for thousands of cells.
   * a VCF file with simulated reads (--vcf, needs -C/-V...): the reads (RC field) of all the tumour cells are pooled, as in a
     bulk sample, and VAF = alternate reads / total reads for every site with alternate reads. The healthy cell (last column)
     is excluded.
@@ -9,6 +11,7 @@ Two sources:
     experiment can be mimicked by sampling reads at a given depth (binomial), optionally mixing in healthy cells (purity).
 
 Usage:
+  bulk_vaf.py --bulk Results/bulk [--min-reads 10] [--out vaf.png] [--tsv vaf.tsv]
   bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 [--min-reads 10] [--out vaf.png] [--tsv vaf.tsv]
   bulk_vaf.py snv_genotypes_file [--depth 100] [--purity 1.0] [--seed 1] [--out vaf.png] [--tsv vaf.tsv]
 """
@@ -17,6 +20,7 @@ import numpy as np
 
 ap = argparse.ArgumentParser()
 ap.add_argument("file", nargs="?")
+ap.add_argument("--bulk", default=None, help="bulk file written by CellCoal option -0")
 ap.add_argument("--vcf", default=None, help="VCF file with simulated reads: VAF from the pooled read counts")
 ap.add_argument("--min-reads", type=int, default=1, help="with --vcf: minimum pooled depth of a site")
 ap.add_argument("--depth", type=float, default=100, help="mean bulk depth (Poisson); 0 = no read sampling")
@@ -27,6 +31,34 @@ ap.add_argument("--tsv", default=None)
 ap.add_argument("--bins", type=int, default=50)
 a = ap.parse_args()
 
+if a.bulk:
+    rows = []
+    for l in open(a.bulk):
+        f = l.rstrip("\n").split("\t")
+        if len(f) == 11 and f[0] != "site":
+            rows.append(f)
+    d = np.array([[float(x) for x in (r[6], r[8], r[10])] for r in rows])
+    keep = d[:, 0] >= a.min_reads
+    depth, vb, vt = d[keep, 0], d[keep, 1], d[keep, 2]
+    if a.tsv:
+        with open(a.tsv, "w") as o:
+            o.write("site\tpooled_depth\tbulk_vaf\ttrue_vaf\n")
+            for r, k in zip(rows, keep):
+                if k:
+                    o.write(f"{r[0]}\t{r[6]}\t{r[8]}\t{r[10]}\n")
+    import matplotlib
+    matplotlib.use("Agg")
+    import matplotlib.pyplot as plt
+    fig, ax = plt.subplots(1, 2, figsize=(11, 4), sharey=True)
+    bins = np.linspace(0, 0.5, a.bins + 1)
+    ax[0].hist(vt[vt > 0], bins=bins, color="#4c72b0"); ax[0].set_title(f"True VAF ({int((vt > 0).sum())} SNVs)")
+    ax[1].hist(vb, bins=bins, color="#dd8452"); ax[1].set_title(f"Bulk VAF from simulated reads ({len(vb)} sites)")
+    for x in ax:
+        x.set_xlabel("VAF")
+    ax[0].set_ylabel("Number of sites")
+    plt.tight_layout(); plt.savefig(a.out, dpi=150)
+    print(f"{len(vb)} sites; mean pooled depth {depth.mean():.1f}; plot written to {a.out}")
+    sys.exit(0)
 if a.vcf:
     pos, vaf_true, vaf_obs, depth = [], [], [], []
     ncells = 0

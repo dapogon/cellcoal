@@ -180,7 +180,7 @@ Version 1.1.0 (18/10/2019)
    e.g. ~2.4 GB for 1000 cells x 50000 sites. */
 #define NEED_CELL_SITES (doNGS == YES || doPrintSNVhaplotypes == YES || doPrintTrueHaplotypes == YES || \
                          doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || \
-                         doPrintCATG == YES || doPrintPILEUP == YES || doPrintAncestors == YES)
+                         doPrintCATG == YES || doPrintPILEUP == YES || doPrintBulk == YES || doPrintAncestors == YES)
 
 int main (int argc, char **argv)
     {
@@ -251,6 +251,7 @@ int main (int argc, char **argv)
 	stringPrecision = 12;			/* precision for taxa names */
 	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
 	doPrintPILEUP = NO;				/* whether to print read counts for SNVs in PILEUP format*/
+	doPrintBulk = NO;				/* whether to print pooled (bulk) read counts and VAF per site */
 	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
 	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
 	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
@@ -329,6 +330,7 @@ int main (int argc, char **argv)
 		doNGS = NO;
 		doPrintCATG = NO;
 		doPrintPILEUP = NO;
+		doPrintBulk = NO;
    		}
 	
     /* initialize a few variables */
@@ -448,6 +450,7 @@ int main (int argc, char **argv)
     strcpy(fullGenotypesDir, "full_genotypes_dir");
     strcpy(CATGdir, "catg_dir");
 	strcpy(PILEUPdir, "pileup_dir");
+	strcpy(bulkDir, "bulk_dir");
 	strcpy(VCFdir, "vcf_dir");
 	
 	strcpy(SNVgenotypesFile, "snv_gen");
@@ -464,6 +467,7 @@ int main (int argc, char **argv)
 		strcpy(userGenomeFile, "usergenome");
     strcpy(CATGfile, "catg");
 	strcpy(PILEUPfile, "pileup");
+	strcpy(bulkFile, "bulk");
 	strcpy(VCFfile, "vcf");
     strcpy(logFile, "log");
 	strcpy(settingsFile, "log");
@@ -788,9 +792,11 @@ int main (int argc, char **argv)
 				/* reads are simulated, summarized and printed (VCF, PILEUP) in blocks of sites */
 				if (doPrintSeparateReplicates == NO)
 					fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
-				StreamReads (&seed, fpVCF, (doPrintPILEUP == YES) ? fpPILEUP : NULL);
+				StreamReads (&seed, fpVCF, (doPrintPILEUP == YES) ? fpPILEUP : NULL, (doPrintBulk == YES) ? fpBulk : NULL);
 				if (doPrintPILEUP == YES && doPrintSeparateReplicates == NO)
 					fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+				if (doPrintBulk == YES && doPrintSeparateReplicates == NO)
+					fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
 				}
 			else if (doNGS == YES)
 				GenerateReadCounts(&seed);
@@ -869,6 +875,13 @@ int main (int argc, char **argv)
 						PrintPILEUP(fpPILEUP);
 						if (doPrintSeparateReplicates == NO)
 							fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+						}
+
+					if (doPrintBulk == YES)
+						{
+						PrintBulk (fpBulk);
+						if (doPrintSeparateReplicates == NO)
+							fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
 						}
 					}
 				}
@@ -952,6 +965,8 @@ int main (int argc, char **argv)
 					fclose (fpCATG);
 				if (doPrintPILEUP == YES)
 					fclose (fpPILEUP);
+				if (doPrintBulk == YES)
+					fclose (fpBulk);
 				}
  
 			/* free data structures */
@@ -1039,6 +1054,8 @@ int main (int argc, char **argv)
 			fclose(fpCATG);
 		if (doPrintPILEUP == YES)
 			fclose(fpPILEUP);
+		if (doPrintBulk == YES)
+			fclose(fpBulk);
 		if (doPrintTree == YES)
 			fclose(fpTrees);
 		if (doPrintTimes == YES)
@@ -6530,12 +6547,47 @@ void PrintVCF (FILE *fp)
 	}
 
 
+/********************* BulkSite  ************************/
+/* One line per site: reads of the four nucleotides pooled over the tumour cells, pooled depth, alternate reads and VAF
+   (as in a bulk sample), and the true fraction of alternate alleles among the tumour cells. Only sites with alternate
+   reads or with a true alternate allele are printed. */
+static void BulkSite (FILE *fp, int j)
+	{
+	int		i, ref = allSites[j].referenceAllele;
+	long	reads[4] = {0, 0, 0, 0}, depth, altReads, trueAlt = 0;
+	double	vaf;
+
+	for (i=0; i<numCells; i++)
+		{
+		reads[0] += CS(i,j).readCount[A];
+		reads[1] += CS(i,j).readCount[C];
+		reads[2] += CS(i,j).readCount[G];
+		reads[3] += CS(i,j).readCount[T];
+		trueAlt += (CS(i,j).trueMaternalAllele != ref) + (CS(i,j).truePaternalAllele != ref);
+		}
+	depth = reads[0] + reads[1] + reads[2] + reads[3];
+	altReads = depth - reads[ref];
+	if (altReads == 0 && trueAlt == 0)
+		return;
+	vaf = (depth > 0) ? (double) altReads / (double) depth : 0.0;
+	fprintf (fp, "%d\t%c\t%ld\t%ld\t%ld\t%ld\t%ld\t%ld\t%.6f\t%ld\t%.6f\n", j+1, WhichNuc(ref), reads[0], reads[1], reads[2], reads[3],
+			 depth, altReads, vaf, trueAlt, (double) trueAlt / (2.0 * numCells));
+	}
+
+static void PrintBulk (FILE *fp)
+	{
+	int		j;
+
+	for (j=0; j<numSites; j++)
+		BulkSite (fp, j);
+	}
+
 /********************* StreamReads  ************************/
 /* Simulates the reads of very large data sets without storing them. Sites are processed in blocks: the reads and genotype
    likelihoods of all the cells are simulated (in parallel over the sites of the block, each site with its own random
    stream, as in GenerateReadCounts), the sites that look like SNVs are printed (VCF, PILEUP), and the block is discarded.
    The window of sites held in cell[].site starts at siteOff. */
-static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout)
+static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut)
 	{
 	int			i, j, j0, nb, q, nq, nSNVs = 0;
 	double		**ngsEij;
@@ -6643,6 +6695,9 @@ static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout)
 		if (fpPILEUPout)
 			for (q=0; q<nq; q++)
 				PileupSite (fpPILEUPout, blockSNVs[q]);
+		if (fpBulkOut)
+			for (j=j0; j<j0+nb; j++)
+				BulkSite (fpBulkOut, j);
 
 		free (blockSNVs);
 		for (j=j0; j<j0+nb; j++)
@@ -6783,6 +6838,16 @@ void PrepareGlobalFiles(int argc, char **argv)
 				}
 			}
 
+		if (doPrintBulk == YES)
+			{
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, bulkFile);
+			if ((fpBulk = fopen(File, "w")) == NULL)
+				{
+				fprintf (stderr, "Can't open \"%s\"\n", File);
+				exit(-1);
+				}
+			}
+
        }
 
    if (doPrintSNVgenotypes == YES)
@@ -6855,6 +6920,12 @@ void PrepareGlobalFiles(int argc, char **argv)
 		fprintf (fpPILEUP, "Read counts\n");
 		PrintCommandLine (fpPILEUP, argc, argv);*/
 		fprintf (fpPILEUP,"%d\n", numDataSets);
+		}
+
+	if (doPrintBulk == YES)
+		{
+		fprintf (fpBulk,"%d\n", numDataSets);
+		fprintf (fpBulk,"site\tref\treadsA\treadsC\treadsG\treadsT\tdepth\talt_reads\tbulk_vaf\ttrue_alt_alleles\ttrue_vaf\n");
 		}
 	}
 
@@ -6994,6 +7065,20 @@ void PrepareSeparateFiles(int replicate)
 				fprintf (stderr, "Can't open \"%s\"\n", File);
 				exit(-1);
 				}
+			}
+
+		/* pooled (bulk) read counts and VAF for every site */
+		if (doPrintBulk == YES)
+			{
+			snprintf (File, sizeof(File),"%s/%s", resultsDir, bulkDir);
+			mkdir(File,S_IRWXU);
+			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, bulkDir, bulkFile, replicate+1);
+			if ((fpBulk = fopen(File, "w")) == NULL)
+				{
+				fprintf (stderr, "Can't open \"%s\"\n", File);
+				exit(-1);
+				}
+			fprintf (fpBulk,"site\tref\treadsA\treadsC\treadsG\treadsT\tdepth\talt_reads\tbulk_vaf\ttrue_alt_alleles\ttrue_vaf\n");
 			}
         }
 	}
@@ -8666,6 +8751,13 @@ static void	PrintRunInformation (FILE *fp)
 				   if (doPrintSeparateReplicates == YES)
 					   fprintf (fp, " in folder \"%s\"", PILEUPdir);
 				   }
+
+			   if (doPrintBulk == YES)
+				   {
+				   fprintf (fp, "\n Pooled (bulk) read counts and VAF printed to file \"%s\"", bulkFile);
+				   if (doPrintSeparateReplicates == YES)
+					   fprintf (fp, " in folder \"%s\"", bulkDir);
+				   }
 			  }
 		   else
 			   fprintf (fp, "\n\n\nNo output data files");
@@ -8757,6 +8849,8 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 			fprintf (fp, " -%d", 8);
 		if (doPrintPILEUP == YES)
 			fprintf (fp, " -%d", 9);
+		if (doPrintBulk == YES)
+			fprintf (fp, " -%d", 0);
 		if (doPrintTrueHaplotypes == YES)
 			fprintf (fp, " -%c", 'Y');
 		if (doPrintSeparateReplicates == YES)
@@ -8839,6 +8933,7 @@ void PrintUsage(FILE *fp)
     fprintf (fp,"\n-7: print times to a file (e.g. -7)");
     fprintf (fp,"\n-8: print read counts in CATG format (e.g. -8)");
 	fprintf (fp,"\n-9: print read counts in PILEUP format (e.g. -9)");
+	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site (e.g. -0)");
     fprintf (fp,"\n-Y: print true SNV haplotypes to a file (e.g. -Y)");
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
@@ -8933,6 +9028,7 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-7: print times to a file =  %d", doPrintTimes);
 	fprintf (fp,"\n-8: print read counts in CATG format =  %d", doPrintCATG);
 	fprintf (fp,"\n-9: print read counts in PILEUP format =  %d", doPrintPILEUP);
+	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site =  %d", doPrintBulk);
 	fprintf (fp,"\n-Y: print true haplotypes to a file =  %c", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
@@ -10280,9 +10376,14 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 					CopyName (userGenomeFile, argv[i], "userGenomeFile");
 				doUserGenome = YES;
 			break;
-			/*case '0':
-                doSimulateData = NO;
-                break;*/
+			case '0':
+				doPrintBulk = YES;
+				if (doNGS == NO)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print pooled read counts when coverage is <= 0\n\n");
+					PrintUsage(stderr);
+					}
+				break;
 			case 'W':
 				doTumorNames = YES;
 			break;
@@ -11090,9 +11191,14 @@ void ReadParametersFromFile (void)
 					}
 				doUserGenome = YES;
 			break;
-			/*case '0':
-                doSimulateData = NO;
-			break;*/
+			case '0':
+				doPrintBulk = YES;
+				if (doNGS == NO)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print pooled read counts when reads are not simulated (coverage >0)\n\n");
+					PrintUsage(stderr);
+					}
+				break;
 			case 'W':
 				doTumorNames = YES;
 			break;
