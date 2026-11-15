@@ -31,7 +31,7 @@ With simulated reads, sequencing and amplification errors give almost every site
 
 ## What's new in 2.1.9
 
-The source is split into modules (`src/tree.c`, `mutation.c`, `observation.c`, `reads.c`, `reads_output.c`, `output.c`, `rng.c`, `options.c`, `config.c`, `globals.c`; the main program is `cellcoal.c`); output and speed are unchanged. **Configuration files**: `bin/cellcoal-2.1.9 --config examples/config.example.yaml` reads the options from a JSON or YAML file (option letters or long names such as `cells`, `coverage`), and `Results/run.json` now has an `options` object that can be passed to `--config` to repeat a run. **Summary plots**: `python3 tools/cellcoal_plots.py depth|missing|heatmap ...` (depth per cell, site and genotype; genotypes without reads; genotype heatmap). See [docs/CHANGES-2.1.9.md](docs/CHANGES-2.1.9.md).
+The source is split into modules (`src/tree.c`, `mutation.c`, `observation.c`, `reads.c`, `reads_output.c`, `output.c`, `rng.c`, `options.c`, `config.c`, `globals.c`; the main program is `cellcoal.c`); output and speed are unchanged. **Configuration files**: `bin/cellcoal-2.1.9 --config examples/config.example.yaml` reads the options from a JSON or YAML file (option letters or long names such as `cells`, `coverage`), and `Results/run.json` now has an `options` object that can be passed to `--config` to repeat a run. **Summary plots**: `python3 tools/cellcoal_plots.py depth|missing|heatmap ...` (and `all Results` for every plot plus a `report.html`, from the next release) (depth per cell, site and genotype; genotypes without reads; genotype heatmap). See [docs/CHANGES-2.1.9.md](docs/CHANGES-2.1.9.md).
 
 ## What's new in 2.1.8
 

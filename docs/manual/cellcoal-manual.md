@@ -868,6 +868,8 @@ Other summary plots are made by `tools/cellcoal_plots.py` (numpy and matplotlib;
 
 Each command writes a PNG (`--out`), can write the per-cell numbers (`--tsv`) and prints a short summary.
 
+`python3 tools/cellcoal_plots.py all Results --outdir plots` runs everything that the files of a Results folder allow (depth, missing, heatmap and the bulk VAF of `bulk_vaf.py`, from the bulk file if there is one, else from the VCF or the genotypes) and writes `plots/report.html`, a single page with the figures, their summaries and the run record (`--replicate` chooses the replicate when the run used one folder per replicate, option -v). What cannot be drawn because an output was not requested (for example the heatmap without option -1) is listed as skipped.
+
 ## 8.11 Reproducibility and the run record
 
 Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.

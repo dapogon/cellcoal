@@ -1593,6 +1593,15 @@ the cells ordered by their shared variants.</li>
 </ul>
 <p>Each command writes a PNG (<code>--out</code>), can write the
 per-cell numbers (<code>--tsv</code>) and prints a short summary.</p>
+<p><code>python3 tools/cellcoal_plots.py all Results --outdir plots</code>
+runs everything that the files of a Results folder allow (depth,
+missing, heatmap and the bulk VAF of <code>bulk_vaf.py</code>, from the
+bulk file if there is one, else from the VCF or the genotypes) and
+writes <code>plots/report.html</code>, a single page with the figures,
+their summaries and the run record (<code>--replicate</code> chooses the
+replicate when the run used one folder per replicate, option -v). What
+cannot be drawn because an output was not requested (for example the
+heatmap without option -1) is listed as skipped.</p>
 <h2 id="reproducibility-and-the-run-record">8.11 Reproducibility and the
 run record</h2>
 <p>Read counts are generated from one independent random stream per

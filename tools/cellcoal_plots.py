@@ -5,6 +5,8 @@
   cellcoal_plots.py missing Results/vcf_dir/vcf.0001 [--out missing.png]    genotypes without reads: per cell and per site
   cellcoal_plots.py heatmap Results/snv_genotypes_dir/snv_gen.0001 [--out heatmap.png] [--max-sites 2000]
                                                                           cells x SNVs, coloured by the alleles that differ from the healthy cell
+  cellcoal_plots.py all     Results [--replicate 1] [--outdir plots]       every plot that the files of a Results folder allow,
+                                                                          plus the bulk VAF, and a self-contained report.html
 
 The VCF can be plain or gzip (-z). 'depth' and 'missing' need reads (option -C); 'heatmap' needs the SNV genotype file (-1).
 Every command prints a short summary in the terminal and writes a PNG (and, with --tsv, the numbers behind the plot).
@@ -150,6 +152,76 @@ def cmd_heatmap(a):
     print("wrote", a.out)
 
 
+def find_file(results, names):
+    """first existing file among the candidate names (relative to the Results folder)"""
+    import os
+    for n in names:
+        p = os.path.join(results, n)
+        if os.path.isfile(p):
+            return p
+    return None
+
+
+def cmd_all(a):
+    import base64, contextlib, io, os, subprocess, html
+    r, rep = a.file, "%04d" % a.replicate
+    if not os.path.isdir(r):
+        sys.exit("%s is not a folder: give the Results folder of a run" % r)
+    os.makedirs(a.outdir, exist_ok=True)
+    vcf = find_file(r, ["vcf_dir/vcf." + rep, "vcf_dir/vcf." + rep + ".gz", "vcf", "vcf.gz"])
+    gen = find_file(r, ["snv_genotypes_dir/snv_gen." + rep, "snv_gen"])
+    bulk = find_file(r, ["bulk_dir/bulk." + rep, "bulk"])
+    sections = []   # (title, png path or None, text)
+
+    def run(title, fn, **kw):
+        out = os.path.join(a.outdir, kw.pop("png"))
+        ns = argparse.Namespace(file=kw.pop("file"), out=out, tsv=None, bins=a.bins, max_sites=a.max_sites)
+        buf = io.StringIO()
+        try:
+            with contextlib.redirect_stdout(buf):
+                fn(ns)
+            sections.append((title, out, buf.getvalue()))
+        except SystemExit as e:
+            sections.append((title, None, str(e)))
+
+    if vcf:
+        run("Read depth", cmd_depth, file=vcf, png="depth.png")
+        run("Genotypes without reads", cmd_missing, file=vcf, png="missing.png")
+    else:
+        sections.append(("Read depth, genotypes without reads", None, "no VCF with reads was found (needs -C and a VCF, not -Z)"))
+    if gen:
+        run("Genotype heatmap", cmd_heatmap, file=gen, png="heatmap.png")
+    else:
+        sections.append(("Genotype heatmap", None, "no SNV genotype file was found (needs option -1)"))
+    vaf_src = [("--bulk", bulk)] if bulk else [("--vcf", vcf)] if vcf else [(None, gen)] if gen else []
+    if vaf_src:
+        png = os.path.join(a.outdir, "vaf.png")
+        flag, path = vaf_src[0]
+        cmd = [sys.executable, os.path.join(os.path.dirname(os.path.abspath(__file__)), "bulk_vaf.py")] + ([flag, path] if flag else [path]) + ["--out", png]
+        res = subprocess.run(cmd, capture_output=True, text=True)
+        sections.append(("Bulk-like VAF distribution", png if os.path.isfile(png) else None, (res.stdout + res.stderr).strip()))
+    meta = ""
+    rj = find_file(r, ["run.json"])
+    if rj:
+        import json
+        j = json.load(open(rj))
+        meta = "%s %s, %s cells x %s sites, %s replicates, seed %s, %s s" % (j.get("program", "CellCoal"), j.get("version", ""), j.get("cells"), j.get("sites"), j.get("replicates"), j.get("seed"), j.get("wall_seconds"))
+    parts = ["<!doctype html><meta charset=utf-8><title>CellCoal report</title>",
+             "<style>body{font:15px/1.5 system-ui,sans-serif;max-width:1100px;margin:2em auto;padding:0 1em;color:#222}img{max-width:100%}pre{background:#f5f5f5;padding:.6em;overflow:auto}h2{margin-top:1.6em}</style>",
+             "<h1>CellCoal report</h1><p>%s</p><p>Folder: <code>%s</code>, replicate %d</p>" % (html.escape(meta), html.escape(os.path.abspath(r)), a.replicate)]
+    for title, png, text in sections:
+        parts.append("<h2>%s</h2>" % html.escape(title))
+        if png and os.path.isfile(png):
+            parts.append('<img alt="%s" src="data:image/png;base64,%s">' % (html.escape(title), base64.b64encode(open(png, "rb").read()).decode()))
+        if text:
+            parts.append("<pre>%s</pre>" % html.escape(text))
+    out = os.path.join(a.outdir, "report.html")
+    open(out, "w").write("\n".join(parts))
+    for title, png, text in sections:
+        print("%-38s %s" % (title, "ok" if png else "skipped: " + text.splitlines()[0][:70] if text else "skipped"))
+    print("wrote", out)
+
+
 if __name__ == "__main__":
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     sub = ap.add_subparsers(dest="cmd", required=True)
@@ -161,5 +233,12 @@ if __name__ == "__main__":
         p.add_argument("--bins", type=int, default=40)
         p.add_argument("--max-sites", type=int, default=2000, help="heatmap: sample at most this many SNVs")
         p.set_defaults(fn=fn)
+    p = sub.add_parser("all")
+    p.add_argument("file", help="the Results folder of a run")
+    p.add_argument("--outdir", default="plots")
+    p.add_argument("--replicate", type=int, default=1, help="replicate whose files are used when the run has one folder per replicate (-v)")
+    p.add_argument("--bins", type=int, default=40)
+    p.add_argument("--max-sites", type=int, default=2000)
+    p.set_defaults(fn=cmd_all)
     a = ap.parse_args()
     a.fn(a)

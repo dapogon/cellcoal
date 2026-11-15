@@ -175,6 +175,9 @@ if python3 -c "import matplotlib, numpy" 2>/dev/null; then
     [ -s "$TMP/pl2/$1.png" ] || ok_all=0
   done
   [ $ok_all = 1 ] && ok "depth, missing and heatmap plots are written" || bad "summary plots"
+  mkdir -p "$TMP/pl3"
+  (cd "$TMP/pl3" && "$BIN" -n1 -s30 -l2000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.001 -D0.1 -1 -0 -v -#3 >/dev/null 2>&1 && python3 "$ROOT/tools/cellcoal_plots.py" all Results --outdir plots >plots.txt 2>&1)
+  if [ -s "$TMP/pl3/plots/report.html" ] && grep -q 'base64' "$TMP/pl3/plots/report.html" && [ -s "$TMP/pl3/plots/vaf.png" ] && [ -s "$TMP/pl3/plots/heatmap.png" ]; then ok "'all' writes the plots and a self-contained report.html"; else bad "cellcoal_plots.py all"; fi
 else echo "  skip (matplotlib not installed)"; fi
 
 echo "2h. Run record (run.json)"

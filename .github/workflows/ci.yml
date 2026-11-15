@@ -22,8 +22,15 @@ jobs:
         if: runner.os == 'macOS'
         run: brew install libomp
 
+      - name: Install Python packages for the plots (tools/)
+        run: |
+          python3 -m pip install --user numpy matplotlib 2>/dev/null || python3 -m pip install --user --break-system-packages numpy matplotlib
+
       - name: Build
         run: make
 
       - name: Test
-        run: make test
+        run: |
+          python3 -c "import numpy, matplotlib; print('plots: numpy', numpy.__version__, 'matplotlib', matplotlib.__version__)"
+          make test | tee test.log
+          ! grep -q 'skip (matplotlib' test.log
