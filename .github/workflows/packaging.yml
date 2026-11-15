@@ -51,7 +51,7 @@ jobs:
         shell: bash -el {0}
         run: |
           conda install -y conda-build
-          conda build conda --output-folder /tmp/conda-bld -c conda-forge
+          conda-build conda --output-folder /tmp/conda-bld -c conda-forge
 
       - name: Install the package and run
         shell: bash -el {0}
