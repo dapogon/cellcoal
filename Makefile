@@ -1,6 +1,6 @@
 PROG = cellcoal
 DASH = -
-VERSION = 2.8.0
+VERSION = 2.1.7
 SRCDIR = src
 OBJDIR = out
 BINDIR = bin

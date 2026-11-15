@@ -1,6 +1,6 @@
-# CellCoal 2.7.0 — what changed
+# CellCoal 2.1.6 — what changed
 
-**Output of all existing runs is bit-identical to 2.6.0.**
+**Output of all existing runs is bit-identical to 2.1.5.**
 
 ## CATG and ML genotypes with streamed reads
 

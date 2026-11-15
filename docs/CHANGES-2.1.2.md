@@ -1,6 +1,6 @@
-# CellCoal 2.3.0 — what changed
+# CellCoal 2.1.2 — what changed
 
-**Output of all existing runs is bit-identical to 2.2.0.**
+**Output of all existing runs is bit-identical to 2.1.1.**
 
 ## New option -0: pooled (bulk) read counts and VAF
 

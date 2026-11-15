@@ -1,6 +1,6 @@
-# CellCoal 2.8.0 — what changed
+# CellCoal 2.1.7 — what changed
 
-**Output of all existing runs is bit-identical to 2.7.0.**
+**Output of all existing runs is bit-identical to 2.1.6.**
 
 ## Coverage dispersion between sites (-O)
 
