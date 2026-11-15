@@ -56,6 +56,17 @@ mkdir -p "$TMP/nz"
 (cd "$TMP/nz" && "$BIN" $C -Z >out.txt 2>&1)
 if [ -s "$TMP/nz/Results/bulk" ] && [ ! -e "$TMP/nz/Results/vcf" ] && cmp -s "$TMP/nz/Results/bulk" "$TMP/bk0/Results/bulk"; then ok "-Z"; else bad "-Z"; fi
 
+echo "2g. Bulk-only runs skip the likelihoods; -z compresses the VCF; -M filters it"
+D="-n2 -s60 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C5 -V1 -E0.001 -B0.3 0.01 -A0.05 0.01 0 -#7"
+mkdir -p "$TMP/ro" "$TMP/st" "$TMP/gz" "$TMP/pl" "$TMP/fl" "$TMP/fs"
+(cd "$TMP/ro" && "$BIN" $D -0 -Z >out.txt 2>&1); (cd "$TMP/st" && CELLCOAL_STREAM=1 "$BIN" $D -0 -9 >out.txt 2>&1)
+if [ -s "$TMP/ro/Results/bulk" ] && cmp -s "$TMP/ro/Results/bulk" "$TMP/st/Results/bulk"; then ok "bulk only (no likelihoods) = full reads"; else bad "bulk only (no likelihoods) = full reads"; fi
+(cd "$TMP/pl" && "$BIN" $D >out.txt 2>&1); (cd "$TMP/gz" && "$BIN" $D -z >out.txt 2>&1)
+if [ "$(zcat "$TMP/gz/Results/vcf.gz" | grep -v -i filedate | md5sum)" = "$(grep -v -i filedate "$TMP/pl/Results/vcf" | md5sum)" ]; then ok "-z"; else bad "-z"; fi
+(cd "$TMP/fl" && "$BIN" $D -M0.02 >out.txt 2>&1); (cd "$TMP/fs" && CELLCOAL_STREAM=1 "$BIN" $D -M0.02 >out.txt 2>&1)
+nf=$(grep -a -vc '^#' "$TMP/fl/Results/vcf"); np=$(grep -a -vc '^#' "$TMP/pl/Results/vcf")
+if [ "$nf" -gt 0 ] && [ "$nf" -lt "$np" ]; then ok "-M reduces the VCF ($np -> $nf sites)"; else bad "-M reduces the VCF"; fi
+
 echo "3. Germline SNPs (-c) are inherited by every cell"
 for b in 0 1; do
   d="$TMP/germ$b"; mkdir -p "$d"

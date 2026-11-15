@@ -3,7 +3,9 @@
 
 Three sources:
   * the bulk file written by CellCoal option -0 (--bulk): already pooled over the cells, one line per site, with the VAF of
-    the simulated reads and the true VAF. Smallest and fastest input, also for thousands of cells.
+    the simulated reads and the true VAF. Smallest and fastest input, also for thousands of cells. With --depth (e.g. 100)
+    the pooled reads are sampled at a realistic bulk depth, and --purity (< 1) dilutes them with healthy cells; the true
+    VAF is then scaled by the purity too.
   * a VCF file with simulated reads (--vcf, needs -C/-V...): the reads (RC field) of all the tumour cells are pooled, as in a
     bulk sample, and VAF = alternate reads / total reads for every site with alternate reads. The healthy cell (last column)
     is excluded.
@@ -11,7 +13,7 @@ Three sources:
     experiment can be mimicked by sampling reads at a given depth (binomial), optionally mixing in healthy cells (purity).
 
 Usage:
-  bulk_vaf.py --bulk Results/bulk [--min-reads 10] [--out vaf.png] [--tsv vaf.tsv]
+  bulk_vaf.py --bulk Results/bulk [--depth 100 --purity 0.8] [--min-reads 10] [--out vaf.png] [--tsv vaf.tsv]
   bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 [--min-reads 10] [--out vaf.png] [--tsv vaf.tsv]
   bulk_vaf.py snv_genotypes_file [--depth 100] [--purity 1.0] [--seed 1] [--out vaf.png] [--tsv vaf.tsv]
 """
@@ -25,13 +27,15 @@ ap.add_argument("--logy", action="store_true", help="logarithmic y axis")
 ap.add_argument("--bulk", default=None, help="bulk file written by CellCoal option -0")
 ap.add_argument("--vcf", default=None, help="VCF file with simulated reads: VAF from the pooled read counts")
 ap.add_argument("--min-reads", type=int, default=1, help="with --vcf: minimum pooled depth of a site")
-ap.add_argument("--depth", type=float, default=100, help="mean bulk depth (Poisson); 0 = no read sampling")
+ap.add_argument("--depth", type=float, default=None, help="mean bulk depth (Poisson); 0 = no read sampling (with --bulk: use the pooled reads as they are)")
 ap.add_argument("--purity", type=float, default=1.0, help="fraction of tumour cells in the bulk sample")
 ap.add_argument("--seed", type=int, default=1)
 ap.add_argument("--out", default="vaf.png")
 ap.add_argument("--tsv", default=None)
 ap.add_argument("--bins", type=int, default=50)
 a = ap.parse_args()
+if a.depth is None:
+    a.depth = 0 if (a.bulk or a.vcf) else 100      # genotype input needs reads to be sampled; pooled reads already exist
 
 if a.bulk:
     rows = []
@@ -40,6 +44,14 @@ if a.bulk:
         if len(f) == 11 and f[0] != "site":
             rows.append(f)
     d = np.array([[float(x) for x in (r[6], r[8], r[10])] for r in rows])
+    if a.depth > 0 or a.purity < 1.0:
+        # mimic a real bulk experiment: the pooled reads of the cells are diluted with healthy cells (purity: only
+        # reference reads are added) and then sampled at a realistic depth (Poisson) with binomial sampling of the reads
+        rng = np.random.default_rng(a.seed)
+        pooled_vaf = d[:, 1] * a.purity
+        dp = rng.poisson(a.depth, len(d)) if a.depth > 0 else d[:, 0].astype(int)
+        vb_s = np.where(dp > 0, rng.binomial(dp, np.clip(pooled_vaf, 0, 1)) / np.maximum(dp, 1), 0.0)
+        d = np.column_stack([dp, vb_s, d[:, 2] * a.purity])
     keep = d[:, 0] >= a.min_reads
     depth, vb, vt = d[keep, 0], d[keep, 1], d[keep, 2]
     if a.tsv:

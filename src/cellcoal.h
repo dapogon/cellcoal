@@ -59,6 +59,9 @@ static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
 static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBulkOut);
 static void 	PrintBulk (FILE *fp);
+static int 	VCFSitePasses (int j);
+static FILE *	OpenVCF (const char *path);
+static void 	CloseVCF (FILE *fp);
 static void 	SiteReadCounts (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
 static void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut);
 static void	BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat);
@@ -160,7 +163,7 @@ static char		resultsDir[MAX_NAME], treeDir[MAX_NAME], timesDir[MAX_NAME], File[4
 static char		inCellName[MAX_NAME], outCellName[MAX_NAME], inRootCellName[MAX_NAME], outRootCellName[MAX_NAME];
 static char		GLmodel[MAX_NAME];
 static int		doPrintSNVgenotypes, doPrintSNVhaplotypes, doPrintTrueHaplotypes, doPrintFullHaplotypes, doPrintFullGenotypes, doPrintTree, doUserTree, doUserGenome, doSpecificParameterFile;
-static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintBulk, doPrintVCF, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
+static int		doPrintTimes, doPrintAncestors, doPrintCATG, doPrintPILEUP, doPrintBulk, doPrintVCF, doZipVCF, doPrintSeparateReplicates, doPrintIUPAChaplotypes;
 static int		doExponential, doDemographics, doOthsukiInnanCoal, doSimulateData, doSimulateFixedNumMutations, doNGS, doTumorNames, taxonNamesAreChars;
 static int		doJC, doHKY, doGTR, doGTnR, doGeneticSignatures;
 static int      rateVarAmongSites, rateVarAmongLineages, rateVarCoverage, doTreeRateSwitches, numTreeRateSwitches, equalBaseFreq, alphabet, thereIsMij, thereIsEij;
@@ -194,6 +197,8 @@ static int			obsActive = 0;
 static long			siteOff = 0;
 #define CS(i,j)	(cell[i].site[(long)(j) - siteOff])
 #define CD(i,j)	(cell[i].doublet[(long)(j) - siteOff])
+static double		minVAFvcf = 0.0;	/* the VCF lists only sites whose pooled VAF in reads is at least this */
+static int			readsOnly = 0;		/* only the pooled (bulk) read file is printed: no genotype likelihoods are needed */
 static int			streamMode = 0;		/* reads are simulated and printed in blocks of sites (see StreamReads) */
 static int			streamBlock = 0;		/* number of sites in a block */
 static int			*doubletDonor = NULL;	/* donor cell of each doublet cell when streaming */

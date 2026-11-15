@@ -253,6 +253,8 @@ int main (int argc, char **argv)
 	doPrintPILEUP = NO;				/* whether to print read counts for SNVs in PILEUP format*/
 	doPrintBulk = NO;				/* whether to print pooled (bulk) read counts and VAF per site */
 	doPrintVCF = YES;				/* whether to print the VCF file when reads are simulated */
+	doZipVCF = NO;					/* whether the VCF is written compressed with gzip */
+	minVAFvcf = 0.0;				/* minimum pooled VAF of the sites in the VCF */
 	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
 	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
 	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
@@ -333,6 +335,8 @@ int main (int argc, char **argv)
 		doPrintPILEUP = NO;
 		doPrintBulk = NO;
 		doPrintVCF = YES;
+		doZipVCF = NO;
+		minVAFvcf = 0.0;
    		}
 	
     /* initialize a few variables */
@@ -965,7 +969,7 @@ int main (int argc, char **argv)
 				if (doPrintTrueHaplotypes == YES)
 					fclose (fpTrueHaplotypes);
 				if (doNGS == YES && doPrintVCF == YES)
-					fclose (fpVCF);
+					CloseVCF (fpVCF);
 				if (doPrintCATG == YES)
 					fclose (fpCATG);
 				if (doPrintPILEUP == YES)
@@ -1054,7 +1058,7 @@ int main (int argc, char **argv)
 		if (doPrintTrueHaplotypes == YES)
 			fclose(fpTrueHaplotypes);
 		if (doNGS == YES && doPrintVCF == YES)
-			fclose(fpVCF);
+			CloseVCF (fpVCF);
 		if (doPrintCATG == YES)
 			fclose(fpCATG);
 		if (doPrintPILEUP == YES)
@@ -2457,6 +2461,7 @@ void DecideSparseMode (void)
 		}
 	sparseMode = NO;
 	streamMode = NO;
+	readsOnly = NO;
 	if (doNGS == YES)
 		{
 		/* reads of data sets whose per-cell, per-site data would not fit in memory are streamed in blocks of sites */
@@ -2469,7 +2474,8 @@ void DecideSparseMode (void)
 			streamLimitMB = atof (env);
 		supported = (doPrintCATG == NO && doPrintSNVgenotypes == NO && doPrintSNVhaplotypes == NO && doPrintTrueHaplotypes == NO &&
 					 doPrintFullHaplotypes == NO && doPrintFullGenotypes == NO && doPrintAncestors == NO);
-		if (streamForce == 1 || (streamForce == -1 && cellMB > streamLimitMB && supported == YES))
+		readsOnly = (doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == YES);
+		if (streamForce == 1 || (streamForce == -1 && (cellMB > streamLimitMB || readsOnly == YES) && supported == YES))
 			{
 			if (supported == NO)
 				{
@@ -2481,6 +2487,7 @@ void DecideSparseMode (void)
 			return;
 			}
 		}
+	readsOnly = NO;	/* reads-only needs streamed reads */
 	if ((env = getenv ("CELLCOAL_SPARSE")) != NULL && *env != '\0')
 		force = (atoi (env) != 0);
 	if ((env = getenv ("CELLCOAL_DENSE_MB")) != NULL && atof (env) > 0)
@@ -4660,6 +4667,17 @@ static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, Rea
 			CS(ii,jj).MLmatAllele = CS(ii,jj).MLpatAllele = MISSING;
 		}
 
+	if (readsOnly == YES)
+		{
+		/* the bulk file needs reads only: skip the genotype likelihoods (they use no random numbers) */
+		if (doubletDonor != NULL)
+			for (ii=0; ii<numCells; ii++)
+				if (cell[ii].hasDoublet == YES)
+					DoubletAtSite (ii, doubletDonor[ii], jj, sbuf, probsT, ngsEij, ampMat, ampPat, &dummySeed);
+		streamActive = 0;
+		return;
+		}
+
 	for (ii=0; ii<numCells+1; ii++)
 		{
 		double *g = sbuf + GL_NUM*(size_t)ii;
@@ -5811,7 +5829,8 @@ static void DoubletAtSite (int c1, int c2, int j, const double *gl1, double *pro
 		if (debug_DL == YES)
 			fprintf (stderr,"\n\n-- New celldoublet reads and likelihoods");
 		SiteReadCounts (&donor, c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
-		GenotypeLikelihoods (&donor, c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed, donorGL);
+		if (readsOnly == NO)
+			GenotypeLikelihoods (&donor, c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed, donorGL);
 
 		if (debug_DL == YES)
 			{
@@ -5832,6 +5851,8 @@ static void DoubletAtSite (int c1, int c2, int j, const double *gl1, double *pro
 
 		CD(c1,j).maternalAlleleDoublet = donor.maternalAllele;
 		CD(c1,j).paternalAlleleDoublet = donor.paternalAllele;
+		if (readsOnly == YES)
+			return;
 
 		//fprintf(stderr,"\nln cell\t\tcelltype\tdoublet");
 		/* adding the genotype log likelihoods of two sets of reads (c1 + celldoublet) to get the total doublet likelihoods */
@@ -6378,6 +6399,8 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 /* writes the complete VCF line of one SNV site; it only reads shared data, so lines of different sites can be built concurrently */
 static void VCFSiteLine (FILE *fp, int j)
 	{
+	if (VCFSitePasses (j) == NO)
+		return;
 	int		i, k, l, referenceAllele;
 
 		
@@ -6569,10 +6592,20 @@ static void BulkSite (FILE *fp, int j)
 
 	for (i=0; i<numCells; i++)
 		{
-		reads[0] += CS(i,j).readCount[A];
-		reads[1] += CS(i,j).readCount[C];
-		reads[2] += CS(i,j).readCount[G];
-		reads[3] += CS(i,j).readCount[T];
+		if (cell[i].hasDoublet == YES)
+			{
+			reads[0] += CD(i,j).readCountDoublet[A];
+			reads[1] += CD(i,j).readCountDoublet[C];
+			reads[2] += CD(i,j).readCountDoublet[G];
+			reads[3] += CD(i,j).readCountDoublet[T];
+			}
+		else
+			{
+			reads[0] += CS(i,j).readCount[A];
+			reads[1] += CS(i,j).readCount[C];
+			reads[2] += CS(i,j).readCount[G];
+			reads[3] += CS(i,j).readCount[T];
+			}
 		trueAlt += (CS(i,j).trueMaternalAllele != ref) + (CS(i,j).truePaternalAllele != ref);
 		}
 	depth = reads[0] + reads[1] + reads[2] + reads[3];
@@ -6731,6 +6764,50 @@ static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE
 	}
 
 
+/********************* VCF file (plain or gzip) ************************/
+/* Opens the VCF file, compressing it with gzip when requested (-z): the data is piped to "gzip -c" */
+static FILE *OpenVCF (const char *path)
+	{
+	char	cmd[2*MAX_NAME+32];
+	FILE	*fp;
+
+	if (doZipVCF == NO)
+		return fopen (path, "w");
+	if (strchr (path, '\'') != NULL)
+		{
+		fprintf (stderr, "Cannot compress the VCF when the path has a quote: %s\n", path);
+		exit (-1);
+		}
+	snprintf (cmd, sizeof(cmd), "gzip -c > '%s.gz'", path);
+	fp = popen (cmd, "w");
+	if (fp == NULL)
+		fprintf (stderr, "Could not run gzip to write the compressed VCF\n");
+	return fp;
+	}
+
+static void CloseVCF (FILE *fp)
+	{
+	if (doZipVCF == YES)
+		pclose (fp);
+	else
+		fclose (fp);
+	}
+
+/* The VCF lists the apparent SNVs whose pooled VAF in reads (alternate reads / reads) is at least minVAFvcf (-M) */
+static int VCFSitePasses (int j)
+	{
+	long	depth, alt;
+
+	if (minVAFvcf <= 0.0)
+		return YES;
+	depth = allSites[j].readCountACGT;
+	if (depth <= 0)
+		return NO;
+	alt = depth - ((allSites[j].referenceAllele == A) ? allSites[j].readCountA : (allSites[j].referenceAllele == C) ? allSites[j].readCountC :
+				   (allSites[j].referenceAllele == G) ? allSites[j].readCountG : allSites[j].readCountT);
+	return ((double) alt / (double) depth >= minVAFvcf) ? YES : NO;
+	}
+
 /********************* PrepareGlobalFiles **********************/
 /* Open global files to output results */
 void PrepareGlobalFiles(int argc, char **argv)
@@ -6820,7 +6897,7 @@ void PrepareGlobalFiles(int argc, char **argv)
         if (doNGS == YES && doPrintVCF == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFfile);
-            if ((fpVCF = fopen(File, "w")) == NULL)
+            if ((fpVCF = OpenVCF (File)) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
                 exit(-1);
@@ -7044,7 +7121,7 @@ void PrepareSeparateFiles(int replicate)
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFdir);
 			mkdir(File,S_IRWXU);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
-            if ((fpVCF = fopen(File, "w")) == NULL)
+            if ((fpVCF = OpenVCF (File)) == NULL)
                 {
                 fprintf (stderr, "Can't open \"%s\"\n", File);
                 exit(-1);
@@ -8743,7 +8820,7 @@ static void	PrintRunInformation (FILE *fp)
 
 			   if (doNGS == YES && doPrintVCF == YES)
 				   {
-				   fprintf (fp, "\n Genotype likelihoods (%s model) printed to file \"%s\"", GLmodel, VCFfile);
+				   fprintf (fp, "\n Genotype likelihoods (%s model) printed to file \"%s%s\"", GLmodel, VCFfile, (doZipVCF == YES) ? ".gz" : "");
 				   if (doPrintSeparateReplicates == YES)
 					   fprintf (fp, " in folder \"%s\"", VCFdir);
 				   }
@@ -8863,6 +8940,10 @@ static void PrintCommandLine (FILE *fp, int argc,char **argv)
 			fprintf (fp, " -%d", 0);
 		if (doPrintVCF == NO)
 			fprintf (fp, " -%c", 'Z');
+		if (doZipVCF == YES)
+			fprintf (fp, " -%c", 'z');
+		if (minVAFvcf > 0.0)
+			fprintf (fp, " -M%g", minVAFvcf);
 		if (doPrintTrueHaplotypes == YES)
 			fprintf (fp, " -%c", 'Y');
 		if (doPrintSeparateReplicates == YES)
@@ -8947,6 +9028,8 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-9: print read counts in PILEUP format (e.g. -9)");
 	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site (e.g. -0)");
 	fprintf (fp,"\n-Z: do not print the VCF file (needs -8, -9 or -0) (e.g. -Z)");
+	fprintf (fp,"\n-z: write the VCF compressed with gzip, as vcf.gz (e.g. -z)");
+	fprintf (fp,"\n-M: minimum pooled VAF in reads of the sites listed in the VCF (e.g. -M0.02)");
     fprintf (fp,"\n-Y: print true SNV haplotypes to a file (e.g. -Y)");
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
@@ -9043,6 +9126,8 @@ static void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-9: print read counts in PILEUP format =  %d", doPrintPILEUP);
 	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site =  %d", doPrintBulk);
 	fprintf (fp,"\n-Z: print the VCF file =  %d", doPrintVCF);
+	fprintf (fp,"\n-z: compress the VCF file with gzip =  %d", doZipVCF);
+	fprintf (fp,"\n-M: minimum pooled VAF of the sites in the VCF =  %g", minVAFvcf);
 	fprintf (fp,"\n-Y: print true haplotypes to a file =  %c", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
@@ -10393,6 +10478,17 @@ static void ReadParametersFromCommandLine (int argc,char **argv)
 			case 'Z':
 				doPrintVCF = NO;
 				break;
+			case 'z':
+				doZipVCF = YES;
+				break;
+			case 'M':
+				minVAFvcf = atof(argv[i]);
+				if (minVAFvcf < 0 || minVAFvcf > 1)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad minimum VAF (%f)\n\n", minVAFvcf);
+					PrintUsage(stderr);
+					}
+				break;
 			case '0':
 				doPrintBulk = YES;
 				if (doNGS == NO)
@@ -11210,6 +11306,16 @@ void ReadParametersFromFile (void)
 			break;
 			case 'Z':
 				doPrintVCF = NO;
+				break;
+			case 'z':
+				doZipVCF = YES;
+				break;
+			case 'M':
+				if (fscanf(stdin, "%lf", &minVAFvcf) !=1 || minVAFvcf < 0 || minVAFvcf > 1)
+					{
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad minimum VAF (%f)\n\n", minVAFvcf);
+					PrintUsage(stderr);
+					}
 				break;
 			case '0':
 				doPrintBulk = YES;
