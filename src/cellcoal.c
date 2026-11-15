@@ -745,7 +745,7 @@ int main (int argc, char **argv)
 			numSNVs = CountTrueVariants();
 
 			/* copy true genotypes before doing ADO but after CNLOH and deletion */
-			if (NEED_CELL_SITES)
+			if (NEED_CELL_SITES && streamMode == NO)
 			for (i=0; i<numCells+1; i++)
 				for (j=0; j<numSites; j++)
 					{
@@ -783,11 +783,22 @@ int main (int argc, char **argv)
 				obsActive = YES;	/* from now on the cell genotypes are observed with ADO and errors */
 	
 			/* generate NGS read counts */
-			if (doNGS == YES)
+			if (streamMode == YES)
+				{
+				/* reads are simulated, summarized and printed (VCF, PILEUP) in blocks of sites */
+				if (doPrintSeparateReplicates == NO)
+					fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
+				StreamReads (&seed, fpVCF, (doPrintPILEUP == YES) ? fpPILEUP : NULL);
+				if (doPrintPILEUP == YES && doPrintSeparateReplicates == NO)
+					fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+				}
+			else if (doNGS == YES)
 				GenerateReadCounts(&seed);
 
 			/* count how many alleles are at each site and how many SNVs we observe now, after ADO and genotype errors/read generation */
-			if (doNGS == YES)
+			if (streamMode == YES)
+				;	/* already counted by StreamReads */
+			else if (doNGS == YES)
 				numSNVs = CountAllelesInMLGenotypes();
 			else
 				numSNVs = CountAllelesInObservedGenotypes();
@@ -838,7 +849,7 @@ int main (int argc, char **argv)
                 PrintFullHaplotypes(fpFullHaplotypes);
 				}
 		
-			if (alphabet == DNA)
+			if (alphabet == DNA && streamMode == NO)
 				{
 				if (doNGS == YES)
 					{
@@ -2418,6 +2429,31 @@ void DecideSparseMode (void)
 	int		force = -1;
 
 	sparseMode = NO;
+	streamMode = NO;
+	if (doNGS == YES)
+		{
+		/* reads of data sets whose per-cell, per-site data would not fit in memory are streamed in blocks of sites */
+		double	cellMB = (double) (numCells+1) * (double) numSites * (double) sizeof(CellSiteStr) / 1048576.0, streamLimitMB = 2048.0;
+		int		streamForce = -1, supported;
+
+		if ((env = getenv ("CELLCOAL_STREAM")) != NULL && *env != '\0')
+			streamForce = (atoi (env) != 0);
+		if ((env = getenv ("CELLCOAL_STREAM_MB")) != NULL && atof (env) > 0)
+			streamLimitMB = atof (env);
+		supported = (doPrintCATG == NO && doPrintSNVgenotypes == NO && doPrintSNVhaplotypes == NO && doPrintTrueHaplotypes == NO &&
+					 doPrintFullHaplotypes == NO && doPrintFullGenotypes == NO && doPrintAncestors == NO);
+		if (streamForce == 1 || (streamForce == -1 && cellMB > streamLimitMB && supported == YES))
+			{
+			if (supported == NO)
+				{
+				fprintf (stderr, "\nERROR: streamed reads only support the VCF and PILEUP outputs (not -1 -2 -3 -4 -5 -Y, CATG or ancestors). Unset CELLCOAL_STREAM or do not use those outputs.\n");
+				exit (-1);
+				}
+			streamMode = YES;
+			sparseMode = YES;
+			return;
+			}
+		}
 	if ((env = getenv ("CELLCOAL_SPARSE")) != NULL && *env != '\0')
 		force = (atoi (env) != 0);
 	if ((env = getenv ("CELLCOAL_DENSE_MB")) != NULL && atof (env) > 0)
@@ -2428,15 +2464,6 @@ void DecideSparseMode (void)
 	if (force == 1 || (force == -1 && denseMB > limitMB))
 		sparseMode = YES;
 
-	if (sparseMode == YES && doNGS == YES)
-		{
-		if (force == 1)
-			{
-			fprintf (stderr, "\nERROR: sparse genome storage does not support simulating reads yet. Unset CELLCOAL_SPARSE or do not use -C.\n");
-			exit (-1);
-			}
-		sparseMode = NO;	/* automatic choice: keep dense storage */
-		}
 	if (sparseMode == YES && denseMB > limitMB && (doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || doPrintTrueHaplotypes == YES))
 		{
 		/* These outputs write every site of every cell: (cells x sites) characters per file. */
@@ -4462,9 +4489,22 @@ void AllocateCellStructure(void)
 	   these blocks are only allocated when an option needs them (see NEED_CELL_SITES) */
 	if (!NEED_CELL_SITES)
 		return;
+	if (streamMode == YES)
+		{
+		/* only a window of sites is held (see StreamReads): about 64 MB, and enough sites to keep the threads busy */
+		long	b = (long) (64.0 * 1048576.0 / (sizeof(CellSiteStr) * (double)(numCells+1)));
+		int		minB = 16;
+#ifdef _OPENMP
+		minB = 8 * omp_get_max_threads();
+#endif
+		if (b < minB) b = minB;
+		if (b > 4096) b = 4096;
+		if (b > numSites) b = numSites;
+		streamBlock = (int) b;
+		}
 	for (i=0; i<numCells+1; i++)
 		{
-		cell[i].site  = (CellSiteStr*) calloc (numSites, sizeof(CellSiteStr));
+		cell[i].site  = (CellSiteStr*) calloc ((streamMode == YES) ? streamBlock : numSites, sizeof(CellSiteStr));
 		if (!cell[i].site)
 			{
 			fprintf (stderr, "Could not allocate the cell[%d].site structure\n", i);
@@ -4514,6 +4554,10 @@ static void TotalReadCountsAtSite (int j)
 	allSites[j].readCountT = countReadsT;
 	allSites[j].readCountACGT = countReadsA + countReadsC + countReadsG + countReadsT;
 	}
+
+static void DoubletAtSite (int c1, int c2, int j, const double *gl1, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
+static void TotalReadCountsAtSite (int j);
+static int MLCountsAtSite (int j);
 
 /* Scratch matrices of a thread that simulates reads */
 typedef struct
@@ -4569,8 +4613,16 @@ static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, Rea
 	double	**ampMat = rs->ampMat, **ampPat = rs->ampPat, *sbuf = rs->sbuf, *probsT = rs->probsT;
 	long int	dummySeed = 1;	/* never used: the stream of the site is active */
 	int		ii;
-			int		hasAlt = NO, al;
+	int		hasAlt = NO, al;
 	size_t	bytes = (size_t)(numCells+1) * GL_NUM * sizeof(double), before;
+
+	/* true genotypes (before ADO and genotyping errors) of the streamed window */
+	if (streamMode == YES)
+		for (ii=0; ii<numCells+1; ii++)
+			{
+			CS(ii,jj).trueMaternalAllele = GetTrueG (MATERNAL, ii, jj);
+			CS(ii,jj).truePaternalAllele = GetTrueG (PATERNAL, ii, jj);
+			}
 
 	/* read counts of all the cells at this site, from the stream of the site */
 	StartStream (streamBase, (uint64_t) jj);
@@ -4580,7 +4632,6 @@ static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, Rea
 		if (CS(ii,jj).numReads <= 0)
 			CS(ii,jj).MLmatAllele = CS(ii,jj).MLpatAllele = MISSING;
 		}
-	streamActive = 0;
 
 	for (ii=0; ii<numCells+1; ii++)
 		{
@@ -4601,6 +4652,13 @@ static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, Rea
 		if (al >= A && al <= T && al != allSites[jj].referenceAllele)
 			hasAlt = YES;
 		}
+	/* doublets (streamed reads): the reads of a donor cell are added to those of the doublet cell, from the same stream */
+	if (streamMode == YES && doubletDonor != NULL)
+		for (ii=0; ii<numCells; ii++)
+			if (cell[ii].hasDoublet == YES)
+				DoubletAtSite (ii, doubletDonor[ii], jj, sbuf + GL_NUM*(size_t)ii, probsT, ngsEij, ampMat, ampPat, &dummySeed);
+	streamActive = 0;
+
 	if (hasAlt == YES)
 		{
 		#pragma omp atomic capture
@@ -4613,6 +4671,76 @@ static void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, Rea
 				memcpy (keep, sbuf, bytes);
 				siteGL[jj] = keep;
 				}
+			}
+		}
+
+	/* summary of the site (what GenerateReadCounts and CountAllelesInMLGenotypes do for all the sites) */
+	if (streamMode == YES)
+		{
+		TotalReadCountsAtSite (jj);
+		MLCountsAtSite (jj);
+		}
+	}
+
+/* Sequencing error probabilities, constant across sites, and the genotype likelihood model */
+static void SetupReadModel (double **ngsEij)
+	{
+	int		i, j;
+
+	/* initialize ngsEij now as this will be contant across sites */
+	for (i=0; i<4; i++)
+		for (j=0; j<4; j++)
+			{
+			if (i == j)
+				ngsEij[i][j] = 1.0 - sequencingError;
+			else
+				ngsEij[i][j] = Eij[i][j]/cumEij[i][3] * sequencingError;
+			}
+	
+	
+	/* define GL model  */
+	/* initialize */
+	doGATK = NO;
+	do2T = NO;
+	do4T = NO;
+	doGATK_ADO = NO;
+	do2T_ADO = NO;
+	do4T_ADO = NO;
+
+	if (thereisADO == NO)
+		{
+		if (meanAmplificationError == 0)
+			{
+			doGATK = YES;
+			strcpy(GLmodel, "GATK");
+			}
+		else if (simulateOnlyTwoTemplates == YES)
+			{
+			do2T = YES;
+			strcpy(GLmodel, "2T");
+			}
+		else
+			{
+			do4T = YES;
+			strcpy(GLmodel, "4T");
+			}
+		}
+	else
+		{
+		if (meanAmplificationError == 0)
+			{
+			doGATK_ADO = YES;
+			strcpy(GLmodel, "GATK_ADO");
+			}
+		else if (simulateOnlyTwoTemplates == YES)
+			{
+			do2T_ADO = YES;
+			strcpy(GLmodel, "2T_ADO");
+			}
+		else
+			{
+			do4T_ADO = YES;
+			strcpy(GLmodel, "4T_ADO");
 			}
 		}
 	}
@@ -4687,63 +4815,8 @@ void GenerateReadCounts (long int *seed)
 			}
 		}
 
-	/* initialize ngsEij now as this will be contant across sites */
-	for (i=0; i<4; i++)
-		for (j=0; j<4; j++)
-			{
-			if (i == j)
-				ngsEij[i][j] = 1.0 - sequencingError;
-			else
-				ngsEij[i][j] = Eij[i][j]/cumEij[i][3] * sequencingError;
-			}
-	
-	
-	/* define GL model  */
-	/* initialize */
-	doGATK = NO;
-	do2T = NO;
-	do4T = NO;
-	doGATK_ADO = NO;
-	do2T_ADO = NO;
-	do4T_ADO = NO;
+	SetupReadModel (ngsEij);
 
-	if (thereisADO == NO)
-		{
-		if (meanAmplificationError == 0)
-			{
-			doGATK = YES;
-			strcpy(GLmodel, "GATK");
-			}
-		else if (simulateOnlyTwoTemplates == YES)
-			{
-			do2T = YES;
-			strcpy(GLmodel, "2T");
-			}
-		else
-			{
-			do4T = YES;
-			strcpy(GLmodel, "4T");
-			}
-		}
-	else
-		{
-		if (meanAmplificationError == 0)
-			{
-			doGATK_ADO = YES;
-			strcpy(GLmodel, "GATK_ADO");
-			}
-		else if (simulateOnlyTwoTemplates == YES)
-			{
-			do2T_ADO = YES;
-			strcpy(GLmodel, "2T_ADO");
-			}
-		else
-			{
-			do4T_ADO = YES;
-			strcpy(GLmodel, "4T_ADO");
-			}
-		}
-		
 	/* One stream per site is started from two numbers taken from the main stream (so each replicate
 	   differs), which makes the sites independent of each other. For every site the reads of all cells
 	   are simulated (in cell order, with the stream of the site) and then the genotype likelihoods are
@@ -6454,6 +6527,142 @@ void PrintVCF (FILE *fp)
 			VCFSiteLine (fp, SNVsites[snv]);
 	
 	fprintf (fp, "\n");
+	}
+
+
+/********************* StreamReads  ************************/
+/* Simulates the reads of very large data sets without storing them. Sites are processed in blocks: the reads and genotype
+   likelihoods of all the cells are simulated (in parallel over the sites of the block, each site with its own random
+   stream, as in GenerateReadCounts), the sites that look like SNVs are printed (VCF, PILEUP), and the block is discarded.
+   The window of sites held in cell[].site starts at siteOff. */
+static void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout)
+	{
+	int			i, j, j0, nb, q, nq, nSNVs = 0;
+	double		**ngsEij;
+	uint64_t	streamBase;
+	long int	s1, s2;
+	char		**lineBuf = NULL;
+	size_t		*lineLen = NULL;
+	int			chunk = 1;
+
+	ngsEij = (double**) calloc (4, sizeof(double*));
+	for (i=0; i<4; i++)
+		ngsEij[i] = (double*) calloc (4, sizeof(double));
+	SetupReadModel (ngsEij);
+
+	/* doublets: which cells are doublets and their donors */
+	if (meanDoubletRate > 0)
+		{
+		double doubletRate;
+
+		doubletDonor = (int*) calloc (numCells, sizeof(int));
+		for (i=0; i<numCells; i++)
+			{
+			doubletRate = RandomBetaMeanVar (meanDoubletRate, varDoubletRate, seed);
+			if (RandomUniform (seed) < doubletRate)
+				{
+				cell[i].hasDoublet = YES;
+				doubletDonor[i] = RandomUniformTo (numCells, seed);
+				cell[i].doublet = (DoubletSiteStr*) calloc (streamBlock, sizeof(DoubletSiteStr));
+				if (!cell[i].doublet)
+					{
+					fprintf (stderr, "Could not allocate the doublet window of cell %d\n", i);
+					exit (-1);
+					}
+				}
+			}
+		}
+
+	RandomUniform (seed);
+	s1 = *seed;
+	RandomUniform (seed);
+	s2 = *seed;
+	streamBase = ((uint64_t) s1 << 32) ^ (uint64_t) s2;
+
+	if (fpVCFout)
+		PrintVCFHeader (fpVCFout);
+#ifdef _OPENMP
+	chunk = 4 * omp_get_max_threads();
+#endif
+	lineBuf = (char**) calloc (chunk, sizeof(char*));
+	lineLen = (size_t*) calloc (chunk, sizeof(size_t));
+
+	for (j0=0; j0<numSites; j0+=streamBlock)
+		{
+		int		*blockSNVs;
+
+		nb = (numSites - j0 < streamBlock) ? numSites - j0 : streamBlock;
+		siteOff = j0;
+		glUsed = 0;
+
+		#pragma omp parallel
+			{
+			ReadScratch	rs;
+			int			jj;
+
+			NewReadScratch (&rs);
+			#pragma omp for schedule(dynamic,1)
+			for (jj=j0; jj<j0+nb; jj++)
+				SimulateSiteReads (jj, streamBase, ngsEij, &rs);
+			FreeReadScratch (&rs);
+			}
+
+		blockSNVs = (int*) malloc (nb * sizeof(int));
+		nq = 0;
+		for (j=j0; j<j0+nb; j++)
+			if (allSites[j].isSNV == YES)
+				{
+				SNVsites[nSNVs++] = j;
+				blockSNVs[nq++] = j;
+				}
+
+		/* VCF lines of the block, built in parallel and written in order */
+		if (fpVCFout)
+			for (i=0; i<nq; i+=chunk)
+				{
+				int		m = (nq - i < chunk) ? nq - i : chunk;
+
+				#pragma omp parallel for schedule(dynamic,1)
+				for (q=0; q<m; q++)
+					{
+					FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+					if (!ms)
+						{
+						fprintf (stderr, "Could not open a memory stream for the VCF line\n");
+						exit (-1);
+						}
+					VCFSiteLine (ms, blockSNVs[i+q]);
+					fclose (ms);
+					}
+				for (q=0; q<m; q++)
+					{
+					fwrite (lineBuf[q], 1, lineLen[q], fpVCFout);
+					free (lineBuf[q]);
+					}
+				}
+		if (fpPILEUPout)
+			for (q=0; q<nq; q++)
+				PileupSite (fpPILEUPout, blockSNVs[q]);
+
+		free (blockSNVs);
+		for (j=j0; j<j0+nb; j++)
+			{
+			free (siteGL[j]);
+			siteGL[j] = NULL;
+			}
+		}
+	if (fpVCFout)
+		fprintf (fpVCFout, "\n");
+
+	siteOff = 0;
+	numSNVs = nSNVs;
+	free (lineBuf);
+	free (lineLen);
+	free (doubletDonor);
+	doubletDonor = NULL;
+	for (i=0; i<4; i++)
+		free (ngsEij[i]);
+	free (ngsEij);
 	}
 
 

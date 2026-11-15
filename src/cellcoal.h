@@ -57,6 +57,7 @@ static void		PrintPILEUP (FILE *fp);
 static void		AllelicDropout (long int *seed);
 static void		GenotypeError (long int *seed);
 static void		GenerateReadCounts (long int *seed);
+static void 	StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout);
 static void 	SiteReadCounts (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
 static void 	GenotypeLikelihoods (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut);
 static void	BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat);
@@ -192,6 +193,9 @@ static int			obsActive = 0;
 static long			siteOff = 0;
 #define CS(i,j)	(cell[i].site[(long)(j) - siteOff])
 #define CD(i,j)	(cell[i].doublet[(long)(j) - siteOff])
+static int			streamMode = 0;		/* reads are simulated and printed in blocks of sites (see StreamReads) */
+static int			streamBlock = 0;		/* number of sites in a block */
+static int			*doubletDonor = NULL;	/* donor cell of each doublet cell when streaming */
 static int			sparseADO = 0;
 static int			*errCount = NULL;
 static Geno		ObservedAllele (int genome, int node, int site, Geno trueAllele);
@@ -247,6 +251,17 @@ extern double 	***selectedSignature;
 extern double	****geneticSignature;
 extern double	**signatureProbs;
 extern double	*triNucFreq;
+
+/* The genotype of a cell without allelic dropout and genotyping errors (sparse mode keeps them apart from the genomes) */
+static inline Geno GetTrueG (int genome, int node, int site)
+	{
+	if (__builtin_expect (sparseMode, 0) && node != OUTGROUP_ROOT)
+		{
+		Geno *c = sparseCols[site];
+		return c ? c[(long)genome*numNodes+node] : data[genome][OUTGROUP_ROOT][site];
+		}
+	return data[genome][node][site];
+	}
 
 #ifdef CHECK_MUT_DISTRIBUTION
 static int		*MutCount, *SiteMut, dataSetsWithSNVs;
