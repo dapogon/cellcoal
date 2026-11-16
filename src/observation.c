@@ -299,13 +299,10 @@ int CountTrueVariants (void)
         {
         mat = data[MATERNAL][cell];
         pat = data[PATERNAL][cell];
+        /* no branches, so that the compiler can vectorize it */
         for (site=0; site<numSites; site++)
-            {
-            if (isVar[site] == 0 &&
-                ((mat[site] != DELETION && mat[site] != matRoot[site]) ||
-                 (pat[site] != DELETION && pat[site] != patRoot[site])))
-                isVar[site] = 1;
-            }
+            isVar[site] |= (char) (((mat[site] != DELETION) & (mat[site] != matRoot[site])) |
+                                   ((pat[site] != DELETION) & (pat[site] != patRoot[site])));
         }
     for (site=0; site<numSites; site++)
         {
@@ -376,6 +373,35 @@ int CountAllelesInObservedGenotypes (void)
 						}
 					}
 				}
+			}
+		else if (2 * (numCells + 1) < 65536)
+			{
+			/* 16-bit counters and one comparison per allele type: no scattered increments, so it is vectorized */
+			unsigned short	c16[6][BLK];
+			int				n = s1 - s0;
+
+			memset (c16, 0, sizeof(c16));
+			for (cell=0; cell<numCells+1; cell++)
+				for (ch=0; ch<2; ch++)
+					{
+					const Geno *r = data[ch == 0 ? MATERNAL : PATERNAL][cell] + s0;
+					unsigned short *a0 = c16[0], *a1 = c16[1], *a2 = c16[2], *a3 = c16[3], *a4 = c16[4], *a5 = c16[5];
+
+					for (site=0; site<n; site++)
+						{
+						Geno g = r[site];
+
+						a0[site] += (g == A);
+						a1[site] += (g == C);
+						a2[site] += (g == G);
+						a3[site] += (g == T);
+						a4[site] += (g == ADO);
+						a5[site] += (g == DELETION);
+						}
+					}
+			for (k=0; k<6; k++)
+				for (site=0; site<n; site++)
+					cnt[k][site] = c16[k][site];
 			}
 		else
 		for (cell=0; cell<numCells+1; cell++)

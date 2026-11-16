@@ -57,11 +57,9 @@ void InitializeGenomes (TreeNode *p, long int *seed)
             else
                 {
                 anccell = p->anc->label;
-                for (site=0; site<numSites; site++)
-                    {
-                    SetG(MATERNAL, cell, site, GetG(MATERNAL, anccell, site));
-                    SetG(PATERNAL, cell, site, GetG(PATERNAL, anccell, site));
-                    }
+                /* here the genomes are dense (sparse mode never gets here): copy the ancestor's rows */
+                memcpy (data[MATERNAL][cell], data[MATERNAL][anccell], numSites * sizeof(Geno));
+                memcpy (data[PATERNAL][cell], data[PATERNAL][anccell], numSites * sizeof(Geno));
                 }
              }
         else /* binary alphabet */
