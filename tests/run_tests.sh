@@ -509,5 +509,48 @@ printf 'sweep: "C=2,4"\ncells: 6\nsites: 200\nreplicates: 2\nresults_folder: SC\
 [ $r1 -ne 0 ] && [ $r2 -ne 0 ] && [ $r3 -ne 0 ] && ok "--sweep rejects unknown options, -n and a missing specification" || bad "--sweep errors ($r1 $r2 $r3)"
 cd "$ROOT"
 
+echo "2g18. --summary against the true genotypes"
+mkdir -p "$TMP/tr" && rm -rf "$TMP/tr"/* && cd "$TMP/tr"
+TA="-n3 -s30 -l3000 -u1e-6 -e10000 -b1 -C10 -V5 -E0.002 -P0.2 0.02 -B0.1 0.01 --summary -#4"
+CELLCOAL_SPARSE=1 CELLCOAL_STREAM=0 "$BIN" $TA -oST >/dev/null 2>&1
+CELLCOAL_SPARSE=1 CELLCOAL_STREAM=1 "$BIN" $TA -oSS >/dev/null 2>&1
+cmp -s ST/summary.tsv SS/summary.tsv && ok "truth metrics are the same with stored and streamed reads" || bad "truth metrics stored vs streamed"
+python3 - <<'PY' && ok "truth metrics are in range and recall is high" || bad "truth metrics values"
+rows=[l.rstrip("\n").split("\t") for l in open("ST/summary.tsv")]
+h=rows[0]
+for r in rows[1:]:
+    d=dict(zip(h,r))
+    assert 0.9 < float(d["called_fraction"]) <= 1, d
+    assert 0 < float(d["genotype_error"]) < 0.1, d
+    assert 0 < float(d["snv_precision"]) <= 1 and 0.5 < float(d["snv_recall"]) <= 1, d
+PY
+"$BIN" -n2 -s10 -l500 -u1e-6 -e10000 -b1 --summary -oSN >/dev/null 2>&1
+[ "$(sed -n 2p SN/summary.tsv | cut -f9-12)" = "$(printf 'NA\tNA\tNA\tNA')" ] && ok "truth metrics are NA without reads" || bad "truth metrics without reads"
+"$BIN" -n6 -s20 -l2000 -u1e-6 -e10000 -b1 -C10 -V5 -P0.1 0.01 --sweep "E=0.0005,0.02" -oSE -#5 >/dev/null 2>&1
+python3 - <<'PY' && ok "--sweep: genotype error grows with the sequencing error" || bad "--sweep genotype_error"
+rows=[l.rstrip("\n").split("\t") for l in open("SE/sweep.tsv")]
+h=rows[0]; g=h.index("genotype_error")
+assert float(rows[2][g]) > 3*float(rows[1][g]), rows
+PY
+"$BIN" -n2 -s8 -l300 -u1e-6 -e10000 -b1 --sweep "s=8,10" -oSX >/dev/null 2>&1
+grep -q "genotype_error" SX/sweep.tsv && sed -n 2p SX/sweep.tsv | grep -q "NA" && ok "--sweep: NA columns without reads" || bad "--sweep NA"
+cd "$ROOT"
+
+echo "2g19. --sweep-jobs, --sweep-resume and the sweep plot"
+mkdir -p "$TMP/sj" && rm -rf "$TMP/sj"/* && cd "$TMP/sj"
+JA="-n4 -s15 -l1500 -u1e-6 -e10000 -b1 -C10 -V5 -P0.1 0.01 -#5"
+"$BIN" $JA --sweep "E=0.0005,0.005,0.02" -oS1 >/dev/null 2>&1
+"$BIN" $JA --sweep "E=0.0005,0.005,0.02" --sweep-jobs 2 -oS2 >/dev/null 2>&1
+cmp -s S1/sweep.tsv S2/sweep.tsv && cmp -s S1/sweep_replicates.tsv S2/sweep_replicates.tsv && ok "--sweep-jobs gives the same tables as running one at a time" || bad "--sweep-jobs"
+rm S2/runs/summary_0003.tsv S2/sweep.tsv
+"$BIN" $JA --sweep "E=0.0005,0.005,0.02" --sweep-resume -oS2 > resume.log 2>&1
+cmp -s S1/sweep.tsv S2/sweep.tsv && grep -q "run 1/3 already done" resume.log && ok "--sweep-resume runs only what is missing" || bad "--sweep-resume"
+"$BIN" $JA --sweep "E=0.0005,0.01" --sweep-resume -oS2 >/dev/null 2>&1 && bad "--sweep-resume accepts another sweep" || ok "--sweep-resume rejects a folder with another sweep"
+"$BIN" $JA --sweep "E=0.0005,0.02" --sweep-jobs 0 -oS3 >/dev/null 2>&1 && bad "--sweep-jobs 0 accepted" || ok "--sweep-jobs needs a number from 1 to 256"
+if python3 -c "import matplotlib" 2>/dev/null; then
+python3 "$ROOT/tools/cellcoal_plots.py" sweep S1 --out sw.png >/dev/null 2>&1 && [ -s sw.png ] && ok "cellcoal_plots.py sweep draws the table" || bad "sweep plot"
+else echo "  skip (matplotlib not installed)"; fi
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

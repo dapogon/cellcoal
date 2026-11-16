@@ -1765,7 +1765,19 @@ version. Stored and streamed reads give the same files.</p>
 (variable sites of the true genotypes, before dropout and errors),
 <code>snv_observed</code> (after dropout, errors and reads) and
 <code>snv_ratio</code> (observed over true; it can be above 1 because
-errors create false variants).</p>
+errors create false variants). With reads (<code>-C</code>) it adds four
+metrics against the true genotypes, computed for the tumour cells (not
+the healthy cell) site by site while the reads are simulated, so they
+are the same with stored and streamed reads:
+<code>called_fraction</code> (genotypes called from the reads over cells
+x sites), <code>genotype_error</code> (called genotypes that differ from
+the true unphased genotype over called genotypes; a true genotype with
+one deleted allele counts as homozygous for the other, and a cell with
+both alleles deleted is left out; a doublet is judged against its own
+true genotype), <code>snv_precision</code> and <code>snv_recall</code>
+(sites where the called genotypes show a variant, against the sites that
+are variable in the true genotypes). Without reads these columns are
+<code>NA</code>.</p>
 <p><strong><code>--sweep &quot;KEY=V1,V2,... KEY2=...&quot;</code></strong> runs
 the program once for every combination of the listed values and collects
 the metrics of <code>--summary</code> in a table, instead of writing a
@@ -1787,8 +1799,23 @@ Output, in the folder of <code>-o</code> (default <code>Sweep</code>):
 of replicates <code>n</code>, and the mean and the standard error
 <code>_se</code> of every metric) and <code>sweep_replicates.tsv</code>
 (all the replicates of all the runs). The run folders are deleted unless
-<code>--sweep-keep</code> is given. <code>-n</code>, <code>-o</code>,
-<code>-#</code> and <code>-F</code> cannot be swept. Example:
+<code>--sweep-keep</code> is given; the summary of every finished run is
+kept in <code>&lt;dir&gt;/runs</code>. <code>--sweep-jobs N</code> runs
+N combinations at the same time (each with <code>OMP_NUM_THREADS</code>
+set to the number of cores divided by N, unless the variable is already
+set; on Windows the runs go one after another).
+<code>--sweep-resume</code> continues an interrupted sweep: the runs
+whose summary is in <code>&lt;dir&gt;/runs</code> are not repeated, and
+the program refuses to resume if the folder holds a different sweep
+(other options, values or seed; the command lines are in
+<code>sweep_spec.txt</code>). Metrics that are <code>NA</code> in every
+replicate are <code>NA</code> in <code>sweep.tsv</code>; otherwise the
+mean and the standard error use the replicates that have a value.
+<code>python3 tools/cellcoal_plots.py sweep Sweep</code> draws the
+metrics (mean and standard error) against the first parameter, one line
+per value of the second (<code>--x</code>, <code>--metrics</code>,
+<code>--logx</code>). <code>-n</code>, <code>-o</code>, <code>-#</code>
+and <code>-F</code> cannot be swept. Example:
 <code>cellcoal -n50 -s20 -l10000 -u1e-6 -e10000 -b1 -E0.001 --sweep &quot;C=2,5,10 E=0.001,0.01&quot; -oCovErr</code>.</p>
 <h2 id="version-2.2.3-doublet-correlations-summary-sweep">8.17 Version
 2.2.3: doublet correlations, –summary, –sweep</h2>
@@ -1800,7 +1827,8 @@ against the latest release (section 6.10h). The output of existing runs
 is identical to 2.2.2.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
-toolchain: <code>pacman -S make mingw-w64-ucrt-x86_64-gcc python</code>,
+toolchain:
+<code>pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc python</code>,
 then <code>make</code>). The code that differs between systems is in
 <code>src/platform.h</code> (directories, in-memory streams,
 <code>getline</code>, 64-bit file offsets, time functions) and
@@ -1808,13 +1836,13 @@ then <code>make</code>). The code that differs between systems is in
 <code>--sweep</code>). The CI has a <code>windows</code> job that builds
 the program, runs smoke tests (a run with reads and
 <code>--summary</code>, a <code>--sweep</code>, and re-running over an
-existing results folder) and the whole suite. At the time of writing the
-suite passes 74 of 80 checks on Windows; the failing ones (the
-stored-versus-streamed bulk file, <code>-Z</code>, <code>--config</code>
-from <code>run.json</code> and <code>--fast</code> against the default
-genotypes) are being investigated and the job does not fail because of
-them yet. The results of the simulations are statistically correct on
-Windows (<code>tests/theory.py</code> passes).</p>
+existing results folder) and the whole suite. The whole suite passes on
+Windows (it needs <code>diffutils</code> in MSYS2 for <code>cmp</code>
+and <code>diff</code>; install it with
+<code>pacman -S diffutils</code>). Configuration files are read in text
+mode, so CRLF line endings are accepted. The results of the simulations
+are statistically correct on Windows (<code>tests/theory.py</code>
+passes).</p>
 <p>On Windows <code>long</code> has 32 bits, which overflowed in the
 random number generator and made the coalescent times statistically
 wrong; the generator and the index arithmetic now use 64-bit integers

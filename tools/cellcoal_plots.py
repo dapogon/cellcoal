@@ -5,6 +5,9 @@
   cellcoal_plots.py missing Results/vcf_dir/vcf.0001 [--out missing.png]    genotypes without reads: per cell and per site
   cellcoal_plots.py heatmap Results/snv_genotypes_dir/snv_gen.0001 [--out heatmap.png] [--max-sites 2000]
                                                                           cells x SNVs, coloured by the alleles that differ from the healthy cell
+  cellcoal_plots.py sweep   Sweep/sweep.tsv [--out sweep.png] [--metrics genotype_error,snv_recall] [--x KEY]
+                                                                          metrics (mean and standard error) against the swept parameter; with two
+                                                                          parameters, one line per value of the second one
   cellcoal_plots.py all     Results [--replicate 1] [--outdir plots]       every plot that the files of a Results folder allow,
                                                                           plus the bulk VAF, and a self-contained report.html
 
@@ -152,6 +155,81 @@ def cmd_heatmap(a):
     print("wrote", a.out)
 
 
+def cmd_sweep(a):
+    """plots the table of a --sweep run: every metric against the first parameter (or --x), one line per value of the other one"""
+    import os
+    path = a.file
+    if os.path.isdir(path):
+        path = os.path.join(path, "sweep.tsv")
+    if not os.path.isfile(path):
+        sys.exit("%s was not found: give sweep.tsv or the folder of a --sweep run" % path)
+    with open(path) as fh:
+        rows = [l.rstrip("\n").split("\t") for l in fh if l.strip()]
+    head, rows = rows[0], rows[1:]
+    if "n" not in head:
+        sys.exit("%s does not look like a sweep table (no column n)" % path)
+    params = head[1:head.index("n")]
+    metrics = [h for h in head[head.index("n") + 1:] if not h.endswith("_se")]
+    if a.metrics:
+        wanted = a.metrics.split(",")
+        bad = [m for m in wanted if m not in metrics]
+        if bad:
+            sys.exit("unknown metric %s; available: %s" % (", ".join(bad), ", ".join(metrics)))
+        metrics = wanted
+    else:
+        pref = [m for m in ("genotype_error", "snv_precision", "snv_recall", "called_fraction", "snv_observed", "snv_true") if m in metrics]
+        metrics = pref or metrics[:6]
+    xk = a.x or params[0]
+    if xk not in params:
+        sys.exit("unknown parameter %s; available: %s" % (xk, ", ".join(params)))
+    others = [q for q in params if q != xk]
+    col = {h: i for i, h in enumerate(head)}
+
+    def num(v):
+        try:
+            return float(v)
+        except ValueError:
+            return float("nan")
+
+    def key(r):
+        return tuple(r[col[q]] for q in others)
+
+    groups = {}
+    for r in rows:
+        groups.setdefault(key(r), []).append(r)
+    xs_all = [r[col[xk]] for r in rows]
+    numeric = all(not np.isnan(num(v)) for v in xs_all)
+    ncol = min(3, len(metrics))
+    nrow = (len(metrics) + ncol - 1) // ncol
+    fig, axes = plt.subplots(nrow, ncol, figsize=(4.2 * ncol, 3.3 * nrow), squeeze=False)
+    for ax, m in zip(axes.flat, metrics):
+        for g, rs in sorted(groups.items()):
+            xs = [num(r[col[xk]]) for r in rs] if numeric else list(range(len(rs)))
+            ys = [num(r[col[m]]) for r in rs]
+            es = [num(r[col[m + "_se"]]) for r in rs]
+            ok = [i for i, y in enumerate(ys) if not np.isnan(y)]
+            if not ok:
+                continue
+            label = ", ".join("%s=%s" % (q, v) for q, v in zip(others, g)) or None
+            ax.errorbar([xs[i] for i in ok], [ys[i] for i in ok], yerr=[0 if np.isnan(es[i]) else es[i] for i in ok], marker="o", capsize=3, label=label)
+            if not numeric:
+                ax.set_xticks(range(len(rs)))
+                ax.set_xticklabels([r[col[xk]] for r in rs], rotation=45, ha="right")
+        ax.set_xlabel(xk)
+        ax.set_title(m, fontsize=10)
+        ax.grid(alpha=.3)
+        if a.logx and numeric:
+            ax.set_xscale("log")
+        if ax.get_legend_handles_labels()[0]:
+            ax.legend(fontsize=7)
+    for ax in list(axes.flat)[len(metrics):]:
+        ax.axis("off")
+    fig.tight_layout()
+    fig.savefig(a.out, dpi=130)
+    print("%d runs, parameters: %s; metrics plotted: %s" % (len(rows), ", ".join(params), ", ".join(metrics)))
+    print("wrote", a.out)
+
+
 def find_file(results, names):
     """first existing file among the candidate names (relative to the Results folder)"""
     import os
@@ -233,6 +311,13 @@ if __name__ == "__main__":
         p.add_argument("--bins", type=int, default=40)
         p.add_argument("--max-sites", type=int, default=2000, help="heatmap: sample at most this many SNVs")
         p.set_defaults(fn=fn)
+    p = sub.add_parser("sweep")
+    p.add_argument("file", help="sweep.tsv, or the folder of a --sweep run")
+    p.add_argument("--out", default="sweep.png")
+    p.add_argument("--metrics", default=None, help="comma-separated metrics (default: genotype_error, snv_precision, snv_recall, called_fraction, ...)")
+    p.add_argument("--x", default=None, help="parameter on the x axis (default: the first one)")
+    p.add_argument("--logx", action="store_true", help="logarithmic x axis")
+    p.set_defaults(fn=cmd_sweep)
     p = sub.add_parser("all")
     p.add_argument("file", help="the Results folder of a run")
     p.add_argument("--outdir", default="plots")

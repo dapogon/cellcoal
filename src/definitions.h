@@ -99,6 +99,7 @@ typedef struct
 	int		countA, countC, countG, countT, countN, countACGT; // alelle counts in genotypes
 	int		readCountA, readCountC, readCountG, readCountT, readCountACGT; // alelle counts in reads
 	int		countCellswithData, countDropped;
+	int		truthCalled, truthErrors, truthCallVar;	/* --summary: genotypes called from reads, wrong ones, and whether the ML genotypes show a variant at this site */
 	int		referenceAllele;
 	int		*alternateAlleles;
 	int		numAltAlleles;
