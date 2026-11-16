@@ -634,14 +634,14 @@ void PrintVCF (FILE *fp)
 			#pragma omp parallel for schedule(dynamic,1)
 			for (q=0; q<nq; q++)
 				{
-				FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+				FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
 				if (!ms)
 					{
 					fprintf (stderr, "Could not open a memory stream for the VCF line\n");
 					exit (-1);
 					}
 				VCFSiteLine (ms, SNVsites[snv+q]);
-				fclose (ms);
+				MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
 				}
 			for (q=0; q<nq; q++)
 				{
@@ -1127,14 +1127,14 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 				#pragma omp parallel for schedule(dynamic,1)
 				for (q=0; q<m; q++)
 					{
-					FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+					FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
 					if (!ms)
 						{
 						fprintf (stderr, "Could not open a memory stream for the CATG line\n");
 						exit (-1);
 						}
 					CATGSiteLine (ms, blockSNVs[i+q]);
-					fclose (ms);
+					MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
 					}
 				for (q=0; q<m; q++)
 					{
@@ -1152,14 +1152,14 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 				#pragma omp parallel for schedule(dynamic,1)
 				for (q=0; q<m; q++)
 					{
-					FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+					FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
 					if (!ms)
 						{
 						fprintf (stderr, "Could not open a memory stream for the VCF line\n");
 						exit (-1);
 						}
 					VCFSiteLine (ms, blockSNVs[i+q]);
-					fclose (ms);
+					MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
 					}
 				for (q=0; q<m; q++)
 					{

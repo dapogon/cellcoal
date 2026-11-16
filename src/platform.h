@@ -22,4 +22,40 @@
 	#define SHELL_QUOTE_CHAR	'\''
 #endif
 
+/* In-memory FILE streams (a line of the VCF/CATG is formatted in a thread and written later in order).
+   POSIX: open_memstream. Windows has none: a temporary file is used and its content is read back when the stream is closed.
+   The buffer and its length are valid after MemStreamClose; the caller frees the buffer. */
+#ifdef _WIN32
+	#include <stdio.h>
+	#include <stdlib.h>
+	static inline FILE *MemStreamOpen (char **buf, size_t *len)
+		{
+		*buf = NULL;
+		*len = 0;
+		return tmpfile ();
+		}
+	static inline void MemStreamClose (FILE *f, char **buf, size_t *len)
+		{
+		long n;
+
+		fflush (f);
+		n = ftell (f);
+		if (n < 0)
+			n = 0;
+		*buf = (char*) malloc ((size_t) n + 1);
+		if (*buf == NULL)
+			{
+			fprintf (stderr, "Out of memory\n");
+			exit (-1);
+			}
+		rewind (f);
+		*len = fread (*buf, 1, (size_t) n, f);
+		(*buf)[*len] = '\0';
+		fclose (f);
+		}
+#else
+	#define MemStreamOpen(buf, len)			open_memstream (buf, len)
+	#define MemStreamClose(f, buf, len)		fclose (f)
+#endif
+
 #endif
