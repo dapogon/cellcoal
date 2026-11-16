@@ -486,5 +486,28 @@ close ${r[0]} 0.675 0.05 && ok "signature 1: C>T fraction ${r[0]} (expected 0.67
 (cd "$TMP/pq" && "$BIN" $M -P0.2 0.01 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/pq/Results"))
 close ${r[0]} 0.20 0.06 && ok "ADO per cell (-P0.2 0.01): mean ${r[0]} (expected 0.20)" || bad "ADO per cell: ${r[0]} (expected 0.20)"
 
+echo "2g17. --summary and --sweep"
+mkdir -p "$TMP/sw" && rm -rf "$TMP/sw"/* && cd "$TMP/sw"
+"$BIN" -n3 -s10 -l500 -u1e-6 -e10000 -b1 -C8 -E0.001 --summary -#3 >/dev/null 2>&1
+[ "$(wc -l < Results/summary.tsv)" -eq 4 ] && head -1 Results/summary.tsv | grep -q "snv_true" && ok "--summary writes one row per replicate" || bad "--summary table"
+"$BIN" -n4 -s10 -l500 -u1e-6 -e10000 -b1 -E0.001 -P0.2 0.02 --sweep "C=2,8 J=1,5" -oSW -#7 >/dev/null 2>&1
+[ "$(wc -l < SW/sweep.tsv)" -eq 5 ] && [ ! -d SW/run_0001 ] && ok "--sweep: 2x2 grid, one row per combination, run folders removed" || bad "--sweep grid"
+python3 - <<'PY' && ok "--sweep: common seed (same genealogy in every run) and replicates table" || bad "--sweep content"
+rows=[l.rstrip("\n").split("\t") for l in open("SW/sweep.tsv")]
+h=rows[0]; t=h.index("tmrca")
+# C does not change the genealogy: runs with the same J (rows 1,3 and 2,4) have the same mean TMRCA
+assert rows[1][t]==rows[3][t] and rows[2][t]==rows[4][t], rows
+assert len(open("SW/sweep_replicates.tsv").readlines())==1+4*4
+PY
+"$BIN" -s8 -l200 -n2 -u1e-6 -e10000 -b1 --sweep "C=2..6..2" -oSR --sweep-keep >/dev/null 2>&1
+[ "$(wc -l < SR/sweep.tsv)" -eq 4 ] && [ -d SR/run_0003 ] && ok "--sweep with a range and --sweep-keep" || bad "--sweep range"
+printf 'sweep: "C=2,4"\ncells: 6\nsites: 200\nreplicates: 2\nresults_folder: SC\nseed: 5\n' > c.yaml
+"$BIN" --config c.yaml >/dev/null 2>&1; [ "$(wc -l < SC/sweep.tsv)" -eq 3 ] && ok "--sweep from a --config file" || bad "--sweep config"
+"$BIN" -s5 -l100 --sweep "zzz=1" >/dev/null 2>&1; r1=$?
+"$BIN" -s5 -l100 --sweep "n=1,2" >/dev/null 2>&1; r2=$?
+"$BIN" -s5 -l100 --sweep >/dev/null 2>&1; r3=$?
+[ $r1 -ne 0 ] && [ $r2 -ne 0 ] && [ $r3 -ne 0 ] && ok "--sweep rejects unknown options, -n and a missing specification" || bad "--sweep errors ($r1 $r2 $r3)"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

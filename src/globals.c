@@ -85,7 +85,8 @@ int					doBCF = 0;
 double				covAdoCorr = 0.0;
 double				*cellAdoRate = NULL;
 double				covDoubletCorr = 0.0, adoDoubletCorr = 0.0;
-int					doSummary = 0;
+int					doSummary = 0, numSNVsTrue = 0;
+FILE				*fpSummary = NULL;
 
 int					adoReplicate = 0;
 __thread uint64_t	streamState;

@@ -162,6 +162,8 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 void SetupReadModel (double **ngsEij);
 
 char **ExpandConfigArgs (int *argc, char **argv);
+const char *SweepOptionForName (const char *name);
+void RunSweep (int argc, char **argv, const char *spec, int keep);
 void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent);
 
 /* Global variables */
@@ -332,7 +334,8 @@ extern __thread double		siteCovMult;	/* between-site coverage multiplier of the 
 extern __thread int			streamActive;
 extern double				covAdoCorr;	/* --cov-ado-corr: correlation between the coverage and the ADO rate of the cells */
 extern double				covDoubletCorr, adoDoubletCorr;	/* --cov-doublet-corr, --ado-doublet-corr: correlation of being a doublet with the coverage / ADO rate of the cells */
-extern int					doSummary;	/* --summary: write summary.tsv, one row of metrics per replicate */
+extern int					doSummary, numSNVsTrue;	/* --summary: write summary.tsv, one row of metrics per replicate */
+extern FILE				*fpSummary;
 extern double				*cellAdoRate;	/* ADO rate of every cell (kept only when covAdoCorr != 0) */
 extern int					fastMode;	/* --fast: cheaper samplers and log10/10^x for the reads (same distributions, different random numbers) */
 double	Log10Approx (double x);

@@ -113,6 +113,9 @@ Streamed reads with the full genotype and haplotype files</a></li>
 <li><a href="#g-index-of-the-bcf-file" id="toc-g-index-of-the-bcf-file">6.10g Index of the BCF file</a></li>
 <li><a href="#h-tests-sanitizers-fuzzing-compilers-and-theory" id="toc-h-tests-sanitizers-fuzzing-compilers-and-theory">6.10h Tests:
 sanitizers, fuzzing, compilers and theory</a></li>
+<li><a href="#i-per-cell-correlations-with-doublets---summary-and---sweep" id="toc-i-per-cell-correlations-with-doublets---summary-and---sweep">6.10i
+Per-cell correlations with doublets, <code>--summary</code> and
+<code>--sweep</code></a></li>
 <li><a href="#version-2.1.1-streamed-reads" id="toc-version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</a></li>
 <li><a href="#versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options" id="toc-versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
@@ -1722,6 +1725,61 @@ loses an allele with probability D and both with probability (1 - sqrt(1
 is a z-score that must be below 4, which detects a change of a few
 percent in the rates.</li>
 </ul>
+<h2 id="i-per-cell-correlations-with-doublets---summary-and---sweep">6.10i
+Per-cell correlations with doublets, <code>--summary</code> and
+<code>--sweep</code></h2>
+<p><strong>Doublets and the other per-cell parameters.</strong>
+<code>--cov-doublet-corr RHO</code> correlates (-1 to 1) the coverage
+multiplier of a cell (<code>-J</code>) with the cell being a doublet
+(<code>-B</code>); <code>--ado-doublet-corr RHO</code> does the same
+with the ADO rate (<code>-P</code>). They can be combined with
+<code>--cov-ado-corr</code>; the three correlations must form a valid
+correlation matrix (otherwise the program stops with a parameter error).
+The cells are ranked with a Gaussian copula: each cell gets a latent
+score that is a mixture of the standardized latent coverage and ADO
+values and independent noise, and the cells with the highest scores
+become the doublets, so the number of doublets is the same as without
+the correlation. The correlation is between latent variables; the
+observed correlation between a 0/1 doublet indicator and a continuous
+variable is smaller (about 0.75 times the latent value with 30% of
+doublets). The coverage, ADO rate and doublet status of every cell are
+written to <code>cell_params</code> (columns <code>cell</code>,
+<code>coverage_multiplier</code>, <code>ado_rate</code>,
+<code>doublet</code>, <code>donor</code>) whenever a correlation is
+used. Without the new options the output is identical to the previous
+version. Stored and streamed reads give the same files.</p>
+<p><strong><code>--summary</code></strong> writes
+<code>summary.tsv</code> in the results folder, one row per replicate:
+<code>replicate</code>, <code>tmrca</code>, <code>mutations</code>,
+<code>deletions</code>, <code>cnloh</code>, <code>snv_true</code>
+(variable sites of the true genotypes, before dropout and errors),
+<code>snv_observed</code> (after dropout, errors and reads) and
+<code>snv_ratio</code> (observed over true; it can be above 1 because
+errors create false variants).</p>
+<p><strong><code>--sweep &quot;KEY=V1,V2,... KEY2=...&quot;</code></strong> runs
+the program once for every combination of the listed values and collects
+the metrics of <code>--summary</code> in a table, instead of writing a
+script. A key is an option letter (<code>C</code>, <code>E</code>,
+<code>s</code>, …) or a long name (<code>coverage</code>,
+<code>cells</code>, <code>cov-ado-corr</code>, …). A value can be a
+range <code>LOW..HIGH..STEP</code>; options that take several numbers
+use colons (<code>A=0.05:0.01:0,0.1:0.02:0</code>). All the runs use the
+same seed (<code>-#</code>, or one drawn at random and printed), so a
+parameter that does not alter the random numbers consumed before the
+tree (for example <code>C</code> or <code>E</code>) gives the same
+genealogies in all the runs and the differences between rows are due to
+the parameter only; parameters that change the stream (for example
+<code>J</code>, <code>s</code>) give different genealogies. The other
+options of the command line (or of <code>--config</code>, where
+<code>sweep: &quot;C=2,5&quot;</code> is also allowed) are common to all the runs.
+Output, in the folder of <code>-o</code> (default <code>Sweep</code>):
+<code>sweep.tsv</code> (one row per combination: the values, the number
+of replicates <code>n</code>, and the mean and the standard error
+<code>_se</code> of every metric) and <code>sweep_replicates.tsv</code>
+(all the replicates of all the runs). The run folders are deleted unless
+<code>--sweep-keep</code> is given. <code>-n</code>, <code>-o</code>,
+<code>-#</code> and <code>-F</code> cannot be swept. Example:
+<code>cellcoal -n50 -s20 -l10000 -u1e-6 -e10000 -b1 -E0.001 --sweep &quot;C=2,5,10 E=0.001,0.01&quot; -oCovErr</code>.</p>
 <h2 id="version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</h2>
 <p>Streamed reads. When the per-cell, per-site read data would exceed

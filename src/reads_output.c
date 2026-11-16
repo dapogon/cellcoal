@@ -743,7 +743,7 @@ static int CmpByKey (const void *x, const void *y)
 /* keeps the ADO rate of every cell (drawn with -P) for the correlation with the coverage (--cov-ado-corr) */
 void KeepCellADO (const double *rate)
 	{
-	if (covAdoCorr == 0.0)
+	if (covAdoCorr == 0.0 && adoDoubletCorr == 0.0)
 		return;
 	free (cellAdoRate);
 	cellAdoRate = (double*) malloc ((numCells+1) * sizeof(double));
