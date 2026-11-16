@@ -533,11 +533,13 @@ static char *ReadWholeFile (const char *path)
 	size = ftell (fp);
 	rewind (fp);
 	buf = (char*) malloc (size + 1);
-	if (!buf || (long) fread (buf, 1, size, fp) != size)
+	/* in text mode (Windows) fewer bytes than the file size can be read: CRLF becomes LF */
+	if (!buf)
 		{
 		fprintf (stderr, "\n!!! CONFIG ERROR: cannot read %s\n\n", path);
 		exit (-1);
 		}
+	size = (long) fread (buf, 1, size, fp);
 	buf[size] = '\0';
 	fclose (fp);
 	return buf;
