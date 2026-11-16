@@ -1136,7 +1136,7 @@ int main (int argc, char **argv)
 			fprintf (stderr, "Can't open \"%s\"\n", File);
 			exit(-1);
 			}
-		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\n");
+		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\tado_simulated\n");
 		}
 
 	/* Read user treefile */

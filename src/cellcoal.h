@@ -142,8 +142,8 @@ void 	RecordTriNucObservation(TriNucStr *trin, int site);
 void 	RemoveTriNucObservation(TriNucStr *trin, int site);
 void		AllocateCellStructure (void);
 int		CompareGenotypes (int a1, int a2, int b1, int b2);
-#define NUM_TRUTH_METRICS	9
-int		TruthMetrics (double *m);	/* m[NUM_TRUTH_METRICS]: called_fraction, genotype_error, snv_precision, snv_recall, het_error, hom_error, het_to_hom, doublet_error, singlet_error */
+#define NUM_TRUTH_METRICS	10
+int		TruthMetrics (double *m);	/* m[NUM_TRUTH_METRICS]: called_fraction, genotype_error, snv_precision, snv_recall, het_error, hom_error, het_to_hom, doublet_error, singlet_error, ado_simulated */
 #ifdef COUNT_ML_GENOTYPE_ERRORS
 	void		CountMLGenotypingErrors (void);
 #endif

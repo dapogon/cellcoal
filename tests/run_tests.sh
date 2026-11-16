@@ -525,7 +525,7 @@ for r in rows[1:]:
     assert 0 < float(d["snv_precision"]) <= 1 and 0.5 < float(d["snv_recall"]) <= 1, d
 PY
 "$BIN" -n2 -s10 -l500 -u1e-6 -e10000 -b1 --summary -oSN >/dev/null 2>&1
-[ "$(sed -n 2p SN/summary.tsv | cut -f9-17)" = "$(printf 'NA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA')" ] && ok "truth metrics are NA without reads" || bad "truth metrics without reads"
+[ "$(sed -n 2p SN/summary.tsv | cut -f9-18)" = "$(printf 'NA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA')" ] && ok "truth metrics are NA without reads" || bad "truth metrics without reads"
 "$BIN" -n3 -s40 -l3000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.001 -P0.4 0.05 -B0.3 0.01 --summary -oSD -#6 >/dev/null 2>&1
 "$BIN" -n3 -s40 -l3000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.001 --summary -oS0 -#6 >/dev/null 2>&1
 python3 - <<'PY' && ok "truth metrics by genotype: allelic dropout makes heterozygous cells look homozygous; doublets raise the error" || bad "truth metrics by genotype and doublets"
@@ -537,8 +537,9 @@ for d in load("SD/summary.tsv"):
     assert het > 5*hom and 0.1 < het < 0.8, d
     assert h2h <= het + 1e-9 and h2h > 0.8*het, d
     assert float(d["doublet_error"]) > float(d["singlet_error"]), d
+    assert 0.15 < float(d["ado_simulated"]) < 0.55, d
 for d in load("S0/summary.tsv"):
-    assert float(d["het_to_hom"]) < 0.2 and d["doublet_error"] == "NA", d
+    assert float(d["het_to_hom"]) < 0.2 and d["doublet_error"] == "NA" and float(d["ado_simulated"]) == 0, d
 PY
 "$BIN" -n6 -s20 -l2000 -u1e-6 -e10000 -b1 -C10 -V5 -P0.1 0.01 --sweep "E=0.0005,0.02" -oSE -#5 >/dev/null 2>&1
 python3 - <<'PY' && ok "--sweep: genotype error grows with the sequencing error" || bad "--sweep genotype_error"
@@ -563,6 +564,16 @@ cmp -s S1/sweep.tsv S2/sweep.tsv && grep -q "run 1/3 already done" resume.log &&
 "$BIN" $JA --sweep "E=0.0005,0.02" --sweep-jobs 0 -oS3 >/dev/null 2>&1 && bad "--sweep-jobs 0 accepted" || ok "--sweep-jobs needs a number from 1 to 256"
 if python3 -c "import matplotlib" 2>/dev/null; then
 python3 "$ROOT/tools/cellcoal_plots.py" sweep S1 --out sw.png >/dev/null 2>&1 && [ -s sw.png ] && ok "cellcoal_plots.py sweep draws the table" || bad "sweep plot"
+else echo "  skip (matplotlib not installed)"; fi
+cd "$ROOT"
+
+echo "2g20. Plots from the files of a single run (the examples of the quickstart)"
+mkdir -p "$TMP/qs" && rm -rf "$TMP/qs"/* && cd "$TMP/qs"
+if python3 -c "import matplotlib, numpy" 2>/dev/null; then
+"$BIN" -n1 -s12 -l2000 -u1e-6 -e10000 -b1 -C10 -V5 -E0.001 -P0.2 0.02 -1 -0 -#6 -oQ >/dev/null 2>&1
+python3 "$ROOT/tools/cellcoal_plots.py" heatmap Q/snv_gen --out h.png >/dev/null 2>&1 && [ -s h.png ] && ok "heatmap from the SNV genotype file of one replicate" || bad "heatmap of a single file"
+python3 "$ROOT/tools/bulk_vaf.py" --vcf Q/vcf --out v.png >/dev/null 2>&1 && [ -s v.png ] && ok "bulk_vaf.py reads the VCF of one replicate" || bad "bulk_vaf of a single VCF"
+python3 "$ROOT/tools/cellcoal_plots.py" all Q --outdir QP >/dev/null 2>&1 && [ -s QP/report.html ] && ok "cellcoal_plots.py all on a results folder" || bad "plots all"
 else echo "  skip (matplotlib not installed)"; fi
 cd "$ROOT"
 

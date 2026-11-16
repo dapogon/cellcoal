@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.1.9)"
+date: "November, 2026 (CellCoal 2.2.4)"
 ---
 
 # 1. About CellCoal
@@ -14,17 +14,155 @@ If you use CellCoal, please cite it as:
 
 Posada D. 2020. CellCoal: coalescent simulation of single-cell sequencing samples. *Molecular Biology and Evolution* 37: 1535-1542. [https://academic.oup.com/mbe/article/37/5/1535/5728646](https://academic.oup.com/mbe/article/37/5/1535/5728646){target="_blank"}.
 
-# 3. Getting started
+# 3. Quickstart
 
-1.  **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.0.1.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
+This chapter takes you from nothing to a first simulation, a few typical analyses and an experiment over many conditions. Every command in it was run with the version of this manual and the output shown is the real one. The sections after it describe all the options.
 
-2.  **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided for the gcc compiler. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.0.1`). The Makefile detects OpenMP support automatically (see section 4.1): it uses `-fopenmp` when the compiler supports it and, on macOS, Homebrew's `libomp` if it is installed (`brew install libomp`); otherwise the program is compiled single-threaded, with identical results. To compile without OpenMP type `make OMPFLAG=`. Compilation flags include `-O3 -ffp-contract=off -fno-math-errno`; please do not add `-ffast-math` or `-march=native` if you need identical results across machines.
+## 3.1 Installation
 
-    **Alternatives to compiling**: `make install [PREFIX=/usr/local]` installs the program as `cellcoal`, with the manual, the examples and `cellcoal-bulk-vaf`. Each release also has prebuilt tarballs for Linux (x86_64, static) and macOS (Apple silicon) among its assets. With Homebrew: `brew tap dapogon/cellcoal https://github.com/dapogon/cellcoal && brew install cellcoal`. A conda recipe is in the folder *conda* of the repository.
+CellCoal is a single command-line program (no graphical interface) for Linux, macOS and Windows. Choose one of the following ways.
 
-3.  **Run**: `bin/cellcoal-x.y.z`. In this case, the program arguments will be read from a file called *parameters*. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
+**Prebuilt program (the quickest).** Each release at <https://github.com/dapogon/cellcoal/releases> has, among its assets, a file for each system (with its `.sha256`):
 
-4.  **Inspect results**: Once the run is finished, different output files will be written by default inside a folder called *Results*.
+| System | File | Notes |
+|:--|:--|:--|
+| Linux (x86_64) | `cellcoal-x.y.z-linux-x86_64.tar.gz` | static, multithreaded |
+| macOS (Apple silicon) | `cellcoal-x.y.z-macos-arm64.tar.gz` | includes `libomp.dylib` |
+| Windows (x86_64) | `cellcoal-x.y.z-windows-x86_64.zip` | includes the DLLs it needs (releases after 2.2.4) |
+
+Unpack it and run `cellcoal` (`cellcoal.exe` on Windows) from the folder that results; the folder also has the manual, the example parameter files (`examples`, `parameters`) and the plotting tools. On Linux and macOS, `tar xzf cellcoal-x.y.z-linux-x86_64.tar.gz` and then `cd cellcoal-x.y.z-linux-x86_64`. On macOS, if the system refuses to open a program downloaded from the internet, remove the quarantine mark with `xattr -d com.apple.quarantine cellcoal libomp.dylib`.
+
+**Homebrew (macOS and Linux).**
+
+    brew tap dapogon/cellcoal https://github.com/dapogon/cellcoal
+    brew install cellcoal
+
+**Conda.** The folder `conda` of the repository has a recipe; build it with `conda build conda` and install the result with `conda install --use-local cellcoal`.
+
+**From the source code (any system with a C compiler and `make`).** Download the source of a release (or `git clone https://github.com/dapogon/cellcoal`), move into the folder and type:
+
+    make
+    make test          # optional: runs the test suite (several minutes)
+    sudo make install  # optional: installs as cellcoal in /usr/local (PREFIX=... to change it)
+
+The program is `bin/cellcoal-x.y.z`; `make install` copies it as `cellcoal`, with `cellcoal-bulk-vaf`, `cellcoal-plots`, the manual and the examples. The Makefile detects OpenMP (multithreading) by itself: `-fopenmp` with gcc and clang on Linux, Homebrew's `libomp` on macOS (`brew install libomp`), and it is always used on Windows; if it is not available the program is built single-threaded with identical results (`make OMPFLAG=` forces that). Do not add `-ffast-math` or `-march=native` to the flags if you need identical results across machines. On **Windows** use MSYS2 (UCRT64): `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, and then `make` (section 6.10j).
+
+**The plotting tools** (`tools/cellcoal_plots.py`, `tools/bulk_vaf.py`) need Python 3 with `numpy` and `matplotlib` (`pip install numpy matplotlib`). The simulator itself does not need Python.
+
+**Check the installation.** `cellcoal -?` prints the version and a list of all the options with their default values. In the examples below, write `bin/cellcoal-x.y.z` (or the path to the program) if you did not install it as `cellcoal`.
+
+## 3.2 Your first simulation
+
+Create an empty folder to work in and type:
+
+    cellcoal -n1 -s6 -l1000 -u1e-6 -e10000 -1 -6 -#1 -oFirst
+
+It simulates one replicate (`-n1`) of a sample of 6 tumour cells (`-s6`), plus a healthy cell used as outgroup, with 1000 sites (`-l1000`), a somatic mutation rate of 10^-6^ per site and generation (`-u1e-6`) and an effective population size of 10000 (`-e10000`). `-1` writes the genotypes of the sites that have mutated, `-6` the genealogy, `-#1` fixes the seed of the random numbers (the same seed and the same options always give the same data) and `-oFirst` is the name of the folder for the results. Options are a letter followed by the value, without a space, and the ones you do not write have the defaults of section 7. The program prints a summary on the screen and writes the folder *First*:
+
+| File | Content |
+|:--|:--|
+| `snv_gen` | the genotypes of the variable sites (option `-1`) |
+| `trees` | the genealogy of the cells, in Newick format, with the branch lengths in expected mutations per site, which is the time multiplied by the mutation rate (option `-6`) |
+| `log` | what the program did, with the version, the options, the seed and the time |
+| `run.json` | the same record in a format that is easy to read from a script; a run can be repeated with `cellcoal --config First/run.json` |
+
+The tree looks like this (the file has it on one line; the last cell, `outgcell`, is the healthy one):
+
+    (((cell0004:0.004826,cell0006:0.004826):0.001157,
+      ((cell0001:0.002138,(cell0003:0.000414,cell0002:0.000414):0.001724):0.000367,
+        cell0005:0.002505):0.003478):0.002991,outgcell:0.008974);
+
+and `snv_gen` has, after the number of replicates and the label `[#1]`, the number of cells and variable sites (here `7 70`), the positions of those sites and one line per cell with its genotype at each of them (`CG` is a heterozygous genotype, `AA` a homozygous one):
+
+    cell0001  CG TC AA AC GT CC GA CC CC TT CA TT AA AA GG AA CG GG AA ...
+    cell0002  CG TC AA AC GT CC GG CC CC TT CA TT AA AA GC AG CC GG TA ...
+
+The healthy cell does not carry the somatic mutations, so the cells with a genotype that differs from its own are the mutated ones. If the program stops with *the diploid infinite sites model (ISM) has been violated*, the mutation rate and the population size give more mutations than sites: lower `-u` (or `-e`), or increase `-l`.
+
+## 3.3 Examples
+
+**Reads, genotype likelihoods and a VCF file.** Most users simulate the sequencing of the cells. With a sequencing coverage (`-C`) the program simulates the reads of every cell at every site and writes a VCF file with the read counts and the genotype likelihoods:
+
+    cellcoal -n1 -s20 -l5000 -u1e-6 -e10000 -C10 -V5 -E0.001 -P0.2 0.02 -#1 -oReads
+
+`-C10` is the mean sequencing depth, `-V5` the overdispersion of the depth (the coverage of single cells is very uneven), `-E0.001` the sequencing error and `-P0.2 0.02` the mean and variance of the allelic dropout (ADO) rate among cells, which the amplification of one cell's DNA produces. The result is the file `vcf` (a plain-text VCF 4.3; it can be compressed with `-z` or written as BCF with `--bcf`), `ado_cells` (the dropout rate of each cell) and the usual `log` and `run.json`. In the VCF each cell has, at each variable site, the called genotype (`GT`), the depth (`DP`), the reads of A, C, G and T (`RC`), the log~10~ likelihoods of the genotypes, the true genotype in the sample (`TG`) and more fields that are described in section 6.11. For several replicates use `-n` and, to have one file for each, `-v`. Other outputs are the reads as a pileup (`-9`) or in CATG format (`-8`), and the true genotypes (`-1`) and haplotypes (`-2`).
+
+**Genotypes with errors, without reads.** To study methods that start from genotypes, you can skip the reads and add allelic dropout (`-D`) and genotyping errors (`-G`, mean and variance of the error rate) directly to the true genotypes:
+
+    cellcoal -n1 -s6 -l1000 -u1e-6 -e10000 -D0.1 -G0.01 0.001 -1 -#1 -oErrors
+
+The file `snv_gen` has now missing alleles (`?`) where there was a dropout and wrong alleles where there was an error.
+
+**A look at the data.** `cellcoal_plots.py` (or `cellcoal-plots`, if the program is installed) draws the most common plots of a results folder. For a run with reads and the SNV genotypes (`-1`):
+
+    cellcoal -n1 -s20 -l3000 -u1e-6 -e10000 -C10 -V5 -E0.001 -P0.2 0.02 -1 -#6 -oLook
+    python3 tools/cellcoal_plots.py all Look --outdir Look/plots
+
+makes `report.html` with the read depth, the genotypes without reads, a heatmap of the cells and variable sites, and the bulk VAF, and the PNG of each. The heatmap of that run (light grey: like the healthy cell, orange: one allele differs, red: both, dark grey: no reads):
+
+![Heatmap of 20 cells at 448 variable sites, from `cellcoal_plots.py heatmap`.](media/quickstart_heatmap.png){width=75%}
+
+**Bulk sequencing of the same tumour.** If you want what a bulk sample would give, option `-0` writes the reads pooled over the cells (one line per site, small even for thousands of cells), and `bulk_vaf.py` draws the distribution of the variant allele frequency (VAF), in this example as if the bulk was sequenced at 100x:
+
+    cellcoal -n1 -s30 -l20000 -u1e-6 -e10000 -C10 -V5 -E0.001 -0 -Z -#2 -oBulk
+    python3 tools/bulk_vaf.py --bulk Bulk/bulk --depth 100 --out vaf.png --tsv vaf.tsv
+
+(`-Z` does not write the VCF, which is the big file; it needs another output such as `-0`.)
+
+![VAF distribution of the bulk from `bulk_vaf.py`.](media/quickstart_vaf.png){width=75%}
+
+**Doublets.** Two cells captured together appear in the data as one cell with the reads of both. `-B0.1 0.01` makes about 10% of the cells doublets (the second number is the variance of the rate among cells). The VCF then has, for a doublet, the genotype called from the mixed reads (`GT`, `ML`) and, in `DG`, the genotype of the second cell of the pair; `TG` is the true genotype of the cell itself, which ignores the doublet. The error of the doublets is reported apart in `--summary` (`doublet_error`).
+
+    cellcoal -n2 -s20 -l3000 -u1e-6 -e10000 -C10 -V5 -E0.001 -B0.1 0.01 -#5 -oDoublets
+
+**Many replicates and a table of results.** `--summary` writes `summary.tsv`, one line per replicate, with the depth of the tree, the number of mutations and, when there are reads, how well the genotypes were recovered (called fraction, genotype error, precision and recall of the variable sites, the error of heterozygous and homozygous genotypes, of doublets, and the simulated allelic dropout). Twenty replicates take about a second:
+
+    cellcoal -n20 -s20 -l5000 -u1e-6 -e10000 -C10 -V5 -E0.001 -P0.2 0.02 -B0.1 0.01 --summary -#3 -oSummary
+
+| replicate | tmrca | mutations | called_fraction | genotype_error | snv_recall | het_to_hom | ado_simulated |
+|--:|--:|--:|--:|--:|--:|--:|--:|
+| 1 | 0.745775 | 631 | 0.984100 | 0.010121 | 0.776545 | 0.188136 | 0.160035 |
+| 2 | 2.112792 | 1268 | 0.974520 | 0.021775 | 0.761830 | 0.257183 | 0.214341 |
+| 3 | 2.235561 | 1163 | 0.983140 | 0.021462 | 0.734308 | 0.191595 | 0.142880 |
+
+(the first three replicates, and only some of the columns; the file has all of them). The table can be read with any tool (R, Python, a spreadsheet).
+
+**Options in a file.** The options can be in a parameter file (`-Ffile`, with the options in blocks and comments between brackets, see the files in `examples`) or in a JSON or YAML file (`--config`). The files `examples/parameters.GTR.reads` and `examples/config.example.yaml` are complete examples with reads:
+
+    cellcoal -Fexamples/parameters.GTR.reads
+    cellcoal --config examples/config.example.yaml
+
+The first writes its results in the folder `results_GTR_reads` (the name is in the file) and the second in `Results`, the default. In a parameter file the seed has to be in the file as well; with `--config`, the options typed after the file replace the ones in it (for example `--config file.yaml -n1`).
+
+## 3.4 Tutorial: how do coverage and sequencing error change the results?
+
+Simulating one data set tells little: one wants to know how a result changes when a condition changes. `--sweep` runs the program for every combination of the values that you list, with the same seed for all, and puts the metrics of `--summary` in one table. Here, the depth (`-C`) and the sequencing error (`-E`) are varied, with 10 replicates of 20 cells for each of the 8 combinations, 2 combinations at a time:
+
+    cellcoal -n10 -s20 -l3000 -u1e-6 -e10000 -V5 -P0.2 0.02 -#4 \
+             --sweep "C=2,5,10,20 E=0.001,0.01" --sweep-jobs 2 -oSweep
+
+The key is the letter of the option (or its long name, as in `--config`), a range can be written `LOW..HIGH..STEP`, and the options of the command line that are not swept are the same in all the runs. The folder *Sweep* has `sweep.tsv` (for each combination, the mean of every metric over the replicates and its standard error, `_se`), `sweep_replicates.tsv` (every replicate) and `runs` (the summary of each combination, which lets `--sweep-resume` continue a sweep that was interrupted). Add `--sweep-keep` to keep the results of every run as well. Then:
+
+    python3 tools/cellcoal_plots.py sweep Sweep/sweep.tsv --out sweep.png --metrics genotype_error,snv_recall,het_to_hom
+
+![Mean and standard error of three metrics against the depth, for two sequencing errors.](media/quickstart_sweep.png){width=100%}
+
+How to read it:
+
+- `genotype_error` falls with the depth, and it is always higher with the larger sequencing error. At 20x and an error of 0.001 only 1% of the genotypes called are wrong.
+- `snv_recall` (the fraction of the truly variable sites where some cell is called variant) is lowest at 2x, where many cells have no reads at a site, and it does not keep rising with the depth: from 5x on it stays between 0.74 and 0.85. It is not just a matter of reads, which agrees with the last panel.
+- `het_to_hom` is the fraction of the truly heterozygous genotypes that are called homozygous. It is 0.63 at 2x, 0.25 at 10x and 0.20 at 20x, and it never goes below `ado_simulated` (the allelic dropout that was simulated, 0.187 in all the runs, see `sweep.tsv`). The difference between the two is the loss of an allele only because of a low depth, and it is the part that more coverage removes; the rest is the dropout, which no depth fixes. That is why single-cell data are so different from bulk data.
+
+You can sweep any option of the simulation (the sequencing error `E`, the dropout `P`, the doublet rate `B`, the number of cells `s`, the mutation rate `u`, ...) and combine up to the number of values that you can wait for; `-n`, `-o`, `-#` and `-F` cannot be swept. When a metric cannot be computed (for example, without reads) its columns show `NA`.
+
+## 3.5 Good to know
+
+- **Reproducibility.** The same seed (`-#`) and options give identical results in every run and independent of the number of threads (section 4.1). Without `-#`, the seed is taken from the clock and is written in `log` and `run.json`.
+- **Threads.** `OMP_NUM_THREADS=4 cellcoal ...` chooses the number of threads for the reads and the VCF; by default all the cores are used.
+- **Size.** The VCF is by far the largest file (for example, 770 MB for 2 replicates of 100 cells with 30,000 sites). For many cells or sites use `-z` (compressed), `--bcf`, or write only what you need with `-Z` and `-0`, `-8` or `-9`. Runs with many sites keep the genotypes in a compact (sparse) form and, when the reads would not fit in memory, they are generated and written site by site (section 5.3).
+- **The help.** `cellcoal -?` lists every option with its default value.
+- **Next.** Section 4 describes how options are given; section 5 how the data are simulated; section 6 every option.
+
 
 # 4. Basic usage
 
@@ -907,7 +1045,7 @@ Beyond the regression suite (`make test`), the CI checks the program in several 
 
 **Doublets and the other per-cell parameters.** `--cov-doublet-corr RHO` correlates (-1 to 1) the coverage multiplier of a cell (`-J`) with the cell being a doublet (`-B`); `--ado-doublet-corr RHO` does the same with the ADO rate (`-P`). They can be combined with `--cov-ado-corr`; the three correlations must form a valid correlation matrix (otherwise the program stops with a parameter error). The cells are ranked with a Gaussian copula: each cell gets a latent score that is a mixture of the standardized latent coverage and ADO values and independent noise, and the cells with the highest scores become the doublets, so the number of doublets is the same as without the correlation. The correlation is between latent variables; the observed correlation between a 0/1 doublet indicator and a continuous variable is smaller (about 0.75 times the latent value with 30% of doublets). The coverage, ADO rate and doublet status of every cell are written to `cell_params` (columns `cell`, `coverage_multiplier`, `ado_rate`, `doublet`, `donor`) whenever a correlation is used. Without the new options the output is identical to the previous version. Stored and streamed reads give the same files.
 
-**`--summary`** writes `summary.tsv` in the results folder, one row per replicate: `replicate`, `tmrca`, `mutations`, `deletions`, `cnloh`, `snv_true` (variable sites of the true genotypes, before dropout and errors), `snv_observed` (after dropout, errors and reads) and `snv_ratio` (observed over true; it can be above 1 because errors create false variants). With reads (`-C`) it adds nine metrics against the true genotypes, computed for the tumour cells (not the healthy cell) site by site while the reads are simulated, so they are the same with stored and streamed reads: `called_fraction` (genotypes called from the reads over cells x sites), `genotype_error` (called genotypes that differ from the true unphased genotype over called genotypes; a true genotype with one deleted allele counts as homozygous for the other, and a cell with both alleles deleted is left out; a doublet is judged against its own true genotype), `snv_precision` and `snv_recall` (sites where the called genotypes show a variant, against the sites that are variable in the true genotypes). Five more split the error: `het_error` and `hom_error` (error of the cells whose true genotype is heterozygous or homozygous), `het_to_hom` (heterozygous cells that are called homozygous, which is the visible footprint of allelic dropout; it is almost all of `het_error` when there is dropout), and `doublet_error` and `singlet_error` (error of the cells that are doublets, judged by their doublet genotype, and of the others; `NA` when there are no doublets). CellCoal does not detect doublets, so there is no precision or recall for them. Without reads these columns are `NA`.
+**`--summary`** writes `summary.tsv` in the results folder, one row per replicate: `replicate`, `tmrca`, `mutations`, `deletions`, `cnloh`, `snv_true` (variable sites of the true genotypes, before dropout and errors), `snv_observed` (after dropout, errors and reads) and `snv_ratio` (observed over true; it can be above 1 because errors create false variants). With reads (`-C`) it adds ten metrics against the true genotypes, computed for the tumour cells (not the healthy cell) site by site while the reads are simulated, so they are the same with stored and streamed reads: `called_fraction` (genotypes called from the reads over cells x sites), `genotype_error` (called genotypes that differ from the true unphased genotype over called genotypes; a true genotype with one deleted allele counts as homozygous for the other, and a cell with both alleles deleted is left out; a doublet is judged against its own true genotype), `snv_precision` and `snv_recall` (sites where the called genotypes show a variant, against the sites that are variable in the true genotypes). Five more split the error: `het_error` and `hom_error` (error of the cells whose true genotype is heterozygous or homozygous), `het_to_hom` (heterozygous cells that are called homozygous, which is the visible footprint of allelic dropout; it is almost all of `het_error` when there is dropout), and `doublet_error` and `singlet_error` (error of the cells that are doublets, judged by their doublet genotype, and of the others; `NA` when there are no doublets). `ado_simulated` is the allelic dropout that was simulated in the genotypes: the heterozygous genotypes that lost one allele, over those that kept at least one. It is the value to compare with `het_to_hom` (what is seen in the called genotypes): `het_to_hom` is a little higher because a low depth can also leave a heterozygous cell with reads of one allele only, and the difference shrinks as the coverage grows. CellCoal does not detect doublets, so there is no precision or recall for them. Without reads these columns are `NA`.
 
 **`--sweep "KEY=V1,V2,... KEY2=..."`** runs the program once for every combination of the listed values and collects the metrics of `--summary` in a table, instead of writing a script. A key is an option letter (`C`, `E`, `s`, ...) or a long name (`coverage`, `cells`, `cov-ado-corr`, ...). A value can be a range `LOW..HIGH..STEP`; options that take several numbers use colons (`A=0.05:0.01:0,0.1:0.02:0`). All the runs use the same seed (`-#`, or one drawn at random and printed), so a parameter that does not alter the random numbers consumed before the tree (for example `C` or `E`) gives the same genealogies in all the runs and the differences between rows are due to the parameter only; parameters that change the stream (for example `J`, `s`) give different genealogies. The other options of the command line (or of `--config`, where `sweep: "C=2,5"` is also allowed) are common to all the runs. Output, in the folder of `-o` (default `Sweep`): `sweep.tsv` (one row per combination: the values, the number of replicates `n`, and the mean and the standard error `_se` of every metric) and `sweep_replicates.tsv` (all the replicates of all the runs). The run folders are deleted unless `--sweep-keep` is given; the summary of every finished run is kept in `<dir>/runs`. `--sweep-jobs N` runs N combinations at the same time (each with `OMP_NUM_THREADS` set to the number of cores divided by N, unless the variable is already set; on Windows the runs go one after another). `--sweep-resume` continues an interrupted sweep: the runs whose summary is in `<dir>/runs` are not repeated, and the program refuses to resume if the folder holds a different sweep (other options, values or seed; the command lines are in `sweep_spec.txt`). Metrics that are `NA` in every replicate are `NA` in `sweep.tsv`; otherwise the mean and the standard error use the replicates that have a value. `python3 tools/cellcoal_plots.py sweep Sweep` draws the metrics (mean and standard error) against the first parameter, one line per value of the second (`--x`, `--metrics`, `--logx`). `-n`, `-o`, `-#` and `-F` cannot be swept. Example: `cellcoal -n50 -s20 -l10000 -u1e-6 -e10000 -b1 -E0.001 --sweep "C=2,5,10 E=0.001,0.01" -oCovErr`.
 
