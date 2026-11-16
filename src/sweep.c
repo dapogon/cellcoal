@@ -11,7 +11,7 @@
 #include "cellcoal.h"
 #include <unistd.h>
 #ifdef _WIN32
-#include <windows.h>
+int WindowsExecutablePath (char *buf, size_t n);
 #endif
 
 #define SW_MAX_PARAMS	8
@@ -264,9 +264,7 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 
 	{
 #ifdef _WIN32
-	DWORD len = GetModuleFileNameA (NULL, exe, (DWORD) sizeof(exe));
-
-	if (len == 0 || len >= sizeof(exe))
+	if (!WindowsExecutablePath (exe, sizeof(exe)))
 		snprintf (exe, sizeof(exe), "%s", argv[0]);
 #else
 	ssize_t len = readlink ("/proc/self/exe", exe, sizeof(exe) - 1);
