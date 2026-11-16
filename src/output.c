@@ -580,7 +580,7 @@ void PrintSNVGenotypes (FILE *fp)
                     int site = SNVsites[j];
                     for (i=i0; i<i1; i++)
                         {
-                        char *q = buf + (long)(i-i0) * rowLen + 3L * j;
+                        char *q = buf + (long long)(i-i0) * rowLen + 3L * j;
                         q[0] = ' ';
                         q[1] = WhichNuc(GetG(MATERNAL, i, site));
                         q[2] = WhichNuc(GetG(PATERNAL, i, site));
@@ -594,7 +594,7 @@ void PrintSNVGenotypes (FILE *fp)
                         fprintf (fp,"%s%04d ", inCellName,i+1);
                     else
                         fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
-                    fwrite (buf + (long)(i-i0) * rowLen, 1, (size_t) rowLen, fp);
+                    fwrite (buf + (long long)(i-i0) * rowLen, 1, (size_t) rowLen, fp);
                     fprintf (fp,"\n");
                     }
                 }

@@ -34,7 +34,7 @@ void MLPairAt (int i, int q, int *m, int *p)
 
 	if (streamMode == YES)
 		{
-		unsigned char b = mlStore[(long) q * (numCells+1) + i];
+		unsigned char b = mlStore[(long long) q * (numCells+1) + i];
 
 		*m = ((b & 15) == 15) ? MISSING : (int) (b & 15);
 		*p = ((b >> 4) == 15) ? MISSING : (int) (b >> 4);
@@ -55,7 +55,7 @@ void MLPairAt (int i, int q, int *m, int *p)
 static void StoreMLAlleles (int q, int j)
 	{
 	int		i, m, p;
-	unsigned char *dst = mlStore + (long) q * (numCells+1);
+	unsigned char *dst = mlStore + (long long) q * (numCells+1);
 
 	for (i=0; i<numCells+1; i++)
 		{
@@ -1095,11 +1095,11 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 		/* maximum likelihood alleles of the block's SNVs, kept for the genotype and haplotype files */
 		if ((doPrintSNVgenotypes == YES || doPrintSNVhaplotypes == YES) && nq > 0)
 			{
-			long need = (long) nSNVs * (numCells+1);
+			long long need = (long long) nSNVs * (numCells+1);
 
 			if (need > mlStoreCap)
 				{
-				long newCap = need + need / 2 + (long) (numCells+1) * 1024;
+				long long newCap = need + need / 2 + (long long) (numCells+1) * 1024;
 				unsigned char *t = (unsigned char*) realloc (mlStore, (size_t) newCap);
 
 				if (!t)
