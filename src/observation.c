@@ -483,10 +483,8 @@ void CountMLGenotypingErrors()
 		}
 
 	fprintf(fpSims, "%d, %10.8f, %d, %10.8f, %d\n", countCalledGenotypes, countCalledGenotypes / ((numCells+1) * (double)numSites), countMLgenotypeErrors, countMLgenotypeErrors/(double)countCalledGenotypes, numSNVs);
-	cumCountCalledGenotypes += countCalledGenotypes / ((numCells+1) * (double)numSites);
-	cumCountCalledGenotypesSq += pow (countCalledGenotypes / ((numCells+1) * (double)numSites), 2);
-	cumCountMLgenotypeErrors += countMLgenotypeErrors/(double)countCalledGenotypes;
-	cumCountMLgenotypeErrorsSq += pow (countMLgenotypeErrors/(double)countCalledGenotypes, 2);
+	AccumAdd (&runStats.called, countCalledGenotypes / ((numCells+1) * (double)numSites));
+	AccumAdd (&runStats.mlErr, countMLgenotypeErrors/(double)countCalledGenotypes);
 	}
 
 

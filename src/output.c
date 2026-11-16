@@ -1790,12 +1790,12 @@ void	PrintRunInformation (FILE *fp)
 	else
 		{
 		fprintf (fp, "\n\nGenealogy");
-		fprintf (fp, "\n Mean time to the MRCA (Ne generations)       =   %6.4f", meanTMRCA);
+		fprintf (fp, "\n Mean time to the MRCA (Ne generations)       =   %6.4f", runStats.tmrca.mean);
 		if (noisy > 1)
 			fprintf (fp, "\n Exp time to the MRCA [constant Ne]           =   %6.4f", expTMRCA);
 		if (numDataSets > 1)
 			{
-			fprintf (fp, "\n Variance time MRCA                           =   %6.4f", varTMRCA);
+			fprintf (fp, "\n Variance time MRCA                           =   %6.4f", runStats.tmrca.var);
 			if (noisy > 1)
 				fprintf (fp, "\n Exp variance time MRCA [constant Ne]         =   %6.4f", expVarTMRCA);
 			}
@@ -1886,20 +1886,20 @@ void	PrintRunInformation (FILE *fp)
             if (noisy > 1)
 				fprintf (fp, "\n Exp num mutation events [Ne=cte,ISMh]        =   %3.2f", expNumMU);
             }
-        fprintf (fp, "\n Mean number of mutation events               =   %3.2f", meanNumMU);
+        fprintf (fp, "\n Mean number of mutation events               =   %3.2f", runStats.mu.mean);
         if (numDataSets > 1)
             {
             if (doSimulateFixedNumMutations == NO)
 				{
                 if (noisy > 1)
 					fprintf (fp, "\n Exp variance num mut events [Ne=cte,ISM]     =   %3.2f", expVarNumMU);
-				fprintf (fp, "\n Variance number of mutation events           =   %3.2f", varNumMU);
+				fprintf (fp, "\n Variance number of mutation events           =   %3.2f", runStats.mu.var);
 				}
              }
-        fprintf (fp, "\n Mean number of SNVs                          =   %3.2f", meanNumSNVs);
+        fprintf (fp, "\n Mean number of SNVs                          =   %3.2f", runStats.snv.mean);
         if (numDataSets > 1)
             {
-			fprintf (fp, "\n Variance number of SNVs                      =   %3.2f", varNumSNVs);
+			fprintf (fp, "\n Variance number of SNVs                      =   %3.2f", runStats.snv.var);
 			fprintf (fp, "\n Proportion of reps without SNV sites         =   %3.2f", zeroSNVs/(double)numDataSets);
 			}
 
@@ -1907,18 +1907,18 @@ void	PrintRunInformation (FILE *fp)
 			{
 			fprintf (fp, "\n\nDeletion rates");
 			fprintf (fp, "\n Deletion rate                                =   %2.1e", deletionRate);
-			fprintf (fp, "\n Mean number of deletion events               =   %3.2f", meanNumDEL);
+			fprintf (fp, "\n Mean number of deletion events               =   %3.2f", runStats.del.mean);
 			if (numDataSets > 1)
-				fprintf (fp, "\n Variance number of deletion events           =   %3.2f", varNumDEL);
+				fprintf (fp, "\n Variance number of deletion events           =   %3.2f", runStats.del.var);
 			}
 
 		if (CNLOHrate > 0)
 			{
 			fprintf (fp, "\n\nCopy-neutral LOH rates");
 			fprintf (fp, "\n CN-LOH rate                                  =   %2.1e", CNLOHrate);
-			fprintf (fp, "\n Mean number of CN-LOH events                 =   %3.2f", meanNumCNLOH);
+			fprintf (fp, "\n Mean number of CN-LOH events                 =   %3.2f", runStats.cnloh.mean);
 			if (numDataSets > 1)
-				fprintf (fp, "\n Variance number of CN-LOH events             =   %3.2f", varNumCNLOH);
+				fprintf (fp, "\n Variance number of CN-LOH events             =   %3.2f", runStats.cnloh.var);
 			}
  
 		fprintf (fp, "\n\nSingle-cell WGA");

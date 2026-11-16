@@ -179,6 +179,20 @@ Version 1.1.0 (18/10/2019)
    SNV genotypes are printed from the genome data, and allocating (cells+1) x sites blocks anyway costs
    e.g. ~2.4 GB for 1000 cells x 50000 sites. */
 
+/* adds a value to the statistics accumulated over replicates */
+void AccumAdd (Accum *a, double x)
+	{
+	a->sum += x;
+	a->sumSq += pow(x,2);
+	}
+
+/* mean and (sample) variance after n replicates */
+void AccumFinish (Accum *a, int n)
+	{
+	a->mean = a->sum / (double) n;
+	a->var = (1.0 / (double) (n-1)) * (a->sumSq - pow(a->sum,2) / (double) n);
+	}
+
 /* default values of all the options */
 static void SetDefaultOptions (void)
 	{
@@ -318,21 +332,14 @@ static void CheckOptionCombinations (void)
 /* means and variances over replicates */
 static void ComputeSummaryStatistics (void)
 	{
-    meanNumCA  = cumNumCA /  (double) numDataSets;
-    meanNumMU  = cumNumMU /  (double) numDataSets;
-    meanNumSNVs  = cumNumSNVs / (double) numDataSets;
-    meanNumDEL  = cumNumDEL /  (double) numDataSets;
-    meanNumCNLOH = cumNumCNLOH /  (double) numDataSets;
-    meanTMRCA  =  cumTMRCA /  (double) numDataSets;
-	meanMLgenotypeError = cumCountMLgenotypeErrors / (double) numDataSets;
-	meanCalledGenotypes = cumCountCalledGenotypes / (double) numDataSets;
-
-    varNumMU = (1.0 / (double) (numDataSets-1)) * (cumNumMUSq - pow(cumNumMU,2) / (double) numDataSets);
-    varNumSNVs = (1.0 / (double) (numDataSets-1)) * (cumNumSNVsSq - pow(cumNumSNVs,2) / (double) numDataSets);
-    varNumDEL = (1.0 / (double) (numDataSets-1)) * (cumNumDELSq - pow(cumNumDEL,2) / (double) numDataSets);
-	varTMRCA = (1.0 / (double) (numDataSets-1)) * (cumTMRCASq - pow(cumTMRCA,2) / (double) numDataSets);
-	varMLgenotypeError = (1.0 / (double) (numDataSets-1)) * (cumCountMLgenotypeErrorsSq - pow(cumCountMLgenotypeErrors,2) / (double) numDataSets);
-	varCalledGenotypes = (1.0 / (double) (numDataSets-1)) * (cumCountCalledGenotypesSq - pow(cumCountCalledGenotypes,2) / (double) numDataSets);
+	AccumFinish (&runStats.mu, numDataSets);
+	AccumFinish (&runStats.snv, numDataSets);
+	AccumFinish (&runStats.del, numDataSets);
+	AccumFinish (&runStats.tmrca, numDataSets);
+	AccumFinish (&runStats.mlErr, numDataSets);
+	AccumFinish (&runStats.called, numDataSets);
+	runStats.ca.mean = runStats.ca.sum / (double) numDataSets;	/* the variances of these two are not computed */
+	runStats.cnloh.mean = runStats.cnloh.sum / (double) numDataSets;
 	}
 
 /* reads simulated, summarized and printed (VCF, PILEUP, bulk, CATG) in blocks of sites */
@@ -486,9 +493,8 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				TreeRateSwitch (coalTreeMRCA, seed);
 				}
 			
-			cumNumCA += numCA;
-			cumTMRCA += TMRCA;
-			cumTMRCASq += pow(TMRCA,2);
+			runStats.ca.sum += numCA;
+			AccumAdd (&runStats.tmrca, TMRCA);
 			}
 
 		totalTreeLength = SumBranches (healthyRoot);
@@ -627,8 +633,7 @@ static void RunReplicate (int dataSetNum, long int *seed)
             if (noisy > 2)
                 fprintf (stderr, "DONE\n\n");
 	
-            cumNumMU += numMU;
-            cumNumMUSq += pow(numMU,2);
+            AccumAdd (&runStats.mu, numMU);
 
 			if (CNLOHrate > 0)
 				{
@@ -646,8 +651,7 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				if (noisy > 2)
 					fprintf (stderr, "DONE\n\n");
 
-				cumNumCNLOH += numCNLOH;
-				cumNumCNLOHSq += pow(numCNLOH,2);
+				AccumAdd (&runStats.cnloh, numCNLOH);
 				}
 
 			if (deletionRate > 0)
@@ -666,8 +670,7 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				if (noisy > 2)
 					fprintf (stderr, "DONE\n\n");
 
-				cumNumDEL += numDEL;
-				cumNumDELSq += pow(numDEL,2);
+				AccumAdd (&runStats.del, numDEL);
 				}
 
 			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
@@ -729,8 +732,7 @@ static void RunReplicate (int dataSetNum, long int *seed)
 			else
 				numSNVs = CountAllelesInObservedGenotypes();
 
-            cumNumSNVs += numSNVs;
-            cumNumSNVsSq += pow(numSNVs,2);
+            AccumAdd (&runStats.snv, numSNVs);
 
 			if (fpSummary != NULL)
 				{
@@ -963,11 +965,11 @@ int main (int argc, char **argv)
     expVarNumMU =  theta * a + pow(theta,2) * a2;
     expTMRCA = 2 * (1 - 1.0/numCells) /* 2.0 * N */;
     expVarTMRCA = 0;
-    for (i=2; i<=numCells; i++)
-        expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
-    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = 0;
-	cumCountMLgenotypeErrors = cumCountMLgenotypeErrorsSq = cumCountCalledGenotypes = cumCountCalledGenotypesSq = 0;
-    zeroSNVs = cumTMRCA = cumTMRCASq = 0;
+	for (i=2; i<=numCells; i++)
+		expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
+
+	memset (&runStats, 0, sizeof(runStats));
+	zeroSNVs = 0;
 		
     altModelMutationRate = mutationRate*nonISMRelMutRate;
 	
@@ -1232,10 +1234,10 @@ int main (int argc, char **argv)
 	if (fpSummary != NULL)
 		fclose (fpSummary);
 #ifdef COUNT_ML_GENOTYPE_ERRORS
-	fprintf (stdout, "\n\n Mean probability for untrue genotype calls     =   %8.6f", meanMLgenotypeError);
-	fprintf (stdout, "\n Variance probability for untrue genotype calls =   %8.6f", varMLgenotypeError);
-	fprintf (stdout, "\n Mean proportion of SNV genotypes called        =   %8.6f", meanCalledGenotypes);
-	fprintf (stdout, "\n Variance proportion of SNV genotypes called    =   %8.6f\n", varCalledGenotypes);
+	fprintf (stdout, "\n\n Mean probability for untrue genotype calls     =   %8.6f", runStats.mlErr.mean);
+	fprintf (stdout, "\n Variance probability for untrue genotype calls =   %8.6f", runStats.mlErr.var);
+	fprintf (stdout, "\n Mean proportion of SNV genotypes called        =   %8.6f", runStats.called.mean);
+	fprintf (stdout, "\n Variance proportion of SNV genotypes called    =   %8.6f\n", runStats.called.var);
 	fclose(fpSims);
 #endif
 	

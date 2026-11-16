@@ -179,10 +179,12 @@ extern int		ploidy, numCells, N, *Nbegin, *Nend,  *cumDuration, numSites, numDat
 extern int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutations, altModel;
 extern int		numCA, numMU, numDEL, numCNLOH, numProposedMU, numSNVs, numFixedMutations, numSNVmaternal, zeroSNVs;
 extern int		numISMdeletions, numISMCNLOH, stringPrecision;
-extern double	meanNumSNVs, meanNumCA, meanNumMU, meanNumDEL, meanNumCNLOH;
-extern double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountMLgenotypeErrors, cumCountCalledGenotypes;
-extern double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
-extern double	varNumMU, varNumSNVs, varNumDEL, varNumCNLOH;
+/* statistics accumulated over replicates (sum, sum of squares; mean and variance after the last replicate) */
+typedef struct { double sum, sumSq, mean, var; } Accum;
+typedef struct { Accum tmrca, ca, mu, snv, del, cnloh, mlErr, called; } RunStats;
+extern RunStats runStats;
+void AccumAdd (Accum *a, double x);
+void AccumFinish (Accum *a, int n);
 extern double	expNumMU, expVarNumMU;
 extern double	theta, healthyTipBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
 extern double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
@@ -204,9 +206,7 @@ extern double	fixedADOrate, doADOcell, meanADOcell, varADOcell, doADOsite, meanA
 extern double	doAllelicImbalance, meanAllelicImbalance, varAllelicImbalance;
 extern double	coverage, haploidCoverageReduction;
 extern double	meanAmplificationError, varAmplificationError, meanDoubletRate, varDoubletRate;
-extern double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
-extern double 	cumCountMLgenotypeErrors, cumCountMLgenotypeErrorsSq, meanMLgenotypeError, varMLgenotypeError;
-extern double 	cumCountCalledGenotypes, cumCountCalledGenotypesSq, meanCalledGenotypes, varCalledGenotypes;
+extern double	TMRCA, expTMRCA, expVarTMRCA;
 extern double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
 extern double	Cijk[256], Root[4];
 extern double	SNPrate, alphaCoverage, alphaSiteCoverage, alphaCellCoverage;
