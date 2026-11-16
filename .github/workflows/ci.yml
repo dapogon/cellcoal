@@ -110,3 +110,21 @@ jobs:
         run: make test
       - name: Coverage summary
         run: python3 tools/gcov_summary.py out | tee -a "$GITHUB_STEP_SUMMARY"
+
+  speed:
+    # builds the latest release and the new code on the same runner and fails if the new code is more than 25% slower
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+      - name: Build the new code
+        run: make && cp bin/cellcoal-* /tmp/cellcoal-new
+      - name: Build the latest release
+        run: |
+          tag=$(git tag --sort=-v:refname | head -1)
+          echo "Reference release: $tag"
+          git worktree add /tmp/ref "$tag"
+          (cd /tmp/ref && make && cp bin/cellcoal-* /tmp/cellcoal-ref)
+      - name: Compare speed
+        run: python3 tests/bench.py /tmp/cellcoal-ref /tmp/cellcoal-new --max-ratio 1.25 | tee -a "$GITHUB_STEP_SUMMARY"
