@@ -1055,7 +1055,7 @@ int main (int argc, char **argv)
 	// clean previous results directory
 	RemoveDir (resultsDir);
 	// create new results directory
-	mkdir(resultsDir,S_IRWXU);
+	MAKE_DIR (resultsDir);
 
    	strcpy(treeDir, "trees_dir");
    	strcpy(timesDir, "times_dir");

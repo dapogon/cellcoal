@@ -721,28 +721,44 @@ void ReadUntil(FILE *fv, char stopChar, char *what)
 
 
 
-/************************ Unlink_callback **************************/
-/* Call back to remove the passed path .
-From http://stackoverflow.com/questions/5467725/how-to-delete-a-directory-and-its-contents-in-posix-c
-*/
-int Unlink_callback(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-	{
-    int rv = remove(fpath);
-
-    if (rv)
-        perror(fpath);
-
-    return rv;
-	}
-
-
 /************************ RemoveDir **************************/
-/* Removes directory and its contents
-From http://stackoverflow.com/questions/5467725/how-to-delete-a-directory-and-its-contents-in-posix-c
-*/
-int RemoveDir(char *path)
+/* Removes a directory and its contents (portable: POSIX and Windows); returns 0 when everything was removed or the path did not exist */
+int RemoveDir (char *path)
 	{
-    return nftw(path, Unlink_callback, 64, FTW_DEPTH | FTW_PHYS);
+	struct stat	st;
+	DIR			*d;
+	struct dirent	*e;
+	int			rc = 0;
+
+	if (LSTAT (path, &st) != 0)
+		return 0;
+	if (!S_ISDIR (st.st_mode))
+		return unlink (path);
+	if ((d = opendir (path)) == NULL)
+		return -1;
+	while ((e = readdir (d)) != NULL)
+		{
+		char	*sub;
+		size_t	len;
+
+		if (strcmp (e->d_name, ".") == 0 || strcmp (e->d_name, "..") == 0)
+			continue;
+		len = strlen (path) + strlen (e->d_name) + 2;
+		sub = (char*) malloc (len);
+		if (!sub)
+			{
+			rc = -1;
+			break;
+			}
+		snprintf (sub, len, "%s/%s", path, e->d_name);
+		if (RemoveDir (sub) != 0)
+			rc = -1;
+		free (sub);
+		}
+	closedir (d);
+	if (rmdir (path) != 0)
+		rc = -1;
+	return rc;
 	}
 
 

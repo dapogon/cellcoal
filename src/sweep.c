@@ -10,6 +10,9 @@
 */
 #include "cellcoal.h"
 #include <unistd.h>
+#ifdef _WIN32
+#include <windows.h>
+#endif
 
 #define SW_MAX_PARAMS	8
 #define SW_MAX_VALUES	256
@@ -32,24 +35,25 @@ static void SweepFail (const char *msg, const char *what)
 	exit (-1);
 	}
 
+/* quotes an argument for the shell: '...' on POSIX, "..." on Windows (cmd.exe) */
 static char *SweepQuote (const char *s)
 	{
-	size_t i, n = 0;
+	size_t i;
 	char *q = (char*) malloc (4 * strlen (s) + 3), *p;
 
 	if (!q)
 		SweepFail ("out of memory", NULL);
 	p = q;
-	*p++ = '\'';
+	*p++ = SHELL_QUOTE_CHAR;
 	for (i=0; s[i]; i++)
 		{
+#ifndef _WIN32
 		if (s[i] == '\'')
-			{ memcpy (p, "'\\''", 4); p += 4; }
-		else
-			*p++ = s[i];
-		n++;
+			{ memcpy (p, "'\\''", 4); p += 4; continue; }
+#endif
+		*p++ = s[i];
 		}
-	*p++ = '\'';
+	*p++ = SHELL_QUOTE_CHAR;
 	*p = '\0';
 	return q;
 	}
@@ -259,15 +263,22 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 		seed = 1;
 
 	{
+#ifdef _WIN32
+	DWORD len = GetModuleFileNameA (NULL, exe, (DWORD) sizeof(exe));
+
+	if (len == 0 || len >= sizeof(exe))
+		snprintf (exe, sizeof(exe), "%s", argv[0]);
+#else
 	ssize_t len = readlink ("/proc/self/exe", exe, sizeof(exe) - 1);
 
 	if (len > 0)
 		exe[len] = '\0';
 	else
-		snprintf (exe, sizeof(exe), "%s", argv[0]);
+		snprintf (exe, sizeof(exe), "%s", argv[0]);	/* macOS: the path used to start the program */
+#endif
 	}
 
-	mkdir (dir, S_IRWXU);
+	MAKE_DIR (dir);
 	snprintf (path, sizeof(path), "%s/sweep.tsv", dir);
 	if ((fpSweep = fopen (path, "w")) == NULL)
 		SweepFail ("cannot write", path);
@@ -342,14 +353,24 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 
 		qd = SweepQuote (rundir);
 		ql = SweepQuote (logf);
-		snprintf (tail, sizeof(tail), " '-o%s' -y0 '-#%ld' --summary > %s 2>&1", rundir, seed, ql);
+		snprintf (tail, sizeof(tail), " %c-o%s%c -y0 %c-#%ld%c --summary > %s 2>&1", SHELL_QUOTE_CHAR, rundir, SHELL_QUOTE_CHAR, SHELL_QUOTE_CHAR, seed, SHELL_QUOTE_CHAR, ql);
 		/* the directory is quoted inside -o */
 		(void) qd;
 		len += snprintf (cmd + len, sizeof(cmd) - len, "%s", tail);
 		free (qd);
 		free (ql);
 		}
+#ifdef _WIN32
+		/* cmd.exe removes the first and the last quote of a command line that starts with a quote */
+		{
+		char wrapped[sizeof(cmd) + 4];
+
+		snprintf (wrapped, sizeof(wrapped), "\"%s\"", cmd);
+		status = system (wrapped);
+		}
+#else
 		status = system (cmd);
+#endif
 		if (status != 0)
 			{
 			fprintf (stderr, "\n!!! SWEEP ERROR: run %d of %d failed (see %s)\n", i + 1, nruns, logf);

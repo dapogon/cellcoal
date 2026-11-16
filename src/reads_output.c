@@ -937,7 +937,7 @@ void WriteCellParams (int replicate)
 	if (doPrintSeparateReplicates == YES)
 		{
 		snprintf (file, sizeof(file), "%s/cell_params_dir", resultsDir);
-		mkdir (file, S_IRWXU);
+		MAKE_DIR (file);
 		snprintf (file, sizeof(file), "%s/cell_params_dir/cell_params.%04d", resultsDir, replicate+1);
 		fp = fopen (file, "w");
 		}
@@ -1213,12 +1213,12 @@ FILE *OpenVCF (const char *path)
 
 	if (doZipVCF == NO)
 		return fopen (path, "w");
-	if (strchr (path, '\'') != NULL)
+	if (strchr (path, SHELL_QUOTE_CHAR) != NULL)
 		{
 		fprintf (stderr, "Cannot compress the VCF when the path has a quote: %s\n", path);
 		exit (-1);
 		}
-	snprintf (cmd, sizeof(cmd), "gzip -c > '%s.gz'", path);
+	snprintf (cmd, sizeof(cmd), "gzip -c > %c%s.gz%c", SHELL_QUOTE_CHAR, path, SHELL_QUOTE_CHAR);
 	fp = popen (cmd, "w");
 	if (fp == NULL)
 		fprintf (stderr, "Could not run gzip to write the compressed VCF\n");

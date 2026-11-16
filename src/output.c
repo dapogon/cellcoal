@@ -227,7 +227,7 @@ void PrepareSeparateFiles(int replicate)
     if (doPrintTree == YES)
         {
 		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeDir);
-		mkdir(File,S_IRWXU);
+		MAKE_DIR (File);
 		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, treeDir, treeFile, replicate+1);
 		if ((fpTrees = fopen(File, "w")) == NULL)
             {
@@ -239,7 +239,7 @@ void PrepareSeparateFiles(int replicate)
 	if (doPrintTimes == YES)
         {
 		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesDir);
-		mkdir(File,S_IRWXU);
+		MAKE_DIR (File);
 		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, timesDir, timesFile, replicate+1);
 		if ((fpTimes = fopen(File, "w")) == NULL)
             {
@@ -254,7 +254,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintSNVgenotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVgenotypesDir, SNVgenotypesFile, replicate+1);
             if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
                 {
@@ -267,7 +267,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintSNVhaplotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVhaplotypesDir, SNVhaplotypesFile, replicate+1);
             if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
                 {
@@ -280,7 +280,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintTrueHaplotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
             if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
@@ -293,7 +293,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintFullGenotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullGenotypesDir, fullGenotypesFile, replicate+1);
             if ((fpFullGenotypes = fopen(File, "w")) == NULL)
                 {
@@ -306,7 +306,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintFullHaplotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullHaplotypesDir, fullHaplotypesFile, replicate+1);
             if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
                 {
@@ -319,7 +319,7 @@ void PrepareSeparateFiles(int replicate)
         if (doNGS == YES && doPrintVCF == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFdir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
             if ((fpVCF = OpenVCF (File)) == NULL)
                 {
@@ -332,7 +332,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintCATG == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGdir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, CATGdir, CATGfile, replicate+1);
             if ((fpCATG = fopen(File, "w")) == NULL)
                 {
@@ -345,7 +345,7 @@ void PrepareSeparateFiles(int replicate)
 		if (doPrintPILEUP == YES)
 			{
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPdir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
 			if ((fpPILEUP = fopen(File, "w")) == NULL)
 				{
@@ -358,7 +358,7 @@ void PrepareSeparateFiles(int replicate)
 		if (doPrintBulk == YES)
 			{
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, bulkDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, bulkDir, bulkFile, replicate+1);
 			if ((fpBulk = fopen(File, "w")) == NULL)
 				{
@@ -2417,7 +2417,7 @@ void WriteADOCells (const double *rate, int replicate)
 	if (doPrintSeparateReplicates == YES)
 		{
 		snprintf (file, sizeof(file), "%s/ado_cells_dir", resultsDir);
-		mkdir (file, S_IRWXU);
+		MAKE_DIR (file);
 		snprintf (file, sizeof(file), "%s/ado_cells_dir/ado_cells.%04d", resultsDir, replicate+1);
 		fp = fopen (file, "w");
 		}

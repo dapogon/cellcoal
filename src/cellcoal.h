@@ -18,9 +18,7 @@
 #include <time.h>
 #include <ctype.h>
 #include <errno.h>
-#include <sys/types.h>
-#include <sys/stat.h>
-#include <ftw.h>
+#include "platform.h"
 
 #include "definitions.h"
 
@@ -138,7 +136,6 @@ double	RandomGamma (double shape, long int *seed);
 double	RandomGamma1 (double s, long int *seed);
 double	RandomGamma2 (double s, long int *seed);
 int		ChooseUniformState (double *freq, long int *seed);
-int		Unlink_callback (const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf);
 int		RemoveDir(char *path);
 int 		CheckMatrixSymmetry(double matrix[4][4]);
 void 	RecordTriNucObservation(TriNucStr *trin, int site);

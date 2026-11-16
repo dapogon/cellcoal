@@ -128,3 +128,35 @@ jobs:
           (cd /tmp/ref && make && cp bin/cellcoal-* /tmp/cellcoal-ref)
       - name: Compare speed
         run: python3 tests/bench.py /tmp/cellcoal-ref /tmp/cellcoal-new --max-ratio 1.25 | tee -a "$GITHUB_STEP_SUMMARY"
+
+  windows:
+    # Windows (MSYS2, MinGW-w64): build and smoke tests; the whole suite runs too but does not fail the job yet
+    runs-on: windows-latest
+    defaults:
+      run:
+        shell: msys2 {0}
+    steps:
+      - uses: actions/checkout@v4
+      - uses: msys2/setup-msys2@v2
+        with:
+          msystem: UCRT64
+          update: false
+          install: make mingw-w64-ucrt-x86_64-gcc python
+      - name: Build
+        run: make
+      - name: Smoke tests
+        run: |
+          set -e
+          bin=$(ls bin/cellcoal-* | head -1)
+          mkdir -p /tmp/w && cd /tmp/w
+          "$OLDPWD/$bin" -n2 -s10 -l500 -u1e-6 -e10000 -b1 -C8 -E0.001 -P0.2 0.02 -B0.1 0.01 --summary -v -#3 > /dev/null
+          test -s Results/summary.tsv
+          test -s Results/vcf_dir/vcf.0001
+          "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 --sweep "C=2,4" -oSW > /dev/null
+          test "$(wc -l < SW/sweep.tsv)" -eq 3
+          "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
+          "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
+          echo "Windows smoke tests passed"
+      - name: Whole suite (informative)
+        continue-on-error: true
+        run: make test
