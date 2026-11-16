@@ -116,6 +116,8 @@ sanitizers, fuzzing, compilers and theory</a></li>
 <li><a href="#i-per-cell-correlations-with-doublets---summary-and---sweep" id="toc-i-per-cell-correlations-with-doublets---summary-and---sweep">6.10i
 Per-cell correlations with doublets, <code>--summary</code> and
 <code>--sweep</code></a></li>
+<li><a href="#version-2.2.3-doublet-correlations-summary-sweep" id="toc-version-2.2.3-doublet-correlations-summary-sweep">8.17 Version
+2.2.3: doublet correlations, –summary, –sweep</a></li>
 <li><a href="#version-2.1.1-streamed-reads" id="toc-version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</a></li>
 <li><a href="#versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options" id="toc-versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
@@ -1705,6 +1707,13 @@ two integer overflows with absurd values; all are fixed in 2.2.2.</li>
 <code>--coverage</code>, runs the suite and writes the line coverage of
 every source file (<code>tools/gcov_summary.py</code>) in the summary of
 the job.</li>
+<li><strong>Speed.</strong>
+<code>python3 tests/bench.py REFERENCE_BIN NEW_BIN</code> runs three
+fixed workloads (trees and mutations, reads with VCF, reads with
+doublets and coverage variation) with one thread and compares the time
+with a reference binary (the CI builds the latest release on the same
+runner); it fails if any workload is more than 25% slower. Comparing two
+builds on the same machine avoids the noise of absolute timings.</li>
 <li><strong>Theory.</strong>
 <code>python3 tests/theory.py bin/cellcoal-x.y.z</code> (a few seconds,
 also part of <code>make test</code>) checks that the model is right, not
@@ -1780,6 +1789,14 @@ of replicates <code>n</code>, and the mean and the standard error
 <code>--sweep-keep</code> is given. <code>-n</code>, <code>-o</code>,
 <code>-#</code> and <code>-F</code> cannot be swept. Example:
 <code>cellcoal -n50 -s20 -l10000 -u1e-6 -e10000 -b1 -E0.001 --sweep &quot;C=2,5,10 E=0.001,0.01&quot; -oCovErr</code>.</p>
+<h2 id="version-2.2.3-doublet-correlations-summary-sweep">8.17 Version
+2.2.3: doublet correlations, –summary, –sweep</h2>
+<p><code>--cov-doublet-corr</code>, <code>--ado-doublet-corr</code>,
+<code>--summary</code> and <code>--sweep</code> (section 6.10i); a crash
+of <code>--ado-doublet-corr</code> used alone is fixed.
+<code>main</code> is split into functions and the CI checks the speed
+against the latest release (section 6.10h). The output of existing runs
+is identical to 2.2.2.</p>
 <h2 id="version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</h2>
 <p>Streamed reads. When the per-cell, per-site read data would exceed
