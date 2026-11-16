@@ -52,7 +52,7 @@ void AllocateCellStructure(void)
 	if (streamMode == YES)
 		{
 		/* only a window of sites is held (see StreamReads): about 64 MB, and enough sites to keep the threads busy */
-		long	b = (long) (64.0 * 1048576.0 / (sizeof(CellSiteStr) * (double)(numCells+1)));
+		long long	b = (long long) (64.0 * 1048576.0 / (sizeof(CellSiteStr) * (double)(numCells+1)));
 		int		minB = 16;
 #ifdef _OPENMP
 		minB = 8 * omp_get_max_threads();

@@ -118,6 +118,7 @@ Per-cell correlations with doublets, <code>--summary</code> and
 <code>--sweep</code></a></li>
 <li><a href="#version-2.2.3-doublet-correlations-summary-sweep" id="toc-version-2.2.3-doublet-correlations-summary-sweep">8.17 Version
 2.2.3: doublet correlations, –summary, –sweep</a></li>
+<li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-reads" id="toc-version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</a></li>
 <li><a href="#versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options" id="toc-versions-2.1.2-to-2.1.4-bulk-read-counts-vcf-options">8.9
@@ -1797,6 +1798,28 @@ of <code>--ado-doublet-corr</code> used alone is fixed.
 <code>main</code> is split into functions and the CI checks the speed
 against the latest release (section 6.10h). The output of existing runs
 is identical to 2.2.2.</p>
+<h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
+<p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
+toolchain: <code>pacman -S make mingw-w64-ucrt-x86_64-gcc python</code>,
+then <code>make</code>). The code that differs between systems is in
+<code>src/platform.h</code> (directories, in-memory streams,
+<code>getline</code>, 64-bit file offsets, time functions) and
+<code>src/winexe.c</code> (path of the executable, needed by
+<code>--sweep</code>). The CI has a <code>windows</code> job that builds
+the program, runs smoke tests (a run with reads and
+<code>--summary</code>, a <code>--sweep</code>, and re-running over an
+existing results folder) and the whole suite. At the time of writing the
+suite passes 74 of 80 checks on Windows; the failing ones (the
+stored-versus-streamed bulk file, <code>-Z</code>, <code>--config</code>
+from <code>run.json</code> and <code>--fast</code> against the default
+genotypes) are being investigated and the job does not fail because of
+them yet. The results of the simulations are statistically correct on
+Windows (<code>tests/theory.py</code> passes).</p>
+<p>On Windows <code>long</code> has 32 bits, which overflowed in the
+random number generator and made the coalescent times statistically
+wrong; the generator and the index arithmetic now use 64-bit integers
+explicitly. The output on Linux and macOS is unchanged (bit-identical to
+2.0.2 in the regression configurations).</p>
 <h2 id="version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</h2>
 <p>Streamed reads. When the per-cell, per-site read data would exceed

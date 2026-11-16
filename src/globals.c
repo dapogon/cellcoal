@@ -15,10 +15,7 @@ int		ploidy, numCells, N, *Nbegin, *Nend,  *cumDuration, numSites, numDataSets, 
 int		noisy, numNodes, numAltModelSites, numDefaultModelSites, numISMmutations, altModel;
 int		numCA, numMU, numDEL, numCNLOH, numProposedMU, numSNVs, numFixedMutations, numSNVmaternal, zeroSNVs;
 int		numISMdeletions, numISMCNLOH, stringPrecision;
-double	meanNumSNVs, meanNumCA, meanNumMU, meanNumDEL, meanNumCNLOH;
-double 	cumNumSNVs, cumNumCA, cumNumMU, cumNumDEL, cumNumCNLOH, cumCountMLgenotypeErrors, cumCountCalledGenotypes;
-double	cumNumMUSq, cumNumSNVsSq, cumNumDELSq, cumNumCNLOHSq;
-double	varNumMU, varNumSNVs, varNumDEL, varNumCNLOH;
+RunStats	runStats;
 double	expNumMU, expVarNumMU;
 double	theta, healthyTipBranchLength, healthyTipBranchLengthRatio, transformingBranchLengthRatio, totalTreeLength;
 double	mutationRate, nonISMRelMutRate, propAltModelSites, altModelMutationRate, deletionRate, CNLOHrate;
@@ -40,9 +37,7 @@ double	fixedADOrate, doADOcell, meanADOcell, varADOcell, doADOsite, meanADOsite,
 double	doAllelicImbalance, meanAllelicImbalance, varAllelicImbalance;
 double	coverage, haploidCoverageReduction;
 double	meanAmplificationError, varAmplificationError, meanDoubletRate, varDoubletRate;
-double	TMRCA, cumTMRCA, cumTMRCASq, meanTMRCA, expTMRCA, varTMRCA, expVarTMRCA;
-double 	cumCountMLgenotypeErrors, cumCountMLgenotypeErrorsSq, meanMLgenotypeError, varMLgenotypeError;
-double 	cumCountCalledGenotypes, cumCountCalledGenotypesSq, meanCalledGenotypes, varCalledGenotypes;
+double	TMRCA, expTMRCA, expVarTMRCA;
 double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
 double	Cijk[256], Root[4];
 double	SNPrate, alphaCoverage, alphaSiteCoverage, alphaCellCoverage;

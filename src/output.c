@@ -227,7 +227,7 @@ void PrepareSeparateFiles(int replicate)
     if (doPrintTree == YES)
         {
 		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeDir);
-		mkdir(File,S_IRWXU);
+		MAKE_DIR (File);
 		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, treeDir, treeFile, replicate+1);
 		if ((fpTrees = fopen(File, "w")) == NULL)
             {
@@ -239,7 +239,7 @@ void PrepareSeparateFiles(int replicate)
 	if (doPrintTimes == YES)
         {
 		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesDir);
-		mkdir(File,S_IRWXU);
+		MAKE_DIR (File);
 		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, timesDir, timesFile, replicate+1);
 		if ((fpTimes = fopen(File, "w")) == NULL)
             {
@@ -254,7 +254,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintSNVgenotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVgenotypesDir, SNVgenotypesFile, replicate+1);
             if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
                 {
@@ -267,7 +267,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintSNVhaplotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVhaplotypesDir, SNVhaplotypesFile, replicate+1);
             if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
                 {
@@ -280,7 +280,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintTrueHaplotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
             if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
                 {
@@ -293,7 +293,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintFullGenotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullGenotypesDir, fullGenotypesFile, replicate+1);
             if ((fpFullGenotypes = fopen(File, "w")) == NULL)
                 {
@@ -306,7 +306,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintFullHaplotypes == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullHaplotypesDir, fullHaplotypesFile, replicate+1);
             if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
                 {
@@ -319,7 +319,7 @@ void PrepareSeparateFiles(int replicate)
         if (doNGS == YES && doPrintVCF == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFdir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
             if ((fpVCF = OpenVCF (File)) == NULL)
                 {
@@ -332,7 +332,7 @@ void PrepareSeparateFiles(int replicate)
         if (doPrintCATG == YES)
             {
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGdir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, CATGdir, CATGfile, replicate+1);
             if ((fpCATG = fopen(File, "w")) == NULL)
                 {
@@ -345,7 +345,7 @@ void PrepareSeparateFiles(int replicate)
 		if (doPrintPILEUP == YES)
 			{
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPdir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
 			if ((fpPILEUP = fopen(File, "w")) == NULL)
 				{
@@ -358,7 +358,7 @@ void PrepareSeparateFiles(int replicate)
 		if (doPrintBulk == YES)
 			{
 			snprintf (File, sizeof(File),"%s/%s", resultsDir, bulkDir);
-			mkdir(File,S_IRWXU);
+			MAKE_DIR (File);
 			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, bulkDir, bulkFile, replicate+1);
 			if ((fpBulk = fopen(File, "w")) == NULL)
 				{
@@ -580,7 +580,7 @@ void PrintSNVGenotypes (FILE *fp)
                     int site = SNVsites[j];
                     for (i=i0; i<i1; i++)
                         {
-                        char *q = buf + (long)(i-i0) * rowLen + 3L * j;
+                        char *q = buf + (long long)(i-i0) * rowLen + 3L * j;
                         q[0] = ' ';
                         q[1] = WhichNuc(GetG(MATERNAL, i, site));
                         q[2] = WhichNuc(GetG(PATERNAL, i, site));
@@ -594,7 +594,7 @@ void PrintSNVGenotypes (FILE *fp)
                         fprintf (fp,"%s%04d ", inCellName,i+1);
                     else
                         fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
-                    fwrite (buf + (long)(i-i0) * rowLen, 1, (size_t) rowLen, fp);
+                    fwrite (buf + (long long)(i-i0) * rowLen, 1, (size_t) rowLen, fp);
                     fprintf (fp,"\n");
                     }
                 }
@@ -1790,12 +1790,12 @@ void	PrintRunInformation (FILE *fp)
 	else
 		{
 		fprintf (fp, "\n\nGenealogy");
-		fprintf (fp, "\n Mean time to the MRCA (Ne generations)       =   %6.4f", meanTMRCA);
+		fprintf (fp, "\n Mean time to the MRCA (Ne generations)       =   %6.4f", runStats.tmrca.mean);
 		if (noisy > 1)
 			fprintf (fp, "\n Exp time to the MRCA [constant Ne]           =   %6.4f", expTMRCA);
 		if (numDataSets > 1)
 			{
-			fprintf (fp, "\n Variance time MRCA                           =   %6.4f", varTMRCA);
+			fprintf (fp, "\n Variance time MRCA                           =   %6.4f", runStats.tmrca.var);
 			if (noisy > 1)
 				fprintf (fp, "\n Exp variance time MRCA [constant Ne]         =   %6.4f", expVarTMRCA);
 			}
@@ -1886,20 +1886,20 @@ void	PrintRunInformation (FILE *fp)
             if (noisy > 1)
 				fprintf (fp, "\n Exp num mutation events [Ne=cte,ISMh]        =   %3.2f", expNumMU);
             }
-        fprintf (fp, "\n Mean number of mutation events               =   %3.2f", meanNumMU);
+        fprintf (fp, "\n Mean number of mutation events               =   %3.2f", runStats.mu.mean);
         if (numDataSets > 1)
             {
             if (doSimulateFixedNumMutations == NO)
 				{
                 if (noisy > 1)
 					fprintf (fp, "\n Exp variance num mut events [Ne=cte,ISM]     =   %3.2f", expVarNumMU);
-				fprintf (fp, "\n Variance number of mutation events           =   %3.2f", varNumMU);
+				fprintf (fp, "\n Variance number of mutation events           =   %3.2f", runStats.mu.var);
 				}
              }
-        fprintf (fp, "\n Mean number of SNVs                          =   %3.2f", meanNumSNVs);
+        fprintf (fp, "\n Mean number of SNVs                          =   %3.2f", runStats.snv.mean);
         if (numDataSets > 1)
             {
-			fprintf (fp, "\n Variance number of SNVs                      =   %3.2f", varNumSNVs);
+			fprintf (fp, "\n Variance number of SNVs                      =   %3.2f", runStats.snv.var);
 			fprintf (fp, "\n Proportion of reps without SNV sites         =   %3.2f", zeroSNVs/(double)numDataSets);
 			}
 
@@ -1907,18 +1907,18 @@ void	PrintRunInformation (FILE *fp)
 			{
 			fprintf (fp, "\n\nDeletion rates");
 			fprintf (fp, "\n Deletion rate                                =   %2.1e", deletionRate);
-			fprintf (fp, "\n Mean number of deletion events               =   %3.2f", meanNumDEL);
+			fprintf (fp, "\n Mean number of deletion events               =   %3.2f", runStats.del.mean);
 			if (numDataSets > 1)
-				fprintf (fp, "\n Variance number of deletion events           =   %3.2f", varNumDEL);
+				fprintf (fp, "\n Variance number of deletion events           =   %3.2f", runStats.del.var);
 			}
 
 		if (CNLOHrate > 0)
 			{
 			fprintf (fp, "\n\nCopy-neutral LOH rates");
 			fprintf (fp, "\n CN-LOH rate                                  =   %2.1e", CNLOHrate);
-			fprintf (fp, "\n Mean number of CN-LOH events                 =   %3.2f", meanNumCNLOH);
+			fprintf (fp, "\n Mean number of CN-LOH events                 =   %3.2f", runStats.cnloh.mean);
 			if (numDataSets > 1)
-				fprintf (fp, "\n Variance number of CN-LOH events             =   %3.2f", varNumCNLOH);
+				fprintf (fp, "\n Variance number of CN-LOH events             =   %3.2f", runStats.cnloh.var);
 			}
  
 		fprintf (fp, "\n\nSingle-cell WGA");
@@ -2417,7 +2417,7 @@ void WriteADOCells (const double *rate, int replicate)
 	if (doPrintSeparateReplicates == YES)
 		{
 		snprintf (file, sizeof(file), "%s/ado_cells_dir", resultsDir);
-		mkdir (file, S_IRWXU);
+		MAKE_DIR (file);
 		snprintf (file, sizeof(file), "%s/ado_cells_dir/ado_cells.%04d", resultsDir, replicate+1);
 		fp = fopen (file, "w");
 		}

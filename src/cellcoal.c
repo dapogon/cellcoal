@@ -179,6 +179,20 @@ Version 1.1.0 (18/10/2019)
    SNV genotypes are printed from the genome data, and allocating (cells+1) x sites blocks anyway costs
    e.g. ~2.4 GB for 1000 cells x 50000 sites. */
 
+/* adds a value to the statistics accumulated over replicates */
+void AccumAdd (Accum *a, double x)
+	{
+	a->sum += x;
+	a->sumSq += pow(x,2);
+	}
+
+/* mean and (sample) variance after n replicates */
+void AccumFinish (Accum *a, int n)
+	{
+	a->mean = a->sum / (double) n;
+	a->var = (1.0 / (double) (n-1)) * (a->sumSq - pow(a->sum,2) / (double) n);
+	}
+
 /* default values of all the options */
 static void SetDefaultOptions (void)
 	{
@@ -318,21 +332,14 @@ static void CheckOptionCombinations (void)
 /* means and variances over replicates */
 static void ComputeSummaryStatistics (void)
 	{
-    meanNumCA  = cumNumCA /  (double) numDataSets;
-    meanNumMU  = cumNumMU /  (double) numDataSets;
-    meanNumSNVs  = cumNumSNVs / (double) numDataSets;
-    meanNumDEL  = cumNumDEL /  (double) numDataSets;
-    meanNumCNLOH = cumNumCNLOH /  (double) numDataSets;
-    meanTMRCA  =  cumTMRCA /  (double) numDataSets;
-	meanMLgenotypeError = cumCountMLgenotypeErrors / (double) numDataSets;
-	meanCalledGenotypes = cumCountCalledGenotypes / (double) numDataSets;
-
-    varNumMU = (1.0 / (double) (numDataSets-1)) * (cumNumMUSq - pow(cumNumMU,2) / (double) numDataSets);
-    varNumSNVs = (1.0 / (double) (numDataSets-1)) * (cumNumSNVsSq - pow(cumNumSNVs,2) / (double) numDataSets);
-    varNumDEL = (1.0 / (double) (numDataSets-1)) * (cumNumDELSq - pow(cumNumDEL,2) / (double) numDataSets);
-	varTMRCA = (1.0 / (double) (numDataSets-1)) * (cumTMRCASq - pow(cumTMRCA,2) / (double) numDataSets);
-	varMLgenotypeError = (1.0 / (double) (numDataSets-1)) * (cumCountMLgenotypeErrorsSq - pow(cumCountMLgenotypeErrors,2) / (double) numDataSets);
-	varCalledGenotypes = (1.0 / (double) (numDataSets-1)) * (cumCountCalledGenotypesSq - pow(cumCountCalledGenotypes,2) / (double) numDataSets);
+	AccumFinish (&runStats.mu, numDataSets);
+	AccumFinish (&runStats.snv, numDataSets);
+	AccumFinish (&runStats.del, numDataSets);
+	AccumFinish (&runStats.tmrca, numDataSets);
+	AccumFinish (&runStats.mlErr, numDataSets);
+	AccumFinish (&runStats.called, numDataSets);
+	runStats.ca.mean = runStats.ca.sum / (double) numDataSets;	/* the variances of these two are not computed */
+	runStats.cnloh.mean = runStats.cnloh.sum / (double) numDataSets;
 	}
 
 /* reads simulated, summarized and printed (VCF, PILEUP, bulk, CATG) in blocks of sites */
@@ -445,276 +452,11 @@ static void PrintReplicateOutputs (int dataSetNum)
 		}
 	}
 
-int main (int argc, char **argv)
-    {
-    FILE 		*fp;
-    int			i, j;
-    int         dataSetNum;
-    long int	seed;
-    double		a, a2;
-    clock_t		start;
-    double		secs, wallSecs = 0.0;
-		
-    /* Default settings */
-	seed = time(NULL);				/* seed for random numbers */
-	SetDefaultOptions ();
+/* one replicate: genealogy, mutations, deletions/cnLOH, ADO, errors, reads and all the per-replicate outputs */
+static void RunReplicate (int dataSetNum, long int *seed)
+	{
+	int		i, j;
 
-	/*
-	 noisy = 0: does not print anything
-	 noisy = 1: + simulation summary,
-	 noisy = 2: + replicate information,
-	 noisy = 3: + calculation status and event information
-	*/
-
-	strcpy(parameterFile, "parameters");
-	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
-	ReadParametersFromCommandLine (argc, argv);
-	CheckOptionCombinations ();
-	if (argc < 2 || doSpecificParameterFile == YES)
-        {
-		readingParameterFile = YES;
-        if ((fp = freopen(parameterFile, "r", stdin)) != NULL)
-            ReadParametersFromFile();
-        else
-            {
-			fprintf (stderr, "\nERROR: Could not open parameter file: %s\n", parameterFile);
-            PrintUsage(stderr);
-            exit(-1);
-            }
-        }
-	else
-		readingParameterFile = NO;
-   
-   start = clock();
-   clock_gettime (CLOCK_MONOTONIC, &wallStart);
-	
-    if (noisy > 0)
-        {
-        PrintHeader(stderr);
-        PrintDate(stderr);
- 		}
-		
-    if (doSimulateData == NO)
-        {
-        doPrintSNVgenotypes = NO;
-        doPrintSNVhaplotypes = NO;
-		doPrintTrueHaplotypes = NO;
-		doPrintFullHaplotypes = NO;
-        doPrintFullGenotypes = NO;
-		doPrintAncestors = NO;
-		doNGS = NO;
-		doPrintCATG = NO;
-		doPrintPILEUP = NO;
-		doPrintBulk = NO;
-		doPrintVCF = YES;
-		doZipVCF = NO;
-		minVAFvcf = 0.0;
-   		}
-	
-    /* initialize a few variables */
-	numNodes = 2 * numCells + 1;
-	maxTreeRateSwitches = numCells;
-	a = 0;
-    a2 = 0;
-    for (i=1; i<numCells; i++) /* ignoring outgroup (healthy cell) */
-        {
-        a += 1.0/(double)i;
-        a2 += 1.0/(double)pow(i,2);
-        }
-    theta = 2.0 * N * mutationRate * 2.0 * numSites * ((1.0-propAltModelSites) + nonISMRelMutRate*propAltModelSites);
-    expNumMU = theta * a;
-    expVarNumMU =  theta * a + pow(theta,2) * a2;
-    expTMRCA = 2 * (1 - 1.0/numCells) /* 2.0 * N */;
-    expVarTMRCA = 0;
-    for (i=2; i<=numCells; i++)
-        expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
-    cumNumCA = cumNumMU = cumNumMUSq = cumNumSNVs = cumNumSNVsSq = 0;
-	cumCountMLgenotypeErrors = cumCountMLgenotypeErrorsSq = cumCountCalledGenotypes = cumCountCalledGenotypesSq = 0;
-    zeroSNVs = cumTMRCA = cumTMRCASq = 0;
-		
-    altModelMutationRate = mutationRate*nonISMRelMutRate;
-	
-	if (doSimulateData == YES && alphabet == DNA)
-		{
-		/* initialize cumfreq */
-		cumfreq[0] = freq[0];
-		for (i=1; i<4; i++)
-			cumfreq[i] = cumfreq[i-1] + freq[i];
-	
-		/* initialize cumMij */
-		for (i=0; i<4; i++)
-			{
-			cumMij[i][0] = Mij[i][0];
-			for (j=1; j<4; j++)
-				cumMij[i][j] = cumMij[i][j-1] + Mij[i][j];
-			}
-
-		/* initialize cumEij */
-		for (i=0; i<4; i++)
-			{
-			cumEij[i][0] = Eij[i][0];
-			for (j=1; j<4; j++)
-				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
-			}
-		}
-
-	if (doOthsukiInnanCoal == YES)
-		{
-		growthRate = birthRate - deathRate;
-		if (growthRate < 0)
-			{
-			fprintf (stderr, "\n!!! PARAMETER ERROR: the birth rate (%f) should be bigger than the death rate %f)", birthRate, deathRate);
-			PrintUsage(stderr);
-			}
-		}
-	
-    /* Set seed and spin wheels of pseudorandom number generator */
-    /* seed = (unsigned int) clock();*/
-    if (userSeed > 0)
-        seed = userSeed;
-	
-    originalSeed = seed;
-    for (i=0; i<100; i++)
-        RandomUniform(&seed);
-
-    if (noisy > 0)
-		{
-		PrintCommandLine (stderr, argc, argv);
-		}
-
-     /* Check the distribution of the mutations */
-    #ifdef CHECK_MUT_DISTRIBUTION
-        MutCount = (int *) calloc(2*(numCells+1), sizeof(int));
-        dataSetsWithSNVs = 0;
-        meansumPos = 0;
-     #endif
-	
-	/* set names for taxa */
-	if (doTumorNames == YES)
-		{
-		strcpy(inCellName, "tumcell");
-		strcpy(outCellName, "healthycell");
-		strcpy(inRootCellName, "tumoralroot");
-		strcpy(outRootCellName, "healthyroot");
-		stringPrecision = 12;
-		}
-	else
-		{
-		strcpy(inCellName, "cell");
-		strcpy(outCellName, "outgcell");
-		strcpy(inRootCellName, "ingrroot");
-		strcpy(outRootCellName, "outgroot");
-		stringPrecision = 9;
-		}
-	
-	if (doPrintIUPAChaplotypes == YES)
-		stringPrecision += 1;
-	
-    /* set file dirs and names */
-	if (strlen(resultsDir) == 0)
-		strcpy(resultsDir, "Results");
-	// clean previous results directory
-	RemoveDir (resultsDir);
-	// create new results directory
-	mkdir(resultsDir,S_IRWXU);
-
-   	strcpy(treeDir, "trees_dir");
-   	strcpy(timesDir, "times_dir");
-	strcpy(SNVgenotypesDir, "snv_genotypes_dir");
-    strcpy(SNVhaplotypesDir, "snv_haplotypes_dir");
-    strcpy(trueHaplotypesDir, "true_haplotypes_dir");
-    strcpy(fullHaplotypesDir, "full_haplotypes_dir");
-	strcpy(MLhaplotypesDir, "ML_haplotypes_dir");
-    strcpy(fullGenotypesDir, "full_genotypes_dir");
-    strcpy(CATGdir, "catg_dir");
-	strcpy(PILEUPdir, "pileup_dir");
-	strcpy(bulkDir, "bulk_dir");
-	strcpy(VCFdir, "vcf_dir");
-	
-	strcpy(SNVgenotypesFile, "snv_gen");
-    strcpy(SNVhaplotypesFile, "snv_hap");
-    strcpy(trueHaplotypesFile, "true_hap");
-    strcpy(fullHaplotypesFile, "full_hap");
-	strcpy(MLhaplotypesFile, "ML_hap");
-    strcpy(fullGenotypesFile, "full_gen");
-    strcpy(treeFile, "trees");
-    strcpy(timesFile, "times");
-	if (strlen(userTreeFile) == 0)
-		strcpy(userTreeFile, "usertree");
-	if (strlen(userGenomeFile) == 0)
-		strcpy(userGenomeFile, "usergenome");
-    strcpy(CATGfile, "catg");
-	strcpy(PILEUPfile, "pileup");
-	strcpy(bulkFile, "bulk");
-	strcpy(VCFfile, "vcf");
-    strcpy(logFile, "log");
-	strcpy(settingsFile, "log");
- 
-	if (doPrintSeparateReplicates == NO)
-		PrepareGlobalFiles(argc, argv);
-
-	/* Start printing info to log */
-	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
-	if ((fpLog = fopen(File, "w")) == NULL)
-		{
-		fprintf (stderr, "Can't open \"%s\"\n", File);
-		exit(-1);
-		}
-
-	PrintHeader(fpLog);
-	PrintDate(fpLog);
-	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
-	PrintCommandLine (fpLog, argc, argv);
- 
-	#ifdef COUNT_ML_GENOTYPE_ERRORS
-		snprintf (File, sizeof(File),"%s/%s", resultsDir, "sims");
-		 if ((fpSims= fopen(File, "w")) == NULL)
-			 {
-			 fprintf (stderr, "Can't open \"%s\"\n", File);
-			 exit(-1);
-			 }
-	fprintf(fpSims,"CountCalls, ProbCalls, CountBadCalls, ProbBadCalls, numSNVs\n");
-	#endif
-	
-	/* --summary: one line of metrics per replicate in <results>/summary.tsv */
-	if (doSummary == YES)
-		{
-		snprintf (File, sizeof(File), "%s/%s", resultsDir, "summary.tsv");
-		if ((fpSummary = fopen(File, "w")) == NULL)
-			{
-			fprintf (stderr, "Can't open \"%s\"\n", File);
-			exit(-1);
-			}
-		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\n");
-		}
-
-	/* Read user treefile */
-	if (doUserTree == YES)
-		{
-		if (noisy > 2)
-			fprintf (stderr, "\n>> Reading user tree ...");
-		ReadUserTree(fpUserTree);
-		}
-
-	/* Read user genomefile  */
-	if (doUserGenome == YES)
-		{
-		if (noisy > 2)
-			fprintf (stderr, "\n>> Reading user genome ...");
-		ReadUserGenome(fpUserGenome);
-		}
-
-	OUTGROUP_ROOT = 2 * numCells;
-	INGROUP_ROOT = (2 * numCells) - 1;
-
-	if (doGeneticSignatures == YES && doSimulateData == YES)
-		PrepareGeneticSignatures();
-
-	if (noisy > 1)
-		fprintf(stderr, "\n");
-	
-    for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
-        {
         numCA = numMU = numDEL = numCNLOH = numProposedMU = TMRCA = numSNVmaternal = 0;
 
 		if (doPrintSeparateReplicates == YES)
@@ -738,22 +480,21 @@ int main (int argc, char **argv)
 			{
 			if (noisy > 2)
 				fprintf (stderr, "\n>> Starting coalescent tree ...");
-			MakeCoalescenceTree (numCells, N, &seed);
+			MakeCoalescenceTree (numCells, N, seed);
 			if (noisy > 2)
 				fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
 
 		   /* Make ingroup cell tree non-clock if needed */
 			if (rateVarAmongLineages == YES)
-				MakeTreeNonClock (coalTreeMRCA, &seed);
+				MakeTreeNonClock (coalTreeMRCA, seed);
 			else if (doTreeRateSwitches == YES)
 				{
 				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
-				TreeRateSwitch (coalTreeMRCA, &seed);
+				TreeRateSwitch (coalTreeMRCA, seed);
 				}
 			
-			cumNumCA += numCA;
-			cumTMRCA += TMRCA;
-			cumTMRCASq += pow(TMRCA,2);
+			runStats.ca.sum += numCA;
+			AccumAdd (&runStats.tmrca, TMRCA);
 			}
 
 		totalTreeLength = SumBranches (healthyRoot);
@@ -868,12 +609,12 @@ int main (int argc, char **argv)
 				}
 
              /* assign ancestral states to all genomes */
-            InitializeGenomes (healthyRoot, &seed);
+            InitializeGenomes (healthyRoot, seed);
 			
 			/* add germline variation if needed */
 			if (SNPrate > 0)
 				{
-				AddGermlineVariation (&seed);
+				AddGermlineVariation (seed);
 				/* germline SNPs were added to the root genome only: pass them down to all the nodes */
 				InheritRootGenome (healthyRoot);
 				}
@@ -881,38 +622,36 @@ int main (int argc, char **argv)
             /* evolve maternal genome */
             if (noisy > 2)
                 fprintf (stderr, "\n>> Evolving maternal genome ... ");
-             EvolveSitesOnTree (healthyRoot, MATERNAL, &seed);
+             EvolveSitesOnTree (healthyRoot, MATERNAL, seed);
             if (noisy > 2)
                 fprintf (stderr, "DONE");
 
             /* evolve paternal genome */
              if (noisy > 2)
                 fprintf (stderr, "\n>> Evolving paternal genome ... ");
-            EvolveSitesOnTree (healthyRoot, PATERNAL, &seed);
+            EvolveSitesOnTree (healthyRoot, PATERNAL, seed);
             if (noisy > 2)
                 fprintf (stderr, "DONE\n\n");
 	
-            cumNumMU += numMU;
-            cumNumMUSq += pow(numMU,2);
+            AccumAdd (&runStats.mu, numMU);
 
 			if (CNLOHrate > 0)
 				{
 				/* evolve maternal CN_LOH */
 				if (noisy > 2)
 					fprintf (stderr, "\n>> Evolving maternal CN_LOH ... ");
-				 EvolveCNLOHonTree(healthyRoot, MATERNAL, &seed);
+				 EvolveCNLOHonTree(healthyRoot, MATERNAL, seed);
 				if (noisy > 2)
 					fprintf (stderr, "DONE");
 
 				/* evolve paternal CN_LOH  */
 				 if (noisy > 2)
 					fprintf (stderr, "\n>> Evolving paternal CN_LOH ... ");
-				 EvolveCNLOHonTree(healthyRoot, PATERNAL, &seed);
+				 EvolveCNLOHonTree(healthyRoot, PATERNAL, seed);
 				if (noisy > 2)
 					fprintf (stderr, "DONE\n\n");
 
-				cumNumCNLOH += numCNLOH;
-				cumNumCNLOHSq += pow(numCNLOH,2);
+				AccumAdd (&runStats.cnloh, numCNLOH);
 				}
 
 			if (deletionRate > 0)
@@ -920,19 +659,18 @@ int main (int argc, char **argv)
 				/* evolve maternal deletions */
 				if (noisy > 2)
 					fprintf (stderr, "\n>> Evolving maternal deletions ... ");
-				 EvolveDeletionsOnTree(healthyRoot, MATERNAL, &seed);
+				 EvolveDeletionsOnTree(healthyRoot, MATERNAL, seed);
 				if (noisy > 2)
 					fprintf (stderr, "DONE");
 
 				/* evolve paternal deletions  */
 				 if (noisy > 2)
 					fprintf (stderr, "\n>> Evolving paternal deletions ... ");
-				 EvolveDeletionsOnTree(healthyRoot, PATERNAL, &seed);
+				 EvolveDeletionsOnTree(healthyRoot, PATERNAL, seed);
 				if (noisy > 2)
 					fprintf (stderr, "DONE\n\n");
 
-				cumNumDEL += numDEL;
-				cumNumDELSq += pow(numDEL,2);
+				AccumAdd (&runStats.del, numDEL);
 				}
 
 			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
@@ -961,18 +699,18 @@ int main (int argc, char **argv)
 			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
 				{
 				if (sparseMode == YES)
-					SparseAllelicDropout(&seed);
+					SparseAllelicDropout(seed);
 				else
-					AllelicDropout(&seed);
+					AllelicDropout(seed);
 				}
 	
 			/* introduce errors directly in the genotypes */
 			if (meanGenotypingError > 0)
 				{
 				if (sparseMode == YES)
-					SparseGenotypeError(&seed);
+					SparseGenotypeError(seed);
 				else
-					GenotypeError(&seed);
+					GenotypeError(seed);
 				}
 
 			if (sparseMode == YES)
@@ -981,10 +719,10 @@ int main (int argc, char **argv)
 			/* generate NGS read counts */
 			if (streamMode == YES)
 				{
-				GenerateStreamedReads (&seed, dataSetNum);
+				GenerateStreamedReads (seed, dataSetNum);
 				}
 			else if (doNGS == YES)
-				GenerateReadCounts(&seed);
+				GenerateReadCounts(seed);
 
 			/* count how many alleles are at each site and how many SNVs we observe now, after ADO and genotype errors/read generation */
 			if (streamMode == YES)
@@ -994,8 +732,7 @@ int main (int argc, char **argv)
 			else
 				numSNVs = CountAllelesInObservedGenotypes();
 
-            cumNumSNVs += numSNVs;
-            cumNumSNVsSq += pow(numSNVs,2);
+            AccumAdd (&runStats.snv, numSNVs);
 
 			if (fpSummary != NULL)
 				{
@@ -1145,8 +882,279 @@ int main (int argc, char **argv)
 		
         /* if(((dataSetNum*10)%numDataSets) == 0)
          PrintMemory(stderr); */
-    } // replicate
+	}
+
+int main (int argc, char **argv)
+    {
+    FILE 		*fp;
+    int			i, j;
+    int         dataSetNum;
+    long int	seed;
+    double		a, a2;
+    clock_t		start;
+    double		secs, wallSecs = 0.0;
 		
+    /* Default settings */
+	seed = time(NULL);				/* seed for random numbers */
+	SetDefaultOptions ();
+
+	/*
+	 noisy = 0: does not print anything
+	 noisy = 1: + simulation summary,
+	 noisy = 2: + replicate information,
+	 noisy = 3: + calculation status and event information
+	*/
+
+	strcpy(parameterFile, "parameters");
+	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
+	ReadParametersFromCommandLine (argc, argv);
+	CheckOptionCombinations ();
+	if (argc < 2 || doSpecificParameterFile == YES)
+        {
+		readingParameterFile = YES;
+        if ((fp = freopen(parameterFile, "r", stdin)) != NULL)
+            ReadParametersFromFile();
+        else
+            {
+			fprintf (stderr, "\nERROR: Could not open parameter file: %s\n", parameterFile);
+            PrintUsage(stderr);
+            exit(-1);
+            }
+        }
+	else
+		readingParameterFile = NO;
+   
+   start = clock();
+   clock_gettime (CLOCK_MONOTONIC, &wallStart);
+	
+    if (noisy > 0)
+        {
+        PrintHeader(stderr);
+        PrintDate(stderr);
+ 		}
+		
+    if (doSimulateData == NO)
+        {
+        doPrintSNVgenotypes = NO;
+        doPrintSNVhaplotypes = NO;
+		doPrintTrueHaplotypes = NO;
+		doPrintFullHaplotypes = NO;
+        doPrintFullGenotypes = NO;
+		doPrintAncestors = NO;
+		doNGS = NO;
+		doPrintCATG = NO;
+		doPrintPILEUP = NO;
+		doPrintBulk = NO;
+		doPrintVCF = YES;
+		doZipVCF = NO;
+		minVAFvcf = 0.0;
+   		}
+	
+    /* initialize a few variables */
+	numNodes = 2 * numCells + 1;
+	maxTreeRateSwitches = numCells;
+	a = 0;
+    a2 = 0;
+    for (i=1; i<numCells; i++) /* ignoring outgroup (healthy cell) */
+        {
+        a += 1.0/(double)i;
+        a2 += 1.0/(double)pow(i,2);
+        }
+    theta = 2.0 * N * mutationRate * 2.0 * numSites * ((1.0-propAltModelSites) + nonISMRelMutRate*propAltModelSites);
+    expNumMU = theta * a;
+    expVarNumMU =  theta * a + pow(theta,2) * a2;
+    expTMRCA = 2 * (1 - 1.0/numCells) /* 2.0 * N */;
+    expVarTMRCA = 0;
+	for (i=2; i<=numCells; i++)
+		expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
+
+	memset (&runStats, 0, sizeof(runStats));
+	zeroSNVs = 0;
+		
+    altModelMutationRate = mutationRate*nonISMRelMutRate;
+	
+	if (doSimulateData == YES && alphabet == DNA)
+		{
+		/* initialize cumfreq */
+		cumfreq[0] = freq[0];
+		for (i=1; i<4; i++)
+			cumfreq[i] = cumfreq[i-1] + freq[i];
+	
+		/* initialize cumMij */
+		for (i=0; i<4; i++)
+			{
+			cumMij[i][0] = Mij[i][0];
+			for (j=1; j<4; j++)
+				cumMij[i][j] = cumMij[i][j-1] + Mij[i][j];
+			}
+
+		/* initialize cumEij */
+		for (i=0; i<4; i++)
+			{
+			cumEij[i][0] = Eij[i][0];
+			for (j=1; j<4; j++)
+				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
+			}
+		}
+
+	if (doOthsukiInnanCoal == YES)
+		{
+		growthRate = birthRate - deathRate;
+		if (growthRate < 0)
+			{
+			fprintf (stderr, "\n!!! PARAMETER ERROR: the birth rate (%f) should be bigger than the death rate %f)", birthRate, deathRate);
+			PrintUsage(stderr);
+			}
+		}
+	
+    /* Set seed and spin wheels of pseudorandom number generator */
+    /* seed = (unsigned int) clock();*/
+    if (userSeed > 0)
+        seed = userSeed;
+	
+    originalSeed = seed;
+    for (i=0; i<100; i++)
+        RandomUniform(&seed);
+
+    if (noisy > 0)
+		{
+		PrintCommandLine (stderr, argc, argv);
+		}
+
+     /* Check the distribution of the mutations */
+    #ifdef CHECK_MUT_DISTRIBUTION
+        MutCount = (int *) calloc(2*(numCells+1), sizeof(int));
+        dataSetsWithSNVs = 0;
+        meansumPos = 0;
+     #endif
+	
+	/* set names for taxa */
+	if (doTumorNames == YES)
+		{
+		strcpy(inCellName, "tumcell");
+		strcpy(outCellName, "healthycell");
+		strcpy(inRootCellName, "tumoralroot");
+		strcpy(outRootCellName, "healthyroot");
+		stringPrecision = 12;
+		}
+	else
+		{
+		strcpy(inCellName, "cell");
+		strcpy(outCellName, "outgcell");
+		strcpy(inRootCellName, "ingrroot");
+		strcpy(outRootCellName, "outgroot");
+		stringPrecision = 9;
+		}
+	
+	if (doPrintIUPAChaplotypes == YES)
+		stringPrecision += 1;
+	
+    /* set file dirs and names */
+	if (strlen(resultsDir) == 0)
+		strcpy(resultsDir, "Results");
+	// clean previous results directory
+	RemoveDir (resultsDir);
+	// create new results directory
+	MAKE_DIR (resultsDir);
+
+   	strcpy(treeDir, "trees_dir");
+   	strcpy(timesDir, "times_dir");
+	strcpy(SNVgenotypesDir, "snv_genotypes_dir");
+    strcpy(SNVhaplotypesDir, "snv_haplotypes_dir");
+    strcpy(trueHaplotypesDir, "true_haplotypes_dir");
+    strcpy(fullHaplotypesDir, "full_haplotypes_dir");
+	strcpy(MLhaplotypesDir, "ML_haplotypes_dir");
+    strcpy(fullGenotypesDir, "full_genotypes_dir");
+    strcpy(CATGdir, "catg_dir");
+	strcpy(PILEUPdir, "pileup_dir");
+	strcpy(bulkDir, "bulk_dir");
+	strcpy(VCFdir, "vcf_dir");
+	
+	strcpy(SNVgenotypesFile, "snv_gen");
+    strcpy(SNVhaplotypesFile, "snv_hap");
+    strcpy(trueHaplotypesFile, "true_hap");
+    strcpy(fullHaplotypesFile, "full_hap");
+	strcpy(MLhaplotypesFile, "ML_hap");
+    strcpy(fullGenotypesFile, "full_gen");
+    strcpy(treeFile, "trees");
+    strcpy(timesFile, "times");
+	if (strlen(userTreeFile) == 0)
+		strcpy(userTreeFile, "usertree");
+	if (strlen(userGenomeFile) == 0)
+		strcpy(userGenomeFile, "usergenome");
+    strcpy(CATGfile, "catg");
+	strcpy(PILEUPfile, "pileup");
+	strcpy(bulkFile, "bulk");
+	strcpy(VCFfile, "vcf");
+    strcpy(logFile, "log");
+	strcpy(settingsFile, "log");
+ 
+	if (doPrintSeparateReplicates == NO)
+		PrepareGlobalFiles(argc, argv);
+
+	/* Start printing info to log */
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
+	if ((fpLog = fopen(File, "w")) == NULL)
+		{
+		fprintf (stderr, "Can't open \"%s\"\n", File);
+		exit(-1);
+		}
+
+	PrintHeader(fpLog);
+	PrintDate(fpLog);
+	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
+	PrintCommandLine (fpLog, argc, argv);
+ 
+	#ifdef COUNT_ML_GENOTYPE_ERRORS
+		snprintf (File, sizeof(File),"%s/%s", resultsDir, "sims");
+		 if ((fpSims= fopen(File, "w")) == NULL)
+			 {
+			 fprintf (stderr, "Can't open \"%s\"\n", File);
+			 exit(-1);
+			 }
+	fprintf(fpSims,"CountCalls, ProbCalls, CountBadCalls, ProbBadCalls, numSNVs\n");
+	#endif
+	
+	/* --summary: one line of metrics per replicate in <results>/summary.tsv */
+	if (doSummary == YES)
+		{
+		snprintf (File, sizeof(File), "%s/%s", resultsDir, "summary.tsv");
+		if ((fpSummary = fopen(File, "w")) == NULL)
+			{
+			fprintf (stderr, "Can't open \"%s\"\n", File);
+			exit(-1);
+			}
+		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\n");
+		}
+
+	/* Read user treefile */
+	if (doUserTree == YES)
+		{
+		if (noisy > 2)
+			fprintf (stderr, "\n>> Reading user tree ...");
+		ReadUserTree(fpUserTree);
+		}
+
+	/* Read user genomefile  */
+	if (doUserGenome == YES)
+		{
+		if (noisy > 2)
+			fprintf (stderr, "\n>> Reading user genome ...");
+		ReadUserGenome(fpUserGenome);
+		}
+
+	OUTGROUP_ROOT = 2 * numCells;
+	INGROUP_ROOT = (2 * numCells) - 1;
+
+	if (doGeneticSignatures == YES && doSimulateData == YES)
+		PrepareGeneticSignatures();
+
+	if (noisy > 1)
+		fprintf(stderr, "\n");
+	
+	for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
+		RunReplicate (dataSetNum, &seed);
+
 	ComputeSummaryStatistics ();
 
 	/* close file pointers */
@@ -1226,10 +1234,10 @@ int main (int argc, char **argv)
 	if (fpSummary != NULL)
 		fclose (fpSummary);
 #ifdef COUNT_ML_GENOTYPE_ERRORS
-	fprintf (stdout, "\n\n Mean probability for untrue genotype calls     =   %8.6f", meanMLgenotypeError);
-	fprintf (stdout, "\n Variance probability for untrue genotype calls =   %8.6f", varMLgenotypeError);
-	fprintf (stdout, "\n Mean proportion of SNV genotypes called        =   %8.6f", meanCalledGenotypes);
-	fprintf (stdout, "\n Variance proportion of SNV genotypes called    =   %8.6f\n", varCalledGenotypes);
+	fprintf (stdout, "\n\n Mean probability for untrue genotype calls     =   %8.6f", runStats.mlErr.mean);
+	fprintf (stdout, "\n Variance probability for untrue genotype calls =   %8.6f", runStats.mlErr.var);
+	fprintf (stdout, "\n Mean proportion of SNV genotypes called        =   %8.6f", runStats.called.mean);
+	fprintf (stdout, "\n Variance proportion of SNV genotypes called    =   %8.6f\n", runStats.called.var);
 	fclose(fpSims);
 #endif
 	

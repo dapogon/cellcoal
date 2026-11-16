@@ -34,7 +34,7 @@ void MLPairAt (int i, int q, int *m, int *p)
 
 	if (streamMode == YES)
 		{
-		unsigned char b = mlStore[(long) q * (numCells+1) + i];
+		unsigned char b = mlStore[(long long) q * (numCells+1) + i];
 
 		*m = ((b & 15) == 15) ? MISSING : (int) (b & 15);
 		*p = ((b >> 4) == 15) ? MISSING : (int) (b >> 4);
@@ -55,7 +55,7 @@ void MLPairAt (int i, int q, int *m, int *p)
 static void StoreMLAlleles (int q, int j)
 	{
 	int		i, m, p;
-	unsigned char *dst = mlStore + (long) q * (numCells+1);
+	unsigned char *dst = mlStore + (long long) q * (numCells+1);
 
 	for (i=0; i<numCells+1; i++)
 		{
@@ -634,14 +634,14 @@ void PrintVCF (FILE *fp)
 			#pragma omp parallel for schedule(dynamic,1)
 			for (q=0; q<nq; q++)
 				{
-				FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+				FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
 				if (!ms)
 					{
 					fprintf (stderr, "Could not open a memory stream for the VCF line\n");
 					exit (-1);
 					}
 				VCFSiteLine (ms, SNVsites[snv+q]);
-				fclose (ms);
+				MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
 				}
 			for (q=0; q<nq; q++)
 				{
@@ -937,7 +937,7 @@ void WriteCellParams (int replicate)
 	if (doPrintSeparateReplicates == YES)
 		{
 		snprintf (file, sizeof(file), "%s/cell_params_dir", resultsDir);
-		mkdir (file, S_IRWXU);
+		MAKE_DIR (file);
 		snprintf (file, sizeof(file), "%s/cell_params_dir/cell_params.%04d", resultsDir, replicate+1);
 		fp = fopen (file, "w");
 		}
@@ -1095,11 +1095,11 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 		/* maximum likelihood alleles of the block's SNVs, kept for the genotype and haplotype files */
 		if ((doPrintSNVgenotypes == YES || doPrintSNVhaplotypes == YES) && nq > 0)
 			{
-			long need = (long) nSNVs * (numCells+1);
+			long long need = (long long) nSNVs * (numCells+1);
 
 			if (need > mlStoreCap)
 				{
-				long newCap = need + need / 2 + (long) (numCells+1) * 1024;
+				long long newCap = need + need / 2 + (long long) (numCells+1) * 1024;
 				unsigned char *t = (unsigned char*) realloc (mlStore, (size_t) newCap);
 
 				if (!t)
@@ -1127,14 +1127,14 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 				#pragma omp parallel for schedule(dynamic,1)
 				for (q=0; q<m; q++)
 					{
-					FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+					FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
 					if (!ms)
 						{
 						fprintf (stderr, "Could not open a memory stream for the CATG line\n");
 						exit (-1);
 						}
 					CATGSiteLine (ms, blockSNVs[i+q]);
-					fclose (ms);
+					MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
 					}
 				for (q=0; q<m; q++)
 					{
@@ -1152,14 +1152,14 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 				#pragma omp parallel for schedule(dynamic,1)
 				for (q=0; q<m; q++)
 					{
-					FILE *ms = open_memstream (&lineBuf[q], &lineLen[q]);
+					FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
 					if (!ms)
 						{
 						fprintf (stderr, "Could not open a memory stream for the VCF line\n");
 						exit (-1);
 						}
 					VCFSiteLine (ms, blockSNVs[i+q]);
-					fclose (ms);
+					MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
 					}
 				for (q=0; q<m; q++)
 					{
@@ -1213,12 +1213,12 @@ FILE *OpenVCF (const char *path)
 
 	if (doZipVCF == NO)
 		return fopen (path, "w");
-	if (strchr (path, '\'') != NULL)
+	if (strchr (path, SHELL_QUOTE_CHAR) != NULL)
 		{
 		fprintf (stderr, "Cannot compress the VCF when the path has a quote: %s\n", path);
 		exit (-1);
 		}
-	snprintf (cmd, sizeof(cmd), "gzip -c > '%s.gz'", path);
+	snprintf (cmd, sizeof(cmd), "gzip -c > %c%s.gz%c", SHELL_QUOTE_CHAR, path, SHELL_QUOTE_CHAR);
 	fp = popen (cmd, "w");
 	if (fp == NULL)
 		fprintf (stderr, "Could not run gzip to write the compressed VCF\n");
@@ -1307,7 +1307,7 @@ void StoreFullBlock (int j0, int nb)
 				}
 			buf[j] = (unsigned char) (((m == MISSING) ? 15 : m) | (((p == MISSING) ? 15 : p) << 4));
 			}
-		if (fseeko (fullStore, (off_t) i * (off_t) numSites + (off_t) j0, SEEK_SET) != 0 || fwrite (buf, 1, nb, fullStore) != (size_t) nb)
+		if (fseeko (fullStore, (long long) i * (long long) numSites + (long long) j0, SEEK_SET) != 0 || fwrite (buf, 1, nb, fullStore) != (size_t) nb)
 			{
 			fprintf (stderr, "Could not write the temporary file of full genotypes\n");
 			exit (-1);
@@ -1323,7 +1323,7 @@ void LoadFullRow (int i)
 		return;
 	if (fullRow == NULL)
 		fullRow = (unsigned char*) malloc (numSites);
-	if (!fullRow || fseeko (fullStore, (off_t) i * (off_t) numSites, SEEK_SET) != 0 || fread (fullRow, 1, numSites, fullStore) != (size_t) numSites)
+	if (!fullRow || fseeko (fullStore, (long long) i * (long long) numSites, SEEK_SET) != 0 || fread (fullRow, 1, numSites, fullStore) != (size_t) numSites)
 		{
 		fprintf (stderr, "Could not read the temporary file of full genotypes\n");
 		exit (-1);

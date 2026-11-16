@@ -83,16 +83,16 @@ int ChooseUniformState (double *prob, long int *seed)
 #define LCG_A3		1622650073UL
 #define LCG_A4		984943658UL
 
-static inline long LCG_MulMod (long s, unsigned long a)
+static inline int64_t LCG_MulMod (int64_t s, uint64_t a)
 	{
-	unsigned long	x = a * (unsigned long) s;
-	unsigned long	r = (x & LCG_M) + (x >> 31);
-	return (long) (r >= LCG_M ? r - LCG_M : r);
+	uint64_t	x = a * (uint64_t) s;
+	uint64_t	r = (x & LCG_M) + (x >> 31);
+	return (int64_t) (r >= LCG_M ? r - LCG_M : r);
 	}
 
 double RandomUniform (long int *seed)
 	{
-	long int	lo, hi, test;
+	int64_t	lo, hi, test;
 
 	if (streamActive)
 		return (double)((SplitMix64 (&streamState) >> 11) + 0.5) * (1.0 / 9007199254740992.0);	/* in (0,1) */
@@ -259,14 +259,14 @@ static int PoissonFast (double lambda, long int *seed)
 		double	b = 0.931 + 2.53 * slam, a = -0.059 + 0.02483 * b;
 		double	invalpha = 1.1239 + 1.1328 / (b - 3.4), vr = 0.9277 - 3.6224 / (b - 2.0);
 		double	U, V, us;
-		long	k;
+		int64_t	k;
 
 		for (;;)
 			{
 			U = RandomUniform (seed) - 0.5;
 			V = RandomUniform (seed);
 			us = 0.5 - fabs (U);
-			k = (long) floor ((2.0 * a / us + b) * U + lambda + 0.43);
+			k = (int64_t) floor ((2.0 * a / us + b) * U + lambda + 0.43);
 			if (us >= 0.07 && V <= vr)
 				return (int) k;
 			if (k < 0 || (us < 0.013 && V > us))
@@ -413,9 +413,9 @@ int RandomBinomial (double prob, int numTrials, long int *seed)
 	   (double)s/2147483647 < prob is turned into the exactly equivalent integer comparison s < t,
 	   where t is the smallest integer with (double)t/2147483647 >= prob (the division is monotonic).
 	   This avoids one floating-point division per trial. */
-	const long	m = 2147483647L;
+	const int64_t	m = 2147483647LL;
 	const double M = 2147483647.0;
-	long		s, t, hi, lo, test;
+	int64_t		s, t, hi, lo, test;
 	int			i, sum;
 
 	if (streamActive)	/* the fast path below works on the state of the minimal standard generator */
@@ -441,7 +441,7 @@ int RandomBinomial (double prob, int numTrials, long int *seed)
 		t = m;
 	else
 		{
-		t = (long) (prob * M);
+		t = (int64_t) (prob * M);
 		if (t < 0) t = 0;
 		if (t > m) t = m;
 		while (t > 0 && (double)(t - 1) / M >= prob)
@@ -459,10 +459,10 @@ int RandomBinomial (double prob, int numTrials, long int *seed)
 		   so the four steps can be computed at the same time; same states, same order as one step at a time */
 		for (; i+4 <= numTrials; i+=4)
 			{
-			long s1 = LCG_MulMod (s, LCG_A1);
-			long s2 = LCG_MulMod (s, LCG_A2);
-			long s3 = LCG_MulMod (s, LCG_A3);
-			long s4 = LCG_MulMod (s, LCG_A4);
+			int64_t s1 = LCG_MulMod (s, LCG_A1);
+			int64_t s2 = LCG_MulMod (s, LCG_A2);
+			int64_t s3 = LCG_MulMod (s, LCG_A3);
+			int64_t s4 = LCG_MulMod (s, LCG_A4);
 			sum += (s1 < t) + (s2 < t) + (s3 < t) + (s4 < t);
 			s = s4;
 			}
@@ -721,28 +721,44 @@ void ReadUntil(FILE *fv, char stopChar, char *what)
 
 
 
-/************************ Unlink_callback **************************/
-/* Call back to remove the passed path .
-From http://stackoverflow.com/questions/5467725/how-to-delete-a-directory-and-its-contents-in-posix-c
-*/
-int Unlink_callback(const char *fpath, const struct stat *sb, int typeflag, struct FTW *ftwbuf)
-	{
-    int rv = remove(fpath);
-
-    if (rv)
-        perror(fpath);
-
-    return rv;
-	}
-
-
 /************************ RemoveDir **************************/
-/* Removes directory and its contents
-From http://stackoverflow.com/questions/5467725/how-to-delete-a-directory-and-its-contents-in-posix-c
-*/
-int RemoveDir(char *path)
+/* Removes a directory and its contents (portable: POSIX and Windows); returns 0 when everything was removed or the path did not exist */
+int RemoveDir (char *path)
 	{
-    return nftw(path, Unlink_callback, 64, FTW_DEPTH | FTW_PHYS);
+	struct stat	st;
+	DIR			*d;
+	struct dirent	*e;
+	int			rc = 0;
+
+	if (LSTAT (path, &st) != 0)
+		return 0;
+	if (!S_ISDIR (st.st_mode))
+		return unlink (path);
+	if ((d = opendir (path)) == NULL)
+		return -1;
+	while ((e = readdir (d)) != NULL)
+		{
+		char	*sub;
+		size_t	len;
+
+		if (strcmp (e->d_name, ".") == 0 || strcmp (e->d_name, "..") == 0)
+			continue;
+		len = strlen (path) + strlen (e->d_name) + 2;
+		sub = (char*) malloc (len);
+		if (!sub)
+			{
+			rc = -1;
+			break;
+			}
+		snprintf (sub, len, "%s/%s", path, e->d_name);
+		if (RemoveDir (sub) != 0)
+			rc = -1;
+		free (sub);
+		}
+	closedir (d);
+	if (rmdir (path) != 0)
+		rc = -1;
+	return rc;
 	}
 
 
