@@ -1827,7 +1827,8 @@ against the latest release (section 6.10h). The output of existing runs
 is identical to 2.2.2.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
-toolchain: <code>pacman -S make mingw-w64-ucrt-x86_64-gcc python</code>,
+toolchain:
+<code>pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc python</code>,
 then <code>make</code>). The code that differs between systems is in
 <code>src/platform.h</code> (directories, in-memory streams,
 <code>getline</code>, 64-bit file offsets, time functions) and
@@ -1835,13 +1836,13 @@ then <code>make</code>). The code that differs between systems is in
 <code>--sweep</code>). The CI has a <code>windows</code> job that builds
 the program, runs smoke tests (a run with reads and
 <code>--summary</code>, a <code>--sweep</code>, and re-running over an
-existing results folder) and the whole suite. At the time of writing the
-suite passes 74 of 80 checks on Windows; the failing ones (the
-stored-versus-streamed bulk file, <code>-Z</code>, <code>--config</code>
-from <code>run.json</code> and <code>--fast</code> against the default
-genotypes) are being investigated and the job does not fail because of
-them yet. The results of the simulations are statistically correct on
-Windows (<code>tests/theory.py</code> passes).</p>
+existing results folder) and the whole suite. The whole suite passes on
+Windows (it needs <code>diffutils</code> in MSYS2 for <code>cmp</code>
+and <code>diff</code>; install it with
+<code>pacman -S diffutils</code>). Configuration files are read in text
+mode, so CRLF line endings are accepted. The results of the simulations
+are statistically correct on Windows (<code>tests/theory.py</code>
+passes).</p>
 <p>On Windows <code>long</code> has 32 bits, which overflowed in the
 random number generator and made the coalescent times statistically
 wrong; the generator and the index arithmetic now use 64-bit integers

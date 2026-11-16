@@ -157,6 +157,5 @@ jobs:
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
           echo "Windows smoke tests passed"
-      - name: Whole suite (informative)
-        continue-on-error: true
+      - name: Whole suite
         run: make test
