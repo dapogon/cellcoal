@@ -335,6 +335,116 @@ static void ComputeSummaryStatistics (void)
 	varCalledGenotypes = (1.0 / (double) (numDataSets-1)) * (cumCountCalledGenotypesSq - pow(cumCountCalledGenotypes,2) / (double) numDataSets);
 	}
 
+/* reads simulated, summarized and printed (VCF, PILEUP, bulk, CATG) in blocks of sites */
+static void GenerateStreamedReads (long int *seed, int dataSetNum)
+	{
+	/* reads are simulated, summarized and printed (VCF, PILEUP) in blocks of sites */
+	if (doPrintVCF == YES && doPrintSeparateReplicates == NO)
+		fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
+	if (doPrintCATG == YES)
+		{
+		catgBody = tmpfile ();
+		if (!catgBody)
+			{
+			fprintf (stderr, "Could not open a temporary file for the CATG output\n");
+			exit (-1);
+			}
+		}
+	StreamReads (seed, (doPrintVCF == YES) ? fpVCF : NULL, (doPrintPILEUP == YES) ? fpPILEUP : NULL, (doPrintBulk == YES) ? fpBulk : NULL, catgBody);
+	if (doPrintCATG == YES)
+		{
+		char	cbuf[65536];
+		size_t	n;
+
+		PrintCATGHeader (fpCATG);
+		rewind (catgBody);
+		while ((n = fread (cbuf, 1, sizeof(cbuf), catgBody)) > 0)
+			fwrite (cbuf, 1, n, fpCATG);
+		fprintf (fpCATG, "\n");
+		fclose (catgBody);
+		catgBody = NULL;
+		if (doPrintSeparateReplicates == NO)
+			fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
+		}
+	if (doPrintPILEUP == YES && doPrintSeparateReplicates == NO)
+		fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+	if (doPrintBulk == YES && doPrintSeparateReplicates == NO)
+		fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
+	}
+
+/* per-replicate messages and output of genotypes, haplotypes and reads */
+static void PrintReplicateOutputs (int dataSetNum)
+	{
+	if (noisy > 1)
+	{
+	fprintf (stderr, "\nData set %d",dataSetNum+1);
+	fprintf (stderr, "\nNumber of coalescence events   =   %d", numCA);
+	fprintf (stderr, "\nNumber of mutational events    =   %d", numMU);
+	fprintf (stderr, "\nNumber of SNVs                 =   %d", numSNVs);
+	fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
+	fprintf (stderr, "\nNumber of cnLOH events         =   %d", numCNLOH);
+	
+	if (doTreeRateSwitches == YES)
+		fprintf(stderr, "\nTree rate switches             =   %d %s", numTreeRateSwitches, treeRateInfo);
+
+	fprintf (stderr, "\n\n");
+	}
+
+	if (doPrintSNVgenotypes == YES && numSNVs > 0) /* we only print replicates with variation */
+		{
+		if (doPrintSeparateReplicates == NO)
+			fprintf (fpSNVgenotypes, "[#%d]\n", dataSetNum+1);
+		PrintSNVGenotypes(fpSNVgenotypes);
+		}
+	if (doPrintSNVhaplotypes == YES && numSNVs > 0) /* we only print replicates with variation */
+		{
+		if (doPrintSeparateReplicates == NO)
+			fprintf (fpSNVhaplotypes, "[#%d]\n", dataSetNum+1);
+		PrintSNVHaplotypes(fpSNVhaplotypes, NO);
+		}
+	if (doPrintFullGenotypes == YES)
+		{
+		if (doPrintSeparateReplicates == NO)
+			fprintf (fpFullGenotypes, "[#%d]\n", dataSetNum+1);
+		PrintFullGenotypes(fpFullGenotypes);
+		}
+	if (doPrintFullHaplotypes == YES)
+		{
+		if (doPrintSeparateReplicates == NO)
+			fprintf (fpFullHaplotypes, "[#%d]\n", dataSetNum+1);
+		PrintFullHaplotypes(fpFullHaplotypes);
+		}
+	CloseFullStore ();
+
+	if (alphabet == DNA && streamMode == NO && doNGS == YES)
+		{
+		if (doPrintVCF == YES)
+			{
+			if (doPrintSeparateReplicates == NO)
+				fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
+			PrintVCF (fpVCF);
+			}
+		if (doPrintCATG == YES)
+			{
+			PrintCATG(fpCATG);
+			if (doPrintSeparateReplicates == NO)
+				fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
+			}
+		if (doPrintPILEUP == YES)
+			{
+			PrintPILEUP(fpPILEUP);
+			if (doPrintSeparateReplicates == NO)
+				fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+			}
+		if (doPrintBulk == YES)
+			{
+			PrintBulk (fpBulk);
+			if (doPrintSeparateReplicates == NO)
+				fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
+			}
+		}
+	}
+
 int main (int argc, char **argv)
     {
     FILE 		*fp;
@@ -871,38 +981,7 @@ int main (int argc, char **argv)
 			/* generate NGS read counts */
 			if (streamMode == YES)
 				{
-				/* reads are simulated, summarized and printed (VCF, PILEUP) in blocks of sites */
-				if (doPrintVCF == YES && doPrintSeparateReplicates == NO)
-					fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
-				if (doPrintCATG == YES)
-					{
-					catgBody = tmpfile ();
-					if (!catgBody)
-						{
-						fprintf (stderr, "Could not open a temporary file for the CATG output\n");
-						exit (-1);
-						}
-					}
-				StreamReads (&seed, (doPrintVCF == YES) ? fpVCF : NULL, (doPrintPILEUP == YES) ? fpPILEUP : NULL, (doPrintBulk == YES) ? fpBulk : NULL, catgBody);
-				if (doPrintCATG == YES)
-					{
-					char	cbuf[65536];
-					size_t	n;
-
-					PrintCATGHeader (fpCATG);
-					rewind (catgBody);
-					while ((n = fread (cbuf, 1, sizeof(cbuf), catgBody)) > 0)
-						fwrite (cbuf, 1, n, fpCATG);
-					fprintf (fpCATG, "\n");
-					fclose (catgBody);
-					catgBody = NULL;
-					if (doPrintSeparateReplicates == NO)
-						fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
-					}
-				if (doPrintPILEUP == YES && doPrintSeparateReplicates == NO)
-					fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
-				if (doPrintBulk == YES && doPrintSeparateReplicates == NO)
-					fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
+				GenerateStreamedReads (&seed, dataSetNum);
 				}
 			else if (doNGS == YES)
 				GenerateReadCounts(&seed);
@@ -928,80 +1007,7 @@ int main (int argc, char **argv)
 			if (numSNVs == 0)
                 zeroSNVs++;
 		
-			if (noisy > 1)
-				{
-				fprintf (stderr, "\nData set %d",dataSetNum+1);
-				fprintf (stderr, "\nNumber of coalescence events   =   %d", numCA);
-				fprintf (stderr, "\nNumber of mutational events    =   %d", numMU);
-				fprintf (stderr, "\nNumber of SNVs                 =   %d", numSNVs);
-				fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
-				fprintf (stderr, "\nNumber of cnLOH events         =   %d", numCNLOH);
-				
-				if (doTreeRateSwitches == YES)
-					fprintf(stderr, "\nTree rate switches             =   %d %s", numTreeRateSwitches, treeRateInfo);
-
-				fprintf (stderr, "\n\n");
-				}
-
-			if (doPrintSNVgenotypes == YES && numSNVs > 0) /* we only print replicates with variation */
-                {
-				if (doPrintSeparateReplicates == NO)
-					fprintf (fpSNVgenotypes, "[#%d]\n", dataSetNum+1);
-                PrintSNVGenotypes(fpSNVgenotypes);
-                }
-            if (doPrintSNVhaplotypes == YES && numSNVs > 0) /* we only print replicates with variation */
-                {
-  				if (doPrintSeparateReplicates == NO)
-					fprintf (fpSNVhaplotypes, "[#%d]\n", dataSetNum+1);
-                PrintSNVHaplotypes(fpSNVhaplotypes, NO);
-				}
-            if (doPrintFullGenotypes == YES )
-                {
-				if (doPrintSeparateReplicates == NO)
-					fprintf (fpFullGenotypes, "[#%d]\n", dataSetNum+1);
-                PrintFullGenotypes(fpFullGenotypes);
-                }
-            if (doPrintFullHaplotypes == YES)
-                {
-				if (doPrintSeparateReplicates == NO)
-					fprintf (fpFullHaplotypes, "[#%d]\n", dataSetNum+1);
-                PrintFullHaplotypes(fpFullHaplotypes);
-				}
-			CloseFullStore ();
-		
-			if (alphabet == DNA && streamMode == NO)
-				{
-				if (doNGS == YES)
-					{
-					if (doPrintVCF == YES)
-						{
-						if (doPrintSeparateReplicates == NO)
-							fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
-						PrintVCF (fpVCF);
-						}
-					
-					if (doPrintCATG == YES)
-						{
-						PrintCATG(fpCATG);
-						if (doPrintSeparateReplicates == NO)
-							fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
-						}
-
-					if (doPrintPILEUP == YES)
-						{
-						PrintPILEUP(fpPILEUP);
-						if (doPrintSeparateReplicates == NO)
-							fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
-						}
-
-					if (doPrintBulk == YES)
-						{
-						PrintBulk (fpBulk);
-						if (doPrintSeparateReplicates == NO)
-							fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
-						}
-					}
-				}
+			PrintReplicateOutputs (dataSetNum);
 			} //simdata
  
 		#ifdef CHECK_MUT_DISTRIBUTION
