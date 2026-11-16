@@ -526,7 +526,7 @@ int TruthMetrics (double *m)
 	{
 	int			site, k;
 	long long	called = 0, errors = 0, tp = 0, fp = 0, fn = 0;
-	long long	hetCalled = 0, hetErrors = 0, hetToHom = 0, homCalled = 0, homErrors = 0, dblCalled = 0, dblErrors = 0;
+	long long	hetCalled = 0, hetErrors = 0, hetToHom = 0, homCalled = 0, homErrors = 0, dblCalled = 0, dblErrors = 0, hetSurviving = 0, hetOneDropped = 0;
 
 	for (k=0; k<NUM_TRUTH_METRICS; k++)
 		m[k] = -1.0;
@@ -540,6 +540,7 @@ int TruthMetrics (double *m)
 		errors += allSites[site].truthErrors;
 		hetCalled += allSites[site].truthHetCalled;  hetErrors += allSites[site].truthHetErrors;  hetToHom += allSites[site].truthHetToHom;
 		homCalled += allSites[site].truthHomCalled;  homErrors += allSites[site].truthHomErrors;
+		hetSurviving += allSites[site].truthHetSurviving;  hetOneDropped += allSites[site].truthHetOneDropped;
 		dblCalled += allSites[site].truthDblCalled;  dblErrors += allSites[site].truthDblErrors;
 		if (isVar && callVar)
 			tp++;
@@ -568,6 +569,9 @@ int TruthMetrics (double *m)
 		m[7] = dblErrors / (double) dblCalled;
 	if (called - dblCalled > 0)
 		m[8] = (errors - dblErrors) / (double) (called - dblCalled);
+	/* allelic dropout simulated in the genotypes: heterozygous genotypes that lost one allele, over those that kept at least one (compare with het_to_hom) */
+	if (hetSurviving > 0)
+		m[9] = hetOneDropped / (double) hetSurviving;
 	return YES;
 	}
 

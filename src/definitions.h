@@ -100,7 +100,7 @@ typedef struct
 	int		readCountA, readCountC, readCountG, readCountT, readCountACGT; // alelle counts in reads
 	int		countCellswithData, countDropped;
 	int		truthCalled, truthErrors, truthCallVar;
-	int		truthHetCalled, truthHetErrors, truthHetToHom, truthHomCalled, truthHomErrors, truthDblCalled, truthDblErrors;	/* the same split by true genotype (het / hom) and by doublet status */	/* --summary: genotypes called from reads, wrong ones, and whether the ML genotypes show a variant at this site */
+	int		truthHetCalled, truthHetErrors, truthHetToHom, truthHomCalled, truthHomErrors, truthDblCalled, truthDblErrors, truthHetSurviving, truthHetOneDropped;	/* the same split by true genotype (het / hom) and by doublet status */	/* --summary: genotypes called from reads, wrong ones, and whether the ML genotypes show a variant at this site */
 	int		referenceAllele;
 	int		*alternateAlleles;
 	int		numAltAlleles;

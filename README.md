@@ -8,6 +8,8 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 ## Getting started
 
+New to CellCoal? Chapter 3 of the manual ([docs/cellcoal.manual.v2.0.html](docs/cellcoal.manual.v2.0.html)) is a quickstart: installation on Linux, macOS and Windows, a first simulation, worked examples (reads and VCF, bulk VAF, doublets, summaries, parameter and configuration files) and a tutorial on `--sweep`.
+
 1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.2.3.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
 
 2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.2.3`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.

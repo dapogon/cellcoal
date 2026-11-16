@@ -1,5 +1,7 @@
 # Unreleased (after 2.2.4)
 
-- `--summary` adds `het_error`, `hom_error`, `het_to_hom` (the footprint of allelic dropout), `doublet_error` and `singlet_error`.
+- `--summary` adds `het_error`, `hom_error`, `het_to_hom` (the footprint of allelic dropout), `doublet_error`, `singlet_error` and `ado_simulated` (the allelic dropout simulated in the genotypes, to compare with `het_to_hom`).
 - Windows: OpenMP is enabled automatically, and the release workflow builds a Windows zip (program plus the compiler DLLs).
 - Speed: the VCF formatting and the read simulation were profiled again; no change was worth its risk, the output is identical.
+- Manual: new chapter 3, a quickstart with installation (prebuilt programs, Homebrew, conda, source, Windows), a first simulation, worked examples and a tutorial on `--sweep`; every command in it is run.
+- Fixes in the plotting tools: `cellcoal_plots.py heatmap` and `all` failed with the SNV genotype file of a single replicate, `bulk_vaf.py --vcf` failed with the VCF of a single replicate, and the legend of the heatmap overlapped the axis label. New tests (2g20).

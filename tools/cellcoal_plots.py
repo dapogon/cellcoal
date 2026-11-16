@@ -111,8 +111,11 @@ def read_snv_gen(path):
     with open(path, errors="ignore") as fh:
         lines = [l.rstrip("\n") for l in fh]
     i = 0
-    while i < len(lines) and not lines[i].strip().split()[:1] or (i < len(lines) and lines[i].startswith("[#")):
+    # skip the number of data sets, the [#n] label and blank lines: the header of the replicate is a line with two integers
+    while i < len(lines) and not (len(lines[i].split()) == 2 and all(x.isdigit() for x in lines[i].split())):
         i += 1
+    if i >= len(lines):
+        sys.exit("unexpected format in %s: is it the SNV genotype file (option -1)?" % path)
     n, m = [int(x) for x in lines[i].split()[:2]]
     sites = [int(x) for x in lines[i + 1].split()]
     for l in lines[i + 2:i + 2 + n]:
@@ -148,7 +151,7 @@ def cmd_heatmap(a):
     ax.imshow(code[np.ix_(cell_order, order)], aspect="auto", cmap=cmap, vmin=0, vmax=3, interpolation="nearest")
     ax.set(xlabel="SNVs, from the most to the least shared (%d of %d)" % (len(order), nsnv), ylabel="cells (%d)" % ncell, title="Genotypes relative to the healthy cell")
     handles = [matplotlib.patches.Patch(color=c, label=l) for c, l in zip(["#f0f0f0", "#f6b26b", "#b22222", "#7f7f7f"], ["as healthy", "one allele differs", "both alleles differ", "missing"])]
-    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.12), ncol=4, frameon=False)
+    ax.legend(handles=handles, loc="upper center", bbox_to_anchor=(0.5, -0.2), ncol=4, frameon=False)
     fig.tight_layout(); fig.savefig(a.out, dpi=150)
     print("%d cells, %d SNVs: %.1f%% as healthy, %.1f%% heterozygous-like, %.1f%% homozygous-like, %.1f%% missing" %
           (ncell, nsnv, *[100 * (code == k).mean() for k in range(4)]))

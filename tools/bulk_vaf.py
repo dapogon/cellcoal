@@ -81,6 +81,8 @@ if a.vcf:
         if l.startswith("#") or not l.strip():
             continue
         f = l.rstrip("\n").split("\t")
+        if len(f) < 10:                                   # the number of data sets and the [#n] label of a file with several replicates
+            continue
         fmt = f[8].split(":")
         if "RC" not in fmt:
             sys.exit("The VCF has no RC (read count) field")
