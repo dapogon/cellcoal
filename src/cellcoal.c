@@ -179,17 +179,9 @@ Version 1.1.0 (18/10/2019)
    SNV genotypes are printed from the genome data, and allocating (cells+1) x sites blocks anyway costs
    e.g. ~2.4 GB for 1000 cells x 50000 sites. */
 
-int main (int argc, char **argv)
-    {
-    FILE 		*fp;
-    int			i, j;
-    int         dataSetNum;
-    long int	seed;
-    double		a, a2;
-    clock_t		start;
-    double		secs, wallSecs = 0.0;
-		
-    /* Default settings */
+/* default values of all the options */
+static void SetDefaultOptions (void)
+	{
     numDataSets = 50;			/* the number of samples to simulate */
     numCells = 20;				/* number of ingroup cells in each data set */
     ploidy = 2;                 /* we assume diploid genomes */
@@ -285,21 +277,14 @@ int main (int argc, char **argv)
 	meanDoubletRate = 0;			/* mean of beta distribution for doublet errors */
 	varDoubletRate = 1.0e-06;		/* variance of beta distribution for doublet errors */
 	numNodes = 1000;            	/* initial number of nodes allocated to build the coalescent trees */
-	seed = time(NULL); 				/* seed for random numbers */
 	doSpecificParameterFile = NO;	/* by default do not use a custom parameter file */
 	userSeed = 0;					/* seed entered by the user */
 	noisy = 1;						/* level of information to be printed in the screen (see below) */
+	}
 
-	/*
-	 noisy = 0: does not print anything
-	 noisy = 1: + simulation summary,
-	 noisy = 2: + replicate information,
-	 noisy = 3: + calculation status and event information
-	*/
-
-	strcpy(parameterFile, "parameters");
-	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
-	ReadParametersFromCommandLine (argc, argv);
+/* checks that need several options at once (after reading the command line) */
+static void CheckOptionCombinations (void)
+	{
 	if (doBCF == YES)
 		{
 		if (doZipVCF == YES || doPrintVCF == NO)
@@ -328,6 +313,53 @@ int main (int argc, char **argv)
 		fprintf (stderr, "\n!!! PARAMETER ERROR: --ado-doublet-corr needs ADO variation among cells (-P) and doublets (-B)\n\n");
 		exit (-1);
 		}
+	}
+
+/* means and variances over replicates */
+static void ComputeSummaryStatistics (void)
+	{
+    meanNumCA  = cumNumCA /  (double) numDataSets;
+    meanNumMU  = cumNumMU /  (double) numDataSets;
+    meanNumSNVs  = cumNumSNVs / (double) numDataSets;
+    meanNumDEL  = cumNumDEL /  (double) numDataSets;
+    meanNumCNLOH = cumNumCNLOH /  (double) numDataSets;
+    meanTMRCA  =  cumTMRCA /  (double) numDataSets;
+	meanMLgenotypeError = cumCountMLgenotypeErrors / (double) numDataSets;
+	meanCalledGenotypes = cumCountCalledGenotypes / (double) numDataSets;
+
+    varNumMU = (1.0 / (double) (numDataSets-1)) * (cumNumMUSq - pow(cumNumMU,2) / (double) numDataSets);
+    varNumSNVs = (1.0 / (double) (numDataSets-1)) * (cumNumSNVsSq - pow(cumNumSNVs,2) / (double) numDataSets);
+    varNumDEL = (1.0 / (double) (numDataSets-1)) * (cumNumDELSq - pow(cumNumDEL,2) / (double) numDataSets);
+	varTMRCA = (1.0 / (double) (numDataSets-1)) * (cumTMRCASq - pow(cumTMRCA,2) / (double) numDataSets);
+	varMLgenotypeError = (1.0 / (double) (numDataSets-1)) * (cumCountMLgenotypeErrorsSq - pow(cumCountMLgenotypeErrors,2) / (double) numDataSets);
+	varCalledGenotypes = (1.0 / (double) (numDataSets-1)) * (cumCountCalledGenotypesSq - pow(cumCountCalledGenotypes,2) / (double) numDataSets);
+	}
+
+int main (int argc, char **argv)
+    {
+    FILE 		*fp;
+    int			i, j;
+    int         dataSetNum;
+    long int	seed;
+    double		a, a2;
+    clock_t		start;
+    double		secs, wallSecs = 0.0;
+		
+    /* Default settings */
+	seed = time(NULL);				/* seed for random numbers */
+	SetDefaultOptions ();
+
+	/*
+	 noisy = 0: does not print anything
+	 noisy = 1: + simulation summary,
+	 noisy = 2: + replicate information,
+	 noisy = 3: + calculation status and event information
+	*/
+
+	strcpy(parameterFile, "parameters");
+	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
+	ReadParametersFromCommandLine (argc, argv);
+	CheckOptionCombinations ();
 	if (argc < 2 || doSpecificParameterFile == YES)
         {
 		readingParameterFile = YES;
@@ -1109,21 +1141,7 @@ int main (int argc, char **argv)
          PrintMemory(stderr); */
     } // replicate
 		
-    meanNumCA  = cumNumCA /  (double) numDataSets;
-    meanNumMU  = cumNumMU /  (double) numDataSets;
-    meanNumSNVs  = cumNumSNVs / (double) numDataSets;
-    meanNumDEL  = cumNumDEL /  (double) numDataSets;
-    meanNumCNLOH = cumNumCNLOH /  (double) numDataSets;
-    meanTMRCA  =  cumTMRCA /  (double) numDataSets;
-	meanMLgenotypeError = cumCountMLgenotypeErrors / (double) numDataSets;
-	meanCalledGenotypes = cumCountCalledGenotypes / (double) numDataSets;
-
-    varNumMU = (1.0 / (double) (numDataSets-1)) * (cumNumMUSq - pow(cumNumMU,2) / (double) numDataSets);
-    varNumSNVs = (1.0 / (double) (numDataSets-1)) * (cumNumSNVsSq - pow(cumNumSNVs,2) / (double) numDataSets);
-    varNumDEL = (1.0 / (double) (numDataSets-1)) * (cumNumDELSq - pow(cumNumDEL,2) / (double) numDataSets);
-	varTMRCA = (1.0 / (double) (numDataSets-1)) * (cumTMRCASq - pow(cumTMRCA,2) / (double) numDataSets);
-	varMLgenotypeError = (1.0 / (double) (numDataSets-1)) * (cumCountMLgenotypeErrorsSq - pow(cumCountMLgenotypeErrors,2) / (double) numDataSets);
-	varCalledGenotypes = (1.0 / (double) (numDataSets-1)) * (cumCountCalledGenotypesSq - pow(cumCountCalledGenotypes,2) / (double) numDataSets);
+	ComputeSummaryStatistics ();
 
 	/* close file pointers */
 	if (doPrintSeparateReplicates == NO)
