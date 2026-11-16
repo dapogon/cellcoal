@@ -736,13 +736,13 @@ static void RunReplicate (int dataSetNum, long int *seed)
 
 			if (fpSummary != NULL)
 				{
-				double	metric[4];
+				double	metric[NUM_TRUTH_METRICS];
 				int		k;
 
-				TruthMetrics (&metric[0], &metric[1], &metric[2], &metric[3]);
+				TruthMetrics (metric);
 				fprintf (fpSummary, "%d\t%.6f\t%d\t%d\t%d\t%d\t%d\t%.6f", dataSetNum+1, TMRCA, numMU, numDEL, numCNLOH, numSNVsTrue, numSNVs,
 					numSNVsTrue > 0 ? numSNVs / (double) numSNVsTrue : 0.0);
-				for (k=0; k<4; k++)	/* NA when there are no reads or the metric is undefined */
+				for (k=0; k<NUM_TRUTH_METRICS; k++)	/* NA when there are no reads or the metric is undefined */
 					{
 					if (metric[k] < 0.0)
 						fprintf (fpSummary, "\tNA");
@@ -1136,7 +1136,7 @@ int main (int argc, char **argv)
 			fprintf (stderr, "Can't open \"%s\"\n", File);
 			exit(-1);
 			}
-		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\n");
+		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\n");
 		}
 
 	/* Read user treefile */

@@ -1,6 +1,6 @@
 name: Binaries
 
-# Builds the program for Linux (static, with OpenMP), macOS (Apple silicon, with libomp bundled) and Windows (MSYS2 UCRT64, static, with OpenMP).
+# Builds the program for Linux (static, with OpenMP), macOS (Apple silicon, with libomp bundled) and Windows (MSYS2 UCRT64, with OpenMP; the compiler's DLLs are bundled).
 # - run it by hand to test the builds (the tarballs are kept as workflow artifacts), or with a tag to attach them to that release;
 # - the Release workflow calls it with the tag to attach the tarballs to the release.
 
@@ -95,11 +95,13 @@ jobs:
       - name: Build and pack
         shell: msys2 {0}
         run: |
-          make LDFLAGS=-static
+          make
           V=$(sed -n 's/^VERSION = //p' Makefile)
           D="cellcoal-$V-windows-x86_64"
           mkdir -p "$D"
           cp "bin/cellcoal-$V.exe" "$D/cellcoal.exe" 2>/dev/null || cp "bin/cellcoal-$V" "$D/cellcoal.exe"
+          # the runtime libraries of the compiler (libgomp, winpthread, ...) go next to the program
+          for L in $(ldd "$D/cellcoal.exe" | awk '/ucrt64|mingw64/{print $3}'); do cp "$L" "$D/"; done
           cp tools/bulk_vaf.py "$D/cellcoal-bulk-vaf.py"
           cp README.md "docs/CHANGES-$V.md" docs/cellcoal.manual.v2.0.html "$D/"
           cp -R examples parameters "$D/"

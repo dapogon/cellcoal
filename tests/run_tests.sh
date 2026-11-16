@@ -525,7 +525,21 @@ for r in rows[1:]:
     assert 0 < float(d["snv_precision"]) <= 1 and 0.5 < float(d["snv_recall"]) <= 1, d
 PY
 "$BIN" -n2 -s10 -l500 -u1e-6 -e10000 -b1 --summary -oSN >/dev/null 2>&1
-[ "$(sed -n 2p SN/summary.tsv | cut -f9-12)" = "$(printf 'NA\tNA\tNA\tNA')" ] && ok "truth metrics are NA without reads" || bad "truth metrics without reads"
+[ "$(sed -n 2p SN/summary.tsv | cut -f9-17)" = "$(printf 'NA\tNA\tNA\tNA\tNA\tNA\tNA\tNA\tNA')" ] && ok "truth metrics are NA without reads" || bad "truth metrics without reads"
+"$BIN" -n3 -s40 -l3000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.001 -P0.4 0.05 -B0.3 0.01 --summary -oSD -#6 >/dev/null 2>&1
+"$BIN" -n3 -s40 -l3000 -u1e-6 -e10000 -b1 -C8 -V5 -E0.001 --summary -oS0 -#6 >/dev/null 2>&1
+python3 - <<'PY' && ok "truth metrics by genotype: allelic dropout makes heterozygous cells look homozygous; doublets raise the error" || bad "truth metrics by genotype and doublets"
+def load(f):
+    rows=[l.rstrip("\n").split("\t") for l in open(f)]
+    return [dict(zip(rows[0],r)) for r in rows[1:]]
+for d in load("SD/summary.tsv"):
+    het,hom,h2h=float(d["het_error"]),float(d["hom_error"]),float(d["het_to_hom"])
+    assert het > 5*hom and 0.1 < het < 0.8, d
+    assert h2h <= het + 1e-9 and h2h > 0.8*het, d
+    assert float(d["doublet_error"]) > float(d["singlet_error"]), d
+for d in load("S0/summary.tsv"):
+    assert float(d["het_to_hom"]) < 0.2 and d["doublet_error"] == "NA", d
+PY
 "$BIN" -n6 -s20 -l2000 -u1e-6 -e10000 -b1 -C10 -V5 -P0.1 0.01 --sweep "E=0.0005,0.02" -oSE -#5 >/dev/null 2>&1
 python3 - <<'PY' && ok "--sweep: genotype error grows with the sequencing error" || bad "--sweep genotype_error"
 rows=[l.rstrip("\n").split("\t") for l in open("SE/sweep.tsv")]

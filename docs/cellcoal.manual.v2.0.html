@@ -1767,7 +1767,7 @@ version. Stored and streamed reads give the same files.</p>
 (variable sites of the true genotypes, before dropout and errors),
 <code>snv_observed</code> (after dropout, errors and reads) and
 <code>snv_ratio</code> (observed over true; it can be above 1 because
-errors create false variants). With reads (<code>-C</code>) it adds four
+errors create false variants). With reads (<code>-C</code>) it adds nine
 metrics against the true genotypes, computed for the tumour cells (not
 the healthy cell) site by site while the reads are simulated, so they
 are the same with stored and streamed reads:
@@ -1778,8 +1778,17 @@ one deleted allele counts as homozygous for the other, and a cell with
 both alleles deleted is left out; a doublet is judged against its own
 true genotype), <code>snv_precision</code> and <code>snv_recall</code>
 (sites where the called genotypes show a variant, against the sites that
-are variable in the true genotypes). Without reads these columns are
-<code>NA</code>.</p>
+are variable in the true genotypes). Five more split the error:
+<code>het_error</code> and <code>hom_error</code> (error of the cells
+whose true genotype is heterozygous or homozygous),
+<code>het_to_hom</code> (heterozygous cells that are called homozygous,
+which is the visible footprint of allelic dropout; it is almost all of
+<code>het_error</code> when there is dropout), and
+<code>doublet_error</code> and <code>singlet_error</code> (error of the
+cells that are doublets, judged by their doublet genotype, and of the
+others; <code>NA</code> when there are no doublets). CellCoal does not
+detect doublets, so there is no precision or recall for them. Without
+reads these columns are <code>NA</code>.</p>
 <p><strong><code>--sweep &quot;KEY=V1,V2,... KEY2=...&quot;</code></strong> runs
 the program once for every combination of the listed values and collects
 the metrics of <code>--summary</code> in a table, instead of writing a
@@ -1853,6 +1862,11 @@ and <code>diff</code>; install it with
 mode, so CRLF line endings are accepted. The results of the simulations
 are statistically correct on Windows (<code>tests/theory.py</code>
 passes).</p>
+<p>The Makefile enables OpenMP automatically on Windows (the compiler
+ships <code>libgomp</code>), so the Windows build runs in parallel like
+the others (<code>OMP_NUM_THREADS</code>). The release has a Windows zip
+(<code>cellcoal-&lt;version&gt;-windows-x86_64.zip</code>) with the
+program and the DLLs of the compiler it needs.</p>
 <p>On Windows <code>long</code> has 32 bits, which overflowed in the
 random number generator and made the coalescent times statistically
 wrong; the generator and the index arithmetic now use 64-bit integers

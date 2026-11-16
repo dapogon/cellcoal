@@ -522,12 +522,14 @@ void CountMLGenotypingErrors()
    SimulateSiteReads). Returns NO when there are no reads to compare. A metric that cannot be computed is set to -1.
    calledFraction: genotypes called / ingroup cells x sites; genotypeError: wrong called genotypes / called genotypes;
    precision, recall: of the sites where the ML genotypes show a variant, against the sites that are variable in the true genotypes */
-int TruthMetrics (double *calledFraction, double *genotypeError, double *precision, double *recall)
+int TruthMetrics (double *m)
 	{
-	int			site;
+	int			site, k;
 	long long	called = 0, errors = 0, tp = 0, fp = 0, fn = 0;
+	long long	hetCalled = 0, hetErrors = 0, hetToHom = 0, homCalled = 0, homErrors = 0, dblCalled = 0, dblErrors = 0;
 
-	*calledFraction = *genotypeError = *precision = *recall = -1.0;
+	for (k=0; k<NUM_TRUTH_METRICS; k++)
+		m[k] = -1.0;
 	if (doNGS == NO || readsOnly == YES || alphabet != DNA)
 		return NO;
 	for (site=0; site<numSites; site++)
@@ -536,6 +538,9 @@ int TruthMetrics (double *calledFraction, double *genotypeError, double *precisi
 
 		called += allSites[site].truthCalled;
 		errors += allSites[site].truthErrors;
+		hetCalled += allSites[site].truthHetCalled;  hetErrors += allSites[site].truthHetErrors;  hetToHom += allSites[site].truthHetToHom;
+		homCalled += allSites[site].truthHomCalled;  homErrors += allSites[site].truthHomErrors;
+		dblCalled += allSites[site].truthDblCalled;  dblErrors += allSites[site].truthDblErrors;
 		if (isVar && callVar)
 			tp++;
 		else if (!isVar && callVar)
@@ -543,13 +548,26 @@ int TruthMetrics (double *calledFraction, double *genotypeError, double *precisi
 		else if (isVar && !callVar)
 			fn++;
 		}
-	*calledFraction = called / ((double) numCells * (double) numSites);
+	m[0] = called / ((double) numCells * (double) numSites);
 	if (called > 0)
-		*genotypeError = errors / (double) called;
+		m[1] = errors / (double) called;
 	if (tp + fp > 0)
-		*precision = tp / (double) (tp + fp);
+		m[2] = tp / (double) (tp + fp);
 	if (tp + fn > 0)
-		*recall = tp / (double) (tp + fn);
+		m[3] = tp / (double) (tp + fn);
+	/* by true genotype: error of the heterozygous and of the homozygous cells, and how many heterozygous cells look homozygous */
+	if (hetCalled > 0)
+		{
+		m[4] = hetErrors / (double) hetCalled;
+		m[6] = hetToHom / (double) hetCalled;
+		}
+	if (homCalled > 0)
+		m[5] = homErrors / (double) homCalled;
+	/* doublets: error of the genotypes of the cells that are doublets, and of the others (the doublet cells are judged by their doublet genotype) */
+	if (dblCalled > 0)
+		m[7] = dblErrors / (double) dblCalled;
+	if (called - dblCalled > 0)
+		m[8] = (errors - dblErrors) / (double) (called - dblCalled);
 	return YES;
 	}
 
