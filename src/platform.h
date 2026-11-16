@@ -14,6 +14,8 @@
 	#define MAKE_DIR(path)		_mkdir (path)
 	#define LSTAT(path, st)		stat (path, st)
 	#define SHELL_QUOTE_CHAR	'"'
+	#define gmtime_r(t, r)		(gmtime_s (r, t) == 0 ? (r) : NULL)
+	#define localtime_r(t, r)	(localtime_s (r, t) == 0 ? (r) : NULL)
 #else
 	#define MAKE_DIR(path)		mkdir (path, S_IRWXU)
 	#define LSTAT(path, st)		lstat (path, st)
