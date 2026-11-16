@@ -8,9 +8,9 @@ CellCoal simulates the somatic evolution of single-cells. CellCoal generates a c
 
 ## Getting started
 
-1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.2.2.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
+1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.2.3.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
 
-2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.2.2`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.
+2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.2.3`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.
 
 3. **Run**: `bin/cellcoal-x.y.z`. In this case, the program arguments will be read from a file called *parameters*. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
 
@@ -28,6 +28,10 @@ Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells
   `python3 tools/bulk_vaf.py Results/snv_gen --depth 100 --purity 1.0 --out vaf.png --tsv vaf.tsv`
 
 With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
+
+## What's new in 2.2.3
+
+Three options for experiments with many conditions: `--cov-doublet-corr RHO` and `--ado-doublet-corr RHO` correlate being a doublet (`-B`) with the coverage (`-J`) and the ADO rate (`-P`) of the cells (the per-cell values go to `cell_params`); `--summary` writes `summary.tsv` with one row of metrics per replicate; and `--sweep "C=2,5,10 E=0.001,0.01"` runs a grid of parameter values with a common seed and collects the mean and standard error of the metrics in `sweep.tsv`. Fixed a crash with `--ado-doublet-corr` alone. Internally `main` is split into functions and the CI now checks speed against the latest release. Output of existing runs is bit-identical to 2.2.2. See section 6.10i of the manual and [docs/CHANGES-2.2.3.md](docs/CHANGES-2.2.3.md).
 
 ## What's new in 2.2.2
 
