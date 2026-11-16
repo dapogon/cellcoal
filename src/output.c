@@ -2281,6 +2281,10 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
 	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
 	fprintf (fp,"\n--cov-ado-corr RHO: correlation (-1..1) between the coverage (-J) and the ADO rate (-P) of the cells (e.g. --cov-ado-corr -0.5)");
+	fprintf (fp,"\n--cov-doublet-corr RHO: correlation (-1..1) between the coverage (-J) and being a doublet (-B)");
+	fprintf (fp,"\n--ado-doublet-corr RHO: correlation (-1..1) between the ADO rate (-P) and being a doublet (-B)");
+	fprintf (fp,"\n--summary: write summary.tsv, one row of metrics per replicate");
+	fprintf (fp,"\n--sweep \"KEY=V1,V2 ...\": run the grid of values (e.g. --sweep \"C=2,5,10 E=0.001,0.01\") and write sweep.tsv with mean and standard error of the metrics; --sweep-keep keeps the runs");
 	fprintf (fp,"\n--bcf: write the genotype likelihoods as a BCF file (vcf.bcf) instead of a VCF file");
 	fprintf (fp,"\n--fast: faster read simulation (same distributions, different random numbers; see the manual)");
 	fprintf (fp,"\n--config FILE: read the options from a JSON or YAML file");

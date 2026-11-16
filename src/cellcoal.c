@@ -318,6 +318,16 @@ int main (int argc, char **argv)
 		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-ado-corr needs coverage variation among cells (-J) and ADO variation among cells (-P)\n\n");
 		exit (-1);
 		}
+	if (covDoubletCorr != 0.0 && (alphaCellCoverage <= 0.0 || meanDoubletRate <= 0))
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-doublet-corr needs coverage variation among cells (-J) and doublets (-B)\n\n");
+		exit (-1);
+		}
+	if (adoDoubletCorr != 0.0 && (doADOcell == NO || meanDoubletRate <= 0))
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --ado-doublet-corr needs ADO variation among cells (-P) and doublets (-B)\n\n");
+		exit (-1);
+		}
 	if (argc < 2 || doSpecificParameterFile == YES)
         {
 		readingParameterFile = YES;
@@ -524,6 +534,18 @@ int main (int argc, char **argv)
 	fprintf(fpSims,"CountCalls, ProbCalls, CountBadCalls, ProbBadCalls, numSNVs\n");
 	#endif
 	
+	/* --summary: one line of metrics per replicate in <results>/summary.tsv */
+	if (doSummary == YES)
+		{
+		snprintf (File, sizeof(File), "%s/%s", resultsDir, "summary.tsv");
+		if ((fpSummary = fopen(File, "w")) == NULL)
+			{
+			fprintf (stderr, "Can't open \"%s\"\n", File);
+			exit(-1);
+			}
+		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\n");
+		}
+
 	/* Read user treefile */
 	if (doUserTree == YES)
 		{
@@ -773,6 +795,7 @@ int main (int argc, char **argv)
 
 			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 			numSNVs = CountTrueVariants();
+			numSNVsTrue = numSNVs;
 
 			/* copy true genotypes before doing ADO but after CNLOH and deletion */
 			if (NEED_CELL_SITES && streamMode == NO)
@@ -792,9 +815,9 @@ int main (int argc, char **argv)
 				}
 
 			/* do alellic dropout */
+			adoReplicate = dataSetNum;
 			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
 				{
-				adoReplicate = dataSetNum;
 				if (sparseMode == YES)
 					SparseAllelicDropout(&seed);
 				else
@@ -862,6 +885,13 @@ int main (int argc, char **argv)
 
             cumNumSNVs += numSNVs;
             cumNumSNVsSq += pow(numSNVs,2);
+
+			if (fpSummary != NULL)
+				{
+				fprintf (fpSummary, "%d\t%.6f\t%d\t%d\t%d\t%d\t%d\t%.6f\n", dataSetNum+1, TMRCA, numMU, numDEL, numCNLOH, numSNVsTrue, numSNVs,
+					numSNVsTrue > 0 ? numSNVs / (double) numSNVsTrue : 0.0);
+				fflush (fpSummary);
+				}
 
 			if (numSNVs == 0)
                 zeroSNVs++;
@@ -1169,6 +1199,8 @@ int main (int argc, char **argv)
 		free (treeRateSwitchMultiplier);
 
 
+	if (fpSummary != NULL)
+		fclose (fpSummary);
 #ifdef COUNT_ML_GENOTYPE_ERRORS
 	fprintf (stdout, "\n\n Mean probability for untrue genotype calls     =   %8.6f", meanMLgenotypeError);
 	fprintf (stdout, "\n Variance probability for untrue genotype calls =   %8.6f", varMLgenotypeError);

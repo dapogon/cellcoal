@@ -320,6 +320,43 @@ PY
 ); then ok "huge gamma shapes (-a -J -O -V -i 1e308) finish"; else bad "huge gamma shape hangs or fails"; fi
 if python3 "$ROOT/tests/fuzz.py" "$BIN" --runs 60 --seed 11 >"$TMP/fuzz.txt" 2>&1; then ok "$(tail -1 "$TMP/fuzz.txt")"; else bad "fuzz"; head -6 "$TMP/fuzz.txt"; fi
 
+echo "2g16. Correlation of being a doublet with the coverage (--cov-doublet-corr) and the ADO rate (--ado-doublet-corr) of the cells"
+for cfg in "0 0" "0.8 0" "-0.8 0" "0 0.8" "0.8 0.8"; do
+  set -- $cfg; d="$TMP/dc_${1}_${2}"; mkdir -p "$d"
+  (cd "$d" && "$BIN" -n30 -s100 -l200 -u1e-6 -e10000 -b1 -C8 -V5 -E0.001 -J4 -P0.2 0.02 -B0.3 0.02 --cov-ado-corr 0.5 --cov-doublet-corr $1 --ado-doublet-corr $2 -#9 >/dev/null 2>&1)
+done
+if python3 - "$TMP" <<'PY'
+import math, statistics as st, sys
+def load(path):
+    reps = []; cur = None
+    for l in open(path):
+        l = l.rstrip("\n")
+        if l.startswith("[#"): cur = []; reps.append(cur); continue
+        f = l.split("\t")
+        if f[0] != "cell": cur.append((float(f[1]), float(f[2]), int(f[3])))
+    return reps
+def corr(x, y):
+    mx, my = st.mean(x), st.mean(y)
+    return sum((a - mx) * (b - my) for a, b in zip(x, y)) / math.sqrt(sum((a - mx) ** 2 for a in x) * sum((b - my) ** 2 for b in y))
+def stats(cfg):
+    reps = load("%s/dc_%s/Results/cell_params" % (sys.argv[1], cfg))
+    cd = [corr([c[0] for c in r], [c[2] for c in r]) for r in reps]
+    ad = [corr([c[1] for c in r], [c[2] for c in r]) for r in reps]
+    return st.mean(cd), st.mean(ad), sum(c[2] for c in reps[0])
+z = stats("0_0"); cp = stats("0.8_0"); cn = stats("-0.8_0"); ap = stats("0_0.8"); both = stats("0.8_0.8")
+assert abs(z[0]) < 0.1 and abs(z[1]) < 0.1, ("no correlation requested", z)
+assert cp[0] > 0.45 and cn[0] < -0.35, ("coverage - doublet", cp, cn)
+assert ap[1] > 0.45 and both[0] > 0.45 and both[1] > 0.45, ("ADO - doublet", ap, both)
+assert cp[0] > z[0] + 0.4 and ap[1] > z[1] + 0.4
+assert len({z[2], cp[2], cn[2], ap[2], both[2]}) == 1, ("number of doublets of replicate 1 must not change", z[2], cp[2], cn[2], ap[2], both[2])
+print("r(cov,doublet) %.2f/%.2f/%.2f, r(ado,doublet) %.2f/%.2f, doublets in replicate 1: %d" % (z[0], cp[0], cn[0], z[1], ap[1], z[2]))
+PY
+then ok "doublets follow coverage and ADO (point-biserial r below the latent 0.8 because 30% are doublets), same number of doublets"; else bad "doublet correlations"; fi
+if "$BIN" -n1 -s20 -l50 -C5 -B0.3 0.02 --cov-doublet-corr 0.5 >/dev/null 2>&1; then bad "--cov-doublet-corr without -J accepted"; else ok "--cov-doublet-corr without -J is rejected"; fi
+if "$BIN" -n1 -s20 -l50 -C5 -J4 -P0.2 0.02 -B0.3 0.02 --cov-ado-corr 0.5 --cov-doublet-corr -0.8 --ado-doublet-corr 0.8 >/dev/null 2>&1; then bad "incompatible correlations accepted"; else ok "incompatible correlations (not a valid matrix) are rejected"; fi
+printf '{"s":20,"l":100,"C":5,"J":4,"P":[0.2,0.02],"B":[0.3,0.02],"cov_doublet_correlation":0.6,"ado_doublet_correlation":0.3}' > "$TMP/dcc.json"
+mkdir -p "$TMP/dcc" && (cd "$TMP/dcc" && "$BIN" --config "$TMP/dcc.json" -n2 -#3 >/dev/null 2>&1) && [ -s "$TMP/dcc/Results/cell_params" ] && ok "correlations from a --config file" || bad "correlations from --config"
+
 echo "2h. Run record (run.json)"
 mkdir -p "$TMP/rj"
 (cd "$TMP/rj" && "$BIN" -n2 -s20 -l300 -u1e-6 -e10000 -C5 -V1 -#99 >out.txt 2>&1)
@@ -448,6 +485,29 @@ r=($(python3 "$TMP/reads.py" sig "$TMP/sig/Results/vcf_dir/vcf.0001"))
 close ${r[0]} 0.675 0.05 && ok "signature 1: C>T fraction ${r[0]} (expected 0.675)" || bad "signature 1: C>T ${r[0]} (expected 0.675)"
 (cd "$TMP/pq" && "$BIN" $M -P0.2 0.01 >/dev/null 2>&1); r=($(python3 "$TMP/rates.py" "$TMP/pq/Results"))
 close ${r[0]} 0.20 0.06 && ok "ADO per cell (-P0.2 0.01): mean ${r[0]} (expected 0.20)" || bad "ADO per cell: ${r[0]} (expected 0.20)"
+
+echo "2g17. --summary and --sweep"
+mkdir -p "$TMP/sw" && rm -rf "$TMP/sw"/* && cd "$TMP/sw"
+"$BIN" -n3 -s10 -l500 -u1e-6 -e10000 -b1 -C8 -E0.001 --summary -#3 >/dev/null 2>&1
+[ "$(wc -l < Results/summary.tsv)" -eq 4 ] && head -1 Results/summary.tsv | grep -q "snv_true" && ok "--summary writes one row per replicate" || bad "--summary table"
+"$BIN" -n4 -s10 -l500 -u1e-6 -e10000 -b1 -E0.001 -P0.2 0.02 --sweep "C=2,8 J=1,5" -oSW -#7 >/dev/null 2>&1
+[ "$(wc -l < SW/sweep.tsv)" -eq 5 ] && [ ! -d SW/run_0001 ] && ok "--sweep: 2x2 grid, one row per combination, run folders removed" || bad "--sweep grid"
+python3 - <<'PY' && ok "--sweep: common seed (same genealogy in every run) and replicates table" || bad "--sweep content"
+rows=[l.rstrip("\n").split("\t") for l in open("SW/sweep.tsv")]
+h=rows[0]; t=h.index("tmrca")
+# C does not change the genealogy: runs with the same J (rows 1,3 and 2,4) have the same mean TMRCA
+assert rows[1][t]==rows[3][t] and rows[2][t]==rows[4][t], rows
+assert len(open("SW/sweep_replicates.tsv").readlines())==1+4*4
+PY
+"$BIN" -s8 -l200 -n2 -u1e-6 -e10000 -b1 --sweep "C=2..6..2" -oSR --sweep-keep >/dev/null 2>&1
+[ "$(wc -l < SR/sweep.tsv)" -eq 4 ] && [ -d SR/run_0003 ] && ok "--sweep with a range and --sweep-keep" || bad "--sweep range"
+printf 'sweep: "C=2,4"\ncells: 6\nsites: 200\nreplicates: 2\nresults_folder: SC\nseed: 5\n' > c.yaml
+"$BIN" --config c.yaml >/dev/null 2>&1; [ "$(wc -l < SC/sweep.tsv)" -eq 3 ] && ok "--sweep from a --config file" || bad "--sweep config"
+"$BIN" -s5 -l100 --sweep "zzz=1" >/dev/null 2>&1; r1=$?
+"$BIN" -s5 -l100 --sweep "n=1,2" >/dev/null 2>&1; r2=$?
+"$BIN" -s5 -l100 --sweep >/dev/null 2>&1; r3=$?
+[ $r1 -ne 0 ] && [ $r2 -ne 0 ] && [ $r3 -ne 0 ] && ok "--sweep rejects unknown options, -n and a missing specification" || bad "--sweep errors ($r1 $r2 $r3)"
+cd "$ROOT"
 
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

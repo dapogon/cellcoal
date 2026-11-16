@@ -743,7 +743,7 @@ static int CmpByKey (const void *x, const void *y)
 /* keeps the ADO rate of every cell (drawn with -P) for the correlation with the coverage (--cov-ado-corr) */
 void KeepCellADO (const double *rate)
 	{
-	if (covAdoCorr == 0.0)
+	if (covAdoCorr == 0.0 && adoDoubletCorr == 0.0)
 		return;
 	free (cellAdoRate);
 	cellAdoRate = (double*) malloc ((numCells+1) * sizeof(double));
@@ -807,6 +807,174 @@ static void CorrelateCoverageWithADO (long int *seed)
 	free (byAdo); free (byScore); free (z); free (score); free (cov);
 	}
 
+/********************* Doublets correlated with the coverage and the ADO of the cells ************************/
+/* Normal scores of a variable: the cell of rank r (0..n-1) gets the normal quantile of (r+0.5)/n */
+static void NormalScores (const double *key, int n, double *z)
+	{
+	int		i, *ord = (int*) malloc (n * sizeof(int));
+
+	if (!ord)
+		{
+		fprintf (stderr, "Could not allocate the normal scores\n");
+		exit (-1);
+		}
+	for (i=0; i<n; i++)
+		ord[i] = i;
+	sortKey = key;
+	qsort (ord, n, sizeof(int), CmpByKey);
+	for (i=0; i<n; i++)
+		z[ord[i]] = NormalQuantile ((i + 0.5) / n);
+	free (ord);
+	}
+
+/* Which cells are doublets (-B) is decided before the coverage and ADO of the cells are known; with --cov-doublet-corr and/or
+   --ado-doublet-corr the same number of doublets is kept, but they are given to the cells with the highest score
+   beta_a z_ado + beta_c z_cov + residual, where z are the normal scores of the ADO rate and of the coverage multiplier of the
+   cells. The betas are those of a Gaussian copula with correlations (doublet, ADO) = adoDoubletCorr, (doublet, coverage) =
+   covDoubletCorr and (coverage, ADO) = covAdoCorr, so the three pairwise correlations are those requested whenever the matrix
+   is a valid correlation matrix. The doublet status, the window of reads and the donor are moved from the former doublet
+   cells to the new ones; nothing else changes. */
+void CorrelateDoublets (long int *seed)
+	{
+	int		i, n = numCells, k = 0, nIn, nOut, *newSet, *oldOnly, *newOnly;
+	double	*zA = NULL, *zC = NULL, *score, *key, ra = adoDoubletCorr, rc = covDoubletCorr, rac = covAdoCorr;
+	double	ba = 0.0, bc = 0.0, r2, resid, det, u1, u2;
+
+	if ((ra == 0.0 && rc == 0.0) || meanDoubletRate <= 0 || doubletDonor == NULL || n < 2)
+		return;
+	for (i=0; i<n; i++)
+		k += (cell[i].hasDoublet == YES);
+	if (k == 0 || k == n)
+		return;
+	if (ra != 0.0)
+		{
+		zA = (double*) malloc (n * sizeof(double));
+		NormalScores (cellAdoRate, n, zA);
+		}
+	if (rc != 0.0)
+		{
+		zC = (double*) malloc (n * sizeof(double));
+		NormalScores (cellCovMult, n, zC);
+		}
+	if (ra != 0.0 && rc != 0.0)
+		{
+		det = 1.0 - rac * rac;
+		ba = (ra - rac * rc) / det;
+		bc = (rc - rac * ra) / det;
+		}
+	else if (ra != 0.0)
+		ba = ra;
+	else
+		bc = rc;
+	r2 = ba * ra + bc * rc;
+	if (r2 > 1.0 - 1e-9)
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: the correlations --cov-ado-corr, --cov-doublet-corr and --ado-doublet-corr are not compatible (they do not form a valid correlation matrix)\n\n");
+		exit (-1);
+		}
+	resid = sqrt (1.0 - r2);
+	score = (double*) malloc (n * sizeof(double));
+	key = (double*) malloc (n * sizeof(double));
+	newSet = (int*) calloc (n, sizeof(int));
+	oldOnly = (int*) malloc (n * sizeof(int));
+	newOnly = (int*) malloc (n * sizeof(int));
+	if (!score || !key || !newSet || !oldOnly || !newOnly)
+		{
+		fprintf (stderr, "Could not allocate the doublet correlation\n");
+		exit (-1);
+		}
+	for (i=0; i<n; i++)
+		{
+		u1 = RandomUniform (seed);
+		u2 = RandomUniform (seed);
+		score[i] = resid * sqrt (-2.0 * log (u1)) * cos (2.0 * M_PI * u2);
+		if (zA) score[i] += ba * zA[i];
+		if (zC) score[i] += bc * zC[i];
+		key[i] = -score[i];			/* ascending order of key = descending score */
+		}
+	{
+	int *ord = (int*) malloc (n * sizeof(int));
+
+	for (i=0; i<n; i++)
+		ord[i] = i;
+	sortKey = key;
+	qsort (ord, n, sizeof(int), CmpByKey);
+	for (i=0; i<k; i++)
+		newSet[ord[i]] = 1;
+	free (ord);
+	}
+	for (i=0, nIn=nOut=0; i<n; i++)
+		{
+		if (newSet[i] && cell[i].hasDoublet == NO)
+			newOnly[nIn++] = i;
+		else if (!newSet[i] && cell[i].hasDoublet == YES)
+			oldOnly[nOut++] = i;
+		}
+	for (i=0; i<nIn && i<nOut; i++)		/* nIn == nOut: both sets have k cells */
+		{
+		int a = oldOnly[i], b = newOnly[i], d;
+		DoubletSiteStr *w = cell[a].doublet;
+
+		cell[b].doublet = w;
+		cell[a].doublet = NULL;
+		cell[b].hasDoublet = YES;
+		cell[a].hasDoublet = NO;
+		d = doubletDonor[a];
+		doubletDonor[a] = 0;
+		doubletDonor[b] = d;
+		}
+	free (zA); free (zC); free (score); free (key); free (newSet); free (oldOnly); free (newOnly);
+	}
+
+/* Writes the coverage multiplier, the ADO rate, the doublet status and the donor of every cell to the file cell_params (or
+   cell_params_dir/cell_params.NNNN with -v); only when one of the correlations between cell parameters is used. */
+void WriteCellParams (int replicate)
+	{
+	char	file[4*MAX_NAME];
+	FILE	*fp;
+	int		i;
+
+	if (doPrintSeparateReplicates == YES)
+		{
+		snprintf (file, sizeof(file), "%s/cell_params_dir", resultsDir);
+		mkdir (file, S_IRWXU);
+		snprintf (file, sizeof(file), "%s/cell_params_dir/cell_params.%04d", resultsDir, replicate+1);
+		fp = fopen (file, "w");
+		}
+	else
+		{
+		snprintf (file, sizeof(file), "%s/cell_params", resultsDir);
+		fp = fopen (file, replicate == 0 ? "w" : "a");
+		}
+	if (!fp)
+		{
+		fprintf (stderr, "Can't open \"%s\"\n", file);
+		exit (-1);
+		}
+	if (doPrintSeparateReplicates == NO)
+		fprintf (fp, "[#%d]\n", replicate+1);
+	fprintf (fp, "cell\tcoverage_multiplier\tado_rate\tdoublet\tdonor\n");
+	for (i=0; i<numCells; i++)
+		{
+		int dbl = (cell[i].hasDoublet == YES);
+
+		if (doUserTree == NO)
+			fprintf (fp, "%s%04d", inCellName, i+1);
+		else
+			fprintf (fp, "%s", cellNames[i]);
+		fprintf (fp, "\t%.6f\t", cellCovMult ? cellCovMult[i] : 1.0);
+		if (cellAdoRate)
+			fprintf (fp, "%.6f", cellAdoRate[i]);
+		else
+			fprintf (fp, "NA");
+		if (dbl && doubletDonor)
+			fprintf (fp, "\t1\t%d\n", doubletDonor[i] + 1);
+		else
+			fprintf (fp, "\t%d\tNA\n", dbl);
+		}
+	fclose (fp);
+	}
+
 /********************* SetupCellCoverage  ************************/
 /* Coverage varies between cells (-J): the depth expected in every cell is multiplied by a gamma variate with mean 1,
    drawn once per cell and replicate from the main random stream (the same in stored and streamed reads). */
@@ -825,6 +993,9 @@ void SetupCellCoverage (long int *seed)
 		cellCovMult[i] = (alphaCellCoverage > 0.0) ? RandomGamma (alphaCellCoverage, seed) / alphaCellCoverage : 1.0;
 	if (covAdoCorr != 0.0 && cellAdoRate != NULL && numCells > 1)
 		CorrelateCoverageWithADO (seed);
+	CorrelateDoublets (seed);
+	if (covAdoCorr != 0.0 || covDoubletCorr != 0.0 || adoDoubletCorr != 0.0)
+		WriteCellParams (adoReplicate);
 	}
 
 /********************* SetupDoublets  ************************/

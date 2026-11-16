@@ -28,7 +28,9 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"print_times",'7'}, {"print_catg",'8'}, {"print_pileup",'9'}, {"print_bulk",'0'}, {"no_vcf",'Z'},
 	{"gzip_vcf",'z'}, {"min_vaf",'M'}, {"print_true_haplotypes",'Y'}, {"replicate_folders",'v'},
 	{"iupac",'x'}, {"results_folder",'o'}, {"tree_file",'T'}, {"genome_file",'U'}, {"tumor_names",'W'},
-	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'}, {NULL,0}
+	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
+	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
+	{"sweep",'\7'}, {"sweep_keep",'\16'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -444,6 +446,16 @@ static int KeyToFlag (const CfgItem *it, const char *path)
 	return 0;
 	}
 
+/* options with a value that are written with two dashes: --cov-ado-corr etc. (flag -> option name) */
+static const char *LongValueOption (int flag)
+	{
+	if (flag == '\2') return "--cov-ado-corr";
+	if (flag == '\4') return "--cov-doublet-corr";
+	if (flag == '\5') return "--ado-doublet-corr";
+	if (flag == '\7') return "--sweep";
+	return NULL;
+	}
+
 static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int onlyKnown)
 	{
 	int k, v;
@@ -465,15 +477,19 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			{
 			if (it->boolValue == NO)
 				continue;
-			tok = (char*) malloc (8);
+			tok = (char*) malloc (16);
 			if (flag == '\1')
-				snprintf (tok, 8, "--fast");
+				snprintf (tok, 16, "--fast");
 			else if (flag == '\3')
-				snprintf (tok, 8, "--bcf");
-			else if (flag == '\2')
+				snprintf (tok, 16, "--bcf");
+			else if (flag == '\6')
+				snprintf (tok, 16, "--summary");
+			else if (flag == '\16')
+				snprintf (tok, 16, "--sweep-keep");
+			else if (LongValueOption (flag))
 				continue;
 			else
-				snprintf (tok, 8, "-%c", flag);
+				snprintf (tok, 16, "-%c", flag);
 			out[(*n)++] = tok;
 			continue;
 			}
@@ -481,9 +497,9 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			{
 			if (*n >= CFG_MAX_TOKENS - 1)
 				CfgError (path, "too many options", NULL);
-			if (v == 0 && flag == '\2')
+			if (v == 0 && LongValueOption (flag))
 				{
-				out[(*n)++] = strdup ("--cov-ado-corr");
+				out[(*n)++] = strdup (LongValueOption (flag));
 				tok = strdup (it->vals[0]);
 				}
 			else if (v == 0)
@@ -564,6 +580,38 @@ static int ConfigTokens (const char *path, char **out)
 	return n;
 	}
 
+/* The command-line option ("-C", "--cov-ado-corr") of a key of --sweep: an option letter or a long name (dashes or underscores) */
+const char *SweepOptionForName (const char *name)
+	{
+	static char buf[80];
+	char norm[64];
+	int i;
+
+	snprintf (norm, sizeof(norm), "%s", name);
+	for (i=0; norm[i]; i++)
+		if (norm[i] == '-')
+			norm[i] = '_';
+	for (i=0; optionNames[i].name; i++)
+		{
+		char f = optionNames[i].flag;
+
+		if (f == '\1' || f == '\3' || f == '\6' || f == '\7' || f == '\16')
+			continue;	/* switches: nothing to sweep */
+		if (strcmp (optionNames[i].name, norm) == 0 || (norm[1] == '\0' && norm[0] == f) ||
+			(f == '\2' && strcmp (norm, "cov_ado_corr") == 0) || (f == '\4' && strcmp (norm, "cov_doublet_corr") == 0) ||
+			(f == '\5' && strcmp (norm, "ado_doublet_corr") == 0))
+			{
+			const char *lo = LongValueOption (f);
+
+			if (lo)
+				return lo;
+			snprintf (buf, sizeof(buf), "-%c", f);
+			return buf;
+			}
+		}
+	return NULL;
+	}
+
 /* Replaces "--config FILE" in the arguments by the options of the file (the program name stays first) */
 char **ExpandConfigArgs (int *argc, char **argv)
 	{
@@ -571,7 +619,9 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	char **out;
 
 	for (i=1; i<*argc; i++)
-		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0)
+		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
+			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
+			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -596,21 +646,57 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		else
 			out[n++] = argv[i];
 		}
+	/* --sweep SPEC: the program runs itself once per combination and exits */
+	{
+	const char *sweepSpec = NULL;
+	int sweepKeep = NO;
+
+	for (i=1; i<n; i++)
+		{
+		if (strcmp (out[i], "--sweep") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--sweep needs a specification such as \"C=2,5,10 E=0.001,0.01\"", NULL);
+			sweepSpec = out[++i];
+			}
+		else if (strcmp (out[i], "--sweep-keep") == 0)
+			sweepKeep = YES;
+		}
+	if (sweepSpec)
+		{
+		out[n] = NULL;
+		RunSweep (n, out, sweepSpec, sweepKeep);
+		}
+	}
 	/* --fast (from the command line or a configuration file) switches on the fast mode and is not passed on */
 	for (i=1, k=1; i<n; i++)
 		{
-		if (strcmp (out[i], "--cov-ado-corr") == 0)
+		if (strcmp (out[i], "--cov-ado-corr") == 0 || strcmp (out[i], "--cov-doublet-corr") == 0 || strcmp (out[i], "--ado-doublet-corr") == 0)
 			{
+			const char *name = out[i];
+			double *target = (strcmp (name, "--cov-ado-corr") == 0) ? &covAdoCorr : (strcmp (name, "--cov-doublet-corr") == 0) ? &covDoubletCorr : &adoDoubletCorr;
+			char msg[96];
+
 			if (i + 1 >= n)
-				CfgError ("the command line", "--cov-ado-corr needs a value between -1 and 1", NULL);
-			covAdoCorr = atof (out[++i]);
-			if (!(covAdoCorr >= -1.0 && covAdoCorr <= 1.0))
-				CfgError ("the command line", "--cov-ado-corr has to be between -1 and 1", out[i]);
+				{
+				snprintf (msg, sizeof(msg), "%s needs a value between -1 and 1", name);
+				CfgError ("the command line", msg, NULL);
+				}
+			*target = atof (out[++i]);
+			if (!(*target >= -1.0 && *target <= 1.0))
+				{
+				snprintf (msg, sizeof(msg), "%s has to be between -1 and 1", name);
+				CfgError ("the command line", msg, out[i]);
+				}
 			}
 		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;
 		else if (strcmp (out[i], "--bcf") == 0)
 			doBCF = YES;
+		else if (strcmp (out[i], "--summary") == 0)
+			doSummary = YES;
+		else if (strcmp (out[i], "--sweep-keep") == 0)
+			;
 		else
 			out[k++] = out[i];
 		}
