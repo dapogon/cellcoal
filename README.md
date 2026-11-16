@@ -29,6 +29,10 @@ Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells
 
 With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
+## What's new in 2.2.4
+
+`--summary` also reports metrics against the true genotypes (called fraction, genotype error, SNV precision and recall); `--sweep` runs combinations in parallel (`--sweep-jobs N`), resumes (`--sweep-resume`) and can be plotted (`cellcoal_plots.py sweep`). Runs without reads are about 35% faster, and the program builds and passes the whole test suite on Windows (MSYS2). Output identical to 2.2.3.
+
 ## What's new in 2.2.3
 
 Three options for experiments with many conditions: `--cov-doublet-corr RHO` and `--ado-doublet-corr RHO` correlate being a doublet (`-B`) with the coverage (`-J`) and the ADO rate (`-P`) of the cells (the per-cell values go to `cell_params`); `--summary` writes `summary.tsv` with one row of metrics per replicate; and `--sweep "C=2,5,10 E=0.001,0.01"` runs a grid of parameter values with a common seed and collects the mean and standard error of the metrics in `sweep.tsv`. Fixed a crash with `--ado-doublet-corr` alone. Internally `main` is split into functions and the CI now checks speed against the latest release. Output of existing runs is bit-identical to 2.2.2. See section 6.10i of the manual and [docs/CHANGES-2.2.3.md](docs/CHANGES-2.2.3.md).

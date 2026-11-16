@@ -915,6 +915,11 @@ Beyond the regression suite (`make test`), the CI checks the program in several 
 
 `--cov-doublet-corr`, `--ado-doublet-corr`, `--summary` and `--sweep` (section 6.10i); a crash of `--ado-doublet-corr` used alone is fixed. `main` is split into functions and the CI checks the speed against the latest release (section 6.10h). The output of existing runs is identical to 2.2.2.
 
+
+## 8.18 Version 2.2.4: truth metrics, parallel sweeps, speed, Windows
+
+`--summary` adds metrics against the true genotypes; `--sweep` gains `--sweep-jobs`, `--sweep-resume`, ranges and a plot command (section 6.10i). Runs without reads are about 35% faster. The program builds on Windows and the CI runs the whole suite there (section 6.10j). The output of existing runs is identical to 2.2.3.
+
 ## 6.10j Windows (experimental)
 
 CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with reads and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).

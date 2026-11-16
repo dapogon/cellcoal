@@ -118,6 +118,8 @@ Per-cell correlations with doublets, <code>--summary</code> and
 <code>--sweep</code></a></li>
 <li><a href="#version-2.2.3-doublet-correlations-summary-sweep" id="toc-version-2.2.3-doublet-correlations-summary-sweep">8.17 Version
 2.2.3: doublet correlations, –summary, –sweep</a></li>
+<li><a href="#version-2.2.4-truth-metrics-parallel-sweeps-speed-windows" id="toc-version-2.2.4-truth-metrics-parallel-sweeps-speed-windows">8.18
+Version 2.2.4: truth metrics, parallel sweeps, speed, Windows</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-reads" id="toc-version-2.1.1-streamed-reads">8.8 Version 2.1.1: streamed
 reads</a></li>
@@ -1825,6 +1827,14 @@ of <code>--ado-doublet-corr</code> used alone is fixed.
 <code>main</code> is split into functions and the CI checks the speed
 against the latest release (section 6.10h). The output of existing runs
 is identical to 2.2.2.</p>
+<h2 id="version-2.2.4-truth-metrics-parallel-sweeps-speed-windows">8.18
+Version 2.2.4: truth metrics, parallel sweeps, speed, Windows</h2>
+<p><code>--summary</code> adds metrics against the true genotypes;
+<code>--sweep</code> gains <code>--sweep-jobs</code>,
+<code>--sweep-resume</code>, ranges and a plot command (section 6.10i).
+Runs without reads are about 35% faster. The program builds on Windows
+and the CI runs the whole suite there (section 6.10j). The output of
+existing runs is identical to 2.2.3.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:
