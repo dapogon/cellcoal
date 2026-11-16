@@ -141,7 +141,7 @@ jobs:
         with:
           msystem: UCRT64
           update: false
-          install: make mingw-w64-ucrt-x86_64-gcc python
+          install: make diffutils mingw-w64-ucrt-x86_64-gcc python
       - name: Build
         run: make -k
       - name: Smoke tests
@@ -157,34 +157,6 @@ jobs:
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
           echo "Windows smoke tests passed"
-      - name: Diagnostics for the checks that fail on Windows
-        continue-on-error: true
-        run: |
-          bin=$(ls $PWD/bin/cellcoal-* | head -1)
-          mkdir -p /tmp/d1 && cd /tmp/d1
-          echo "=== bulk (-0)"; $bin -n2 -s60 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C5 -V1 -E0 -0 -#7 > out.txt 2>&1; echo "exit code $?"; tail -5 out.txt; ls -la Results
-          mkdir -p /tmp/d2 && cd /tmp/d2
-          echo "=== -Y with --fast"; $bin --fast -n2 -s30 -l800 -u1e-6 -e10000 -b1 -C10 -Y -#31 > out.txt 2>&1; echo "exit code $?"; tail -5 out.txt; ls -la Results
-          mkdir -p /tmp/d3 && cd /tmp/d3
-          echo "=== run.json"; $bin -n2 -s20 -l300 -u1e-6 -e10000 -b1 -C5 -#99 > out.txt 2>&1; echo "exit code $?"; cat Results/run.json | head -30
-          cd /tmp/d3 && mkdir c && cd c && $bin --config ../Results/run.json > out.txt 2>&1; echo "config exit code $?"; tail -5 out.txt; ls Results
-      - name: Diagnostics 2 (determinism and differences)
-        continue-on-error: true
-        run: |
-          bin=$(ls $PWD/bin/cellcoal-* | head -1)
-          A="-n2 -s30 -l800 -u1e-6 -e10000 -b1 -C10 -Y -#31"
-          for d in r1 r2 r3; do mkdir -p /tmp/$d; done
-          (cd /tmp/r1 && $bin $A > o.txt 2>&1); (cd /tmp/r2 && $bin $A > o.txt 2>&1); (cd /tmp/r3 && $bin --fast $A > o.txt 2>&1)
-          echo "=== same command twice: true_hap"; cmp /tmp/r1/Results/true_hap /tmp/r2/Results/true_hap && echo identical
-          echo "=== with and without --fast: true_hap"; cmp /tmp/r1/Results/true_hap /tmp/r3/Results/true_hap && echo identical
-          diff /tmp/r1/Results/true_hap /tmp/r3/Results/true_hap | head -6 | cut -c1-150
-          echo "=== line endings"; head -c 200 /tmp/r1/Results/true_hap | od -c | head -5
-          echo "=== bulk stored vs streamed"
-          B="-n2 -s60 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C5 -V1 -E0 -0 -#7"
-          mkdir -p /tmp/b0 /tmp/b1; (cd /tmp/b0 && CELLCOAL_STREAM=0 $bin $B > o.txt 2>&1); (cd /tmp/b1 && CELLCOAL_STREAM=1 $bin $B > o.txt 2>&1)
-          cmp /tmp/b0/Results/bulk /tmp/b1/Results/bulk && echo identical
-          diff /tmp/b0/Results/bulk /tmp/b1/Results/bulk | head -6 | cut -c1-150
-          grep -i "storage\|reads_mode" /tmp/b0/Results/run.json /tmp/b1/Results/run.json
       - name: Whole suite (informative)
         continue-on-error: true
         run: make test
