@@ -157,6 +157,17 @@ jobs:
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
           echo "Windows smoke tests passed"
+      - name: Diagnostics for the checks that fail on Windows
+        continue-on-error: true
+        run: |
+          bin=$(ls $PWD/bin/cellcoal-* | head -1)
+          mkdir -p /tmp/d1 && cd /tmp/d1
+          echo "=== bulk (-0)"; $bin -n2 -s60 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C5 -V1 -E0 -0 -#7 > out.txt 2>&1; echo "exit code $?"; tail -5 out.txt; ls -la Results
+          mkdir -p /tmp/d2 && cd /tmp/d2
+          echo "=== -Y with --fast"; $bin --fast -n2 -s30 -l800 -u1e-6 -e10000 -b1 -C10 -Y -#31 > out.txt 2>&1; echo "exit code $?"; tail -5 out.txt; ls -la Results
+          mkdir -p /tmp/d3 && cd /tmp/d3
+          echo "=== run.json"; $bin -n2 -s20 -l300 -u1e-6 -e10000 -b1 -C5 -#99 > out.txt 2>&1; echo "exit code $?"; cat Results/run.json | head -30
+          cd /tmp/d3 && mkdir c && cd c && $bin --config ../Results/run.json > out.txt 2>&1; echo "config exit code $?"; tail -5 out.txt; ls Results
       - name: Whole suite (informative)
         continue-on-error: true
         run: make test
