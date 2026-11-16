@@ -514,6 +514,46 @@ void CountMLGenotypingErrors()
 	}
 
 
+#endif
+
+
+/********************* TruthMetrics  ************************/
+/* --summary: compares what was called from the reads with the true genotypes (sums of the per-site counts made by
+   SimulateSiteReads). Returns NO when there are no reads to compare. A metric that cannot be computed is set to -1.
+   calledFraction: genotypes called / ingroup cells x sites; genotypeError: wrong called genotypes / called genotypes;
+   precision, recall: of the sites where the ML genotypes show a variant, against the sites that are variable in the true genotypes */
+int TruthMetrics (double *calledFraction, double *genotypeError, double *precision, double *recall)
+	{
+	int			site;
+	long long	called = 0, errors = 0, tp = 0, fp = 0, fn = 0;
+
+	*calledFraction = *genotypeError = *precision = *recall = -1.0;
+	if (doNGS == NO || readsOnly == YES || alphabet != DNA)
+		return NO;
+	for (site=0; site<numSites; site++)
+		{
+		int isVar = (allSites[site].isVariant == YES), callVar = (allSites[site].truthCallVar == YES);
+
+		called += allSites[site].truthCalled;
+		errors += allSites[site].truthErrors;
+		if (isVar && callVar)
+			tp++;
+		else if (!isVar && callVar)
+			fp++;
+		else if (isVar && !callVar)
+			fn++;
+		}
+	*calledFraction = called / ((double) numCells * (double) numSites);
+	if (called > 0)
+		*genotypeError = errors / (double) called;
+	if (tp + fp > 0)
+		*precision = tp / (double) (tp + fp);
+	if (tp + fn > 0)
+		*recall = tp / (double) (tp + fn);
+	return YES;
+	}
+
+
 /********************* CompareGenotypes  ************************/
 /*
  Compares two unphased genotypes (i.e, A/T = T/A)
@@ -545,8 +585,6 @@ int CompareGenotypes (int a1, int a2, int b1, int b2)
 
 	return equal;
 	}
-
-#endif
 
 
 /************************* CountAllelesInMLGenotypes  ************************/

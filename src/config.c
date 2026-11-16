@@ -30,7 +30,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"iupac",'x'}, {"results_folder",'o'}, {"tree_file",'T'}, {"genome_file",'U'}, {"tumor_names",'W'},
 	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
 	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
-	{"sweep",'\7'}, {"sweep_keep",'\16'}, {NULL,0}
+	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -453,6 +453,7 @@ static const char *LongValueOption (int flag)
 	if (flag == '\4') return "--cov-doublet-corr";
 	if (flag == '\5') return "--ado-doublet-corr";
 	if (flag == '\7') return "--sweep";
+	if (flag == '\17') return "--sweep-jobs";
 	return NULL;
 	}
 
@@ -486,6 +487,8 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 				snprintf (tok, 16, "--summary");
 			else if (flag == '\16')
 				snprintf (tok, 16, "--sweep-keep");
+			else if (flag == '\20')
+				snprintf (tok, 16, "--sweep-resume");
 			else if (LongValueOption (flag))
 				continue;
 			else
@@ -621,7 +624,8 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	for (i=1; i<*argc; i++)
 		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
-			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0)
+			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
+			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -649,7 +653,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	/* --sweep SPEC: the program runs itself once per combination and exits */
 	{
 	const char *sweepSpec = NULL;
-	int sweepKeep = NO;
+	int sweepKeep = NO, sweepResume = NO, sweepJobs = 1;
 
 	for (i=1; i<n; i++)
 		{
@@ -661,11 +665,19 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			}
 		else if (strcmp (out[i], "--sweep-keep") == 0)
 			sweepKeep = YES;
+		else if (strcmp (out[i], "--sweep-resume") == 0)
+			sweepResume = YES;
+		else if (strcmp (out[i], "--sweep-jobs") == 0)
+			{
+			if (i + 1 >= n || atoi (out[i+1]) < 1 || atoi (out[i+1]) > 256)
+				CfgError ("the command line", "--sweep-jobs needs a number of runs at a time (1 to 256)", NULL);
+			sweepJobs = atoi (out[++i]);
+			}
 		}
 	if (sweepSpec)
 		{
 		out[n] = NULL;
-		RunSweep (n, out, sweepSpec, sweepKeep);
+		RunSweep (n, out, sweepSpec, sweepKeep, sweepJobs, sweepResume);
 		}
 	}
 	/* --fast (from the command line or a configuration file) switches on the fast mode and is not passed on */
@@ -695,8 +707,10 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			doBCF = YES;
 		else if (strcmp (out[i], "--summary") == 0)
 			doSummary = YES;
-		else if (strcmp (out[i], "--sweep-keep") == 0)
+		else if (strcmp (out[i], "--sweep-keep") == 0 || strcmp (out[i], "--sweep-resume") == 0)
 			;
+		else if (strcmp (out[i], "--sweep-jobs") == 0)
+			i++;	/* only meaningful together with --sweep */
 		else
 			out[k++] = out[i];
 		}

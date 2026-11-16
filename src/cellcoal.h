@@ -141,8 +141,9 @@ int 		CheckMatrixSymmetry(double matrix[4][4]);
 void 	RecordTriNucObservation(TriNucStr *trin, int site);
 void 	RemoveTriNucObservation(TriNucStr *trin, int site);
 void		AllocateCellStructure (void);
+int		CompareGenotypes (int a1, int a2, int b1, int b2);
+int		TruthMetrics (double *calledFraction, double *genotypeError, double *precision, double *recall);
 #ifdef COUNT_ML_GENOTYPE_ERRORS
-	int		CompareGenotypes (int a1, int a2, int b1, int b2);
 	void		CountMLGenotypingErrors (void);
 #endif
 
@@ -160,7 +161,7 @@ void SetupReadModel (double **ngsEij);
 
 char **ExpandConfigArgs (int *argc, char **argv);
 const char *SweepOptionForName (const char *name);
-void RunSweep (int argc, char **argv, const char *spec, int keep);
+void RunSweep (int argc, char **argv, const char *spec, int keep, int jobs, int resume);
 void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent);
 
 /* Global variables */

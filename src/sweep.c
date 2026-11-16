@@ -10,6 +10,9 @@
 */
 #include "cellcoal.h"
 #include <unistd.h>
+#ifndef _WIN32
+#include <sys/wait.h>
+#endif
 #ifdef _WIN32
 int WindowsExecutablePath (char *buf, size_t n);
 #endif
@@ -113,7 +116,7 @@ static int SweepIsFlagToken (const char *t)
 	}
 
 /* statistics of a column */
-typedef struct { double sum[SW_MAX_COLS], sumsq[SW_MAX_COLS]; long n; } SweepAcc;
+typedef struct { double sum[SW_MAX_COLS], sumsq[SW_MAX_COLS]; long n, nc[SW_MAX_COLS]; } SweepAcc;	/* n: replicates; nc: values that are not NA, per column */
 
 static int SweepReadSummary (const char *path, int run, char **paramVals, int nparams, SweepAcc *acc, int *ncols, char names[][32], FILE *fpAll, int writeAllHeader)
 	{
@@ -159,10 +162,11 @@ static int SweepReadSummary (const char *path, int run, char **paramVals, int np
 			double x = atof (tok);
 
 			fprintf (fpAll, "\t%s", tok);
-			if (c > 0 && c <= SW_MAX_COLS)
+			if (c > 0 && c <= SW_MAX_COLS && strcmp (tok, "NA") != 0)
 				{
 				acc->sum[c-1] += x;
 				acc->sumsq[c-1] += x * x;
+				acc->nc[c-1]++;
 				}
 			c++;
 			}
@@ -173,13 +177,49 @@ static int SweepReadSummary (const char *path, int run, char **paramVals, int np
 	return 0;
 	}
 
-void RunSweep (int argc, char **argv, const char *spec, int keep)
+/* a run finished: keep its summary table (this is what --sweep-resume looks for) and remove its folder unless --sweep-keep */
+static void SweepFinishRun (const char *dir, int run, int keep)
+	{
+	char from[1400], to[1400], rundir[1300], logf[1300];
+	FILE *in, *out;
+	char buf[8192];
+	size_t n;
+
+	snprintf (from, sizeof(from), "%s/run_%04d/summary.tsv", dir, run);
+	snprintf (to, sizeof(to), "%s/runs/summary_%04d.tsv.tmp", dir, run);
+	in = fopen (from, "rb");
+	out = fopen (to, "wb");
+	if (!in || !out)
+		SweepFail ("a run did not write its summary table", from);
+	while ((n = fread (buf, 1, sizeof(buf), in)) > 0)
+		fwrite (buf, 1, n, out);
+	fclose (in);
+	fclose (out);
+	{
+	char final[1400];
+
+	snprintf (final, sizeof(final), "%s/runs/summary_%04d.tsv", dir, run);
+	remove (final);
+	if (rename (to, final) != 0)
+		SweepFail ("cannot keep the summary of a run", final);
+	}
+	if (keep == NO)
+		{
+		snprintf (rundir, sizeof(rundir), "%s/run_%04d", dir, run);
+		snprintf (logf, sizeof(logf), "%s/run_%04d.log", dir, run);
+		RemoveDir (rundir);
+		remove (logf);
+		}
+	}
+
+void RunSweep (int argc, char **argv, const char *spec, int keep, int jobs, int resume)
 	{
 	SweepParam params[SW_MAX_PARAMS];
 	int nparams = 0, i, j, nruns = 1, ncols = 0, seedGiven = NO;
 	char *specCopy = strdup (spec), *tok, *save = NULL, dir[1024] = "Sweep", exe[2048], names[SW_MAX_COLS][32];
 	char **base = (char**) calloc (argc + 1, sizeof(char*));
 	int nbase = 0;
+	char **cmds;
 	FILE *fpSweep, *fpAll;
 	long seed;
 	char path[1400];
@@ -228,7 +268,9 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 
 		if (strcmp (t, "--sweep") == 0)
 			{ i++; continue; }
-		if (strcmp (t, "--sweep-keep") == 0 || strcmp (t, "--summary") == 0)
+		if (strcmp (t, "--sweep-jobs") == 0)
+			{ i++; continue; }
+		if (strcmp (t, "--sweep-keep") == 0 || strcmp (t, "--sweep-resume") == 0 || strcmp (t, "--summary") == 0)
 			continue;
 		if (SweepIsFlagToken (t))
 			{
@@ -277,25 +319,22 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 	}
 
 	MAKE_DIR (dir);
-	snprintf (path, sizeof(path), "%s/sweep.tsv", dir);
-	if ((fpSweep = fopen (path, "w")) == NULL)
-		SweepFail ("cannot write", path);
-	snprintf (path, sizeof(path), "%s/sweep_replicates.tsv", dir);
-	if ((fpAll = fopen (path, "w")) == NULL)
-		SweepFail ("cannot write", path);
+	snprintf (path, sizeof(path), "%s/runs", dir);
+	MAKE_DIR (path);
 
-	fprintf (stderr, "\nSweep: %d runs (", nruns);
-	for (j=0; j<nparams; j++)
-		fprintf (stderr, "%s%s x%d", j ? ", " : "", params[j].key, params[j].nvals);
-	fprintf (stderr, "), seed %ld, folder %s\n", seed, dir);
-
+	/* the commands of all the runs */
+	cmds = (char**) calloc (nruns, sizeof(char*));
+	if (!cmds)
+		SweepFail ("out of memory", NULL);
 	for (i=0; i<nruns; i++)
 		{
-		int idx[SW_MAX_PARAMS], r = i, status;
-		char *vals[SW_MAX_PARAMS], cmd[16384], rundir[1300], logf[1300], *q;
-		SweepAcc acc;
-		size_t len;
+		int idx[SW_MAX_PARAMS], r = i;
+		char *vals[SW_MAX_PARAMS], rundir[1300], logf[1300], *q, *cmd;
+		size_t len, cap = 16384;
 
+		cmd = (char*) malloc (cap);
+		if (!cmd)
+			SweepFail ("out of memory", NULL);
 		for (j=nparams-1; j>=0; j--)
 			{
 			idx[j] = r % params[j].nvals;
@@ -305,12 +344,12 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 		snprintf (rundir, sizeof(rundir), "%s/run_%04d", dir, i + 1);
 		snprintf (logf, sizeof(logf), "%s/run_%04d.log", dir, i + 1);
 		q = SweepQuote (exe);
-		len = snprintf (cmd, sizeof(cmd), "%s", q);
+		len = snprintf (cmd, cap, "%s", q);
 		free (q);
-		for (j=0; j<nbase && len < sizeof(cmd) - 512; j++)
+		for (j=0; j<nbase && len < cap - 1024; j++)
 			{
 			q = SweepQuote (base[j]);
-			len += snprintf (cmd + len, sizeof(cmd) - len, " %s", q);
+			len += snprintf (cmd + len, cap - len, " %s", q);
 			free (q);
 			}
 		for (j=0; j<nparams; j++)
@@ -329,7 +368,7 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 					if (params[j].isLong)
 						{
 						q = SweepQuote (params[j].opt);
-						len += snprintf (cmd + len, sizeof(cmd) - len, " %s", q);
+						len += snprintf (cmd + len, cap - len, " %s", q);
 						free (q);
 						snprintf (arg, al, "%s", p);
 						}
@@ -340,42 +379,195 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 					snprintf (arg, al, "%s", p);
 				first = NO;
 				q = SweepQuote (arg);
-				len += snprintf (cmd + len, sizeof(cmd) - len, " %s", q);
+				len += snprintf (cmd + len, cap - len, " %s", q);
 				free (q);
 				free (arg);
 				}
 			free (vcopy);
 			}
 		{
-		char tail[2800], *qd, *ql;
+		char *ql = SweepQuote (logf);
 
-		qd = SweepQuote (rundir);
-		ql = SweepQuote (logf);
-		snprintf (tail, sizeof(tail), " %c-o%s%c -y0 %c-#%ld%c --summary > %s 2>&1", SHELL_QUOTE_CHAR, rundir, SHELL_QUOTE_CHAR, SHELL_QUOTE_CHAR, seed, SHELL_QUOTE_CHAR, ql);
-		/* the directory is quoted inside -o */
-		(void) qd;
-		len += snprintf (cmd + len, sizeof(cmd) - len, "%s", tail);
-		free (qd);
+		len += snprintf (cmd + len, cap - len, " %c-o%s%c -y0 %c-#%ld%c --summary > %s 2>&1", SHELL_QUOTE_CHAR, rundir, SHELL_QUOTE_CHAR, SHELL_QUOTE_CHAR, seed, SHELL_QUOTE_CHAR, ql);
 		free (ql);
 		}
-#ifdef _WIN32
-		/* cmd.exe removes the first and the last quote of a command line that starts with a quote */
-		{
-		char wrapped[sizeof(cmd) + 4];
-
-		snprintf (wrapped, sizeof(wrapped), "\"%s\"", cmd);
-		status = system (wrapped);
+		cmds[i] = cmd;
 		}
-#else
-		status = system (cmd);
-#endif
-		if (status != 0)
+
+	/* a sweep can only be resumed if it is the same one */
+	{
+	char specFile[1400], text[20000];
+	FILE *fp;
+	size_t n = 0;
+
+	snprintf (specFile, sizeof(specFile), "%s/sweep_spec.txt", dir);
+	text[0] = '\0';
+	for (i=0; i<nruns && n < sizeof(text) - 20000/ (nruns > 4 ? nruns : 4) - 1; i++)
+		n += snprintf (text + n, sizeof(text) - n, "%s\n", cmds[i]);
+	if (resume == YES && (fp = fopen (specFile, "r")) != NULL)
+		{
+		char old[20000];
+		size_t m = fread (old, 1, sizeof(old) - 1, fp);
+
+		fclose (fp);
+		old[m] = '\0';
+		if (strcmp (old, text) != 0)
+			SweepFail ("--sweep-resume: the folder holds a different sweep (other options, values or seed)", dir);
+		}
+	else if (resume == YES)
+		fprintf (stderr, "No earlier sweep in %s: starting a new one\n", dir);
+	if (resume == NO || (fp = fopen (specFile, "r")) == NULL)
+		{
+		if ((fp = fopen (specFile, "w")) != NULL)
 			{
-			fprintf (stderr, "\n!!! SWEEP ERROR: run %d of %d failed (see %s)\n", i + 1, nruns, logf);
+			fputs (text, fp);
+			fclose (fp);
+			}
+		}
+	else
+		fclose (fp);
+	}
+
+	fprintf (stderr, "\nSweep: %d runs (", nruns);
+	for (j=0; j<nparams; j++)
+		fprintf (stderr, "%s%s x%d", j ? ", " : "", params[j].key, params[j].nvals);
+	fprintf (stderr, "), seed %ld, folder %s", seed, dir);
+	if (jobs > 1)
+		fprintf (stderr, ", %d at a time", jobs);
+	fprintf (stderr, "\n");
+
+	/* execute the runs that are not finished (the summary of a finished run is kept in <dir>/runs) */
+	{
+	int next = 0, running = 0, done = 0;
+#ifndef _WIN32
+	int *whichRun = (int*) calloc (jobs > 0 ? jobs : 1, sizeof(int));
+	pid_t *slotPid = (pid_t*) calloc (jobs > 0 ? jobs : 1, sizeof(pid_t));
+	int threadsEach = 0;
+	long cores = sysconf (_SC_NPROCESSORS_ONLN);
+
+	if (!whichRun || !slotPid)
+		SweepFail ("out of memory", NULL);
+	if (jobs > 1 && cores > 0)
+		threadsEach = (int) (cores / jobs) > 0 ? (int) (cores / jobs) : 1;
+#endif
+
+	for (;;)
+		{
+		/* start runs while there is a free slot */
+		while (next < nruns && running < jobs)
+			{
+			struct stat st;
+			char kept[1400];
+
+			snprintf (kept, sizeof(kept), "%s/runs/summary_%04d.tsv", dir, next + 1);
+			if (resume == YES && stat (kept, &st) == 0 && st.st_size > 0)
+				{
+				fprintf (stderr, "  run %d/%d already done\n", next + 1, nruns);
+				next++;
+				done++;
+				continue;
+				}
+#ifdef _WIN32
+			{
+			char wrapped[16400];
+			int status;
+
+			/* cmd.exe removes the first and the last quote of a command line that starts with a quote */
+			snprintf (wrapped, sizeof(wrapped), "\"%s\"", cmds[next]);
+			status = system (wrapped);
+			if (status != 0)
+				{
+				fprintf (stderr, "\n!!! SWEEP ERROR: run %d of %d failed (see %s/run_%04d.log)\n", next + 1, nruns, dir, next + 1);
+				exit (-1);
+				}
+			SweepFinishRun (dir, next + 1, keep);
+			next++;
+			done++;
+			fprintf (stderr, "  run %d/%d done\n", done, nruns);
+			}
+#else
+			{
+			pid_t pid = fork ();
+			int slot;
+
+			if (pid < 0)
+				SweepFail ("cannot start a run (fork failed)", NULL);
+			if (pid == 0)
+				{
+				if (threadsEach > 0 && getenv ("OMP_NUM_THREADS") == NULL)
+					{
+					char nt[16];
+
+					snprintf (nt, sizeof(nt), "%d", threadsEach);
+					setenv ("OMP_NUM_THREADS", nt, 1);
+					}
+				execl ("/bin/sh", "sh", "-c", cmds[next], (char*) NULL);
+				_exit (127);
+				}
+			for (slot=0; slot<jobs; slot++)
+				if (slotPid[slot] == 0)
+					break;
+			slotPid[slot] = pid;
+			whichRun[slot] = next;
+			running++;
+			next++;
+			}
+#endif
+			}
+#ifndef _WIN32
+		if (running == 0)
+			break;
+		{
+		int status, slot;
+		pid_t pid = wait (&status);
+
+		if (pid < 0)
+			break;
+		for (slot=0; slot<jobs; slot++)
+			if (slotPid[slot] == pid)
+				break;
+		if (slot == jobs)
+			continue;
+		slotPid[slot] = 0;
+		running--;
+		if (!WIFEXITED (status) || WEXITSTATUS (status) != 0)
+			{
+			fprintf (stderr, "\n!!! SWEEP ERROR: run %d of %d failed (see %s/run_%04d.log); the finished runs are kept: use --sweep-resume to continue\n",
+				whichRun[slot] + 1, nruns, dir, whichRun[slot] + 1);
+			/* let the other running children end by themselves */
 			exit (-1);
 			}
+		SweepFinishRun (dir, whichRun[slot] + 1, keep);
+		done++;
+		fprintf (stderr, "  run %d/%d done\n", done, nruns);
+		}
+#else
+		break;
+#endif
+		}
+	}
+
+	/* aggregate the summaries in the order of the grid */
+	snprintf (path, sizeof(path), "%s/sweep.tsv", dir);
+	if ((fpSweep = fopen (path, "w")) == NULL)
+		SweepFail ("cannot write", path);
+	snprintf (path, sizeof(path), "%s/sweep_replicates.tsv", dir);
+	if ((fpAll = fopen (path, "w")) == NULL)
+		SweepFail ("cannot write", path);
+	for (i=0; i<nruns; i++)
+		{
+		int idx[SW_MAX_PARAMS], r = i;
+		char *vals[SW_MAX_PARAMS];
+		SweepAcc acc;
+
+		for (j=nparams-1; j>=0; j--)
+			{
+			idx[j] = r % params[j].nvals;
+			r /= params[j].nvals;
+			vals[j] = params[j].vals[idx[j]];
+			}
 		memset (&acc, 0, sizeof(acc));
-		snprintf (path, sizeof(path), "%s/summary.tsv", rundir);
+		snprintf (path, sizeof(path), "%s/runs/summary_%04d.tsv", dir, i + 1);
 		if (SweepReadSummary (path, i + 1, vals, nparams, &acc, &ncols, names, fpAll, i == 0 ? YES : NO) != 0)
 			SweepFail ("a run did not write its summary table", path);
 		if (i == 0)
@@ -394,24 +586,23 @@ void RunSweep (int argc, char **argv, const char *spec, int keep)
 		fprintf (fpSweep, "\t%ld", acc.n);
 		for (j=0; j<ncols; j++)
 			{
-			double m = acc.n > 0 ? acc.sum[j] / acc.n : 0.0, var = 0.0;
+			long	n = acc.nc[j];
+			double	m = n > 0 ? acc.sum[j] / n : 0.0, var = 0.0;
 
-			if (acc.n > 1)
+			if (n == 0)
 				{
-				var = (acc.sumsq[j] - acc.n * m * m) / (acc.n - 1);
+				fprintf (fpSweep, "\tNA\tNA");	/* the metric is not available in any replicate (e.g. no reads) */
+				continue;
+				}
+			if (n > 1)
+				{
+				var = (acc.sumsq[j] - n * m * m) / (n - 1);
 				if (var < 0)
 					var = 0;
 				}
-			fprintf (fpSweep, "\t%.8g\t%.8g", m, acc.n > 1 ? sqrt (var / acc.n) : 0.0);
+			fprintf (fpSweep, "\t%.8g\t%.8g", m, n > 1 ? sqrt (var / n) : 0.0);
 			}
 		fprintf (fpSweep, "\n");
-		fflush (fpSweep);
-		if (keep == NO)
-			{
-			RemoveDir (rundir);
-			remove (logf);
-			}
-		fprintf (stderr, "  run %d/%d done\n", i + 1, nruns);
 		}
 	fclose (fpSweep);
 	fclose (fpAll);

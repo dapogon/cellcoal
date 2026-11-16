@@ -160,6 +160,46 @@ void FreeReadScratch (ReadScratch *rs)
 	free (rs->sbuf);
 	}
 
+/* Compares the genotypes called from the reads with the true ones at site jj (ingroup cells; doublets use the genotype called
+   from the mixed reads). A true genotype with one deleted allele counts as homozygous for the other; a cell with both alleles
+   deleted is left out. Results go to the site, so that threads do not share counters. */
+static void TruthAtSite (int jj)
+	{
+	int		ii, called = 0, errors = 0, callVar = NO, tm, tp, ml, mp;
+
+	for (ii=0; ii<numCells; ii++)
+		{
+		tm = CS(ii,jj).trueMaternalAllele;
+		tp = CS(ii,jj).truePaternalAllele;
+		if (tm == DELETION && tp == DELETION)
+			continue;
+		if (tm == DELETION)
+			tm = tp;
+		else if (tp == DELETION)
+			tp = tm;
+		if (cell[ii].hasDoublet == YES)
+			{
+			ml = CD(ii,jj).MLmatAlleleDoublet;
+			mp = CD(ii,jj).MLpatAlleleDoublet;
+			}
+		else
+			{
+			ml = CS(ii,jj).MLmatAllele;
+			mp = CS(ii,jj).MLpatAllele;
+			}
+		if (ml == MISSING || mp == MISSING)
+			continue;
+		called++;
+		if (!CompareGenotypes (tm, tp, ml, mp))
+			errors++;
+		if ((ml >= A && ml <= T && ml != allSites[jj].referenceAllele) || (mp >= A && mp <= T && mp != allSites[jj].referenceAllele))
+			callVar = YES;
+		}
+	allSites[jj].truthCalled = called;
+	allSites[jj].truthErrors = errors;
+	allSites[jj].truthCallVar = callVar;
+	}
+
 /* Simulates the reads of all the cells at site jj (and their genotype likelihoods) from the stream of the site. When the
    reads are streamed, it also fills the true genotypes, adds the doublets and summarizes the site. */
 void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratch *rs)
@@ -226,6 +266,8 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 			if (cell[ii].hasDoublet == YES)
 				DoubletAtSite (ii, doubletDonor[ii], jj, sbuf + GL_NUM*(size_t)ii, probsT, ngsEij, ampMat, ampPat, &dummySeed);
 	streamActive = 0;
+
+	TruthAtSite (jj);
 
 	if (hasAlt == YES)
 		{
