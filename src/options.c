@@ -208,7 +208,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
                 periodGrowth =	(double *) calloc(numPeriods+1, sizeof(double));
                 if (Nbegin == NULL || Nend == NULL || cumDuration == NULL)
                     {
-                    fprintf (stderr, "\n!!! PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", numPeriods * sizeof(int));
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", (unsigned long) (numPeriods * sizeof(int)));
                     exit (-1);
                     }
                 for (j=1; j<=numPeriods; j++)
@@ -1016,7 +1016,7 @@ void ReadParametersFromFile (void)
                 periodGrowth =	(double *) calloc(numPeriods+1, sizeof(double));
                 if (Nbegin == NULL || Nend == NULL || cumDuration == NULL)
                     {
-                    fprintf (stderr, "\n!!! PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", numPeriods * sizeof(int));
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Could not allocate demographic vectors (%lu)\n", (unsigned long) (numPeriods * sizeof(int)));
                     exit (-1);
                     }
                 for (j=1; j<=numPeriods; j++)

@@ -141,7 +141,7 @@ jobs:
         with:
           msystem: UCRT64
           update: false
-          install: make diffutils mingw-w64-ucrt-x86_64-gcc python
+          install: make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python
       - name: Build
         run: make -k
       - name: Smoke tests

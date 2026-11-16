@@ -1847,7 +1847,7 @@ existing runs is identical to 2.2.3.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:
-<code>pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc python</code>,
+<code>pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python</code>,
 then <code>make</code>). The code that differs between systems is in
 <code>src/platform.h</code> (directories, in-memory streams,
 <code>getline</code>, 64-bit file offsets, time functions) and

@@ -90,7 +90,7 @@ jobs:
         with:
           msystem: UCRT64
           update: false
-          install: make diffutils zip mingw-w64-ucrt-x86_64-gcc python
+          install: make diffutils zip mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python
 
       - name: Build and pack
         shell: msys2 {0}
