@@ -165,7 +165,8 @@ void FreeReadScratch (ReadScratch *rs)
    deleted is left out. Results go to the site, so that threads do not share counters. */
 static void TruthAtSite (int jj)
 	{
-	int		ii, called = 0, errors = 0, callVar = NO, tm, tp, ml, mp;
+	int		ii, called = 0, errors = 0, callVar = NO, tm, tp, ml, mp, wrong, het;
+	int		hetCalled = 0, hetErrors = 0, hetToHom = 0, homCalled = 0, homErrors = 0, dblCalled = 0, dblErrors = 0;
 
 	for (ii=0; ii<numCells; ii++)
 		{
@@ -190,14 +191,35 @@ static void TruthAtSite (int jj)
 		if (ml == MISSING || mp == MISSING)
 			continue;
 		called++;
-		if (!CompareGenotypes (tm, tp, ml, mp))
+		wrong = !CompareGenotypes (tm, tp, ml, mp);
+		het = (tm != tp);
+		if (wrong)
 			errors++;
+		if (het)
+			{
+			hetCalled++;
+			hetErrors += wrong;
+			hetToHom += (ml == mp);	/* a heterozygous cell that looks homozygous: the footprint of allelic dropout */
+			}
+		else
+			{
+			homCalled++;
+			homErrors += wrong;
+			}
+		if (cell[ii].hasDoublet == YES)
+			{
+			dblCalled++;
+			dblErrors += wrong;
+			}
 		if ((ml >= A && ml <= T && ml != allSites[jj].referenceAllele) || (mp >= A && mp <= T && mp != allSites[jj].referenceAllele))
 			callVar = YES;
 		}
 	allSites[jj].truthCalled = called;
 	allSites[jj].truthErrors = errors;
 	allSites[jj].truthCallVar = callVar;
+	allSites[jj].truthHetCalled = hetCalled;  allSites[jj].truthHetErrors = hetErrors;  allSites[jj].truthHetToHom = hetToHom;
+	allSites[jj].truthHomCalled = homCalled;  allSites[jj].truthHomErrors = homErrors;
+	allSites[jj].truthDblCalled = dblCalled;  allSites[jj].truthDblErrors = dblErrors;
 	}
 
 /* Simulates the reads of all the cells at site jj (and their genotype likelihoods) from the stream of the site. When the
