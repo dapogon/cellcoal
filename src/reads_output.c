@@ -1307,7 +1307,7 @@ void StoreFullBlock (int j0, int nb)
 				}
 			buf[j] = (unsigned char) (((m == MISSING) ? 15 : m) | (((p == MISSING) ? 15 : p) << 4));
 			}
-		if (fseeko (fullStore, (off_t) i * (off_t) numSites + (off_t) j0, SEEK_SET) != 0 || fwrite (buf, 1, nb, fullStore) != (size_t) nb)
+		if (fseeko (fullStore, (long long) i * (long long) numSites + (long long) j0, SEEK_SET) != 0 || fwrite (buf, 1, nb, fullStore) != (size_t) nb)
 			{
 			fprintf (stderr, "Could not write the temporary file of full genotypes\n");
 			exit (-1);
@@ -1323,7 +1323,7 @@ void LoadFullRow (int i)
 		return;
 	if (fullRow == NULL)
 		fullRow = (unsigned char*) malloc (numSites);
-	if (!fullRow || fseeko (fullStore, (off_t) i * (off_t) numSites, SEEK_SET) != 0 || fread (fullRow, 1, numSites, fullStore) != (size_t) numSites)
+	if (!fullRow || fseeko (fullStore, (long long) i * (long long) numSites, SEEK_SET) != 0 || fread (fullRow, 1, numSites, fullStore) != (size_t) numSites)
 		{
 		fprintf (stderr, "Could not read the temporary file of full genotypes\n");
 		exit (-1);

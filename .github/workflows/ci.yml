@@ -37,7 +37,7 @@ jobs:
           bcftools --version | head -1
 
       - name: Build
-        run: make
+        run: make -k
 
       - name: Test
         run: |
@@ -143,7 +143,7 @@ jobs:
           update: false
           install: make mingw-w64-ucrt-x86_64-gcc python
       - name: Build
-        run: make
+        run: make -k
       - name: Smoke tests
         run: |
           set -e

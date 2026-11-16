@@ -14,6 +14,45 @@
 	#define MAKE_DIR(path)		_mkdir (path)
 	#define LSTAT(path, st)		stat (path, st)
 	#define SHELL_QUOTE_CHAR	'"'
+	#include <stdio.h>
+	#include <stdlib.h>
+	#include <string.h>
+	#define fseeko(f, off, whence)	_fseeki64 (f, (__int64) (off), whence)
+	#define ftello(f)				((long long) _ftelli64 (f))
+	/* getline is not in the Windows C library */
+	static inline long long PortableGetline (char **line, size_t *cap, FILE *fp)
+		{
+		size_t len = 0;
+		int c;
+
+		if (*line == NULL || *cap == 0)
+			{
+			*cap = 256;
+			*line = (char*) malloc (*cap);
+			if (*line == NULL)
+				return -1;
+			}
+		while ((c = fgetc (fp)) != EOF)
+			{
+			if (len + 2 > *cap)
+				{
+				char *bigger = (char*) realloc (*line, *cap * 2);
+
+				if (bigger == NULL)
+					return -1;
+				*line = bigger;
+				*cap *= 2;
+				}
+			(*line)[len++] = (char) c;
+			if (c == '\n')
+				break;
+			}
+		if (len == 0)
+			return -1;
+		(*line)[len] = '\0';
+		return (long long) len;
+		}
+	#define getline(l, c, f)		PortableGetline (l, c, f)
 	#define gmtime_r(t, r)		(gmtime_s (r, t) == 0 ? (r) : NULL)
 	#define localtime_r(t, r)	(localtime_s (r, t) == 0 ? (r) : NULL)
 #else
