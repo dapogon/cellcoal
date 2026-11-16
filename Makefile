@@ -19,6 +19,12 @@ OBJS=$(patsubst %,$(OBJDIR)/%,$(_OBJS))
 #   3. otherwise CellCoal is compiled without OpenMP (single thread, same results).
 # Override with: make OMPFLAG=            (no OpenMP)
 #                make OMPFLAG=-fopenmp    (force the flag for both compiling and linking)
+# On Windows (MSYS2 / MinGW-w64) the test below cannot write to /dev/null, and libgomp always ships with the compiler
+ifneq ($(findstring MINGW,$(shell uname -s))$(findstring MSYS,$(shell uname -s)),)
+  ifeq ($(origin OMPFLAG),undefined)
+    OMPFLAG = -fopenmp
+  endif
+endif
 ifeq ($(origin OMPFLAG),undefined)
   OMP_TEST_SRC = '\#include <omp.h>\nint main(void){return omp_get_max_threads()>0?0:1;}\n'
   ifeq ($(shell printf $(OMP_TEST_SRC) | $(CC) -fopenmp -x c - -o /dev/null >/dev/null 2>&1 && echo yes),yes)

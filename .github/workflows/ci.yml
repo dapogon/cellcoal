@@ -152,6 +152,7 @@ jobs:
           "$OLDPWD/$bin" -n2 -s10 -l500 -u1e-6 -e10000 -b1 -C8 -E0.001 -P0.2 0.02 -B0.1 0.01 --summary -v -#3 > /dev/null
           test -s Results/summary.tsv
           test -s Results/vcf_dir/vcf.0001
+          grep -q '"openmp": true' Results/run.json
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 --sweep "C=2,4" -oSW > /dev/null
           test "$(wc -l < SW/sweep.tsv)" -eq 3
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
