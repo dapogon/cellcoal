@@ -445,6 +445,443 @@ static void PrintReplicateOutputs (int dataSetNum)
 		}
 	}
 
+/* one replicate: genealogy, mutations, deletions/cnLOH, ADO, errors, reads and all the per-replicate outputs */
+static void RunReplicate (int dataSetNum, long int *seed)
+	{
+	int		i, j;
+
+        numCA = numMU = numDEL = numCNLOH = numProposedMU = TMRCA = numSNVmaternal = 0;
+
+		if (doPrintSeparateReplicates == YES)
+			PrepareSeparateFiles(dataSetNum);
+
+		if (noisy == 1)
+            {
+            fprintf (stdout, "\rReplicate #%3d/%d ", dataSetNum+1, numDataSets);
+			fflush (stdout);
+			
+			/* if stdout is redirected elsewhere, print also to stderr */
+			if (!isatty(fileno(stdout)))
+				{
+				fprintf (stderr, "\rreplicate #%3d/%d", dataSetNum+1, numDataSets);
+				fflush (stderr);
+				}
+			}
+			
+        /* Generate coalescence tree */
+		if (doUserTree == NO)
+			{
+			if (noisy > 2)
+				fprintf (stderr, "\n>> Starting coalescent tree ...");
+			MakeCoalescenceTree (numCells, N, seed);
+			if (noisy > 2)
+				fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
+
+		   /* Make ingroup cell tree non-clock if needed */
+			if (rateVarAmongLineages == YES)
+				MakeTreeNonClock (coalTreeMRCA, seed);
+			else if (doTreeRateSwitches == YES)
+				{
+				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
+				TreeRateSwitch (coalTreeMRCA, seed);
+				}
+			
+			cumNumCA += numCA;
+			cumTMRCA += TMRCA;
+			cumTMRCASq += pow(TMRCA,2);
+			}
+
+		totalTreeLength = SumBranches (healthyRoot);
+
+        if (doPrintTree == YES)
+            PrintTree (healthyRoot, fpTrees);
+
+        if (doPrintTimes == YES)
+            PrintTimes (0, fpTimes);
+ 
+ 
+	DecideSparseMode ();
+
+	/* allocate genotype data (see GetG and SetG) */
+        data = (Geno ***) calloc (ploidy, sizeof(Geno **));
+        if (!data)
+            {
+            fprintf (stderr, "Could not allocate the data structure\n");
+            exit (-1);
+            }
+        for (i=0; i<ploidy; i++)
+            {
+            data[i] = (Geno **) calloc (2*numCells+1, sizeof(Geno *));
+            if (!data[i])
+                {
+                fprintf (stderr, "Could not allocate the data[] structure\n");
+                exit (-1);
+                }
+            for (j=0; j<2*numCells+1; j++)
+                {
+                if (sparseMode == YES && j != OUTGROUP_ROOT)
+                    continue;	/* in sparse mode only the genome of the root is stored densely */
+                data[i][j] = (Geno *) calloc (numSites, sizeof(Geno));
+                if (!data[i][j])
+                    {
+                    fprintf (stderr, "Could not allocate the data[][] structure\n");
+                    exit (-1);
+                    }
+                }
+            }
+        if (sparseMode == YES)
+            {
+            numNodes = 2*numCells+1;
+            sparseCols = (Geno **) calloc (numSites, sizeof(Geno *));
+            if (!sparseCols)
+                {
+                fprintf (stderr, "Could not allocate the sparseCols structure\n");
+                exit (-1);
+                }
+            }
+
+		/* allocate cell structure */
+		AllocateCellStructure();
+
+        /* allocate memory for site information (equal for maternal and paternal) */
+        allSites = (SiteStr*) calloc (numSites, sizeof(SiteStr));
+        if (!allSites)
+            {
+            fprintf (stderr, "Could not allocate the allSites structure\n");
+            exit (-1);
+            }
+		for (i=0; i<numSites; i++)
+			{
+			allSites[i].alternateAlleles = (int *) calloc (4, sizeof(int));
+			if (!allSites[i].alternateAlleles)
+                {
+                fprintf (stderr, "Could not allocate the allSites[i].alternateAlleles[] structure\n");
+                exit (-1);
+                }
+			}
+
+        /* the arrays below keep the index for different types of sites */
+        SNVsites = (int*) calloc (numSites, sizeof(int));
+        if (!SNVsites)
+            {
+            fprintf (stderr, "Could not allocate the SNVsites structure\n");
+            exit (-1);
+            }
+
+        /* the arrays below keep the index for different types of sites */
+        variantSites = (int*) calloc (numSites, sizeof(int));
+        if (!variantSites)
+            {
+            fprintf (stderr, "Could not allocate the variantSites structure\n");
+            exit (-1);
+            }
+
+        DefaultModelSites = (int*) calloc (numSites, sizeof(int));
+        if (!DefaultModelSites)
+            {
+            fprintf (stderr, "Could not allocate the DefaultModelSites structure\n");
+            exit (-1);
+            }
+			
+        AltModelSites = (int*) calloc (numSites, sizeof(int));
+        if (!AltModelSites)
+            {
+            fprintf (stderr, "Could not allocate the AltModelSites structure\n");
+            exit (-1);
+            }
+ 
+        if (doSimulateData == YES)
+            {
+            numISMmutations = 0;
+			numISMdeletions = 0;
+ 			numISMCNLOH = 0;
+ 
+			if (sparseMode == YES)
+				{
+				ResetObservationLayer ();
+				ResetSparseColumns ();
+				}
+
+             /* assign ancestral states to all genomes */
+            InitializeGenomes (healthyRoot, seed);
+			
+			/* add germline variation if needed */
+			if (SNPrate > 0)
+				{
+				AddGermlineVariation (seed);
+				/* germline SNPs were added to the root genome only: pass them down to all the nodes */
+				InheritRootGenome (healthyRoot);
+				}
+	
+            /* evolve maternal genome */
+            if (noisy > 2)
+                fprintf (stderr, "\n>> Evolving maternal genome ... ");
+             EvolveSitesOnTree (healthyRoot, MATERNAL, seed);
+            if (noisy > 2)
+                fprintf (stderr, "DONE");
+
+            /* evolve paternal genome */
+             if (noisy > 2)
+                fprintf (stderr, "\n>> Evolving paternal genome ... ");
+            EvolveSitesOnTree (healthyRoot, PATERNAL, seed);
+            if (noisy > 2)
+                fprintf (stderr, "DONE\n\n");
+	
+            cumNumMU += numMU;
+            cumNumMUSq += pow(numMU,2);
+
+			if (CNLOHrate > 0)
+				{
+				/* evolve maternal CN_LOH */
+				if (noisy > 2)
+					fprintf (stderr, "\n>> Evolving maternal CN_LOH ... ");
+				 EvolveCNLOHonTree(healthyRoot, MATERNAL, seed);
+				if (noisy > 2)
+					fprintf (stderr, "DONE");
+
+				/* evolve paternal CN_LOH  */
+				 if (noisy > 2)
+					fprintf (stderr, "\n>> Evolving paternal CN_LOH ... ");
+				 EvolveCNLOHonTree(healthyRoot, PATERNAL, seed);
+				if (noisy > 2)
+					fprintf (stderr, "DONE\n\n");
+
+				cumNumCNLOH += numCNLOH;
+				cumNumCNLOHSq += pow(numCNLOH,2);
+				}
+
+			if (deletionRate > 0)
+				{
+				/* evolve maternal deletions */
+				if (noisy > 2)
+					fprintf (stderr, "\n>> Evolving maternal deletions ... ");
+				 EvolveDeletionsOnTree(healthyRoot, MATERNAL, seed);
+				if (noisy > 2)
+					fprintf (stderr, "DONE");
+
+				/* evolve paternal deletions  */
+				 if (noisy > 2)
+					fprintf (stderr, "\n>> Evolving paternal deletions ... ");
+				 EvolveDeletionsOnTree(healthyRoot, PATERNAL, seed);
+				if (noisy > 2)
+					fprintf (stderr, "DONE\n\n");
+
+				cumNumDEL += numDEL;
+				cumNumDELSq += pow(numDEL,2);
+				}
+
+			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
+			numSNVs = CountTrueVariants();
+			numSNVsTrue = numSNVs;
+
+			/* copy true genotypes before doing ADO but after CNLOH and deletion */
+			if (NEED_CELL_SITES && streamMode == NO)
+			for (i=0; i<numCells+1; i++)
+				for (j=0; j<numSites; j++)
+					{
+					CS(i,j).trueMaternalAllele = GetG(MATERNAL, i, j);
+					CS(i,j).truePaternalAllele = GetG(PATERNAL, i, j);
+					}
+
+			/* print reference haplotypes without errors */
+			if (doPrintTrueHaplotypes == YES)
+				{
+  				if (doPrintSeparateReplicates == NO)
+					fprintf (fpTrueHaplotypes, "[#%d]\n", dataSetNum+1);
+                PrintTrueFullHaplotypes(fpTrueHaplotypes);
+				}
+
+			/* do alellic dropout */
+			adoReplicate = dataSetNum;
+			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
+				{
+				if (sparseMode == YES)
+					SparseAllelicDropout(seed);
+				else
+					AllelicDropout(seed);
+				}
+	
+			/* introduce errors directly in the genotypes */
+			if (meanGenotypingError > 0)
+				{
+				if (sparseMode == YES)
+					SparseGenotypeError(seed);
+				else
+					GenotypeError(seed);
+				}
+
+			if (sparseMode == YES)
+				obsActive = YES;	/* from now on the cell genotypes are observed with ADO and errors */
+	
+			/* generate NGS read counts */
+			if (streamMode == YES)
+				{
+				GenerateStreamedReads (seed, dataSetNum);
+				}
+			else if (doNGS == YES)
+				GenerateReadCounts(seed);
+
+			/* count how many alleles are at each site and how many SNVs we observe now, after ADO and genotype errors/read generation */
+			if (streamMode == YES)
+				;	/* already counted by StreamReads */
+			else if (doNGS == YES)
+				numSNVs = CountAllelesInMLGenotypes();
+			else
+				numSNVs = CountAllelesInObservedGenotypes();
+
+            cumNumSNVs += numSNVs;
+            cumNumSNVsSq += pow(numSNVs,2);
+
+			if (fpSummary != NULL)
+				{
+				fprintf (fpSummary, "%d\t%.6f\t%d\t%d\t%d\t%d\t%d\t%.6f\n", dataSetNum+1, TMRCA, numMU, numDEL, numCNLOH, numSNVsTrue, numSNVs,
+					numSNVsTrue > 0 ? numSNVs / (double) numSNVsTrue : 0.0);
+				fflush (fpSummary);
+				}
+
+			if (numSNVs == 0)
+                zeroSNVs++;
+		
+			PrintReplicateOutputs (dataSetNum);
+			} //simdata
+ 
+		#ifdef CHECK_MUT_DISTRIBUTION
+        /* Check expectations regarding the position of the mutations in the tree */
+        /* Find out how many mutations are per site; we expect theta/i number of sites with i mutations
+           This approximation might not be good for the haploid ISM model
+           We will count how many sites have 1, 2, 3 ... numCells-1 mutant alleles */
+            SiteMut = (int *) calloc(numSites, sizeof(int));
+            for (j=0; j<numSites; j++)
+                for (i=0; i<numCells; i++)
+                    {
+                    if (GetG(0, i, j) == 1)
+                        SiteMut[j]++;
+                    if (GetG(1, i, j) == 1)
+                        SiteMut[j]++;
+                     }
+            for (j=0; j<numSites; j++)
+                for (i=0; i<numCells; i++)
+                    if (SiteMut[j] == i)
+                        MutCount[i]++;
+			
+            /* Check expectations regarding the distribution of the mutations along the genome */
+            /* the average sum of the positions of the segregating sites has to be L/2 */
+            sumPos = 0;
+            if (numSNVs > 0)
+                {
+                dataSetsWithSNVs++;
+                for (j=0; j<numSites; j++)
+                    if (allSites[j].numMutations > 0)
+                        sumPos += (j+1);
+                meansumPos += (sumPos / (double) numSNVs);
+                }
+        #endif
+
+		if (noisy > 2)
+			for (i=0; i<numSites; i++)
+				PrintSiteInfo (stderr, i);
+	
+		
+		#ifdef COUNT_ML_GENOTYPE_ERRORS
+			CountMLGenotypingErrors();
+		#endif
+		
+		// free all the necessary stuff for this replicate
+		if (doUserTree == NO)
+			{
+            for (i=0; i<numNodes; i++)
+	            free(treeNodes[i].name);
+	        free (treeNodes);
+	        }
+		
+		if (doPrintSeparateReplicates == YES)
+			{
+			if (doPrintTree == YES)
+				fclose (fpTrees);
+			if (doPrintTimes == YES)
+				fclose (fpTimes);
+			}
+		
+        if (doSimulateData == YES)
+            {
+			/* close file pointers for separate replicate file */
+			if (doPrintSeparateReplicates == YES)
+				{
+				if (doPrintSNVgenotypes == YES)
+					fclose (fpSNVgenotypes);
+				if (doPrintFullGenotypes == YES)
+					fclose (fpFullGenotypes);
+				if (doPrintSNVhaplotypes == YES)
+					fclose (fpSNVhaplotypes);
+				if (doPrintFullHaplotypes == YES)
+					fclose (fpFullHaplotypes);
+				if (doPrintTrueHaplotypes == YES)
+					fclose (fpTrueHaplotypes);
+				if (doNGS == YES && doPrintVCF == YES)
+					CloseVCF (fpVCF);
+				if (doPrintCATG == YES)
+					fclose (fpCATG);
+				if (doPrintPILEUP == YES)
+					fclose (fpPILEUP);
+				if (doPrintBulk == YES)
+					fclose (fpBulk);
+				}
+ 
+			/* free data structures */
+			for (i=0; i<ploidy; i++)
+                {
+                for (j=0; j<2*numCells+1; j++)
+                    free (data[i][j]);	/* NULL in sparse mode, except for the root */
+                free (data[i]);
+                }
+			free (data);
+			if (sparseMode == YES)
+				{
+				ResetObservationLayer ();
+				ResetSparseColumns ();
+				free (sparseCols);
+				sparseCols = NULL;
+				}
+
+			if (doTreeRateSwitches == YES)
+				free (treeRateInfo);
+		 
+			for (i=0; i<numSites; i++)
+              free(allSites[i].alternateAlleles);
+            free (allSites);
+            free (SNVsites);
+            free (mlStore);
+            free (cellCovMult);
+            cellCovMult = NULL;
+            mlStore = NULL;
+            mlStoreCap = 0;
+			free (variantSites);
+            free (DefaultModelSites);
+            free (AltModelSites);
+
+			if (doGeneticSignatures == YES)
+				FreeTriNucleotides ();
+			}
+		
+		/* free the per-cell structures (they are allocated at every replicate, with or without NGS) */
+		for (i=0; i<numCells+1; i++)
+			{
+			free (cell[i].doublet);
+			free (cell[i].site);
+			}
+		free (cell);
+		if (siteGL)
+			{
+			for (j=0; j<numSites; j++)
+				free (siteGL[j]);
+			free (siteGL);
+			siteGL = NULL;
+			}
+		
+        /* if(((dataSetNum*10)%numDataSets) == 0)
+         PrintMemory(stderr); */
+	}
+
 int main (int argc, char **argv)
     {
     FILE 		*fp;
@@ -713,440 +1150,9 @@ int main (int argc, char **argv)
 	if (noisy > 1)
 		fprintf(stderr, "\n");
 	
-    for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
-        {
-        numCA = numMU = numDEL = numCNLOH = numProposedMU = TMRCA = numSNVmaternal = 0;
+	for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
+		RunReplicate (dataSetNum, &seed);
 
-		if (doPrintSeparateReplicates == YES)
-			PrepareSeparateFiles(dataSetNum);
-
-		if (noisy == 1)
-            {
-            fprintf (stdout, "\rReplicate #%3d/%d ", dataSetNum+1, numDataSets);
-			fflush (stdout);
-			
-			/* if stdout is redirected elsewhere, print also to stderr */
-			if (!isatty(fileno(stdout)))
-				{
-				fprintf (stderr, "\rreplicate #%3d/%d", dataSetNum+1, numDataSets);
-				fflush (stderr);
-				}
-			}
-			
-        /* Generate coalescence tree */
-		if (doUserTree == NO)
-			{
-			if (noisy > 2)
-				fprintf (stderr, "\n>> Starting coalescent tree ...");
-			MakeCoalescenceTree (numCells, N, &seed);
-			if (noisy > 2)
-				fprintf (stderr, "\n>> Finishing coalescent tree ... DONE");
-
-		   /* Make ingroup cell tree non-clock if needed */
-			if (rateVarAmongLineages == YES)
-				MakeTreeNonClock (coalTreeMRCA, &seed);
-			else if (doTreeRateSwitches == YES)
-				{
-				treeRateInfo = (char *) calloc(MAX_LINE, sizeof(char));
-				TreeRateSwitch (coalTreeMRCA, &seed);
-				}
-			
-			cumNumCA += numCA;
-			cumTMRCA += TMRCA;
-			cumTMRCASq += pow(TMRCA,2);
-			}
-
-		totalTreeLength = SumBranches (healthyRoot);
-
-        if (doPrintTree == YES)
-            PrintTree (healthyRoot, fpTrees);
-
-        if (doPrintTimes == YES)
-            PrintTimes (0, fpTimes);
- 
- 
-	DecideSparseMode ();
-
-	/* allocate genotype data (see GetG and SetG) */
-        data = (Geno ***) calloc (ploidy, sizeof(Geno **));
-        if (!data)
-            {
-            fprintf (stderr, "Could not allocate the data structure\n");
-            exit (-1);
-            }
-        for (i=0; i<ploidy; i++)
-            {
-            data[i] = (Geno **) calloc (2*numCells+1, sizeof(Geno *));
-            if (!data[i])
-                {
-                fprintf (stderr, "Could not allocate the data[] structure\n");
-                exit (-1);
-                }
-            for (j=0; j<2*numCells+1; j++)
-                {
-                if (sparseMode == YES && j != OUTGROUP_ROOT)
-                    continue;	/* in sparse mode only the genome of the root is stored densely */
-                data[i][j] = (Geno *) calloc (numSites, sizeof(Geno));
-                if (!data[i][j])
-                    {
-                    fprintf (stderr, "Could not allocate the data[][] structure\n");
-                    exit (-1);
-                    }
-                }
-            }
-        if (sparseMode == YES)
-            {
-            numNodes = 2*numCells+1;
-            sparseCols = (Geno **) calloc (numSites, sizeof(Geno *));
-            if (!sparseCols)
-                {
-                fprintf (stderr, "Could not allocate the sparseCols structure\n");
-                exit (-1);
-                }
-            }
-
-		/* allocate cell structure */
-		AllocateCellStructure();
-
-        /* allocate memory for site information (equal for maternal and paternal) */
-        allSites = (SiteStr*) calloc (numSites, sizeof(SiteStr));
-        if (!allSites)
-            {
-            fprintf (stderr, "Could not allocate the allSites structure\n");
-            exit (-1);
-            }
-		for (i=0; i<numSites; i++)
-			{
-			allSites[i].alternateAlleles = (int *) calloc (4, sizeof(int));
-			if (!allSites[i].alternateAlleles)
-                {
-                fprintf (stderr, "Could not allocate the allSites[i].alternateAlleles[] structure\n");
-                exit (-1);
-                }
-			}
-
-        /* the arrays below keep the index for different types of sites */
-        SNVsites = (int*) calloc (numSites, sizeof(int));
-        if (!SNVsites)
-            {
-            fprintf (stderr, "Could not allocate the SNVsites structure\n");
-            exit (-1);
-            }
-
-        /* the arrays below keep the index for different types of sites */
-        variantSites = (int*) calloc (numSites, sizeof(int));
-        if (!variantSites)
-            {
-            fprintf (stderr, "Could not allocate the variantSites structure\n");
-            exit (-1);
-            }
-
-        DefaultModelSites = (int*) calloc (numSites, sizeof(int));
-        if (!DefaultModelSites)
-            {
-            fprintf (stderr, "Could not allocate the DefaultModelSites structure\n");
-            exit (-1);
-            }
-			
-        AltModelSites = (int*) calloc (numSites, sizeof(int));
-        if (!AltModelSites)
-            {
-            fprintf (stderr, "Could not allocate the AltModelSites structure\n");
-            exit (-1);
-            }
- 
-        if (doSimulateData == YES)
-            {
-            numISMmutations = 0;
-			numISMdeletions = 0;
- 			numISMCNLOH = 0;
- 
-			if (sparseMode == YES)
-				{
-				ResetObservationLayer ();
-				ResetSparseColumns ();
-				}
-
-             /* assign ancestral states to all genomes */
-            InitializeGenomes (healthyRoot, &seed);
-			
-			/* add germline variation if needed */
-			if (SNPrate > 0)
-				{
-				AddGermlineVariation (&seed);
-				/* germline SNPs were added to the root genome only: pass them down to all the nodes */
-				InheritRootGenome (healthyRoot);
-				}
-	
-            /* evolve maternal genome */
-            if (noisy > 2)
-                fprintf (stderr, "\n>> Evolving maternal genome ... ");
-             EvolveSitesOnTree (healthyRoot, MATERNAL, &seed);
-            if (noisy > 2)
-                fprintf (stderr, "DONE");
-
-            /* evolve paternal genome */
-             if (noisy > 2)
-                fprintf (stderr, "\n>> Evolving paternal genome ... ");
-            EvolveSitesOnTree (healthyRoot, PATERNAL, &seed);
-            if (noisy > 2)
-                fprintf (stderr, "DONE\n\n");
-	
-            cumNumMU += numMU;
-            cumNumMUSq += pow(numMU,2);
-
-			if (CNLOHrate > 0)
-				{
-				/* evolve maternal CN_LOH */
-				if (noisy > 2)
-					fprintf (stderr, "\n>> Evolving maternal CN_LOH ... ");
-				 EvolveCNLOHonTree(healthyRoot, MATERNAL, &seed);
-				if (noisy > 2)
-					fprintf (stderr, "DONE");
-
-				/* evolve paternal CN_LOH  */
-				 if (noisy > 2)
-					fprintf (stderr, "\n>> Evolving paternal CN_LOH ... ");
-				 EvolveCNLOHonTree(healthyRoot, PATERNAL, &seed);
-				if (noisy > 2)
-					fprintf (stderr, "DONE\n\n");
-
-				cumNumCNLOH += numCNLOH;
-				cumNumCNLOHSq += pow(numCNLOH,2);
-				}
-
-			if (deletionRate > 0)
-				{
-				/* evolve maternal deletions */
-				if (noisy > 2)
-					fprintf (stderr, "\n>> Evolving maternal deletions ... ");
-				 EvolveDeletionsOnTree(healthyRoot, MATERNAL, &seed);
-				if (noisy > 2)
-					fprintf (stderr, "DONE");
-
-				/* evolve paternal deletions  */
-				 if (noisy > 2)
-					fprintf (stderr, "\n>> Evolving paternal deletions ... ");
-				 EvolveDeletionsOnTree(healthyRoot, PATERNAL, &seed);
-				if (noisy > 2)
-					fprintf (stderr, "DONE\n\n");
-
-				cumNumDEL += numDEL;
-				cumNumDELSq += pow(numDEL,2);
-				}
-
-			/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
-			numSNVs = CountTrueVariants();
-			numSNVsTrue = numSNVs;
-
-			/* copy true genotypes before doing ADO but after CNLOH and deletion */
-			if (NEED_CELL_SITES && streamMode == NO)
-			for (i=0; i<numCells+1; i++)
-				for (j=0; j<numSites; j++)
-					{
-					CS(i,j).trueMaternalAllele = GetG(MATERNAL, i, j);
-					CS(i,j).truePaternalAllele = GetG(PATERNAL, i, j);
-					}
-
-			/* print reference haplotypes without errors */
-			if (doPrintTrueHaplotypes == YES)
-				{
-  				if (doPrintSeparateReplicates == NO)
-					fprintf (fpTrueHaplotypes, "[#%d]\n", dataSetNum+1);
-                PrintTrueFullHaplotypes(fpTrueHaplotypes);
-				}
-
-			/* do alellic dropout */
-			adoReplicate = dataSetNum;
-			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
-				{
-				if (sparseMode == YES)
-					SparseAllelicDropout(&seed);
-				else
-					AllelicDropout(&seed);
-				}
-	
-			/* introduce errors directly in the genotypes */
-			if (meanGenotypingError > 0)
-				{
-				if (sparseMode == YES)
-					SparseGenotypeError(&seed);
-				else
-					GenotypeError(&seed);
-				}
-
-			if (sparseMode == YES)
-				obsActive = YES;	/* from now on the cell genotypes are observed with ADO and errors */
-	
-			/* generate NGS read counts */
-			if (streamMode == YES)
-				{
-				GenerateStreamedReads (&seed, dataSetNum);
-				}
-			else if (doNGS == YES)
-				GenerateReadCounts(&seed);
-
-			/* count how many alleles are at each site and how many SNVs we observe now, after ADO and genotype errors/read generation */
-			if (streamMode == YES)
-				;	/* already counted by StreamReads */
-			else if (doNGS == YES)
-				numSNVs = CountAllelesInMLGenotypes();
-			else
-				numSNVs = CountAllelesInObservedGenotypes();
-
-            cumNumSNVs += numSNVs;
-            cumNumSNVsSq += pow(numSNVs,2);
-
-			if (fpSummary != NULL)
-				{
-				fprintf (fpSummary, "%d\t%.6f\t%d\t%d\t%d\t%d\t%d\t%.6f\n", dataSetNum+1, TMRCA, numMU, numDEL, numCNLOH, numSNVsTrue, numSNVs,
-					numSNVsTrue > 0 ? numSNVs / (double) numSNVsTrue : 0.0);
-				fflush (fpSummary);
-				}
-
-			if (numSNVs == 0)
-                zeroSNVs++;
-		
-			PrintReplicateOutputs (dataSetNum);
-			} //simdata
- 
-		#ifdef CHECK_MUT_DISTRIBUTION
-        /* Check expectations regarding the position of the mutations in the tree */
-        /* Find out how many mutations are per site; we expect theta/i number of sites with i mutations
-           This approximation might not be good for the haploid ISM model
-           We will count how many sites have 1, 2, 3 ... numCells-1 mutant alleles */
-            SiteMut = (int *) calloc(numSites, sizeof(int));
-            for (j=0; j<numSites; j++)
-                for (i=0; i<numCells; i++)
-                    {
-                    if (GetG(0, i, j) == 1)
-                        SiteMut[j]++;
-                    if (GetG(1, i, j) == 1)
-                        SiteMut[j]++;
-                     }
-            for (j=0; j<numSites; j++)
-                for (i=0; i<numCells; i++)
-                    if (SiteMut[j] == i)
-                        MutCount[i]++;
-			
-            /* Check expectations regarding the distribution of the mutations along the genome */
-            /* the average sum of the positions of the segregating sites has to be L/2 */
-            sumPos = 0;
-            if (numSNVs > 0)
-                {
-                dataSetsWithSNVs++;
-                for (j=0; j<numSites; j++)
-                    if (allSites[j].numMutations > 0)
-                        sumPos += (j+1);
-                meansumPos += (sumPos / (double) numSNVs);
-                }
-        #endif
-
-		if (noisy > 2)
-			for (i=0; i<numSites; i++)
-				PrintSiteInfo (stderr, i);
-	
-		
-		#ifdef COUNT_ML_GENOTYPE_ERRORS
-			CountMLGenotypingErrors();
-		#endif
-		
-		// free all the necessary stuff for this replicate
-		if (doUserTree == NO)
-			{
-            for (i=0; i<numNodes; i++)
-	            free(treeNodes[i].name);
-	        free (treeNodes);
-	        }
-		
-		if (doPrintSeparateReplicates == YES)
-			{
-			if (doPrintTree == YES)
-				fclose (fpTrees);
-			if (doPrintTimes == YES)
-				fclose (fpTimes);
-			}
-		
-        if (doSimulateData == YES)
-            {
-			/* close file pointers for separate replicate file */
-			if (doPrintSeparateReplicates == YES)
-				{
-				if (doPrintSNVgenotypes == YES)
-					fclose (fpSNVgenotypes);
-				if (doPrintFullGenotypes == YES)
-					fclose (fpFullGenotypes);
-				if (doPrintSNVhaplotypes == YES)
-					fclose (fpSNVhaplotypes);
-				if (doPrintFullHaplotypes == YES)
-					fclose (fpFullHaplotypes);
-				if (doPrintTrueHaplotypes == YES)
-					fclose (fpTrueHaplotypes);
-				if (doNGS == YES && doPrintVCF == YES)
-					CloseVCF (fpVCF);
-				if (doPrintCATG == YES)
-					fclose (fpCATG);
-				if (doPrintPILEUP == YES)
-					fclose (fpPILEUP);
-				if (doPrintBulk == YES)
-					fclose (fpBulk);
-				}
- 
-			/* free data structures */
-			for (i=0; i<ploidy; i++)
-                {
-                for (j=0; j<2*numCells+1; j++)
-                    free (data[i][j]);	/* NULL in sparse mode, except for the root */
-                free (data[i]);
-                }
-			free (data);
-			if (sparseMode == YES)
-				{
-				ResetObservationLayer ();
-				ResetSparseColumns ();
-				free (sparseCols);
-				sparseCols = NULL;
-				}
-
-			if (doTreeRateSwitches == YES)
-				free (treeRateInfo);
-		 
-			for (i=0; i<numSites; i++)
-              free(allSites[i].alternateAlleles);
-            free (allSites);
-            free (SNVsites);
-            free (mlStore);
-            free (cellCovMult);
-            cellCovMult = NULL;
-            mlStore = NULL;
-            mlStoreCap = 0;
-			free (variantSites);
-            free (DefaultModelSites);
-            free (AltModelSites);
-
-			if (doGeneticSignatures == YES)
-				FreeTriNucleotides ();
-			}
-		
-		/* free the per-cell structures (they are allocated at every replicate, with or without NGS) */
-		for (i=0; i<numCells+1; i++)
-			{
-			free (cell[i].doublet);
-			free (cell[i].site);
-			}
-		free (cell);
-		if (siteGL)
-			{
-			for (j=0; j<numSites; j++)
-				free (siteGL[j]);
-			free (siteGL);
-			siteGL = NULL;
-			}
-		
-        /* if(((dataSetNum*10)%numDataSets) == 0)
-         PrintMemory(stderr); */
-    } // replicate
-		
 	ComputeSummaryStatistics ();
 
 	/* close file pointers */
