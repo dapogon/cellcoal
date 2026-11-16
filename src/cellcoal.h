@@ -235,6 +235,8 @@ extern int			streamBlock;		/* number of sites in a block */
 extern int			*doubletDonor;	/* donor cell of each doublet cell when streaming */
 extern int			sparseADO;
 extern int			*errCount;
+void		CorrelateDoublets (long int *seed);
+void		WriteCellParams (int replicate);
 void		StoreFullBlock (int j0, int nb);
 void		LoadFullRow (int i);
 void		FullMLPair (int i, int j, int *m, int *p);
@@ -329,6 +331,8 @@ extern double			*cellCovMult;	/* between-cell coverage multiplier of every cell 
 extern __thread double		siteCovMult;	/* between-site coverage multiplier of the site being simulated (-O) */
 extern __thread int			streamActive;
 extern double				covAdoCorr;	/* --cov-ado-corr: correlation between the coverage and the ADO rate of the cells */
+extern double				covDoubletCorr, adoDoubletCorr;	/* --cov-doublet-corr, --ado-doublet-corr: correlation of being a doublet with the coverage / ADO rate of the cells */
+extern int					doSummary;	/* --summary: write summary.tsv, one row of metrics per replicate */
 extern double				*cellAdoRate;	/* ADO rate of every cell (kept only when covAdoCorr != 0) */
 extern int					fastMode;	/* --fast: cheaper samplers and log10/10^x for the reads (same distributions, different random numbers) */
 double	Log10Approx (double x);

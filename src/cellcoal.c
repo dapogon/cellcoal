@@ -318,6 +318,16 @@ int main (int argc, char **argv)
 		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-ado-corr needs coverage variation among cells (-J) and ADO variation among cells (-P)\n\n");
 		exit (-1);
 		}
+	if (covDoubletCorr != 0.0 && (alphaCellCoverage <= 0.0 || meanDoubletRate <= 0))
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-doublet-corr needs coverage variation among cells (-J) and doublets (-B)\n\n");
+		exit (-1);
+		}
+	if (adoDoubletCorr != 0.0 && (doADOcell == NO || meanDoubletRate <= 0))
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --ado-doublet-corr needs ADO variation among cells (-P) and doublets (-B)\n\n");
+		exit (-1);
+		}
 	if (argc < 2 || doSpecificParameterFile == YES)
         {
 		readingParameterFile = YES;
@@ -792,9 +802,9 @@ int main (int argc, char **argv)
 				}
 
 			/* do alellic dropout */
+			adoReplicate = dataSetNum;
 			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
 				{
-				adoReplicate = dataSetNum;
 				if (sparseMode == YES)
 					SparseAllelicDropout(&seed);
 				else

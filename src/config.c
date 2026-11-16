@@ -28,7 +28,8 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"print_times",'7'}, {"print_catg",'8'}, {"print_pileup",'9'}, {"print_bulk",'0'}, {"no_vcf",'Z'},
 	{"gzip_vcf",'z'}, {"min_vaf",'M'}, {"print_true_haplotypes",'Y'}, {"replicate_folders",'v'},
 	{"iupac",'x'}, {"results_folder",'o'}, {"tree_file",'T'}, {"genome_file",'U'}, {"tumor_names",'W'},
-	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'}, {NULL,0}
+	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
+	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -444,6 +445,15 @@ static int KeyToFlag (const CfgItem *it, const char *path)
 	return 0;
 	}
 
+/* options with a value that are written with two dashes: --cov-ado-corr etc. (flag -> option name) */
+static const char *LongValueOption (int flag)
+	{
+	if (flag == '\2') return "--cov-ado-corr";
+	if (flag == '\4') return "--cov-doublet-corr";
+	if (flag == '\5') return "--ado-doublet-corr";
+	return NULL;
+	}
+
 static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int onlyKnown)
 	{
 	int k, v;
@@ -465,12 +475,14 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			{
 			if (it->boolValue == NO)
 				continue;
-			tok = (char*) malloc (8);
+			tok = (char*) malloc (12);
 			if (flag == '\1')
 				snprintf (tok, 8, "--fast");
 			else if (flag == '\3')
 				snprintf (tok, 8, "--bcf");
-			else if (flag == '\2')
+			else if (flag == '\6')
+				snprintf (tok, 12, "--summary");
+			else if (LongValueOption (flag))
 				continue;
 			else
 				snprintf (tok, 8, "-%c", flag);
@@ -481,9 +493,9 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 			{
 			if (*n >= CFG_MAX_TOKENS - 1)
 				CfgError (path, "too many options", NULL);
-			if (v == 0 && flag == '\2')
+			if (v == 0 && LongValueOption (flag))
 				{
-				out[(*n)++] = strdup ("--cov-ado-corr");
+				out[(*n)++] = strdup (LongValueOption (flag));
 				tok = strdup (it->vals[0]);
 				}
 			else if (v == 0)
@@ -571,7 +583,8 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	char **out;
 
 	for (i=1; i<*argc; i++)
-		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0)
+		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
+			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -599,18 +612,30 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	/* --fast (from the command line or a configuration file) switches on the fast mode and is not passed on */
 	for (i=1, k=1; i<n; i++)
 		{
-		if (strcmp (out[i], "--cov-ado-corr") == 0)
+		if (strcmp (out[i], "--cov-ado-corr") == 0 || strcmp (out[i], "--cov-doublet-corr") == 0 || strcmp (out[i], "--ado-doublet-corr") == 0)
 			{
+			const char *name = out[i];
+			double *target = (strcmp (name, "--cov-ado-corr") == 0) ? &covAdoCorr : (strcmp (name, "--cov-doublet-corr") == 0) ? &covDoubletCorr : &adoDoubletCorr;
+			char msg[96];
+
 			if (i + 1 >= n)
-				CfgError ("the command line", "--cov-ado-corr needs a value between -1 and 1", NULL);
-			covAdoCorr = atof (out[++i]);
-			if (!(covAdoCorr >= -1.0 && covAdoCorr <= 1.0))
-				CfgError ("the command line", "--cov-ado-corr has to be between -1 and 1", out[i]);
+				{
+				snprintf (msg, sizeof(msg), "%s needs a value between -1 and 1", name);
+				CfgError ("the command line", msg, NULL);
+				}
+			*target = atof (out[++i]);
+			if (!(*target >= -1.0 && *target <= 1.0))
+				{
+				snprintf (msg, sizeof(msg), "%s has to be between -1 and 1", name);
+				CfgError ("the command line", msg, out[i]);
+				}
 			}
 		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;
 		else if (strcmp (out[i], "--bcf") == 0)
 			doBCF = YES;
+		else if (strcmp (out[i], "--summary") == 0)
+			doSummary = YES;
 		else
 			out[k++] = out[i];
 		}

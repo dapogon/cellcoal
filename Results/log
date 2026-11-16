@@ -1,0 +1,8 @@
+______________________________________________________________________
+
+Cell coalescent simulation - CellCoal  version 2.2.2
+(c) 2016-2022 David Posada - dposada@uvigo.es
+______________________________________________________________________
+
+Mon Nov 16 09:07:34 2026
+Command line arguments (some might not affect) =  /home/claude/cellcoal/bin/cellcoal-2.2.2 -n1 -s20 -l50 -C5 -J4 -P0.2 0.02 -B0.3 0.02
