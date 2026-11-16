@@ -532,7 +532,7 @@ rows=[l.rstrip("\n").split("\t") for l in open("SE/sweep.tsv")]
 h=rows[0]; g=h.index("genotype_error")
 assert float(rows[2][g]) > 3*float(rows[1][g]), rows
 PY
-"$BIN" -n2 -s8 -l300 -u1e-6 -e10000 -b1 --sweep "C=2,4" -oSX >/dev/null 2>&1
+"$BIN" -n2 -s8 -l300 -u1e-6 -e10000 -b1 --sweep "s=8,10" -oSX >/dev/null 2>&1
 grep -q "genotype_error" SX/sweep.tsv && sed -n 2p SX/sweep.tsv | grep -q "NA" && ok "--sweep: NA columns without reads" || bad "--sweep NA"
 cd "$ROOT"
 
