@@ -1,6 +1,8 @@
 #!/usr/bin/env python3
 """Summary plots of CellCoal output.
 
+CellCoal simulates read counts (how many reads support each nucleotide in each cell and site), not individual reads.
+
   cellcoal_plots.py depth   Results/vcf_dir/vcf.0001 [--out depth.png]     read depth per cell, per site and per genotype
   cellcoal_plots.py missing Results/vcf_dir/vcf.0001 [--out missing.png]    genotypes without reads: per cell and per site
   cellcoal_plots.py heatmap Results/snv_genotypes_dir/snv_gen.0001 [--out heatmap.png] [--max-sites 2000]
