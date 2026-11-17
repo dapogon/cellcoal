@@ -1,4 +1,4 @@
-{% set version = "2.2.4" %}
+{% set version = "2.2.5" %}
 
 package:
   name: cellcoal
@@ -6,7 +6,7 @@ package:
 
 source:
   url: https://github.com/dapogon/cellcoal/archive/refs/tags/v{{ version }}.tar.gz
-  sha256: 6b6facb7f57bcb072bb7fbc4ba53bebda9c80dabe05096da4245adc8c0bb9abc
+  sha256: b1935243343071dcc8f79608d9ab07cdc3022ea8d5b4e16aad568ea75fa6baaf
 
 build:
   number: 0
