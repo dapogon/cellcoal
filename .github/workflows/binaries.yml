@@ -113,6 +113,26 @@ jobs:
           sha256sum "$D.zip" > "$D.zip.sha256"
           echo "DIR=$D" >> "$GITHUB_ENV"
 
+      - name: Test the zip from plain PowerShell (outside MSYS2)
+        shell: pwsh
+        run: |
+          $ErrorActionPreference = 'Stop'
+          $env:PATH = 'C:\Windows\System32;C:\Windows'   # nothing from MSYS2: only the DLLs in the zip
+          New-Item -ItemType Directory -Force C:\zt | Out-Null
+          Expand-Archive -Path "$env:DIR.zip" -DestinationPath C:\zt -Force
+          $exe = "C:\zt\$env:DIR\cellcoal.exe"
+          Set-Location C:\zt
+          & $exe -n2 -s20 -l1000 -u1e-6 -e10000 -b1 -C10 -E0.001 -1 -8 --summary -#3 *> out.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content out.txt; throw "cellcoal.exe failed ($LASTEXITCODE)" }
+          foreach ($f in 'Results\snv_gen', 'Results\catg', 'Results\summary.tsv', 'Results\run.json') {
+            if (-not (Test-Path $f) -or (Get-Item $f).Length -eq 0) { throw "missing $f" }
+          }
+          if (-not (Select-String -Quiet '"openmp": true' Results\run.json)) { throw "built without OpenMP" }
+          & $exe -n2 -s8 -l200 -u1e-6 -e10000 -b1 --sweep "C=2,4" -oSW *> sw.txt
+          if ($LASTEXITCODE -ne 0) { Get-Content sw.txt; throw "sweep failed" }
+          if ((Get-Content SW\sweep.tsv).Count -ne 3) { throw "sweep.tsv should have 3 lines" }
+          Write-Host "The Windows zip works from PowerShell"
+
       - uses: actions/upload-artifact@v4
         with:
           name: cellcoal-windows-x86_64

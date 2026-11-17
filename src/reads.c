@@ -41,7 +41,7 @@ void AllocateCellStructure(void)
 	cell = (CellStr*) calloc(numCells+1, sizeof(CellStr));
 	if (!cell)
 		{
-		fprintf (stderr, "Could not allocate cell (%ld)\n", (numCells+1) * sizeof(CellStr));
+		fprintf (stderr, "Could not allocate cell (%zu)\n", (numCells+1) * sizeof(CellStr));
 		exit (-1);
 		}
 

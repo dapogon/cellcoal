@@ -24,13 +24,13 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
     treeNodes = (TreeNode *) calloc(numNodes, sizeof(TreeNode));
     if (!treeNodes)
         {
-        fprintf (stderr, "Could not allocate nodes (%ld)\n", numNodes * sizeof(TreeNode));
+        fprintf (stderr, "Could not allocate nodes (%zu)\n", numNodes * sizeof(TreeNode));
         exit (-1);
         }
     activeNodes = (int *) calloc(numNodes, sizeof(int));
     if (!activeNodes)
         {
-        fprintf (stderr, "Could not allocate activeNodes (%ld)\n", numNodes * sizeof(int));
+        fprintf (stderr, "Could not allocate activeNodes (%zu)\n", numNodes * sizeof(int));
         exit (-1);
         }
 	
@@ -408,7 +408,7 @@ void ReadUserTree (FILE *fp)
     treeNodes = (TreeNode *) calloc(numNodes, sizeof(TreeNode));
     if (!treeNodes)
         {
-        fprintf (stderr, "Could not allocate nodes (%ld)\n", numNodes * sizeof(TreeNode));
+        fprintf (stderr, "Could not allocate nodes (%zu)\n", numNodes * sizeof(TreeNode));
         exit (-1);
         }
 	
@@ -419,7 +419,7 @@ void ReadUserTree (FILE *fp)
     cellNames = (char **) calloc(numCells, sizeof(char *));
     if (!cellNames)
         {
-        fprintf (stderr, "Could not allocate cellNames (%ld)\n", numCells * sizeof(char *));
+        fprintf (stderr, "Could not allocate cellNames (%zu)\n", numCells * sizeof(char *));
         exit (-1);
         }
    for (i=0; i<numCells; i++)
@@ -427,7 +427,7 @@ void ReadUserTree (FILE *fp)
 	   cellNames[i] = (char *) calloc(MAX_NAME, sizeof(char));
 	   if (!cellNames[i])
 		   {
-		   fprintf (stderr, "Could not allocate cellNames[%d] (%ld)\n", i,  MAX_NAME * sizeof(char));
+		   fprintf (stderr, "Could not allocate cellNames[%d] (%zu)\n", i,  MAX_NAME * sizeof(char));
 		   exit (-1);
 		   }
 	   }
@@ -891,7 +891,7 @@ void TreeRateSwitch (TreeNode *p, long int *seed)
 	switchNodes = (TreeNode **) calloc(numTreeRateSwitches, sizeof(TreeNode*));
 	if (!switchNodes)
 		{
-		fprintf (stderr, "Could not allocate switchNode (%ld)\n", numTreeRateSwitches * sizeof(TreeNode*));
+		fprintf (stderr, "Could not allocate switchNode (%zu)\n", numTreeRateSwitches * sizeof(TreeNode*));
 		exit (-1);
 		}
 	
