@@ -2,8 +2,8 @@
     
 [COALESCENT]
     [number of replicates] n1
-    [number of ingroup cells] s10
-    [number of sites] l10
+    [number of ingroup cells] s100
+    [number of sites] l1000
     [effective population size] e10000
     [demographics] [h2 1000 100 40000 200 30000 20000]
     [exponential growth rate] g1e-5 [ln2=0.6931 max]
