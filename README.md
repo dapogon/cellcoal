@@ -127,3 +127,6 @@ A script that simulates with CellCoal, infers the tree with CellPhy and compares
 ## Manual
 A detailed manual is available in [html](https://dapogon.github.io/cellcoal/) or in [pdf](docs/cellcoal.manual.v2.0.pdf). To start, read the [quickstart](https://dapogon.github.io/cellcoal/cellcoal.manual.v2.0.html#toc-quickstart) (installation and examples).
 
+## License
+
+CellCoal is free software, distributed under the GNU General Public License, version 2 or (at your option) any later version; see [LICENSE](LICENSE).
