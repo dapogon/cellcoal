@@ -1,0 +1,34 @@
+cff-version: 1.2.0
+message: "If you use CellCoal, please cite the article below."
+title: "CellCoal: coalescent simulation of single-cell sequencing samples"
+type: software
+authors:
+  - family-names: Posada
+    given-names: David
+    affiliation: "Universidade de Vigo"
+repository-code: "https://github.com/dapogon/cellcoal"
+url: "https://dapogon.github.io/cellcoal/"
+license: GPL-2.0-or-later
+abstract: >-
+  CellCoal simulates the somatic evolution of single cells: a coalescent genealogy of a sample of diploid cells from a
+  growing population, somatic mutations under several models, and the single-cell sequencing process (allelic dropout,
+  amplification and sequencing errors, doublets), with the read counts and genotype likelihoods written as a VCF file.
+keywords:
+  - coalescent
+  - single-cell sequencing
+  - somatic evolution
+  - simulation
+  - cancer
+preferred-citation:
+  type: article
+  title: "CellCoal: coalescent simulation of single-cell sequencing samples"
+  authors:
+    - family-names: Posada
+      given-names: David
+  journal: "Molecular Biology and Evolution"
+  volume: 37
+  issue: 5
+  start: 1535
+  end: 1542
+  year: 2020
+  doi: "10.1093/molbev/msaa025"

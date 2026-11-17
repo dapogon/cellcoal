@@ -1,0 +1,16 @@
+name: Feature request or question
+description: An idea, a missing option, or something that is not clear in the manual
+labels: ["enhancement"]
+body:
+  - type: textarea
+    id: what
+    attributes:
+      label: What would you like to do?
+      description: Describe the data you want to simulate or the analysis you have in mind, and what is missing or unclear.
+    validations:
+      required: true
+  - type: textarea
+    id: tried
+    attributes:
+      label: What have you tried?
+      description: The command you used and the manual section you read, if any.

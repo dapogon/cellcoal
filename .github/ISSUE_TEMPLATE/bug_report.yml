@@ -1,0 +1,59 @@
+name: Bug report
+description: The program stops, crashes, or gives a result that looks wrong
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for reporting. A run can be repeated exactly with its `run.json` (`cellcoal --config run.json`), so that file is the most useful thing to attach.
+  - type: input
+    id: version
+    attributes:
+      label: Version
+      description: "The first lines of `cellcoal -?`, or the name of the file you downloaded (for example `cellcoal-2.2.5-linux-x86_64.tar.gz`)."
+    validations:
+      required: true
+  - type: dropdown
+    id: system
+    attributes:
+      label: System
+      options:
+        - Linux
+        - macOS (Apple silicon)
+        - macOS (Intel)
+        - Windows
+        - Other
+    validations:
+      required: true
+  - type: dropdown
+    id: install
+    attributes:
+      label: How was it installed?
+      options:
+        - Prebuilt program from the release
+        - Homebrew
+        - Conda
+        - Built from the source code
+    validations:
+      required: true
+  - type: textarea
+    id: command
+    attributes:
+      label: Command
+      description: The exact command line (or parameter or configuration file).
+      render: shell
+    validations:
+      required: true
+  - type: textarea
+    id: expected
+    attributes:
+      label: What happened, and what did you expect?
+      description: Include the error message, if any.
+    validations:
+      required: true
+  - type: textarea
+    id: runjson
+    attributes:
+      label: run.json
+      description: "Paste the content of `run.json` from the results folder (it has the version, the options and the seed). Attach `log` too if it is not too large."
+      render: json
