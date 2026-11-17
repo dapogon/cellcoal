@@ -2226,6 +2226,12 @@ ships <code>libgomp</code>), so the Windows build runs in parallel like
 the others (<code>OMP_NUM_THREADS</code>). The release has a Windows zip
 (<code>cellcoal-&lt;version&gt;-windows-x86_64.zip</code>) with the
 program and the DLLs of the compiler it needs.</p>
+<p>From <strong>PowerShell</strong> (not from <code>cmd.exe</code> or
+MSYS2), PowerShell splits an argument such as <code>-E0.001</code> into
+two, <code>-E0</code> and <code>.001</code>, before the program receives
+it. CellCoal joins these pieces again (an option without a dot followed
+by an argument that starts with a dot and a digit), so the usual syntax
+works in PowerShell too.</p>
 <p>On Windows <code>long</code> has 32 bits, which overflowed in the
 random number generator and made the coalescent times statistically
 wrong; the generator and the index arithmetic now use 64-bit integers

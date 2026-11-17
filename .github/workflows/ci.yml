@@ -130,7 +130,7 @@ jobs:
         run: python3 tests/bench.py /tmp/cellcoal-ref /tmp/cellcoal-new --max-ratio 1.25 | tee -a "$GITHUB_STEP_SUMMARY"
 
   windows:
-    # Windows (MSYS2, MinGW-w64): build and smoke tests; the whole suite runs too but does not fail the job yet
+    # Windows (MSYS2, MinGW-w64): build without warnings, smoke tests and the whole suite (plots included; bcftools is not available)
     runs-on: windows-latest
     defaults:
       run:
@@ -141,9 +141,12 @@ jobs:
         with:
           msystem: UCRT64
           update: false
-          install: make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python
-      - name: Build
-        run: make -k
+          install: make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp mingw-w64-ucrt-x86_64-python mingw-w64-ucrt-x86_64-python-numpy mingw-w64-ucrt-x86_64-python-matplotlib
+      - name: Build (no warnings allowed, long is 32 bits on Windows)
+        run: |
+          set -o pipefail
+          make -k 2>&1 | tee build.log
+          ! grep -q 'warning:' build.log
       - name: Smoke tests
         run: |
           set -e
@@ -159,4 +162,9 @@ jobs:
           "$OLDPWD/$bin" -n2 -s8 -l200 -u1e-6 -e10000 -b1 -oRR > /dev/null
           echo "Windows smoke tests passed"
       - name: Whole suite
-        run: make test
+        run: |
+          set -o pipefail
+          python3 -c "import numpy, matplotlib; print('plots: numpy', numpy.__version__, 'matplotlib', matplotlib.__version__)"
+          make test | tee test.log
+          ! grep -q 'skip (matplotlib' test.log
+          ! grep -q 'skip (numpy' test.log
