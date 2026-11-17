@@ -53,6 +53,7 @@ jobs:
             L=$(otool -L "$D/cellcoal" | awk '/libomp/{print $1}')
             if [ -n "$L" ]; then
               cp "$(brew --prefix libomp)/lib/libomp.dylib" "$D/libomp.dylib"
+              chmod 755 "$D/libomp.dylib"
               install_name_tool -change "$L" @executable_path/libomp.dylib "$D/cellcoal"
             fi
           fi
