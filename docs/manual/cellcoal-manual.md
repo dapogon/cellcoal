@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.2.5)"
+date: "November, 2026 (CellCoal 2.2.6)"
 ---
 
 # 1. About CellCoal
@@ -1068,6 +1068,10 @@ Beyond the regression suite (`make test`), the CI checks the program in several 
 ## 8.19 Version 2.2.5: quickstart, more truth metrics, Windows binary
 
 New chapter 3 (quickstart). `--summary` adds `het_error`, `hom_error`, `het_to_hom`, `doublet_error`, `singlet_error` and `ado_simulated` (section 6.10i). The release includes a Windows program, built with OpenMP, and the program accepts the arguments that PowerShell splits (`-E0.001` as `-E0 .001`) (section 6.10j). The plotting tools work with the files of a single replicate. CellCoal simulates read counts, not individual reads, and the text says so. The simulated data of existing runs are identical to 2.2.4.
+
+## 8.20 Version 2.2.6: --version, --check, Intel Mac binary
+
+`--version`, `--help`; `--check` (section 3.5) validates the options and shows what a run would do without simulating; binary for Intel Macs; `LICENSE`, `CITATION.cff`, issue templates; `parameters` template with 100 cells and 1000 sites; the log says "read counts" instead of "reads". The data are identical to 2.2.5.
 
 ## 6.10j Windows (experimental)
 

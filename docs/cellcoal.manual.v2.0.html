@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.2.5)</p>
+<p class="date">November, 2026 (CellCoal 2.2.6)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -133,6 +133,8 @@ Per-cell correlations with doublets, <code>--summary</code> and
 Version 2.2.4: truth metrics, parallel sweeps, speed, Windows</a></li>
 <li><a href="#version-2.2.5-quickstart-more-truth-metrics-windows-binary" id="toc-version-2.2.5-quickstart-more-truth-metrics-windows-binary">8.19
 Version 2.2.5: quickstart, more truth metrics, Windows binary</a></li>
+<li><a href="#version-2.2.6-version-check-intel-mac-binary" id="toc-version-2.2.6-version-check-intel-mac-binary">8.20 Version
+2.2.6: –version, –check, Intel Mac binary</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2260,6 +2262,14 @@ arguments that PowerShell splits (<code>-E0.001</code> as
 files of a single replicate. CellCoal simulates read counts, not
 individual reads, and the text says so. The simulated data of existing
 runs are identical to 2.2.4.</p>
+<h2 id="version-2.2.6-version-check-intel-mac-binary">8.20 Version
+2.2.6: –version, –check, Intel Mac binary</h2>
+<p><code>--version</code>, <code>--help</code>; <code>--check</code>
+(section 3.5) validates the options and shows what a run would do
+without simulating; binary for Intel Macs; <code>LICENSE</code>,
+<code>CITATION.cff</code>, issue templates; <code>parameters</code>
+template with 100 cells and 1000 sites; the log says “read counts”
+instead of “reads”. The data are identical to 2.2.5.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:
