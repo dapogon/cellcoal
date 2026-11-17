@@ -125,5 +125,5 @@ The CI also builds with clang and without OpenMP, runs the suite under AddressSa
 A script that simulates with CellCoal, infers the tree with CellPhy and compares it with the true tree is in [examples/validation](examples/validation).
 
 ## Manual
-A detailed manual is available in [html](https://dapogon.github.io/cellcoal/) or in [pdf](docs/cellcoal.manual.v2.0.pdf).
+A detailed manual is available in [html](https://dapogon.github.io/cellcoal/) or in [pdf](docs/cellcoal.manual.v2.0.pdf). To start, read the [quickstart](https://dapogon.github.io/cellcoal/cellcoal.manual.v2.0.html#toc-quickstart) (installation and examples).
 
