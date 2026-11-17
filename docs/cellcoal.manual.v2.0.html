@@ -234,10 +234,17 @@ Windows) from the folder that results; the folder also has the manual,
 the example parameter files (<code>examples</code>,
 <code>parameters</code>) and the plotting tools. On Linux and macOS,
 <code>tar xzf cellcoal-x.y.z-linux-x86_64.tar.gz</code> and then
-<code>cd cellcoal-x.y.z-linux-x86_64</code>. On macOS, if the system
-refuses to open a program downloaded from the internet, remove the
-quarantine mark with
-<code>xattr -d com.apple.quarantine cellcoal libomp.dylib</code>.</p>
+<code>cd cellcoal-x.y.z-linux-x86_64</code>. On macOS, the program is
+not signed by Apple, so the first time the system says that it <em>could
+not verify that cellcoal is free of malware</em>. It is not a problem of
+the program: the files downloaded from the internet carry a quarantine
+mark, which you remove for the whole unpacked folder (the program and
+<code>libomp.dylib</code>) with
+<code>xattr -dr com.apple.quarantine .</code> from inside it. Another
+way is to open <em>System Settings &gt; Privacy &amp; Security</em>
+after the first attempt and press <em>Open Anyway</em>. With Homebrew
+(below) or when building from the source the warning does not
+appear.</p>
 <p><strong>Homebrew (macOS and Linux).</strong></p>
 <pre><code>brew tap dapogon/cellcoal https://github.com/dapogon/cellcoal
 brew install cellcoal</code></pre>

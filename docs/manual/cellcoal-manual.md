@@ -30,7 +30,7 @@ CellCoal is a single command-line program (no graphical interface) for Linux, ma
 | macOS (Apple silicon) | `cellcoal-x.y.z-macos-arm64.tar.gz` | includes `libomp.dylib` |
 | Windows (x86_64) | `cellcoal-x.y.z-windows-x86_64.zip` | includes the DLLs it needs (from release 2.2.5) |
 
-Unpack it and run `cellcoal` (`cellcoal.exe` on Windows) from the folder that results; the folder also has the manual, the example parameter files (`examples`, `parameters`) and the plotting tools. On Linux and macOS, `tar xzf cellcoal-x.y.z-linux-x86_64.tar.gz` and then `cd cellcoal-x.y.z-linux-x86_64`. On macOS, if the system refuses to open a program downloaded from the internet, remove the quarantine mark with `xattr -d com.apple.quarantine cellcoal libomp.dylib`.
+Unpack it and run `cellcoal` (`cellcoal.exe` on Windows) from the folder that results; the folder also has the manual, the example parameter files (`examples`, `parameters`) and the plotting tools. On Linux and macOS, `tar xzf cellcoal-x.y.z-linux-x86_64.tar.gz` and then `cd cellcoal-x.y.z-linux-x86_64`. On macOS, the program is not signed by Apple, so the first time the system says that it *could not verify that cellcoal is free of malware*. It is not a problem of the program: the files downloaded from the internet carry a quarantine mark, which you remove for the whole unpacked folder (the program and `libomp.dylib`) with `xattr -dr com.apple.quarantine .` from inside it. Another way is to open *System Settings > Privacy & Security* after the first attempt and press *Open Anyway*. With Homebrew (below) or when building from the source the warning does not appear.
 
 **Homebrew (macOS and Linux).**
 

@@ -1,3 +1,3 @@
 # Unreleased (after 2.2.5)
 
-- (nothing yet)
+- Manual: how to open the macOS program (Gatekeeper warning for unsigned programs).
