@@ -577,5 +577,12 @@ python3 "$ROOT/tools/cellcoal_plots.py" all Q --outdir QP >/dev/null 2>&1 && [ -
 else echo "  skip (matplotlib not installed)"; fi
 cd "$ROOT"
 
+echo "2g21. Decimal values split by PowerShell (-E0 .001) are joined again"
+rm -rf "$TMP/psh" && mkdir -p "$TMP/psh/a" "$TMP/psh/b"
+(cd "$TMP/psh/a" && "$BIN" -n2 -s10 -l500 -u1e-6 -e10000 -b1 -C8 -E0.001 -P0.2 0.02 -1 -8 -#3 >/dev/null 2>&1)
+(cd "$TMP/psh/b" && "$BIN" -n2 -s10 -l500 -u1e-6 -e10000 -b1 -C8 -E0 .001 -P0 .2 0.02 -1 -8 -#3 >/dev/null 2>&1)
+if [ -s "$TMP/psh/a/Results/catg" ] && [ "$(norm "$TMP/psh/a/Results" | md5sum)" = "$(norm "$TMP/psh/b/Results" | md5sum)" ]; then ok "-E0 .001 -P0 .2 = -E0.001 -P0.2"; else bad "PowerShell-split decimals"; fi
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

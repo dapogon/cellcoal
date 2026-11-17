@@ -1064,6 +1064,8 @@ CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pac
 
 The Makefile enables OpenMP automatically on Windows (the compiler ships `libgomp`), so the Windows build runs in parallel like the others (`OMP_NUM_THREADS`). The release has a Windows zip (`cellcoal-<version>-windows-x86_64.zip`) with the program and the DLLs of the compiler it needs.
 
+From **PowerShell** (not from `cmd.exe` or MSYS2), PowerShell splits an argument such as `-E0.001` into two, `-E0` and `.001`, before the program receives it. CellCoal joins these pieces again (an option without a dot followed by an argument that starts with a dot and a digit), so the usual syntax works in PowerShell too.
+
 On Windows `long` has 32 bits, which overflowed in the random number generator and made the coalescent times statistically wrong; the generator and the index arithmetic now use 64-bit integers explicitly. The output on Linux and macOS is unchanged (bit-identical to 2.0.2 in the regression configurations).
 
 ## 8.8 Version 2.1.1: streamed reads

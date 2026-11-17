@@ -918,6 +918,7 @@ int main (int argc, char **argv)
 	*/
 
 	strcpy(parameterFile, "parameters");
+	argc = JoinSplitDecimalArgs (argc, argv);	/* -E0.001 split by PowerShell */
 	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
 	ReadParametersFromCommandLine (argc, argv);
 	CheckOptionCombinations ();

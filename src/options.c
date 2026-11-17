@@ -44,6 +44,41 @@ static char *MissingArgument (char flag)
  1 2 3 4 5 6 7 8 9 #
 */
 
+/* PowerShell (Windows, and pwsh anywhere) splits a native argument like -E0.001 into
+   "-E0" and ".001" before the program sees it. Join such pieces again: an option with no
+   dot followed by an argument that starts with a dot and a digit (no CellCoal argument
+   starts like that). Works in place on argv; returns the new argc. */
+int JoinSplitDecimalArgs (int argc, char **argv)
+{
+	int		i, n;
+	char	*joined;
+
+	if (argc < 3)
+		return argc;
+	for (i=1, n=1; i<argc; i++)
+		{
+		if (n > 1 && argv[i][0] == '.' && isdigit ((unsigned char) argv[i][1])
+			&& argv[n-1][0] == '-' && argv[n-1][1] != '-' && argv[n-1][1] != '\0'
+			&& strchr (argv[n-1], '.') == NULL
+			&& isdigit ((unsigned char) argv[n-1][strlen (argv[n-1]) - 1]))
+			{
+			joined = (char *) malloc (strlen (argv[n-1]) + strlen (argv[i]) + 1);
+			if (!joined)
+				{
+				fprintf (stderr, "Could not allocate the command line arguments\n");
+				exit (-1);
+				}
+			strcpy (joined, argv[n-1]);
+			strcat (joined, argv[i]);
+			argv[n-1] = joined;	/* kept until the end of the run, like argv */
+			}
+		else
+			argv[n++] = argv[i];
+		}
+	argv[n] = NULL;
+	return n;
+}
+
 void ReadParametersFromCommandLine (int argc,char **argv)
 {
     int		i, j;

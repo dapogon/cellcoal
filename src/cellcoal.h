@@ -161,6 +161,7 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 void SetupReadModel (double **ngsEij);
 
 char **ExpandConfigArgs (int *argc, char **argv);
+int JoinSplitDecimalArgs (int argc, char **argv);
 const char *SweepOptionForName (const char *name);
 void RunSweep (int argc, char **argv, const char *spec, int keep, int jobs, int resume);
 void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent);
