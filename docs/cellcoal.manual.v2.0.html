@@ -222,6 +222,11 @@ its assets, a file for each system (with its <code>.sha256</code>):</p>
 <td style="text-align: left;">includes <code>libomp.dylib</code></td>
 </tr>
 <tr class="odd">
+<td style="text-align: left;">macOS (Intel)</td>
+<td style="text-align: left;"><code>cellcoal-x.y.z-macos-x86_64.tar.gz</code></td>
+<td style="text-align: left;">includes <code>libomp.dylib</code></td>
+</tr>
+<tr class="even">
 <td style="text-align: left;">Windows (x86_64)</td>
 <td style="text-align: left;"><code>cellcoal-x.y.z-windows-x86_64.zip</code></td>
 <td style="text-align: left;">includes the DLLs it needs (from release
@@ -572,8 +577,15 @@ many cells or sites use <code>-z</code> (compressed),
 sites keep the genotypes in a compact (sparse) form and, when the read
 counts would not fit in memory, they are generated and written site by
 site (section 5.3).</li>
-<li><strong>The help.</strong> <code>cellcoal -?</code> lists every
-option with its default value.</li>
+<li><strong>The help.</strong> <code>cellcoal -?</code> (or
+<code>--help</code>) lists every option with its default value;
+<code>cellcoal --version</code> prints the version.</li>
+<li><strong>Check before running.</strong> <code>cellcoal --check</code>
+followed by your options (or alone, to check the <code>parameters</code>
+file) validates them and shows what the run would do: replicates, cells,
+sites, expected number of mutations and tree depth, outputs, and whether
+the results folder exists (a run deletes it). Nothing is simulated;
+invalid options give a non-zero exit code.</li>
 <li><strong>Next.</strong> Section 4 describes how options are given;
 section 5 how the data are simulated; section 6 every option.</li>
 </ul>

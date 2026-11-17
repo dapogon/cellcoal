@@ -584,5 +584,12 @@ rm -rf "$TMP/psh" && mkdir -p "$TMP/psh/a" "$TMP/psh/b"
 if [ -s "$TMP/psh/a/Results/catg" ] && [ "$(norm "$TMP/psh/a/Results" | md5sum)" = "$(norm "$TMP/psh/b/Results" | md5sum)" ]; then ok "-E0 .001 -P0 .2 = -E0.001 -P0.2"; else bad "PowerShell-split decimals"; fi
 cd "$ROOT"
 
+echo "2g21. --version and --check"
+"$BIN" --version | grep -q "^CellCoal version" && ok "--version" || bad "--version"
+mkdir -p "$TMP/chk" && rm -rf "$TMP/chk"/* && cd "$TMP/chk"
+"$BIN" --check -n3 -s20 -l1000 -C30 | grep -q "Nothing was simulated" && [ ! -d Results ] && ok "--check validates without simulating" || bad "--check"
+"$BIN" --check -n3 -s0 >/dev/null 2>&1 && bad "--check accepts invalid options" || ok "--check rejects invalid options"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

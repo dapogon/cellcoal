@@ -985,6 +985,11 @@ int main (int argc, char **argv)
 	zeroSNVs = 0;
 		
     altModelMutationRate = mutationRate*nonISMRelMutRate;
+    if (checkOnly == YES)
+        {
+        PrintCheck (stdout);
+        exit (0);
+        }
 	
 	if (doSimulateData == YES && alphabet == DNA)
 		{

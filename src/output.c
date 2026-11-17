@@ -518,7 +518,7 @@ void PrintSiteInfo (FILE *fp, int i)
 	fprintf (fp, "\n hasADO = %d", allSites[i].hasADO);
 	fprintf (fp, "\n hasGenotypingError = %d", allSites[i].hasGenotypeError);
 	fprintf (fp, "\n referenceAllele = %c", WhichNuc(allSites[i].referenceAllele));
-	fprintf (fp, "\n numAltAlleles (in reads) = %d   (", allSites[i].numAltAlleles);
+	fprintf (fp, "\n numAltAlleles (in read counts) = %d   (", allSites[i].numAltAlleles);
 	for (j=0; j <allSites[i].numAltAlleles; j++)
 		fprintf (fp, " %c", WhichNuc(allSites[i].alternateAlleles[j]));
 	fprintf (fp, " )");
@@ -1992,7 +1992,7 @@ void	PrintRunInformation (FILE *fp)
 				}
 			}
 		else
-			fprintf (fp, "\n No sequencing reads were produced");
+			fprintf (fp, "\n No read counts were produced");
 		}
 
 	   fprintf (fp, "\n\n\nOutput files are in folder \"%s\":", resultsDir);
@@ -2283,6 +2283,8 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n--cov-ado-corr RHO: correlation (-1..1) between the coverage (-J) and the ADO rate (-P) of the cells (e.g. --cov-ado-corr -0.5)");
 	fprintf (fp,"\n--cov-doublet-corr RHO: correlation (-1..1) between the coverage (-J) and being a doublet (-B)");
 	fprintf (fp,"\n--ado-doublet-corr RHO: correlation (-1..1) between the ADO rate (-P) and being a doublet (-B)");
+	fprintf (fp,"\n--version: print the version and exit");
+	fprintf (fp,"\n--check: check the options and show what would run, without simulating");
 	fprintf (fp,"\n--summary: write summary.tsv, one row of metrics per replicate");
 	fprintf (fp,"\n--sweep \"KEY=V1,V2 ...\": run the grid of values (e.g. --sweep \"C=2,5,10 E=0.001,0.01\") and write sweep.tsv with mean and standard error of the metrics; --sweep-keep keeps the runs");
 	fprintf (fp,"\n--bcf: write the genotype likelihoods as a BCF file (vcf.bcf) instead of a VCF file");
@@ -2445,4 +2447,61 @@ void WriteADOCells (const double *rate, int replicate)
 		fprintf (fp, "\t%.6f\n", rate[i]);
 		}
 	fclose (fp);
+	}
+
+
+/***************************** PrintCheck *******************************/
+/* --check: the options have been read and validated; says what the run would do without running it */
+
+void PrintCheck (FILE *fp)
+	{
+	struct stat	st;
+	int			any = 0;
+
+	fprintf (fp, "CellCoal %s: the options are valid. Nothing was simulated.\n\n", VERSION_NUMBER);
+	fprintf (fp, "  replicates:          %d\n", numDataSets);
+	fprintf (fp, "  cells:               %d (and one healthy outgroup cell)\n", numCells);
+	fprintf (fp, "  sites:               %d\n", numSites);
+	if (doSimulateData == NO)
+		fprintf (fp, "  data:                only the genealogy is simulated (no mutations)\n");
+	else if (doSimulateFixedNumMutations == YES)
+		fprintf (fp, "  mutations:           %d fixed in each replicate\n", numFixedMutations);
+	else
+		fprintf (fp, "  mutations:           about %.0f per replicate expected under the model (the number varies among replicates)\n", expNumMU);
+	fprintf (fp, "  expected tree depth: %.3f (in units of N generations, mean TMRCA of the tumour cells)\n", expTMRCA);
+	if (doSimulateData == YES)
+		{
+		if (doNGS == YES)
+			fprintf (fp, "  read counts:         yes (coverage %.1f; CellCoal simulates read counts, not individual reads)\n", coverage);
+		else
+			fprintf (fp, "  read counts:         no\n");
+		}
+	fprintf (fp, "  seed:                %s\n", userSeed > 0 ? "fixed by the user (-#)" : "from the clock (it is written in the log)");
+	fprintf (fp, "  threads:             ");
+#ifdef _OPENMP
+	fprintf (fp, "up to %d (OMP_NUM_THREADS)\n", omp_get_max_threads ());
+#else
+	fprintf (fp, "1 (built without OpenMP)\n");
+#endif
+	fprintf (fp, "  outputs:            ");
+	if (doPrintTree == YES) { fprintf (fp, " trees"); any = 1; }
+	if (doPrintSNVgenotypes == YES) { fprintf (fp, " snv_gen"); any = 1; }
+	if (doPrintSNVhaplotypes == YES) { fprintf (fp, " snv_hap"); any = 1; }
+	if (doPrintTrueHaplotypes == YES || doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES) { fprintf (fp, " full genomes"); any = 1; }
+	if (doPrintCATG == YES) { fprintf (fp, " catg"); any = 1; }
+	if (doPrintPILEUP == YES) { fprintf (fp, " pileup"); any = 1; }
+	if (doPrintBulk == YES) { fprintf (fp, " bulk"); any = 1; }
+	if (doPrintVCF == YES && doNGS == YES && readsOnly == 0) { fprintf (fp, " vcf%s", doZipVCF == YES ? " (compressed)" : ""); any = 1; }
+	if (doSummary == YES) { fprintf (fp, " summary.tsv"); any = 1; }
+	fprintf (fp, "%s plus log and run.json\n", any ? "," : "");
+	if (doPrintVCF == YES && doNGS == YES && readsOnly == 0)
+		fprintf (fp, "  note:                the VCF is the largest file (roughly 200-350 bytes per cell and variable site; it grows with the coverage)\n");
+	fprintf (fp, "  results folder:      %s", strlen (resultsDir) == 0 ? "Results" : resultsDir);
+	if (stat (strlen (resultsDir) == 0 ? "Results" : resultsDir, &st) == 0)
+		fprintf (fp, "  (it exists: a run would delete it and write it again)");
+	fprintf (fp, "\n");
+	if (doUserTree == YES)
+		fprintf (fp, "  user tree file:      %s%s\n", userTreeFile, stat (userTreeFile, &st) == 0 ? "" : "  !!! NOT FOUND");
+	if (doUserGenome == YES)
+		fprintf (fp, "  user genome file:    %s%s\n", userGenomeFile, stat (userGenomeFile, &st) == 0 ? "" : "  !!! NOT FOUND");
 	}

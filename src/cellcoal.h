@@ -31,6 +31,8 @@ typedef struct
 
 /* Prototypes */
 void 	PrintHeader (FILE *fp);
+void	PrintCheck (FILE *fp);
+extern int	checkOnly;
 extern void 	PrintUsage (FILE *fp);
 void 	PrintDate (FILE *fp);
 void 	PrintDefaults (FILE *fp);

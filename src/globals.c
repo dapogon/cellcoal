@@ -50,6 +50,7 @@ int			obsActive = 0;
 long			siteOff = 0;
 double		minVAFvcf = 0.0;	/* the VCF lists only sites whose pooled VAF in reads is at least this */
 struct timespec	wallStart;	/* start of the run, for the elapsed (wall clock) time */
+int			checkOnly = 0;		/* --check: validate the options and stop without simulating */
 int			readsOnly = 0;		/* only the pooled (bulk) read file is printed: no genotype likelihoods are needed */
 int			streamMode = 0;		/* reads are simulated and printed in blocks of sites (see StreamReads) */
 FILE			*catgBody = NULL;	/* temporary file with the CATG site lines of a streamed replicate */

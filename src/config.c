@@ -624,7 +624,20 @@ char **ExpandConfigArgs (int *argc, char **argv)
 	char **out;
 
 	for (i=1; i<*argc; i++)
-		if (strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
+		{
+		if (strcmp (argv[i], "--version") == 0)
+			{
+			printf ("CellCoal %s\n", VERSION_NUMBER);
+			exit (0);
+			}
+		if (strcmp (argv[i], "--help") == 0)
+			{
+			PrintUsage (stdout);
+			exit (0);
+			}
+		}
+	for (i=1; i<*argc; i++)
+		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
 			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0)
@@ -709,6 +722,8 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			doBCF = YES;
 		else if (strcmp (out[i], "--summary") == 0)
 			doSummary = YES;
+		else if (strcmp (out[i], "--check") == 0)
+			checkOnly = YES;
 		else if (strcmp (out[i], "--sweep-keep") == 0 || strcmp (out[i], "--sweep-resume") == 0)
 			;
 		else if (strcmp (out[i], "--sweep-jobs") == 0)

@@ -28,6 +28,7 @@ CellCoal is a single command-line program (no graphical interface) for Linux, ma
 |:--|:--|:--|
 | Linux (x86_64) | `cellcoal-x.y.z-linux-x86_64.tar.gz` | static, multithreaded |
 | macOS (Apple silicon) | `cellcoal-x.y.z-macos-arm64.tar.gz` | includes `libomp.dylib` |
+| macOS (Intel) | `cellcoal-x.y.z-macos-x86_64.tar.gz` | includes `libomp.dylib` |
 | Windows (x86_64) | `cellcoal-x.y.z-windows-x86_64.zip` | includes the DLLs it needs (from release 2.2.5) |
 
 Unpack it and run `cellcoal` (`cellcoal.exe` on Windows) from the folder that results; the folder also has the manual, the example parameter files (`examples`, `parameters`) and the plotting tools. On Linux and macOS, `tar xzf cellcoal-x.y.z-linux-x86_64.tar.gz` and then `cd cellcoal-x.y.z-linux-x86_64`. On macOS, the program is not signed by Apple, so the first time the system says that it *could not verify that cellcoal is free of malware*. It is not a problem of the program: the files downloaded from the internet carry a quarantine mark, which you remove for the whole unpacked folder (the program and `libomp.dylib`) with `xattr -dr com.apple.quarantine .` from inside it. Another way is to open *System Settings > Privacy & Security* after the first attempt and press *Open Anyway*. With Homebrew (below) or when building from the source the warning does not appear.
@@ -160,7 +161,8 @@ You can sweep any option of the simulation (the sequencing error `E`, the dropou
 - **Reproducibility.** The same seed (`-#`) and options give identical results in every run and independent of the number of threads (section 4.1). Without `-#`, the seed is taken from the clock and is written in `log` and `run.json`.
 - **Threads.** `OMP_NUM_THREADS=4 cellcoal ...` chooses the number of threads for the read counts and the VCF; by default all the cores are used.
 - **Size.** The VCF is by far the largest file (for example, 770 MB for 2 replicates of 100 cells with 30,000 sites). For many cells or sites use `-z` (compressed), `--bcf`, or write only what you need with `-Z` and `-0`, `-8` or `-9`. Runs with many sites keep the genotypes in a compact (sparse) form and, when the read counts would not fit in memory, they are generated and written site by site (section 5.3).
-- **The help.** `cellcoal -?` lists every option with its default value.
+- **The help.** `cellcoal -?` (or `--help`) lists every option with its default value; `cellcoal --version` prints the version.
+- **Check before running.** `cellcoal --check` followed by your options (or alone, to check the `parameters` file) validates them and shows what the run would do: replicates, cells, sites, expected number of mutations and tree depth, outputs, and whether the results folder exists (a run deletes it). Nothing is simulated; invalid options give a non-zero exit code.
 - **Next.** Section 4 describes how options are given; section 5 how the data are simulated; section 6 every option.
 
 
