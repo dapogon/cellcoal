@@ -4,11 +4,11 @@ CellCoal: coalescent simulation of single-cell NGS genotypes
 &copy;2020 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
 
 ## About CellCoal
-CellCoal simulates the somatic evolution of single-cells. CellCoal generates a coalescent genealogy for a sample of somatic cells –no recombination– obtained from a growing population, together with a another cell as outgroup, introduces mutations along this genealogy, and produces single-cell diploid genotypes (single-nuclotide variants or SNVs). CellCoal implements multiple mutations models (0/1, DNA, infinite and finite site models, deletion, copy-neutral LOH, 30 cancer signatures) and is able to generate read counts and genotype likelihoods considering allelic dropout, sequencing and amplification error, plus doublet cells. Rate variation among lineages can be simulated with a gamma distribution or with a few *rate switches* (`-N`): each switch picks a branch at random, with probability proportional to its length, and multiplies the length of that branch and of all its descendants by a given factor, creating a clade that evolves faster or slower (for example, `-N2 4 0.2`).
+CellCoal simulates the somatic evolution of single-cells. CellCoal generates a coalescent genealogy for a sample of somatic cells –no recombination– obtained from a growing population, together with a another cell as outgroup, introduces mutations along this genealogy, and produces single-cell diploid genotypes (single-nuclotide variants or SNVs). CellCoal implements multiple mutations models (0/1, DNA, infinite and finite site models, deletion, copy-neutral LOH, 30 cancer signatures) and is able to generate read counts and genotype likelihoods considering allelic dropout, sequencing and amplification error, plus doublet cells. **CellCoal does not simulate individual reads (there are no sequences, no FASTQ and no BAM files): it simulates the number of reads of each nucleotide in each cell and site (read counts).** Rate variation among lineages can be simulated with a gamma distribution or with a few *rate switches* (`-N`): each switch picks a branch at random, with probability proportional to its length, and multiplies the length of that branch and of all its descendants by a given factor, creating a clade that evolves faster or slower (for example, `-N2 4 0.2`).
 
 ## Getting started
 
-New to CellCoal? Chapter 3 of the manual ([docs/cellcoal.manual.v2.0.html](docs/cellcoal.manual.v2.0.html)) is a quickstart: installation on Linux, macOS and Windows, a first simulation, worked examples (reads and VCF, bulk VAF, doublets, summaries, parameter and configuration files) and a tutorial on `--sweep`.
+New to CellCoal? Chapter 3 of the manual ([docs/cellcoal.manual.v2.0.html](docs/cellcoal.manual.v2.0.html)) is a quickstart: installation on Linux, macOS and Windows, a first simulation, worked examples (read counts and VCF, bulk VAF, doublets, summaries, parameter and configuration files) and a tutorial on `--sweep`.
 
 1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.2.3.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
 
@@ -20,20 +20,20 @@ New to CellCoal? Chapter 3 of the manual ([docs/cellcoal.manual.v2.0.html](docs/
 
 ## Bulk-like VAF distribution
 
-Easiest: option `-0` makes CellCoal write the reads pooled over the tumour cells, one line per site (VAF from the simulated reads and the true VAF; size independent of the number of cells), and `python3 tools/bulk_vaf.py --bulk Results/bulk --out vaf.png` plots it (add `-Z` to skip the VCF when you only need the bulk file; add `--depth 100 --purity 0.8` to mimic a real bulk experiment). The details below cover the other inputs.
+Easiest: option `-0` makes CellCoal write the read counts pooled over the tumour cells, one line per site (VAF from the simulated read counts and the true VAF; size independent of the number of cells), and `python3 tools/bulk_vaf.py --bulk Results/bulk --out vaf.png` plots it (add `-Z` to skip the VCF when you only need the bulk file; add `--depth 100 --purity 0.8` to mimic a real bulk experiment). The details below cover the other inputs.
 
 `tools/bulk_vaf.py` (Python with numpy and matplotlib) draws the variant allele frequency (VAF) distribution of the sample as if it were sequenced in bulk.
 
-- **From the simulated reads** (VCF made with `-C`, `-V`, ...): the reads (RC field) of all the tumour cells are pooled, and VAF = alternate reads / total reads at each site. The healthy cell is excluded.
+- **From the simulated read counts** (VCF made with `-C`, `-V`, ...): the read counts (RC field) of all the tumour cells are pooled, and VAF = alternate reads / total reads at each site. The healthy cell is excluded.
   `python3 tools/bulk_vaf.py --vcf Results/vcf_dir/vcf.0001 --min-reads 10 --out vaf.png --tsv vaf.tsv`
 - **From the genotypes** (`-1`): VAF is the fraction of alternate alleles among the tumour cells; a bulk experiment is mimicked by sampling reads at a given depth and tumour purity.
   `python3 tools/bulk_vaf.py Results/snv_gen --depth 100 --purity 1.0 --out vaf.png --tsv vaf.tsv`
 
-With simulated reads, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
+With simulated read counts, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
 ## What's new in 2.2.4
 
-`--summary` also reports metrics against the true genotypes (called fraction, genotype error, SNV precision and recall); `--sweep` runs combinations in parallel (`--sweep-jobs N`), resumes (`--sweep-resume`) and can be plotted (`cellcoal_plots.py sweep`). Runs without reads are about 35% faster, and the program builds and passes the whole test suite on Windows (MSYS2). Output identical to 2.2.3.
+`--summary` also reports metrics against the true genotypes (called fraction, genotype error, SNV precision and recall); `--sweep` runs combinations in parallel (`--sweep-jobs N`), resumes (`--sweep-resume`) and can be plotted (`cellcoal_plots.py sweep`). Runs without read counts are about 35% faster, and the program builds and passes the whole test suite on Windows (MSYS2). Output identical to 2.2.3.
 
 ## What's new in 2.2.3
 
@@ -45,19 +45,19 @@ Fixes found by the new CI checks: a 2-byte heap overflow in the BCF writer (2.2.
 
 ## What's new in 2.2.1
 
-`--bcf` writes the likelihoods as a BCF file (`vcf.bcf`) instead of the VCF; it reads with bcftools/htslib, and has about the size of `vcf.gz` (4-5 times smaller than the VCF). The program also writes its CSI index (`vcf.bcf.csi`), so region queries work at once. **Streamed reads now work with `-3 -4 -5 -Y`** (full ML genotypes and haplotypes, ancestors, true haplotypes): 200 cells x 60,000 sites with `-3 -4 -Y` use 106 MB instead of 825 MB, with identical files. A per-thread **cache of genotype likelihoods** (cells and sites with the same read counts and amplification errors share them) makes the reads about 30% faster at low coverage without `-A`, with bit-identical output. `--fast` is now about 25-30% faster than the default: the genotype likelihoods are computed in `double` with vectorizable batch logarithms and powers (`tests/fast_stats.py` compares them with the exact code). Without `--fast` nothing changes. See [docs/CHANGES-2.2.1.md](docs/CHANGES-2.2.1.md).
+`--bcf` writes the likelihoods as a BCF file (`vcf.bcf`) instead of the VCF; it reads with bcftools/htslib, and has about the size of `vcf.gz` (4-5 times smaller than the VCF). The program also writes its CSI index (`vcf.bcf.csi`), so region queries work at once. **Streamed read counts now work with `-3 -4 -5 -Y`** (full ML genotypes and haplotypes, ancestors, true haplotypes): 200 cells x 60,000 sites with `-3 -4 -Y` use 106 MB instead of 825 MB, with identical files. A per-thread **cache of genotype likelihoods** (cells and sites with the same read counts and amplification errors share them) makes the read counts about 30% faster at low coverage without `-A`, with bit-identical output. `--fast` is now about 25-30% faster than the default: the genotype likelihoods are computed in `double` with vectorizable batch logarithms and powers (`tests/fast_stats.py` compares them with the exact code). Without `--fast` nothing changes. See [docs/CHANGES-2.2.1.md](docs/CHANGES-2.2.1.md).
 
 ## What's new in 2.2.0
 
-`--fast` (or `fast: true` in a `--config` file) simulates the reads about 10-15% faster with the same distributions but different random numbers (so a seed gives different reads); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. `--cov-ado-corr RHO` correlates the coverage (`-J`) and the ADO rate (`-P`) of the cells. With `-P`, the ADO rate drawn for each cell is written to the new file `ado_cells`. `--config` errors now give the line and column and suggest the correct key for a misspelled one. Also in this release: `plots all` (every plot plus a `report.html`), CI and packaging tests (Homebrew, conda). Without the new options the output is bit-identical to 2.1.9. See [docs/CHANGES-2.2.0.md](docs/CHANGES-2.2.0.md).
+`--fast` (or `fast: true` in a `--config` file) simulates the read counts about 10-15% faster with the same distributions but different random numbers (so a seed gives different read counts); the default output is unchanged. `tests/fast_stats.py` checks that depth, read counts and likelihoods have the same distributions. `--cov-ado-corr RHO` correlates the coverage (`-J`) and the ADO rate (`-P`) of the cells. With `-P`, the ADO rate drawn for each cell is written to the new file `ado_cells`. `--config` errors now give the line and column and suggest the correct key for a misspelled one. Also in this release: `plots all` (every plot plus a `report.html`), CI and packaging tests (Homebrew, conda). Without the new options the output is bit-identical to 2.1.9. See [docs/CHANGES-2.2.0.md](docs/CHANGES-2.2.0.md).
 
 ## What's new in 2.1.9
 
-The source is split into modules (`src/tree.c`, `mutation.c`, `observation.c`, `reads.c`, `reads_output.c`, `output.c`, `rng.c`, `options.c`, `config.c`, `globals.c`; the main program is `cellcoal.c`); output and speed are unchanged. **Configuration files**: `bin/cellcoal-2.1.9 --config examples/config.example.yaml` reads the options from a JSON or YAML file (option letters or long names such as `cells`, `coverage`), and `Results/run.json` now has an `options` object that can be passed to `--config` to repeat a run. **Summary plots**: `python3 tools/cellcoal_plots.py depth|missing|heatmap ...` (and `all Results` for every plot plus a `report.html`, from the next release) (depth per cell, site and genotype; genotypes without reads; genotype heatmap). See [docs/CHANGES-2.1.9.md](docs/CHANGES-2.1.9.md).
+The source is split into modules (`src/tree.c`, `mutation.c`, `observation.c`, `reads.c`, `reads_output.c`, `output.c`, `rng.c`, `options.c`, `config.c`, `globals.c`; the main program is `cellcoal.c`); output and speed are unchanged. **Configuration files**: `bin/cellcoal-2.1.9 --config examples/config.example.yaml` reads the options from a JSON or YAML file (option letters or long names such as `cells`, `coverage`), and `Results/run.json` now has an `options` object that can be passed to `--config` to repeat a run. **Summary plots**: `python3 tools/cellcoal_plots.py depth|missing|heatmap ...` (and `all Results` for every plot plus a `report.html`, from the next release) (depth per cell, site and genotype; genotypes without read counts; genotype heatmap). See [docs/CHANGES-2.1.9.md](docs/CHANGES-2.1.9.md).
 
 ## What's new in 2.1.8
 
-New option `-J alpha`: coverage varies between cells (shared by all the sites of a cell; e.g. `-J4`), complementing `-O` (between sites) and `-V` (within a genotype). The reads of doublets now come from the per-site random stream in stored and streamed mode, so both give identical data; data sets with doublets differ from 2.1.7, the rest are identical. See [docs/CHANGES-2.1.8.md](docs/CHANGES-2.1.8.md).
+New option `-J alpha`: coverage varies between cells (shared by all the sites of a cell; e.g. `-J4`), complementing `-O` (between sites) and `-V` (within a genotype). The read counts of doublets now come from the per-site random stream in stored and streamed mode, so both give identical data; data sets with doublets differ from 2.1.7, the rest are identical. See [docs/CHANGES-2.1.8.md](docs/CHANGES-2.1.8.md).
 
 ## What's new in 2.1.7
 
@@ -65,7 +65,7 @@ New option `-O alpha`: coverage varies between sites, shared by all the cells (e
 
 ## What's new in 2.1.6
 
-Streamed reads now also write the CATG file (`-8`) and the maximum-likelihood SNV genotypes and haplotypes (`-1`, `-2`) obtained from reads, so large data sets with these outputs run in small memory (1,000 cells x 30,000 sites: 191 MB instead of 1.7 GB). The files are identical to the stored mode. See [docs/CHANGES-2.1.6.md](docs/CHANGES-2.1.6.md).
+Streamed read counts now also write the CATG file (`-8`) and the maximum-likelihood SNV genotypes and haplotypes (`-1`, `-2`) obtained from read counts, so large data sets with these outputs run in small memory (1,000 cells x 30,000 sites: 191 MB instead of 1.7 GB). The files are identical to the stored mode. See [docs/CHANGES-2.1.6.md](docs/CHANGES-2.1.6.md).
 
 ## What's new in 2.1.5
 
@@ -85,11 +85,11 @@ New option `-0`: pooled (bulk) read counts and VAF per site, without the per-cel
 
 ## What's new in 2.1.1
 
-Streamed reads: for very large data sets, reads, genotype likelihoods and the VCF/PILEUP files are produced in blocks of sites with small memory. Existing output is identical to 2.1.0. See [docs/CHANGES-2.1.1.md](docs/CHANGES-2.1.1.md).
+Streamed read counts: for very large data sets, read counts, genotype likelihoods and the VCF/PILEUP files are produced in blocks of sites with small memory. Existing output is identical to 2.1.0. See [docs/CHANGES-2.1.1.md](docs/CHANGES-2.1.1.md).
 
 ## What's new in 2.1.0
 
-Sparse genome storage and a lazy ADO / genotyping-error layer: 10,000 cells x 1,000,000 sites in about 7 s and 360 MB (genotype outputs; reads/VCF not yet). Dense output is identical to 2.0.3. See [docs/CHANGES-2.1.0.md](docs/CHANGES-2.1.0.md).
+Sparse genome storage and a lazy ADO / genotyping-error layer: 10,000 cells x 1,000,000 sites in about 7 s and 360 MB (genotype outputs; read counts/VCF not yet). Dense output is identical to 2.0.3. See [docs/CHANGES-2.1.0.md](docs/CHANGES-2.1.0.md).
 
 ## What's new in 2.0.3
 
@@ -115,7 +115,7 @@ Bug fixes (genotyping error, allelic dropout variation, memory safety), 3–4× 
 
 The CI also builds with clang and without OpenMP, runs the suite under AddressSanitizer/UBSan, fuzzes the options and the `--config` parser (`tests/fuzz.py`), reports code coverage, and `tests/theory.py` (part of `make test`) validates the model against theory: coalescent waiting times, growth, number and site frequency spectrum of mutations, depth, sequencing error and dropout. See section 6.10h of the manual.
 
-`make test` runs a small regression suite (`tests/run_tests.sh`): the example parameter files, identical results with 1 and 2 threads, reproducibility with the same seed, and inheritance of germline SNPs (`-c`), and that the observed rates of allelic dropout (`-D`), genotyping error (`-G`) the fixed number of mutations (`-j`), allelic imbalance (`-I`), doublets (`-B`), ADO per cell (`-P`) and the spectrum of mutational signature 1 match the expected values. It also checks that sparse genome storage gives the same output as dense storage and the same ADO and genotyping-error rates, that streamed reads give the same VCF, PILEUP and bulk file as stored reads, that `-0`, `-Z`, `-z` and `-M` behave, that the pooled (bulk) VAF of the reads agrees with the true VAF (ratio of means and correlation), that doublets multiply the pooled depth by the expected factor with stored and streamed reads, and the content of `run.json`. It does not depend on exact floating-point output, so it can be run on any platform.
+`make test` runs a small regression suite (`tests/run_tests.sh`): the example parameter files, identical results with 1 and 2 threads, reproducibility with the same seed, and inheritance of germline SNPs (`-c`), and that the observed rates of allelic dropout (`-D`), genotyping error (`-G`) the fixed number of mutations (`-j`), allelic imbalance (`-I`), doublets (`-B`), ADO per cell (`-P`) and the spectrum of mutational signature 1 match the expected values. It also checks that sparse genome storage gives the same output as dense storage and the same ADO and genotyping-error rates, that streamed read counts give the same VCF, PILEUP and bulk file as stored read counts, that `-0`, `-Z`, `-z` and `-M` behave, that the pooled (bulk) VAF of the read counts agrees with the true VAF (ratio of means and correlation), that doublets multiply the pooled depth by the expected factor with stored and streamed read counts, and the content of `run.json`. It does not depend on exact floating-point output, so it can be run on any platform.
 
 ## Validation
 A script that simulates with CellCoal, infers the tree with CellPhy and compares it with the true tree is in [examples/validation](examples/validation).

@@ -1561,7 +1561,7 @@ void ReadParametersFromFile (void)
 				doPrintCATG = YES;
 				if (doNGS == NO)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the CATG format when reads are not simulated (coverage >0)\n\n");
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the CATG format when read counts are not simulated (coverage >0)\n\n");
 					PrintUsage(stderr);
 					}
 				break;
@@ -1569,7 +1569,7 @@ void ReadParametersFromFile (void)
 				doPrintPILEUP = YES;
 				if (doNGS == NO)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the PILEUP format when reads are not simulated (coverage >0)\n\n");
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print the PILEUP format when read counts are not simulated (coverage >0)\n\n");
 					PrintUsage(stderr);
 					}
 				break;
@@ -1664,7 +1664,7 @@ void ReadParametersFromFile (void)
 				doPrintBulk = YES;
 				if (doNGS == NO)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print pooled read counts when reads are not simulated (coverage >0)\n\n");
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot print pooled read counts when read counts are not simulated (coverage >0)\n\n");
 					PrintUsage(stderr);
 					}
 				break;

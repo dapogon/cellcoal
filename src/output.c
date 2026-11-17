@@ -2255,7 +2255,7 @@ void PrintUsage(FILE *fp)
 
 	fprintf (fp,"\n-G: genotyping error [no read counts]: mean and variance (e.g. -G0.01 0.001)");
 
-	fprintf (fp,"\n-C: sequencing coverage [read counts] (e.g. -C60)");
+	fprintf (fp,"\n-C: sequencing coverage [read counts, not individual reads] (e.g. -C60)");
 	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
 	fprintf (fp,"\n-O: coverage overdispersion between sites, shared by all cells (e.g. -O10)");
 	fprintf (fp,"\n-J: coverage overdispersion between cells, shared by all sites (e.g. -J10)");
@@ -2275,7 +2275,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site (e.g. -0)");
 	fprintf (fp,"\n-Z: do not print the VCF file (needs -8, -9 or -0) (e.g. -Z)");
 	fprintf (fp,"\n-z: write the VCF compressed with gzip, as vcf.gz (e.g. -z)");
-	fprintf (fp,"\n-M: minimum pooled VAF in reads of the sites listed in the VCF (e.g. -M0.02)");
+	fprintf (fp,"\n-M: minimum pooled VAF in the read counts of the sites listed in the VCF (e.g. -M0.02)");
     fprintf (fp,"\n-Y: print true SNV haplotypes to a file (e.g. -Y)");
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");

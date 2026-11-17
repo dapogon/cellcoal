@@ -1,6 +1,9 @@
 #!/usr/bin/env python3
 """Bulk-like VAF distribution from CellCoal output.
 
+CellCoal simulates read counts (how many reads support each nucleotide in each cell and site), not individual reads;
+"reads" here means those counts.
+
 Three sources:
   * the bulk file written by CellCoal option -0 (--bulk): already pooled over the cells, one line per site, with the VAF of
     the simulated reads and the true VAF. Smallest and fastest input, also for thousands of cells. With --depth (e.g. 100)

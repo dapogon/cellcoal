@@ -5,3 +5,4 @@
 - Speed: the VCF formatting and the read simulation were profiled again; no change was worth its risk, the output is identical.
 - Manual: new chapter 3, a quickstart with installation (prebuilt programs, Homebrew, conda, source, Windows), a first simulation, worked examples and a tutorial on `--sweep`; every command in it is run.
 - Fixes in the plotting tools: `cellcoal_plots.py heatmap` and `all` failed with the SNV genotype file of a single replicate, `bulk_vaf.py --vcf` failed with the VCF of a single replicate, and the legend of the heatmap overlapped the axis label. New tests (2g20).
+- Terminology: CellCoal simulates read counts (the number of reads of each nucleotide in each cell and site), not individual reads (no sequences, FASTQ or BAM). The manual, the README, the example parameter files, the help (`-C`), the error messages and the tools now say so.
