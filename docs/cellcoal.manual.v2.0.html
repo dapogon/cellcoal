@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.2.4)</p>
+<p class="date">November, 2026 (CellCoal 2.2.5)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -131,6 +131,8 @@ Per-cell correlations with doublets, <code>--summary</code> and
 2.2.3: doublet correlations, –summary, –sweep</a></li>
 <li><a href="#version-2.2.4-truth-metrics-parallel-sweeps-speed-windows" id="toc-version-2.2.4-truth-metrics-parallel-sweeps-speed-windows">8.18
 Version 2.2.4: truth metrics, parallel sweeps, speed, Windows</a></li>
+<li><a href="#version-2.2.5-quickstart-more-truth-metrics-windows-binary" id="toc-version-2.2.5-quickstart-more-truth-metrics-windows-binary">8.19
+Version 2.2.5: quickstart, more truth metrics, Windows binary</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -222,8 +224,8 @@ its assets, a file for each system (with its <code>.sha256</code>):</p>
 <tr class="odd">
 <td style="text-align: left;">Windows (x86_64)</td>
 <td style="text-align: left;"><code>cellcoal-x.y.z-windows-x86_64.zip</code></td>
-<td style="text-align: left;">includes the DLLs it needs (releases after
-2.2.4)</td>
+<td style="text-align: left;">includes the DLLs it needs (from release
+2.2.5)</td>
 </tr>
 </tbody>
 </table>
@@ -2227,6 +2229,18 @@ Version 2.2.4: truth metrics, parallel sweeps, speed, Windows</h2>
 Runs without read counts are about 35% faster. The program builds on
 Windows and the CI runs the whole suite there (section 6.10j). The
 output of existing runs is identical to 2.2.3.</p>
+<h2 id="version-2.2.5-quickstart-more-truth-metrics-windows-binary">8.19
+Version 2.2.5: quickstart, more truth metrics, Windows binary</h2>
+<p>New chapter 3 (quickstart). <code>--summary</code> adds
+<code>het_error</code>, <code>hom_error</code>, <code>het_to_hom</code>,
+<code>doublet_error</code>, <code>singlet_error</code> and
+<code>ado_simulated</code> (section 6.10i). The release includes a
+Windows program, built with OpenMP, and the program accepts the
+arguments that PowerShell splits (<code>-E0.001</code> as
+<code>-E0 .001</code>) (section 6.10j). The plotting tools work with the
+files of a single replicate. CellCoal simulates read counts, not
+individual reads, and the text says so. The simulated data of existing
+runs are identical to 2.2.4.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

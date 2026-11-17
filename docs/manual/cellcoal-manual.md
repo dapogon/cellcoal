@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.2.4)"
+date: "November, 2026 (CellCoal 2.2.5)"
 ---
 
 # 1. About CellCoal
@@ -28,7 +28,7 @@ CellCoal is a single command-line program (no graphical interface) for Linux, ma
 |:--|:--|:--|
 | Linux (x86_64) | `cellcoal-x.y.z-linux-x86_64.tar.gz` | static, multithreaded |
 | macOS (Apple silicon) | `cellcoal-x.y.z-macos-arm64.tar.gz` | includes `libomp.dylib` |
-| Windows (x86_64) | `cellcoal-x.y.z-windows-x86_64.zip` | includes the DLLs it needs (releases after 2.2.4) |
+| Windows (x86_64) | `cellcoal-x.y.z-windows-x86_64.zip` | includes the DLLs it needs (from release 2.2.5) |
 
 Unpack it and run `cellcoal` (`cellcoal.exe` on Windows) from the folder that results; the folder also has the manual, the example parameter files (`examples`, `parameters`) and the plotting tools. On Linux and macOS, `tar xzf cellcoal-x.y.z-linux-x86_64.tar.gz` and then `cd cellcoal-x.y.z-linux-x86_64`. On macOS, if the system refuses to open a program downloaded from the internet, remove the quarantine mark with `xattr -d com.apple.quarantine cellcoal libomp.dylib`.
 
@@ -1061,6 +1061,11 @@ Beyond the regression suite (`make test`), the CI checks the program in several 
 ## 8.18 Version 2.2.4: truth metrics, parallel sweeps, speed, Windows
 
 `--summary` adds metrics against the true genotypes; `--sweep` gains `--sweep-jobs`, `--sweep-resume`, ranges and a plot command (section 6.10i). Runs without read counts are about 35% faster. The program builds on Windows and the CI runs the whole suite there (section 6.10j). The output of existing runs is identical to 2.2.3.
+
+
+## 8.19 Version 2.2.5: quickstart, more truth metrics, Windows binary
+
+New chapter 3 (quickstart). `--summary` adds `het_error`, `hom_error`, `het_to_hom`, `doublet_error`, `singlet_error` and `ado_simulated` (section 6.10i). The release includes a Windows program, built with OpenMP, and the program accepts the arguments that PowerShell splits (`-E0.001` as `-E0 .001`) (section 6.10j). The plotting tools work with the files of a single replicate. CellCoal simulates read counts, not individual reads, and the text says so. The simulated data of existing runs are identical to 2.2.4.
 
 ## 6.10j Windows (experimental)
 

@@ -31,6 +31,10 @@ Easiest: option `-0` makes CellCoal write the read counts pooled over the tumour
 
 With simulated read counts, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
+## What's new in 2.2.5
+
+A quickstart chapter in the manual (installation, a first simulation, worked examples, a `--sweep` tutorial); `--summary` reports the error by genotype type and doublets, and the simulated allelic dropout; the release has a Windows zip, and CellCoal builds with OpenMP on Windows; the plotting tools work with the files of a single replicate. The manual and README now say clearly that CellCoal simulates read counts, not individual reads. Output identical to 2.2.4.
+
 ## What's new in 2.2.4
 
 `--summary` also reports metrics against the true genotypes (called fraction, genotype error, SNV precision and recall); `--sweep` runs combinations in parallel (`--sweep-jobs N`), resumes (`--sweep-resume`) and can be plotted (`cellcoal_plots.py sweep`). Runs without read counts are about 35% faster, and the program builds and passes the whole test suite on Windows (MSYS2). Output identical to 2.2.3.
