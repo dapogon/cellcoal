@@ -90,10 +90,10 @@ if cmp -s "$TMP/o1/Results/bulk" "$TMP/o2/Results/bulk"; then ok "-O, stored vs 
 mkdir -p "$TMP/ad"
 (cd "$TMP/ad" && CELLCOAL_SPARSE=1 "$BIN" -n1 -s20 -l1000 -u1e-6 -e10000 -g1e-4 -b1 -y3 -D0.3 -#4 >o.txt 2>&1)
 fr=$(python3 -c "
-import re
-t=open('$TMP/ad/o.txt',errors='ignore').read()
+import re,sys
+t=open(sys.argv[1],errors='ignore').read()
 v=[int(x) for x in re.findall(r'countDropped = (\d+)',t)]
-print(round(sum(v)/(len(v)*42.0),4))")
+print(round(sum(v)/(len(v)*42.0),4))" "$TMP/ad/o.txt")
 close "$fr" 0.1634 0.02 && ok "sparse ADO counted at invariant sites: allele dropout fraction $fr (expected 0.1634)" || bad "sparse ADO count ($fr)"
 
 echo "2g4. Coverage heterogeneity: -V is noise independent in every cell (averages out in the bulk), -O is shared by all the cells (does not)"
@@ -126,13 +126,13 @@ if [ "$(norm "$TMP/jd0/Results" | md5sum)" = "$(norm "$TMP/jd1/Results" | md5sum
 cellcv=$(python3 -c "
 import statistics as st,sys
 n=[0]*101; k=0
-for l in open('$TMP/j0/Results/vcf',errors='ignore'):
+for l in open(sys.argv[1],errors='ignore'):
     if l.startswith('1\t'):
         k+=1
         f=l.rstrip('\n').split('\t')
         for c,x in enumerate(f[9:-1]): n[c]+=int(x.split(':')[1])
 m=[x/k for x in n[:100]]
-print(round(st.pvariance(m)/st.mean(m)**2,4))")
+print(round(st.pvariance(m)/st.mean(m)**2,4))" "$TMP/j0/Results/vcf")
 close "$cellcv" 0.25 0.08 && ok "-J4: CV^2 of the mean depth between cells $cellcv (expected 0.25)" || bad "-J4 between-cell depth ($cellcv)"
 
 echo "2g6. Configuration files (--config): JSON, YAML and the options of run.json reproduce a command line"
