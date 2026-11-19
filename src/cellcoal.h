@@ -49,6 +49,7 @@ int			ConvertVCFtoBCF (const char *vcfPath, const char *bcfPath);
 extern int	doBCF;	/* --bcf: write the VCF as BCF */
 extern int	adoReplicate;	/* replicate being simulated, for the ADO file */
 void		ReadUserGenome (FILE *fp);
+int			CountUserTreeLeaves (const char *fileName);
 void		ReadUserTree (FILE *fp);
 void		FreeUserTree (void);
 void		CheckTree (char *treeString);

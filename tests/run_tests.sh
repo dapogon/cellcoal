@@ -628,5 +628,14 @@ grep -q '"cov_ado_correlation": -0.5' A/run.json && grep -q '"fast": true' A/run
 cmp -s A/summary.tsv B/summary.tsv && cmp -s A/cell_params B/cell_params && ok "--config run.json repeats the run" || bad "--config run.json"
 cd "$ROOT"
 
+echo "2g23. user tree: -s ignored (cells = leaves), branch lengths keep precision"
+mkdir -p "$TMP/ut" && rm -rf "$TMP/ut"/* && cd "$TMP/ut"
+printf '((c1:1e-9,c2:2.5e-8):1e-6,(c3:0.0000003,(c4:4e-10,c5:5e-10):1e-7):1e-5);\n' > tiny.tre
+"$BIN" -n1 -s20 -l500 -u1e-6 -e10000 -Ttiny.tre -6 -#4 -oA >o.txt 2>&1 && ok "-T with -s different from the number of leaves" || bad "-T with -s != leaves"
+grep -q "c4:4e-10" A/trees && grep -q "c1:1e-09" A/trees && ok "tiny branch lengths are written without rounding to 0" || bad "tree branch precision"
+printf '(%s);\n' "$(for i in $(seq 1 100); do printf 'c%d:0.001,' $i; done | sed 's/,$//')" > star.tre
+"$BIN" -n1 -s20 -l500 -u1e-6 -e10000 -Tstar.tre -#4 -oB >o2.txt 2>&1 && ok "-T with 100 leaves and default -s" || bad "-T with 100 leaves"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

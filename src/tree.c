@@ -376,6 +376,31 @@ void FreeUserTree (void)
 		}
 	}
 
+/********************************** CountUserTreeLeaves ***********************************/
+/* Counts the leaves (cells) of the user tree: number of commas + 1 in its first line.
+   It is called before any array is allocated, so that -s does not need to match the tree. */
+int CountUserTreeLeaves (const char *fileName)
+	{
+	FILE	*fp;
+	char	*line;
+	int		i, n = 0;
+
+	if ((fp = fopen (fileName, "r")) == NULL)
+		return 0;	/* ReadUserTree will report the error */
+	line = (char*) calloc (MAX_LINE, sizeof(char));
+	if (line && fgets (line, MAX_LINE, fp) != NULL)
+		{
+		for (i=0; line[i] != '\0' && line[i] != ';'; i++)
+			if (line[i] == ',')
+				n++;
+		n++;
+		}
+	free (line);
+	fclose (fp);
+	return n;
+	}
+
+
 /********************************** ReadUserTree ***********************************/
 /* Reads a rooted phyogenetic tree with branch lengths in Newick format */
 void ReadUserTree (FILE *fp)
@@ -515,11 +540,17 @@ void ReadUserTree (FILE *fp)
 		else if (treeString[i] == ':')
 	        {
 	        i++;
-            for (j=0; j<10; j++)
-                tempString[j] = ' ';
+            memset (tempString, 0, MAX_NAME);
             j = 0;
 	        while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':' && treeString[i] != ';' && treeString[i] != '(')
+	        	{
+	        	if (j >= MAX_NAME-1)
+	        		{
+	        		fprintf (stderr, "\nERROR: A branch length in the user tree is too long\n");
+	        		exit (-1);
+	        		}
 	        	tempString[j++] = treeString[i++];
+	        	}
 	        i--;
 	        sscanf (tempString, "%lf", &p->branchLength);
 			
