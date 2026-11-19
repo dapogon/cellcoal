@@ -755,6 +755,13 @@ static void RunReplicate (int dataSetNum, long int *seed)
 					else
 						fprintf (fpSummary, "\t%.6f", metric[k]);
 					}
+				{
+				long long	inv[10];
+
+				InvariantGenotypeCounts (inv);
+				for (k=0; k<10; k++)
+					fprintf (fpSummary, "\t%lld", inv[k]);
+				}
 				fprintf (fpSummary, "\n");
 				fflush (fpSummary);
 				}
@@ -1168,7 +1175,7 @@ int main (int argc, char **argv)
 			fprintf (stderr, "Can't open \"%s\"\n", File);
 			exit(-1);
 			}
-		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\tado_simulated\tsingleton_sites\tsingleton_recall\n");
+		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\tado_simulated\tsingleton_sites\tsingleton_recall\tinv_AA\tinv_AC\tinv_AG\tinv_AT\tinv_CC\tinv_CG\tinv_CT\tinv_GG\tinv_GT\tinv_TT\n");
 		}
 
 	/* Read user treefile */

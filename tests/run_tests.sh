@@ -659,5 +659,24 @@ head -1 A/summary.tsv | grep -q "singleton_sites.singleton_recall" && ok "summar
 "$BIN" $C --min-alt-reads 0 -oC >/dev/null 2>&1; cmp -s <(grep -a -v -i -e date -e time -e Command A/vcf) <(grep -a -v -i -e date -e time -e Command C/vcf) && ok "--min-alt-reads 0 = default" || bad "--min-alt-reads 0"
 cd "$ROOT"
 
+echo "2g26. tools/chrom.py: chromosome in blocks on one tree"
+if command -v python3 >/dev/null 2>&1; then
+mkdir -p "$TMP/chr" && rm -rf "$TMP/chr"/* && cd "$TMP/chr"
+python3 "$ROOT/tools/chrom.py" --exe "$BIN" --blocks 3 --block-size 5000 --out ch --jobs 2 --seed 4 -- -s15 -u1e-7 -e10000 -g1e-4 -b1 -C10 -D0.2 -E0.001 --min-alt-reads 2 >chrom.log 2>&1
+if [ -s ch/chrom.vcf ] && [ -s ch/chrom_summary.tsv ]; then
+  nv=$(grep -a -vc '^#' ch/chrom.vcf)
+  tot=$(python3 - <<'P'
+r=[l.rstrip("\n").split("\t") for l in open("ch/chrom_summary.tsv")]
+h=r[0]; t=r[-1]
+print(sum(int(t[i]) for i,c in enumerate(h) if c.startswith("inv_")) + int(t[h.index("snv_observed")]))
+P
+)
+  [ "$tot" = "15000" ] && ok "invariant counts + variable sites = chromosome length" || bad "chrom.py totals ($tot)"
+  last=$(grep -a -v '^#' ch/chrom.vcf | awk '{print $2}' | sort -n | tail -1)
+  [ "$last" -gt 10000 ] && [ "$last" -le 15000 ] && ok "VCF positions run along the whole chromosome" || bad "chrom.py positions ($last)"
+else bad "chrom.py did not write its outputs"; fi
+cd "$ROOT"
+else echo "  skip (python3 not installed)"; fi
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
