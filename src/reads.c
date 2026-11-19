@@ -165,7 +165,7 @@ void FreeReadScratch (ReadScratch *rs)
    deleted is left out. Results go to the site, so that threads do not share counters. */
 static void TruthAtSite (int jj)
 	{
-	int		ii, called = 0, errors = 0, callVar = NO, tm, tp, ml, mp, wrong, het;
+	int		ii, called = 0, errors = 0, callVar = NO, tm, tp, ml, mp, wrong, het, nTrueAlt = 0;
 	int		hetSurviving = 0, hetOneDropped = 0, dropped;
 	int		hetCalled = 0, hetErrors = 0, hetToHom = 0, homCalled = 0, homErrors = 0, dblCalled = 0, dblErrors = 0;
 
@@ -189,6 +189,8 @@ static void TruthAtSite (int jj)
 			tm = tp;
 		else if (tp == DELETION)
 			tp = tm;
+		if (tm != allSites[jj].referenceAllele || tp != allSites[jj].referenceAllele)
+			nTrueAlt++;
 		if (cell[ii].hasDoublet == YES)
 			{
 			ml = CD(ii,jj).MLmatAlleleDoublet;
@@ -222,12 +224,13 @@ static void TruthAtSite (int jj)
 			dblCalled++;
 			dblErrors += wrong;
 			}
-		if ((ml >= A && ml <= T && ml != allSites[jj].referenceAllele) || (mp >= A && mp <= T && mp != allSites[jj].referenceAllele))
+		if (CellAltCall (ii, jj) == YES)
 			callVar = YES;
 		}
 	allSites[jj].truthCalled = called;
 	allSites[jj].truthErrors = errors;
 	allSites[jj].truthCallVar = callVar;
+	allSites[jj].truthSingleton = (nTrueAlt == 1) ? YES : NO;
 	allSites[jj].truthHetCalled = hetCalled;  allSites[jj].truthHetErrors = hetErrors;  allSites[jj].truthHetToHom = hetToHom;
 	allSites[jj].truthHomCalled = homCalled;  allSites[jj].truthHomErrors = homErrors;
 	allSites[jj].truthHetSurviving = hetSurviving;  allSites[jj].truthHetOneDropped = hetOneDropped;

@@ -145,7 +145,7 @@ void 	RecordTriNucObservation(TriNucStr *trin, int site);
 void 	RemoveTriNucObservation(TriNucStr *trin, int site);
 void		AllocateCellStructure (void);
 int		CompareGenotypes (int a1, int a2, int b1, int b2);
-#define NUM_TRUTH_METRICS	10
+#define NUM_TRUTH_METRICS	12
 int		TruthMetrics (double *m);	/* m[NUM_TRUTH_METRICS]: called_fraction, genotype_error, snv_precision, snv_recall, het_error, hom_error, het_to_hom, doublet_error, singlet_error, ado_simulated */
 #ifdef COUNT_ML_GENOTYPE_ERRORS
 	void		CountMLGenotypingErrors (void);
@@ -342,6 +342,8 @@ extern double				covAdoCorr;	/* --cov-ado-corr: correlation between the coverage
 extern double				covDoubletCorr, adoDoubletCorr;	/* --cov-doublet-corr, --ado-doublet-corr: correlation of being a doublet with the coverage / ADO rate of the cells */
 extern int					doSummary, numSNVsTrue;	/* --summary: write summary.tsv, one row of metrics per replicate */
 extern FILE				*fpSummary;
+extern int					minAltReads;
+int							CellAltCall (int cellIndex, int site);
 extern double				ampCellVar;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */
 extern double				*cellAmpMean;	/* mean amplification error of every cell (with --amp-cell-var) */
 extern double				*cellAdoRate;	/* ADO rate of every cell (kept only when covAdoCorr != 0) */
