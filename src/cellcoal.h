@@ -223,6 +223,8 @@ extern int		sparseMode;
 extern Geno		**sparseCols;
 extern int		numNodes;
 extern int		ignoredNumCells;
+extern int		numOutgroup;
+#define NUM_TAXA (numCells + numOutgroup)	/* cells that appear in the outputs (the outgroup is cell number numCells) */
 extern long		numSparseCols;
 /* In sparse mode, ADO and genotyping errors are not written in the genomes (that would create a column for almost
    every site): they are computed on the fly for the cells (see ObservedAllele) once obsActive is set. */

@@ -361,12 +361,12 @@ int CountAllelesInObservedGenotypes (void)
 				if (c == NULL && !(errCount != NULL && errCount[site] > 0))
 					{
 					/* all the cells are identical to the root (ADO at these sites is counted by PrintSiteInfo, when needed) */
-					cnt[slot[data[MATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
-					cnt[slot[data[PATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += numCells+1;
+					cnt[slot[data[MATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += NUM_TAXA;
+					cnt[slot[data[PATERNAL][OUTGROUP_ROOT][site]+9]][site-s0] += NUM_TAXA;
 					}
 				else
 					{
-					for (cell=0; cell<numCells+1; cell++)
+					for (cell=0; cell<NUM_TAXA; cell++)
 						{
 						cnt[slot[GetG(MATERNAL, cell, site)+9]][site-s0]++;
 						cnt[slot[GetG(PATERNAL, cell, site)+9]][site-s0]++;
@@ -381,7 +381,7 @@ int CountAllelesInObservedGenotypes (void)
 			int				n = s1 - s0;
 
 			memset (c16, 0, sizeof(c16));
-			for (cell=0; cell<numCells+1; cell++)
+			for (cell=0; cell<NUM_TAXA; cell++)
 				for (ch=0; ch<2; ch++)
 					{
 					const Geno *r = data[ch == 0 ? MATERNAL : PATERNAL][cell] + s0;
@@ -404,7 +404,7 @@ int CountAllelesInObservedGenotypes (void)
 					cnt[k][site] = c16[k][site];
 			}
 		else
-		for (cell=0; cell<numCells+1; cell++)
+		for (cell=0; cell<NUM_TAXA; cell++)
 			{
 			for (ch=0; ch<2; ch++)
 				{
@@ -474,7 +474,7 @@ void CountMLGenotypingErrors()
 
 	countMLgenotypeErrors = 0;
 	countCalledGenotypes = 0;
-	for (i=0; i<numCells+1; i++)
+	for (i=0; i<NUM_TAXA; i++)
 		{
 	//	for (snv=0; snv<numSNVs; snv++) // otherwise, with low coverage, increasing amplification error increases accuracy, as it results in many SNVS where most cells do not contain errors...
 			//{
@@ -508,8 +508,8 @@ void CountMLGenotypingErrors()
 			}
 		}
 
-	fprintf(fpSims, "%d, %10.8f, %d, %10.8f, %d\n", countCalledGenotypes, countCalledGenotypes / ((numCells+1) * (double)numSites), countMLgenotypeErrors, countMLgenotypeErrors/(double)countCalledGenotypes, numSNVs);
-	AccumAdd (&runStats.called, countCalledGenotypes / ((numCells+1) * (double)numSites));
+	fprintf(fpSims, "%d, %10.8f, %d, %10.8f, %d\n", countCalledGenotypes, countCalledGenotypes / ((NUM_TAXA) * (double)numSites), countMLgenotypeErrors, countMLgenotypeErrors/(double)countCalledGenotypes, numSNVs);
+	AccumAdd (&runStats.called, countCalledGenotypes / ((NUM_TAXA) * (double)numSites));
 	AccumAdd (&runStats.mlErr, countMLgenotypeErrors/(double)countCalledGenotypes);
 	}
 
@@ -622,7 +622,7 @@ int MLCountsAtSite (int j)
 	int		countA, countC, countG, countT, countN;
 
 	countA = countC = countG = countT = countN = 0;
-	for (i=0; i<numCells+1; i++)
+	for (i=0; i<NUM_TAXA; i++)
 		{
 		int m = CS(i,j).MLmatAllele, q = CS(i,j).MLpatAllele;
 		if (m == A) countA++; else if (m == C) countC++; else if (m == G) countG++; else if (m == T) countT++; else countN++;

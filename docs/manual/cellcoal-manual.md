@@ -1091,6 +1091,15 @@ New chapter 3 (quickstart). `--summary` adds `het_error`, `hom_error`, `het_to_h
 
 New option `--amp-cell-var` (section 6.10c2): the mean amplification error varies among cells. Fix: `run.json` did not record the long options (`--fast`, `--summary`, `--cov-ado-corr`, ...) and now does, so `--config Results/run.json` repeats any run. The README, the manual (section 1.1), `CITATION.cff` and the source header state that CellCoal 2 was developed together with Claude (Anthropic). Without the new option the output is identical to 2.2.6.
 
+## 8.22 Tumor only: `--no-outgroup` (unreleased)
+
+By default the simulation includes one healthy outgroup cell (`outgcell`) that hangs from the healthy root. With `--no-outgroup` only the tumor cells are reported:
+
+- the outgroup is not in the tree file, the VCF/BCF, catg, pileup or the genotype files, nor in the statistics, and it does not decide whether a site is a variable site;
+- the reference is still the healthy root genome (all alleles 0), and the trunk (`-k`) is kept, so truncal mutations are variants in every cell;
+- the tree written with `-6` contains the ingroup only, which is the format `-T` expects, so it can be read back without editing;
+- the simulation of the tumor cells is not changed.
+
 ## 6.10j Windows (experimental)
 
 CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with read counts and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).

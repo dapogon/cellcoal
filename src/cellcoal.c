@@ -985,6 +985,10 @@ int main (int argc, char **argv)
 			}
 		}
 
+	/* tumor only (--no-outgroup): the outgroup stays in the simulation with a branch of length 0 (= the healthy root genome, 0000) but is not in the outputs */
+	if (numOutgroup == 0)
+		healthyTipBranchLengthRatio = 0.0;
+
     /* initialize a few variables */
 	numNodes = 2 * numCells + 1;
 	maxTreeRateSwitches = numCells;

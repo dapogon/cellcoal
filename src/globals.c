@@ -45,6 +45,7 @@ int		OUTGROUP_ROOT, INGROUP_ROOT;
 int		sparseMode = 0;
 Geno		**sparseCols = NULL;
 int		numNodes = 0;
+int		numOutgroup = 1;	/* 1 = the healthy outgroup cell is part of the outputs; 0 with --no-outgroup */
 int		ignoredNumCells = 0;	/* value of -s ignored because a user tree fixes the number of cells (0 = none) */
 long		numSparseCols = 0;
 int			obsActive = 0;
