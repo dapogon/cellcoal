@@ -37,7 +37,7 @@ With simulated read counts, sequencing and amplification errors give almost ever
 
 ## What's new in 2.2.7
 
-Documentation only: it now states that CellCoal 2 was developed together with Claude (Anthropic). The program and its output are identical to 2.2.6. See [docs/CHANGES-2.2.7.md](docs/CHANGES-2.2.7.md).
+`--amp-cell-var`: the amplification error varies among cells. Fix: `run.json` now records the long options, so `--config Results/run.json` repeats any run. The README, the manual and `CITATION.cff` now state that CellCoal 2 was developed together with Claude (Anthropic). Without the new option the output is identical to 2.2.6. See [docs/CHANGES-2.2.7.md](docs/CHANGES-2.2.7.md).
 
 ## What's new in 2.2.6
 

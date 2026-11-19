@@ -338,6 +338,8 @@ extern double				covAdoCorr;	/* --cov-ado-corr: correlation between the coverage
 extern double				covDoubletCorr, adoDoubletCorr;	/* --cov-doublet-corr, --ado-doublet-corr: correlation of being a doublet with the coverage / ADO rate of the cells */
 extern int					doSummary, numSNVsTrue;	/* --summary: write summary.tsv, one row of metrics per replicate */
 extern FILE				*fpSummary;
+extern double				ampCellVar;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */
+extern double				*cellAmpMean;	/* mean amplification error of every cell (with --amp-cell-var) */
 extern double				*cellAdoRate;	/* ADO rate of every cell (kept only when covAdoCorr != 0) */
 extern int					fastMode;	/* --fast: cheaper samplers and log10/10^x for the reads (same distributions, different random numbers) */
 double	Log10Approx (double x);

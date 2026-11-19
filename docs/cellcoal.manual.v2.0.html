@@ -97,6 +97,8 @@ at the command line</a></li>
 <li><a href="#a-ado-rate-of-each-cell" id="toc-a-ado-rate-of-each-cell">6.10a ADO rate of each cell</a></li>
 <li><a href="#c-correlation-between-coverage-and-dropout-cov-ado-corr" id="toc-c-correlation-between-coverage-and-dropout-cov-ado-corr">6.10c
 Correlation between coverage and dropout (–cov-ado-corr)</a></li>
+<li><a href="#c2-amplification-error-that-varies-among-cells-amp-cell-var" id="toc-c2-amplification-error-that-varies-among-cells-amp-cell-var">6.10c2
+Amplification error that varies among cells (–amp-cell-var)</a></li>
 <li><a href="#d-bcf-output-bcf" id="toc-d-bcf-output-bcf">6.10d BCF
 output (–bcf)</a></li>
 <li><a href="#e-cache-of-genotype-likelihoods" id="toc-e-cache-of-genotype-likelihoods">6.10e Cache of genotype
@@ -139,8 +141,8 @@ Version 2.2.4: truth metrics, parallel sweeps, speed, Windows</a></li>
 Version 2.2.5: quickstart, more truth metrics, Windows binary</a></li>
 <li><a href="#version-2.2.6-version-check-intel-mac-binary" id="toc-version-2.2.6-version-check-intel-mac-binary">8.20 Version
 2.2.6: –version, –check, Intel Mac binary</a></li>
-<li><a href="#version-2.2.7-documentation" id="toc-version-2.2.7-documentation">8.21 Version 2.2.7:
-documentation</a></li>
+<li><a href="#version-2.2.7-amplification-error-among-cells" id="toc-version-2.2.7-amplification-error-among-cells">8.21 Version
+2.2.7: amplification error among cells</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -1831,6 +1833,33 @@ multipliers are exactly those requested without the option, and the rank
 noisier than the multiplier, so the correlation measured in the data is
 somewhat smaller. Without the option the output is bit-identical to
 previous versions.</p>
+<h2 id="c2-amplification-error-that-varies-among-cells-amp-cell-var">6.10c2
+Amplification error that varies among cells (–amp-cell-var)</h2>
+<p>With <code>-A MEAN VAR MODEL</code> the fraction of wrong templates
+of every cell, site and haplotype comes from the same beta distribution
+in all the cells. In real data some cells amplify much worse than
+others. <code>--amp-cell-var V</code> (or
+<code>amplification_error_cell_variance: V</code> in a configuration
+file) first draws, for every cell and replicate, its own mean
+amplification error from a beta distribution with mean <code>MEAN</code>
+(from <code>-A</code>) and variance <code>V</code>; then the fraction of
+wrong templates of every site and haplotype of that cell is drawn from a
+beta distribution with that mean and a variance that keeps the
+concentration of <code>-A</code>, that is
+<code>VAR * m_i (1 - m_i) / (MEAN (1 - MEAN))</code> for a cell with
+mean <code>m_i</code>. It needs <code>-A</code>, and <code>V</code> has
+to be smaller than <code>MEAN (1 - MEAN)</code>. The mean of every cell
+is written to <code>cell_params</code> (new column
+<code>amplification_error</code>). The per-cell means are drawn from the
+main random stream after the other per-cell parameters, so the rest of
+the simulation (genealogy, mutations, coverage and ADO of the cells) is
+the same with and without the option; stored and streamed read counts
+give the same files. Without the option the output is identical to the
+previous version.</p>
+<p>Example, with the mean amplification error of the cells spread
+roughly between 0.01 and 0.1 and the ADO rate of the cells roughly
+between 0.2 and 0.5:</p>
+<pre><code>cellcoal -n10 -s100 -l100000 -u5.3e-7 -m2 -p1 -q0 -P0.35 0.0075 -C10 -E0.01 -A0.055 0.003 0 --amp-cell-var 0.0007 -9 -5 -Y</code></pre>
 <h2 id="d-bcf-output-bcf">6.10d BCF output (–bcf)</h2>
 <p><code>--bcf</code> (or <code>bcf: true</code> in a configuration
 file) writes the genotype likelihoods as a BCF file instead of a VCF
@@ -2291,12 +2320,16 @@ without simulating; binary for Intel Macs; <code>LICENSE</code>,
 <code>CITATION.cff</code>, issue templates; <code>parameters</code>
 template with 100 cells and 1000 sites; the log says “read counts”
 instead of “reads”. The data are identical to 2.2.5.</p>
-<h2 id="version-2.2.7-documentation">8.21 Version 2.2.7:
-documentation</h2>
-<p>Documentation only: the README, the manual (section 1.1),
-<code>CITATION.cff</code> and the source header state that CellCoal 2
-was developed together with Claude (Anthropic). The program and its
-output are identical to 2.2.6.</p>
+<h2 id="version-2.2.7-amplification-error-among-cells">8.21 Version
+2.2.7: amplification error among cells</h2>
+<p>New option <code>--amp-cell-var</code> (section 6.10c2): the mean
+amplification error varies among cells. Fix: <code>run.json</code> did
+not record the long options (<code>--fast</code>,
+<code>--summary</code>, <code>--cov-ado-corr</code>, …) and now does, so
+<code>--config Results/run.json</code> repeats any run. The README, the
+manual (section 1.1), <code>CITATION.cff</code> and the source header
+state that CellCoal 2 was developed together with Claude (Anthropic).
+Without the new option the output is identical to 2.2.6.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

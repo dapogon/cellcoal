@@ -313,6 +313,11 @@ static void CheckOptionCombinations (void)
 			exit (-1);
 			}
 		}
+	if (ampCellVar > 0.0 && (meanAmplificationError <= 0.0 || ampCellVar >= meanAmplificationError * (1.0 - meanAmplificationError)))
+		{
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --amp-cell-var needs an amplification error (-A) and a variance < mean*(1-mean) of -A\n\n");
+		exit (-1);
+		}
 	if (covAdoCorr != 0.0 && (alphaCellCoverage <= 0.0 || doADOcell == NO))
 		{
 		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-ado-corr needs coverage variation among cells (-J) and ADO variation among cells (-P)\n\n");
