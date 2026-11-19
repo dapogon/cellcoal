@@ -286,6 +286,8 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 		else
 			memset (g, 0, GL_NUM*sizeof(double));
 		/* same criterion as CountAllelesInMLGenotypes: the site is a SNV when an ML allele differs from the reference */
+		if (ii >= NUM_TAXA)
+			continue;	/* tumor only: the outgroup does not decide whether a site is a SNV */
 		al = CS(ii,jj).MLmatAllele;
 		if (al >= A && al <= T && al != allSites[jj].referenceAllele)
 			hasAlt = YES;

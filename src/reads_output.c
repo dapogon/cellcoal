@@ -77,11 +77,11 @@ void PrintCATGHeader (FILE *fp)
 	{
 	int	i;
 
-	fprintf (fp,"%d %d\n",numCells+1, numSNVs);
+	fprintf (fp,"%d %d\n",NUM_TAXA, numSNVs);
 	for (i=0; i<numCells; i++)
 		fprintf (fp,"%s%04d ", inCellName,i+1);
 
-	fprintf (fp,"%s ", outCellName);
+	if (numOutgroup == 1) fprintf (fp,"%s ", outCellName);
 	}
 
 /* one line of the CATG file: starts with a newline, then the IUPAC codes and the read counts of the cells */
@@ -90,11 +90,11 @@ static void CATGSiteLine (FILE *fp, int j)
 	int	i;
 
 	fprintf (fp,"\n");
-	for (i=0; i<numCells+1; i++)
+	for (i=0; i<NUM_TAXA; i++)
 		fprintf (fp,"%c",WhichIUPAC(CS(i,j).MLmatAllele, CS(i,j).MLpatAllele));
 
 		/* decide per cell (the original tested cell[numCells+1].hasDoublet, one element past the end of the array) */
-	for (i=0; i<numCells+1; i++)
+	for (i=0; i<NUM_TAXA; i++)
 		{
 		if (cell[i].hasDoublet == NO)
 			fprintf (fp,"\t%d,%d,%d,%d", CS(i,j).readCount[C], CS(i,j).readCount[A], CS(i,j).readCount[T], CS(i,j).readCount[G]);
@@ -150,7 +150,7 @@ static void PileupSite (FILE *fp, int j)
 	referenceAllele = allSites[j].referenceAllele;
 	fprintf (fp,"\t%c", WhichNuc(referenceAllele));
 	
-	for (i=0; i<numCells+1; i++)
+	for (i=0; i<NUM_TAXA; i++)
 		{
 		/* PILEUP: NUMBER OF READS */
 		fprintf (fp, "\t%d\t", CS(i,j).numReads);
@@ -556,7 +556,7 @@ static void VCFSiteLine (FILE *fp, int j)
 			pa2[npairs] = (l == 0) ? allSites[j].referenceAllele : allSites[j].alternateAlleles[l-1];
 			npairs++;
 			}
-	for (i=0; i<numCells+1; i++)
+	for (i=0; i<NUM_TAXA; i++)
 		{
 		double glbuf[GL_NUM];
 		const double *glp = GetSiteGL (i, j, glbuf);
@@ -599,13 +599,13 @@ static void PrintVCFHeader (FILE *fp)
 		{
 		for (i=0; i<numCells; i++)
 			fprintf (fp,"\t%s%04d", inCellName, i+1);
-		fprintf (fp,"\t%s", outCellName);
+		if (numOutgroup == 1) fprintf (fp,"\t%s", outCellName);
 		}
 	else
 		{
 		for (i=0; i<numCells; i++)
 			fprintf (fp,"\t%s", cellNames[i]);
-		fprintf (fp,"\t%s", outCellName);
+		if (numOutgroup == 1) fprintf (fp,"\t%s", outCellName);
 		}
 	}
 

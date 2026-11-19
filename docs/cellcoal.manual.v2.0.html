@@ -143,6 +143,8 @@ Version 2.2.5: quickstart, more truth metrics, Windows binary</a></li>
 2.2.6: –version, –check, Intel Mac binary</a></li>
 <li><a href="#version-2.2.7-amplification-error-among-cells" id="toc-version-2.2.7-amplification-error-among-cells">8.21 Version
 2.2.7: amplification error among cells</a></li>
+<li><a href="#tumor-only---no-outgroup-unreleased" id="toc-tumor-only---no-outgroup-unreleased">8.22 Tumor only:
+<code>--no-outgroup</code> (unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2330,6 +2332,23 @@ not record the long options (<code>--fast</code>,
 manual (section 1.1), <code>CITATION.cff</code> and the source header
 state that CellCoal 2 was developed together with Claude (Anthropic).
 Without the new option the output is identical to 2.2.6.</p>
+<h2 id="tumor-only---no-outgroup-unreleased">8.22 Tumor only:
+<code>--no-outgroup</code> (unreleased)</h2>
+<p>By default the simulation includes one healthy outgroup cell
+(<code>outgcell</code>) that hangs from the healthy root. With
+<code>--no-outgroup</code> only the tumor cells are reported:</p>
+<ul>
+<li>the outgroup is not in the tree file, the VCF/BCF, catg, pileup or
+the genotype files, nor in the statistics, and it does not decide
+whether a site is a variable site;</li>
+<li>the reference is still the healthy root genome (all alleles 0), and
+the trunk (<code>-k</code>) is kept, so truncal mutations are variants
+in every cell;</li>
+<li>the tree written with <code>-6</code> contains the ingroup only,
+which is the format <code>-T</code> expects, so it can be read back
+without editing;</li>
+<li>the simulation of the tumor cells is not changed.</li>
+</ul>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

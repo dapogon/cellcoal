@@ -376,6 +376,16 @@ void PrepareSeparateFiles(int replicate)
 
 void PrintTree (TreeNode *treeRoot, FILE *fp)
     {
+    if (numOutgroup == 0 && treeRoot == healthyRoot && coalTreeMRCA != NULL)
+        {
+        /* tumor only: the ingroup tree, as -T reads it (without the trunk and the outgroup) */
+        fprintf (fp, "(");
+        WriteTree (coalTreeMRCA->left, fp);
+        fprintf (fp, ",");
+        WriteTree (coalTreeMRCA->right, fp);
+        fprintf (fp,");\n");
+        return;
+        }
     WriteTree (treeRoot, fp);
     fprintf (fp,");\n");
     }
@@ -490,7 +500,7 @@ void PrintSiteInfo (FILE *fp, int i)
 		{
 		int	cc, dropped = 0;
 
-		for (cc=0; cc<numCells+1; cc++)
+		for (cc=0; cc<NUM_TAXA; cc++)
 			{
 			Geno gm = GetG(MATERNAL, cc, i), gp = GetG(PATERNAL, cc, i);
 
@@ -543,11 +553,11 @@ void PrintSNVGenotypes (FILE *fp)
 
     if (doPrintAncestors == YES && doNGS == NO)
         {
-        fprintf (fp, "%d %d\n", numCells+3, numSNVs);
+        fprintf (fp, "%d %d\n", NUM_TAXA+2, numSNVs);
         }
     else
         {
-        fprintf (fp, "%d %d\n", numCells+1, numSNVs);
+        fprintf (fp, "%d %d\n", NUM_TAXA, numSNVs);
         }
 
     /* site information */
@@ -572,9 +582,9 @@ void PrintSNVGenotypes (FILE *fp)
                 fprintf (stderr, "Could not allocate the genotype print buffer\n");
                 exit (-1);
                 }
-            for (i0=0; i0<numCells+1; i0+=CELLBLOCK)
+            for (i0=0; i0<NUM_TAXA; i0+=CELLBLOCK)
                 {
-                i1 = (i0 + CELLBLOCK < numCells+1) ? i0 + CELLBLOCK : numCells+1;
+                i1 = (i0 + CELLBLOCK < NUM_TAXA) ? i0 + CELLBLOCK : NUM_TAXA;
                 for (j=0; j<numSNVs; j++)
                     {
                     int site = SNVsites[j];
@@ -601,7 +611,7 @@ void PrintSNVGenotypes (FILE *fp)
             free (buf);
             }
         else
-        for (i=0; i<numCells+1; i++)
+        for (i=0; i<NUM_TAXA; i++)
             {
             if (i == numCells)
 				fprintf (fp,"%s ", outCellName);
@@ -640,7 +650,7 @@ void PrintSNVGenotypes (FILE *fp)
         }
     else // binary data
         {
-        for (i=0; i<numCells+1; i++)
+        for (i=0; i<NUM_TAXA; i++)
             {
 			if (i == numCells)
 				fprintf (fp,"%s ", outCellName);
@@ -685,16 +695,16 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 	if (doPrintIUPAChaplotypes == YES)
 		{
 		if (doPrintAncestors == YES)
-			fprintf (fp,"%d %d\n", numCells+3, numSNVs);
+			fprintf (fp,"%d %d\n", NUM_TAXA+2, numSNVs);
 		else
-			fprintf (fp,"%d %d\n", numCells+1, numSNVs);
+			fprintf (fp,"%d %d\n", NUM_TAXA, numSNVs);
 		}
 	else
 		{
 		if (doPrintAncestors == YES && doNGS == NO)
-			fprintf (fp,"%d %d\n",2*(numCells+3), numSNVs);
+			fprintf (fp,"%d %d\n",2*(NUM_TAXA+2), numSNVs);
 		else
-			fprintf (fp,"%d %d\n",2*(numCells+1), numSNVs);
+			fprintf (fp,"%d %d\n",2*(NUM_TAXA), numSNVs);
 		}
 		
     /* site information */
@@ -707,7 +717,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
         {
 		if (doPrintIUPAChaplotypes == YES)
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print haplotype */
 				if (i == numCells)
@@ -746,7 +756,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			}
 		else // print maternal and paternal DNA haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
@@ -817,7 +827,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
         {
 		if (doPrintIUPAChaplotypes == YES) //print binary consensus SNV haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				if (i == numCells)
 					fprintf (fp,"%s ", outCellName);
@@ -846,7 +856,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			}
 		else // print maternal and paternal binary SNV haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
@@ -906,13 +916,13 @@ void PrintFullGenotypes (FILE *fp)
     int		i, j, ml1 = MISSING, ml2 = MISSING;
 		
 	if (doPrintAncestors == YES && doNGS == NO)
-        fprintf (fp, "%d %d\n", numCells+3, numSites);
+        fprintf (fp, "%d %d\n", NUM_TAXA+2, numSites);
     else
-        fprintf (fp, "%d %d\n", numCells+1, numSites);
+        fprintf (fp, "%d %d\n", NUM_TAXA, numSites);
 	
     if (alphabet == DNA)
         {
-        for (i=0; i<numCells+1; i++)
+        for (i=0; i<NUM_TAXA; i++)
             {
 	LoadFullRow (i);
             if (i == numCells)
@@ -952,7 +962,7 @@ void PrintFullGenotypes (FILE *fp)
         }
     else // binary alphabet
         {
-        for (i=0; i<numCells+1; i++)
+        for (i=0; i<NUM_TAXA; i++)
             {
             if (i == numCells)
                 fprintf (fp,"%s ", outCellName);
@@ -991,23 +1001,23 @@ void PrintFullHaplotypes (FILE *fp)
 	if (doPrintIUPAChaplotypes == NO)
 		{
 		if (doPrintAncestors == YES && doNGS == NO)
-			fprintf (fp,"%d %d\n",2*(numCells+3), numSites);
+			fprintf (fp,"%d %d\n",2*(NUM_TAXA+2), numSites);
 		else
-			fprintf (fp,"%d %d\n",2*(numCells+1), numSites);
+			fprintf (fp,"%d %d\n",2*(NUM_TAXA), numSites);
 		}
 	else
 		{
 		if (doPrintAncestors == YES && doNGS == NO)
-			fprintf (fp,"%d %d\n", numCells+3, numSites);
+			fprintf (fp,"%d %d\n", NUM_TAXA+2, numSites);
 		else
-			fprintf (fp,"%d %d\n", numCells+1, numSites);
+			fprintf (fp,"%d %d\n", NUM_TAXA, numSites);
 		}
 		
     if (alphabet == DNA)
         {
 		if (doPrintIUPAChaplotypes == YES)
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 	LoadFullRow (i);
 				/* print IUPAC haplotype */
@@ -1047,7 +1057,7 @@ void PrintFullHaplotypes (FILE *fp)
 			}
 		else // print maternal and paternal DNA haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 	LoadFullRow (i);
 				/* print maternal haplotype */
@@ -1120,7 +1130,7 @@ void PrintFullHaplotypes (FILE *fp)
         {
 		if (doPrintIUPAChaplotypes == YES) // print binary consensus haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				if (i == numCells)
 					fprintf (fp,"%s ", outCellName);
@@ -1149,7 +1159,7 @@ void PrintFullHaplotypes (FILE *fp)
 			}
 		else // print maternal and paternal binary haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
@@ -1210,23 +1220,23 @@ void PrintTrueFullHaplotypes (FILE *fp)
 	if (doPrintIUPAChaplotypes == NO)
 		{
 		if (doPrintAncestors == YES)
-			fprintf (fp,"%d %d\n",2*(numCells+3), numSites);
+			fprintf (fp,"%d %d\n",2*(NUM_TAXA+2), numSites);
 		else
-			fprintf (fp,"%d %d\n",2*(numCells+1), numSites);
+			fprintf (fp,"%d %d\n",2*(NUM_TAXA), numSites);
 		}
 	else
 		{
 		if (doPrintAncestors == YES)
-			fprintf (fp,"%d %d\n", numCells+3, numSites);
+			fprintf (fp,"%d %d\n", NUM_TAXA+2, numSites);
 		else
-			fprintf (fp,"%d %d\n", numCells+1, numSites);
+			fprintf (fp,"%d %d\n", NUM_TAXA, numSites);
 		}
 	
 	if (alphabet == DNA)
 		{
 		if (doPrintIUPAChaplotypes == YES)
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print IUPAC haplotype */
 				if (i == numCells)
@@ -1258,7 +1268,7 @@ void PrintTrueFullHaplotypes (FILE *fp)
 			}
 		else // print maternal and paternal DNA haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
@@ -1315,7 +1325,7 @@ void PrintTrueFullHaplotypes (FILE *fp)
 		{
 		if (doPrintIUPAChaplotypes == YES) // print binary consensus haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				if (i == numCells)
 					fprintf (fp,"%s ", outCellName);
@@ -1344,7 +1354,7 @@ void PrintTrueFullHaplotypes (FILE *fp)
 			}
 		else // print maternal and paternal binary haplotypes
 			{
-			for (i=0; i<numCells+1; i++)
+			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
 				if (i == numCells)
@@ -1965,7 +1975,7 @@ void	PrintRunInformation (FILE *fp)
 			{
 			fprintf (fp, "\n\nGenotyping");
 			fprintf (fp, "\n Genotype error (mean, var)                   =   %2.1e, %2.1e", meanGenotypingError, varGenotypingError);
-			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, numCells+1)) * numSites);
+			//fprintf (fp, "\n Exp number of FP SNVs due to genotype errors =   %3.2f", (1 - pow(1-genotypingError, NUM_TAXA)) * numSites);
 			}
 
 		fprintf (fp, "\n\nNGS");
@@ -2291,6 +2301,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n--summary: write summary.tsv, one row of metrics per replicate");
 	fprintf (fp,"\n--sweep \"KEY=V1,V2 ...\": run the grid of values (e.g. --sweep \"C=2,5,10 E=0.001,0.01\") and write sweep.tsv with mean and standard error of the metrics; --sweep-keep keeps the runs");
 	fprintf (fp,"\n--bcf: write the genotype likelihoods as a BCF file (vcf.bcf) instead of a VCF file");
+	fprintf (fp,"\n--no-outgroup: simulate the tumor only: no healthy outgroup cell in the outputs (the reference is still the healthy root genome)");
 	fprintf (fp,"\n--fast: faster read simulation (same distributions, different random numbers; see the manual)");
 	fprintf (fp,"\n--config FILE: read the options from a JSON or YAML file");
 	fprintf (fp,"\n-T: user-tree file (e.g. -Tusertree)");
@@ -2439,7 +2450,7 @@ void WriteADOCells (const double *rate, int replicate)
 	if (doPrintSeparateReplicates == NO)
 		fprintf (fp, "[#%d]\n", replicate+1);
 	fprintf (fp, "cell\tado_rate\n");
-	for (i=0; i<numCells+1; i++)
+	for (i=0; i<NUM_TAXA; i++)
 		{
 		if (i == numCells)
 			fprintf (fp, "%s", outCellName);
@@ -2463,7 +2474,7 @@ void PrintCheck (FILE *fp)
 
 	fprintf (fp, "CellCoal %s: the options are valid. Nothing was simulated.\n\n", VERSION_NUMBER);
 	fprintf (fp, "  replicates:          %d\n", numDataSets);
-	fprintf (fp, "  cells:               %d (and one healthy outgroup cell)\n", numCells);
+	fprintf (fp, "  cells:               %d%s\n", numCells, numOutgroup == 0 ? " (tumor only: no outgroup cell)" : " (and one healthy outgroup cell)");
 	fprintf (fp, "  sites:               %d\n", numSites);
 	if (doSimulateData == NO)
 		fprintf (fp, "  data:                only the genealogy is simulated (no mutations)\n");

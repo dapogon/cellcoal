@@ -31,7 +31,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
 	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
 	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'},
-	{"amplification_error_cell_variance",'\21'}, {NULL,0}
+	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -487,6 +487,8 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 				snprintf (tok, 16, "--bcf");
 			else if (flag == '\6')
 				snprintf (tok, 16, "--summary");
+			else if (flag == '\22')
+				snprintf (tok, 16, "--no-outgroup");
 			else if (flag == '\16')
 				snprintf (tok, 16, "--sweep-keep");
 			else if (flag == '\20')
@@ -602,7 +604,7 @@ const char *SweepOptionForName (const char *name)
 		{
 		char f = optionNames[i].flag;
 
-		if (f == '\1' || f == '\3' || f == '\6' || f == '\7' || f == '\16')
+		if (f == '\1' || f == '\3' || f == '\6' || f == '\7' || f == '\16' || f == '\22')
 			continue;	/* switches: nothing to sweep */
 		if (strcmp (optionNames[i].name, norm) == 0 || (norm[1] == '\0' && norm[0] == f) ||
 			(f == '\2' && strcmp (norm, "cov_ado_corr") == 0) || (f == '\4' && strcmp (norm, "cov_doublet_corr") == 0) ||
@@ -639,7 +641,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			}
 		}
 	for (i=1; i<*argc; i++)
-		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
+		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--no-outgroup") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
 			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0)
@@ -728,6 +730,8 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			}
 		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;
+		else if (strcmp (out[i], "--no-outgroup") == 0)
+			numOutgroup = 0;
 		else if (strcmp (out[i], "--bcf") == 0)
 			doBCF = YES;
 		else if (strcmp (out[i], "--summary") == 0)
@@ -818,7 +822,7 @@ void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent)
 		fprintf (fp, "%s\n%s  \"" name "\": " text, emitted ? "," : "", indent, value); \
 		emitted++; \
 		}
-	JSON_EXTRA (fastMode == YES, "fast", "%s", "true")
+	JSON_EXTRA (fastMode == YES, "fast", "%s", "true") JSON_EXTRA (numOutgroup == 0, "no_outgroup", "%s", "true")
 	JSON_EXTRA (doBCF == YES, "bcf", "%s", "true")
 	JSON_EXTRA (doSummary == YES, "summary", "%s", "true")
 	JSON_EXTRA (covAdoCorr != 0.0, "cov_ado_correlation", "%.10g", covAdoCorr)

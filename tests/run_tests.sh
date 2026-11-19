@@ -636,6 +636,15 @@ grep -q "c4:4e-10" A/trees && grep -q "c1:1e-09" A/trees && ok "tiny branch leng
 printf '(%s);\n' "$(for i in $(seq 1 100); do printf 'c%d:0.001,' $i; done | sed 's/,$//')" > star.tre
 "$BIN" -n1 -s20 -l500 -u1e-6 -e10000 -Tstar.tre -#4 -oB >o2.txt 2>&1 && ok "-T with 100 leaves and default -s" || bad "-T with 100 leaves"
 "$BIN" --check -n1 -s20 -l500 -Tstar.tre 2>&1 | grep -q -e "-s20 is ignored: the user tree has 100 leaves" && ok "--check reports that -s is ignored with -T" || bad "--check: note on -s ignored"
+echo "2g24. --no-outgroup: tumor only"
+mkdir -p "$TMP/no" && rm -rf "$TMP/no"/* && cd "$TMP/no"
+"$BIN" -n1 -s8 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C10 -E0.001 -6 -1 -8 -#3 -oA >/dev/null 2>&1
+"$BIN" -n1 -s8 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C10 -E0.001 -6 -1 -8 --no-outgroup -#3 -oB >/dev/null 2>&1
+grep -q outgcell A/vcf && ! grep -q outgcell B/vcf && ! grep -q outgcell B/catg && ! grep -q outgcell B/trees && ! grep -q outgcell B/snv_gen && ok "no outgroup in the VCF, catg, trees and genotypes" || bad "--no-outgroup outputs"
+[ "$(grep -a -m1 '^#CHROM' B/vcf | tr '\t' '\n' | wc -l)" = "17" ] && ok "VCF has the 8 cells only" || bad "VCF columns"
+cp B/trees B.tre
+"$BIN" -n1 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C10 -E0.001 -TB.tre --no-outgroup -#3 -oC >/dev/null 2>&1 && [ "$(grep -a -m1 '^#CHROM' C/vcf | tr '\t' '\n' | wc -l)" = "17" ] && ok "the tree written without outgroup is read back with -T" || bad "re-reading the tumor-only tree"
+"$BIN" --no-outgroup -n1 -s8 -l3000 -u1e-6 -e10000 -C10 -E0.001 -#3 -oD >/dev/null 2>&1; grep -q '"no_outgroup": true' D/run.json && ok "run.json records no_outgroup" || bad "run.json no_outgroup"
 cd "$ROOT"
 
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
