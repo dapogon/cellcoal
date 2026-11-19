@@ -35,6 +35,10 @@ Easiest: option `-0` makes CellCoal write the read counts pooled over the tumour
 
 With simulated read counts, sequencing and amplification errors give almost every site a few alternate reads, so the VAF of non-mutated sites sits at the error rate near zero; for a clean plot of the true SNVs use `-E0`, or look at VAF above the error level. Pooling thousands of cells at a few reads each gives a very high pooled depth, so the VAF is very precise. The VCF grows with cells x sites (about 360 bytes per cell and site): for thousands of cells keep the number of sites low (a few thousand).
 
+## What's new in 2.2.7
+
+Documentation only: it now states that CellCoal 2 was developed together with Claude (Anthropic). The program and its output are identical to 2.2.6. See [docs/CHANGES-2.2.7.md](docs/CHANGES-2.2.7.md).
+
 ## What's new in 2.2.6
 
 `cellcoal --version`; `--check` validates the options and shows what a run would do without simulating; a binary for Intel Macs; `LICENSE` (GPL-2), `CITATION.cff` and issue templates; the template `parameters` file has 100 cells and 1000 sites; the macOS package can be unquarantined with `xattr -dr`. Output identical to 2.2.5. See [docs/CHANGES-2.2.6.md](docs/CHANGES-2.2.6.md).

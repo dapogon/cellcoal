@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.2.6)"
+date: "November, 2026 (CellCoal 2.2.7)"
 ---
 
 # 1. About CellCoal
@@ -1076,6 +1076,10 @@ New chapter 3 (quickstart). `--summary` adds `het_error`, `hom_error`, `het_to_h
 ## 8.20 Version 2.2.6: --version, --check, Intel Mac binary
 
 `--version`, `--help`; `--check` (section 3.5) validates the options and shows what a run would do without simulating; binary for Intel Macs; `LICENSE`, `CITATION.cff`, issue templates; `parameters` template with 100 cells and 1000 sites; the log says "read counts" instead of "reads". The data are identical to 2.2.5.
+
+## 8.21 Version 2.2.7: documentation
+
+Documentation only: the README, the manual (section 1.1), `CITATION.cff` and the source header state that CellCoal 2 was developed together with Claude (Anthropic). The program and its output are identical to 2.2.6.
 
 ## 6.10j Windows (experimental)
 
