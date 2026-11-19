@@ -969,6 +969,14 @@ int main (int argc, char **argv)
 		minVAFvcf = 0.0;
    		}
 	
+	/* with a user tree the number of cells is the number of leaves of the tree (-s is ignored) */
+	if (doUserTree == YES)
+		{
+		int nLeaves = CountUserTreeLeaves (strlen(userTreeFile) == 0 ? "usertree" : userTreeFile);
+		if (nLeaves > 0)
+			numCells = nLeaves;
+		}
+
     /* initialize a few variables */
 	numNodes = 2 * numCells + 1;
 	maxTreeRateSwitches = numCells;

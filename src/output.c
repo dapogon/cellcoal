@@ -390,16 +390,16 @@ void WriteTree (TreeNode *p, FILE *fp)
         {
         if(p->isHealthyTip == YES)
             {
-           // fprintf (fp, "healthycell:%8.6f",p->branchLength);
-			fprintf (fp, "%s:%8.6f",outCellName, p->branchLength);
+           // fprintf (fp, "healthycell:%.10g",p->branchLength);
+			fprintf (fp, "%s:%.10g",outCellName, p->branchLength);
 			}
         else if (p->left == NULL && p->right == NULL)
             {
 			if (doUserTree == NO)
-				//fprintf (fp, "tumcell%04d:%8.6f", Index(p),p->branchLength);
-				fprintf (fp, "%s%04d:%8.6f", inCellName, Index(p),p->branchLength);
+				//fprintf (fp, "tumcell%04d:%.10g", Index(p),p->branchLength);
+				fprintf (fp, "%s%04d:%.10g", inCellName, Index(p),p->branchLength);
 			else
-				fprintf (fp, "%s:%8.6f", p->name,p->branchLength);
+				fprintf (fp, "%s:%.10g", p->name,p->branchLength);
             }
         else
             {
@@ -409,7 +409,7 @@ void WriteTree (TreeNode *p, FILE *fp)
             WriteTree (p->right, fp);
             if (p->anc !=NULL)
 				{
-				fprintf (fp, "):%8.6f",p->branchLength);
+				fprintf (fp, "):%.10g",p->branchLength);
 				//TODO: anotate tree?
 				/*if (p->rateSwitch > 0)
 					fprintf (fp, "[&rate_switch=%e]",p->rateSwitch);*/
