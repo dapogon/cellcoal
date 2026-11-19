@@ -39,7 +39,11 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <nav id="TOC" role="doc-toc">
 <ul>
 <li><a href="#about-cellcoal" id="toc-about-cellcoal">1. About
-CellCoal</a></li>
+CellCoal</a>
+<ul>
+<li><a href="#development-of-cellcoal-2" id="toc-development-of-cellcoal-2">1.1 Development of CellCoal
+2</a></li>
+</ul></li>
 <li><a href="#citation" id="toc-citation">2. Citation</a></li>
 <li><a href="#quickstart" id="toc-quickstart">3. Quickstart</a>
 <ul>
@@ -184,6 +188,21 @@ imbalance, allelic dropout, sequencing error, amplification error, plus
 doublet cells. CellCoal does not simulate individual reads (there are no
 sequences, no FASTQ and no BAM files): it simulates the number of reads
 of each nucleotide in each cell and site (read counts).</p>
+<h2 id="development-of-cellcoal-2">1.1 Development of CellCoal 2</h2>
+<p><strong>CellCoal 2 was developed together with Claude.</strong> The
+CellCoal 2 series (versions 2.0.0 onwards) was developed by Claude, an
+AI model made by Anthropic, working as a coding agent (Claude Code) in
+collaboration with David Posada. Claude took part in all the work on the
+code: finding and fixing bugs, making the program faster and lighter in
+memory, splitting the source into modules, new features (sparse and
+streamed genomes, BCF output, <code>--summary</code>,
+<code>--sweep</code>, <code>--config</code>, <code>--check</code>), the
+test suite, the continuous integration, the packages for Linux, macOS
+and Windows, the releases and the documentation, including this text.
+David Posada defined the goals, made the scientific and design
+decisions, tested the program and approved every release, and is the
+author of CellCoal and responsible for it. The 2020 article describes
+version 1, which was written before this work.</p>
 <h1 id="citation">2. Citation</h1>
 <p>If you use CellCoal, please cite it as:</p>
 <p>Posada D. 2020. CellCoal: coalescent simulation of single-cell

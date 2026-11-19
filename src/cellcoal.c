@@ -23,6 +23,7 @@
 	Name:		CellCoal
 	Purpose:	To simulate the clonal neutral evolution of single cells (for example within a tumor)
 	Code:		David Posada (DP)
+				Version 2.x: developed by Claude (Anthropic, as a coding agent) in collaboration with DP
 	Started:	01 June 2016
 
  Version 0.1

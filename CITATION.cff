@@ -13,6 +13,8 @@ abstract: >-
   CellCoal simulates the somatic evolution of single cells: a coalescent genealogy of a sample of diploid cells from a
   growing population, somatic mutations under several models, and the single-cell sequencing process (allelic dropout,
   amplification and sequencing errors, doublets), with the read counts and genotype likelihoods written as a VCF file.
+  The CellCoal 2 series was developed by Claude (an AI model made by Anthropic, working as a coding agent) in
+  collaboration with David Posada, who defined the goals, made the decisions and approved every release.
 keywords:
   - coalescent
   - single-cell sequencing
