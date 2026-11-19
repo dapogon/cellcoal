@@ -30,7 +30,8 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"iupac",'x'}, {"results_folder",'o'}, {"tree_file",'T'}, {"genome_file",'U'}, {"tumor_names",'W'},
 	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
 	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
-	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'}, {NULL,0}
+	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'},
+	{"amplification_error_cell_variance",'\21'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -454,6 +455,7 @@ static const char *LongValueOption (int flag)
 	if (flag == '\5') return "--ado-doublet-corr";
 	if (flag == '\7') return "--sweep";
 	if (flag == '\17') return "--sweep-jobs";
+	if (flag == '\21') return "--amp-cell-var";
 	return NULL;
 	}
 
@@ -604,7 +606,7 @@ const char *SweepOptionForName (const char *name)
 			continue;	/* switches: nothing to sweep */
 		if (strcmp (optionNames[i].name, norm) == 0 || (norm[1] == '\0' && norm[0] == f) ||
 			(f == '\2' && strcmp (norm, "cov_ado_corr") == 0) || (f == '\4' && strcmp (norm, "cov_doublet_corr") == 0) ||
-			(f == '\5' && strcmp (norm, "ado_doublet_corr") == 0))
+			(f == '\5' && strcmp (norm, "ado_doublet_corr") == 0) || (f == '\21' && strcmp (norm, "amp_cell_var") == 0))
 			{
 			const char *lo = LongValueOption (f);
 
@@ -640,7 +642,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
-			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0)
+			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -715,6 +717,14 @@ char **ExpandConfigArgs (int *argc, char **argv)
 				snprintf (msg, sizeof(msg), "%s has to be between -1 and 1", name);
 				CfgError ("the command line", msg, out[i]);
 				}
+			}
+		else if (strcmp (out[i], "--amp-cell-var") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--amp-cell-var needs a variance (> 0)", NULL);
+			ampCellVar = atof (out[++i]);
+			if (!(ampCellVar > 0.0))
+				CfgError ("the command line", "--amp-cell-var has to be > 0", out[i]);
 			}
 		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;

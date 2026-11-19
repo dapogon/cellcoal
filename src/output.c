@@ -1946,6 +1946,8 @@ void	PrintRunInformation (FILE *fp)
 				else
 					fprintf (fp, "\n  (4-template model)");
 				fprintf (fp, " (mean, var)              =   %2.1e, %2.1e", meanAmplificationError, varAmplificationError);
+				if (ampCellVar > 0)
+					fprintf (fp, "\n  variance among cells of the mean           =   %2.1e", ampCellVar);
 				}
 			else
 				fprintf (fp, "\n Amplification error                          =   %2.1f", meanAmplificationError);
@@ -2280,6 +2282,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
 	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
+	fprintf (fp,"\n--amp-cell-var V: the mean amplification error (-A) varies among cells, beta with the mean of -A and variance V (e.g. -A0.05 0.002 0 --amp-cell-var 0.0007)");
 	fprintf (fp,"\n--cov-ado-corr RHO: correlation (-1..1) between the coverage (-J) and the ADO rate (-P) of the cells (e.g. --cov-ado-corr -0.5)");
 	fprintf (fp,"\n--cov-doublet-corr RHO: correlation (-1..1) between the coverage (-J) and being a doublet (-B)");
 	fprintf (fp,"\n--ado-doublet-corr RHO: correlation (-1..1) between the ADO rate (-P) and being a doublet (-B)");

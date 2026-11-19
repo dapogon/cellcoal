@@ -953,7 +953,7 @@ void WriteCellParams (int replicate)
 		}
 	if (doPrintSeparateReplicates == NO)
 		fprintf (fp, "[#%d]\n", replicate+1);
-	fprintf (fp, "cell\tcoverage_multiplier\tado_rate\tdoublet\tdonor\n");
+	fprintf (fp, "cell\tcoverage_multiplier\tado_rate\tdoublet\tdonor%s\n", cellAmpMean ? "\tamplification_error" : "");
 	for (i=0; i<numCells; i++)
 		{
 		int dbl = (cell[i].hasDoublet == YES);
@@ -968,9 +968,12 @@ void WriteCellParams (int replicate)
 		else
 			fprintf (fp, "NA");
 		if (dbl && doubletDonor)
-			fprintf (fp, "\t1\t%d\n", doubletDonor[i] + 1);
+			fprintf (fp, "\t1\t%d", doubletDonor[i] + 1);
 		else
-			fprintf (fp, "\t%d\tNA\n", dbl);
+			fprintf (fp, "\t%d\tNA", dbl);
+		if (cellAmpMean)
+			fprintf (fp, "\t%.6f", cellAmpMean[i]);
+		fprintf (fp, "\n");
 		}
 	fclose (fp);
 	}
@@ -994,7 +997,21 @@ void SetupCellCoverage (long int *seed)
 	if (covAdoCorr != 0.0 && cellAdoRate != NULL && numCells > 1)
 		CorrelateCoverageWithADO (seed);
 	CorrelateDoublets (seed);
-	if (covAdoCorr != 0.0 || covDoubletCorr != 0.0 || adoDoubletCorr != 0.0)
+	/* --amp-cell-var: the mean amplification error of every cell is drawn from a beta distribution with the mean of -A */
+	free (cellAmpMean);
+	cellAmpMean = NULL;
+	if (ampCellVar > 0.0 && meanAmplificationError > 0.0)
+		{
+		cellAmpMean = (double*) malloc ((numCells+1) * sizeof(double));
+		if (!cellAmpMean)
+			{
+			fprintf (stderr, "Could not allocate the cell amplification errors\n");
+			exit (-1);
+			}
+		for (i=0; i<numCells+1; i++)
+			cellAmpMean[i] = RandomBetaMeanVar (meanAmplificationError, ampCellVar, seed);
+		}
+	if (covAdoCorr != 0.0 || covDoubletCorr != 0.0 || adoDoubletCorr != 0.0 || cellAmpMean != NULL)
 		WriteCellParams (adoReplicate);
 	}
 

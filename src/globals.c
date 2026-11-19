@@ -80,6 +80,8 @@ int					fastMode = 0;
 int					doBCF = 0;
 double				covAdoCorr = 0.0;
 double				*cellAdoRate = NULL;
+double				ampCellVar = 0.0;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */
+double				*cellAmpMean = NULL;	/* mean amplification error of every cell (with --amp-cell-var) */
 double				covDoubletCorr = 0.0, adoDoubletCorr = 0.0;
 int					doSummary = 0, numSNVsTrue = 0;
 FILE				*fpSummary = NULL;

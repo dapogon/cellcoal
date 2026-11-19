@@ -621,8 +621,19 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
 		if (meanAmplificationError > 0)
 			{
-			maternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
-			paternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
+			if (cellAmpMean == NULL)
+				{
+				maternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
+				paternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
+				}
+			else
+				{
+				/* --amp-cell-var: mean of this cell; the variance keeps the concentration of -A (var / (mean*(1-mean))) */
+				double mc = cellAmpMean[i];
+				double vc = varAmplificationError * mc * (1.0 - mc) / (meanAmplificationError * (1.0 - meanAmplificationError));
+				maternalSiteAmplificationError = RandomBetaMeanVar(mc, vc, seed);
+				paternalSiteAmplificationError = RandomBetaMeanVar(mc, vc, seed);
+				}
 			}
 		
 		/* initialize ampEijmat */

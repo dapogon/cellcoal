@@ -252,6 +252,35 @@ if python3 -c "import numpy" 2>/dev/null; then
 else echo "  skip (numpy not installed)"; fi
 if "$BIN" --cov-ado-corr 0.5 -s5 2>&1 | grep -q 'needs coverage variation among cells (-J) and ADO variation'; then ok "--cov-ado-corr needs -J and -P"; else bad "cov-ado validation"; fi
 
+echo "2g10b. Amplification error that varies among cells (--amp-cell-var)"
+cat > "$TMP/ampcell.py" <<'PY'
+import sys, numpy as np
+d = sys.argv[1]
+amp = [float(l.rstrip('\n').split('\t')[-1]) for l in open(d + '/Results/cell_params') if l[0] != '[' and not l.startswith('cell\t')]
+nr = dp = None
+for l in open(d + '/Results/pileup'):
+    p = l.rstrip('\n').split('\t')
+    if len(p) < 6: continue
+    if nr is None: n = (len(p) - 3) // 3; nr = np.zeros(n); dp = np.zeros(n)
+    for k in range(len(nr)):
+        dp[k] += int(p[3 + 3 * k]); nr[k] += sum(ch in 'ACGTacgt' for ch in p[4 + 3 * k])
+m = min(len(amp), len(nr)); amp = np.array(amp[:m]); x = (nr / np.maximum(dp, 1))[:m]
+print(round(float(np.std(amp)), 4), round(float(np.corrcoef(amp, x)[0, 1]), 3))
+PY
+if python3 -c "import numpy" 2>/dev/null; then
+  AQ="-n1 -s60 -l3000 -u1e-6 -e10000 -b1 -C10 -E0.001 -A0.05 0.002 0 -9 -#4"
+  mkdir -p "$TMP/am0" "$TMP/am1" "$TMP/am2"
+  (cd "$TMP/am0" && "$BIN" $AQ >/dev/null 2>&1)
+  (cd "$TMP/am1" && "$BIN" --amp-cell-var 0.0007 $AQ >/dev/null 2>&1)
+  printf 'amplification_error_cell_variance: 0.0007\n' > "$TMP/ampcell.yaml"
+  (cd "$TMP/am2" && "$BIN" --config "$TMP/ampcell.yaml" $AQ >/dev/null 2>&1)
+  read s1 c1 <<< "$(python3 "$TMP/ampcell.py" "$TMP/am1")"
+  python3 -c "import sys; sys.exit(0 if 0.015 < $s1 < 0.04 and $c1 > 0.9 else 1)" && ok "--amp-cell-var: per-cell means in cell_params (sd $s1) drive the error reads (r = $c1)" || bad "amp-cell-var ($s1, $c1)"
+  cmp -s "$TMP/am1/Results/pileup" "$TMP/am2/Results/pileup" && ok "amplification_error_cell_variance in a config file" || bad "amp-cell-var config"
+  [ ! -e "$TMP/am0/Results/cell_params" ] && ok "no cell_params without the option" || bad "cell_params without --amp-cell-var"
+else echo "  skip (numpy not installed)"; fi
+if "$BIN" --amp-cell-var 0.001 -s5 2>&1 | grep -q 'needs an amplification error (-A)'; then ok "--amp-cell-var needs -A"; else bad "amp-cell-var validation"; fi
+
 echo "2g11. BCF output (--bcf)"
 BQ="-n2 -s30 -l1500 -u3e-6 -e10000 -b1 -C8 -V5 -E0.01 -A0.05 0.01 0 -D0.1 -B0.1 0.005 -J3 -O3 -v -#9"
 mkdir -p "$TMP/bf1" "$TMP/bf2" "$TMP/bf3"
