@@ -517,6 +517,39 @@ void CountMLGenotypingErrors()
 #endif
 
 
+/********************* CellAltCall  ************************/
+/* YES when the ML genotype of the cell at the site has a non-reference allele supported by at least minAltReads reads
+   (minAltReads = 0: any non-reference ML allele, the original criterion). A doublet cell is judged by its doublet reads. */
+int CellAltCall (int ii, int jj)
+	{
+	int		ml[2], k, a, ref = allSites[jj].referenceAllele, reads;
+
+	if (cell[ii].hasDoublet == YES)
+		{
+		ml[0] = CD(ii,jj).MLmatAlleleDoublet;
+		ml[1] = CD(ii,jj).MLpatAlleleDoublet;
+		}
+	else
+		{
+		ml[0] = CS(ii,jj).MLmatAllele;
+		ml[1] = CS(ii,jj).MLpatAllele;
+		}
+	for (k=0; k<2; k++)
+		{
+		a = ml[k];
+		if (a >= A && a <= T && a != ref)
+			{
+			if (minAltReads == 0)
+				return YES;
+			reads = (cell[ii].hasDoublet == YES) ? CD(ii,jj).readCountDoublet[a] : CS(ii,jj).readCount[a];
+			if (reads >= minAltReads)
+				return YES;
+			}
+		}
+	return NO;
+	}
+
+
 /********************* TruthMetrics  ************************/
 /* --summary: compares what was called from the reads with the true genotypes (sums of the per-site counts made by
    SimulateSiteReads). Returns NO when there are no reads to compare. A metric that cannot be computed is set to -1.
@@ -527,6 +560,7 @@ int TruthMetrics (double *m)
 	int			site, k;
 	long long	called = 0, errors = 0, tp = 0, fp = 0, fn = 0;
 	long long	hetCalled = 0, hetErrors = 0, hetToHom = 0, homCalled = 0, homErrors = 0, dblCalled = 0, dblErrors = 0, hetSurviving = 0, hetOneDropped = 0;
+	long long	singletons = 0, singletonsCalled = 0;
 
 	for (k=0; k<NUM_TRUTH_METRICS; k++)
 		m[k] = -1.0;
@@ -542,6 +576,11 @@ int TruthMetrics (double *m)
 		homCalled += allSites[site].truthHomCalled;  homErrors += allSites[site].truthHomErrors;
 		hetSurviving += allSites[site].truthHetSurviving;  hetOneDropped += allSites[site].truthHetOneDropped;
 		dblCalled += allSites[site].truthDblCalled;  dblErrors += allSites[site].truthDblErrors;
+		if (allSites[site].truthSingleton == YES)
+			{
+			singletons++;
+			singletonsCalled += callVar;
+			}
 		if (isVar && callVar)
 			tp++;
 		else if (!isVar && callVar)
@@ -572,6 +611,10 @@ int TruthMetrics (double *m)
 	/* allelic dropout simulated in the genotypes: heterozygous genotypes that lost one allele, over those that kept at least one (compare with het_to_hom) */
 	if (hetSurviving > 0)
 		m[9] = hetOneDropped / (double) hetSurviving;
+	/* singletons: sites where only one cell carries a non-reference allele (terminal-branch mutations, which set the branch lengths) */
+	m[10] = (double) singletons;
+	if (singletons > 0)
+		m[11] = singletonsCalled / (double) singletons;
 	return YES;
 	}
 
@@ -649,7 +692,15 @@ int MLCountsAtSite (int j)
 	if (countT > 0 && allSites[j].referenceAllele != T)
 		numAltAllelesInCalls++;
 
-	/* find out whether this site is a SNV */
+	/* find out whether this site is a SNV (with --min-alt-reads, a cell has to have a non-reference call supported by enough reads) */
+	if (numAltAllelesInCalls > 0 && minAltReads > 0)
+		{
+		int	supported = NO;
+		for (i=0; i<NUM_TAXA && supported == NO; i++)
+			supported = CellAltCall (i, j);
+		if (supported == NO)
+			numAltAllelesInCalls = 0;
+		}
 	if (numAltAllelesInCalls > 0)
 		{
 		allSites[j].isSNV = YES;

@@ -31,7 +31,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
 	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
 	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'},
-	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {NULL,0}
+	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {"min_alt_reads",'\23'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -456,6 +456,7 @@ static const char *LongValueOption (int flag)
 	if (flag == '\7') return "--sweep";
 	if (flag == '\17') return "--sweep-jobs";
 	if (flag == '\21') return "--amp-cell-var";
+	if (flag == '\23') return "--min-alt-reads";
 	return NULL;
 	}
 
@@ -644,7 +645,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--no-outgroup") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
-			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0)
+			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -727,6 +728,14 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			ampCellVar = atof (out[++i]);
 			if (!(ampCellVar > 0.0))
 				CfgError ("the command line", "--amp-cell-var has to be > 0", out[i]);
+			}
+		else if (strcmp (out[i], "--min-alt-reads") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--min-alt-reads needs a number of reads (>= 0)", NULL);
+			minAltReads = atoi (out[++i]);
+			if (minAltReads < 0)
+				CfgError ("the command line", "--min-alt-reads has to be >= 0", out[i]);
 			}
 		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;
@@ -828,7 +837,7 @@ void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent)
 	JSON_EXTRA (covAdoCorr != 0.0, "cov_ado_correlation", "%.10g", covAdoCorr)
 	JSON_EXTRA (covDoubletCorr != 0.0, "cov_doublet_correlation", "%.10g", covDoubletCorr)
 	JSON_EXTRA (adoDoubletCorr != 0.0, "ado_doublet_correlation", "%.10g", adoDoubletCorr)
-	JSON_EXTRA (ampCellVar > 0.0, "amplification_error_cell_variance", "%.10g", ampCellVar)
+	JSON_EXTRA (minAltReads > 0, "min_alt_reads", "%d", minAltReads) JSON_EXTRA (ampCellVar > 0.0, "amplification_error_cell_variance", "%.10g", ampCellVar)
 #undef JSON_EXTRA
 	}
 	fprintf (fp, "\n%s}", indent);

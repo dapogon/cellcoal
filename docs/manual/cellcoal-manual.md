@@ -1100,6 +1100,22 @@ By default the simulation includes one healthy outgroup cell (`outgcell`) that h
 - the tree written with `-6` contains the ingroup only, which is the format `-T` expects, so it can be read back without editing;
 - the simulation of the tumor cells is not changed.
 
+## 8.23 Fewer false variable sites: `--min-alt-reads` (unreleased)
+
+A site is written to the VCF when some cell has a non-reference maximum-likelihood genotype. With many cells this is almost always true, because a small genotype error per cell adds up (100 cells, 10X, error 0.001, ADO 0.25: about 85,000 of 200,000 sites). `--min-alt-reads M` asks for at least M reads of the alternative allele in a cell that is called non-reference. It does not count cells, so singletons (a mutation in one cell only) are kept.
+
+Example (100 cells, 100 kb, 10X, ADO 0.25, error 0.001, `-u2.4e-8`, one replicate, 68 singleton sites):
+
+| M | sites in the VCF | precision | recall | singleton recall |
+|---|---|---|---|---|
+| 1 | 42,638 | 0.008 | 0.985 | 0.93 |
+| 2 | 460 | 0.71 | 0.96 | 0.82 |
+| 3 | 318 | 1.00 | 0.94 | 0.72 |
+| 4 | 303 | 1.00 | 0.89 | 0.57 |
+| 5 | 282 | 1.00 | 0.83 | 0.38 |
+
+The summary table has `singleton_sites` and `singleton_recall`, so that the loss of singletons can be checked for any setting.
+
 ## 6.10j Windows (experimental)
 
 CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with read counts and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).

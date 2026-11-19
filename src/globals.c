@@ -82,6 +82,7 @@ int					fastMode = 0;
 int					doBCF = 0;
 double				covAdoCorr = 0.0;
 double				*cellAdoRate = NULL;
+int					minAltReads = 0;	/* --min-alt-reads: a site is variable only when a cell has a non-reference call supported by at least this many reads (0 = any non-reference call) */
 double				ampCellVar = 0.0;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */
 double				*cellAmpMean = NULL;	/* mean amplification error of every cell (with --amp-cell-var) */
 double				covDoubletCorr = 0.0, adoDoubletCorr = 0.0;

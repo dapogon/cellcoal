@@ -647,5 +647,17 @@ cp B/trees B.tre
 "$BIN" --no-outgroup -n1 -s8 -l3000 -u1e-6 -e10000 -C10 -E0.001 -#3 -oD >/dev/null 2>&1; grep -q '"no_outgroup": true' D/run.json && ok "run.json records no_outgroup" || bad "run.json no_outgroup"
 cd "$ROOT"
 
+echo "2g25. --min-alt-reads and the singleton metrics"
+mkdir -p "$TMP/mar" && rm -rf "$TMP/mar"/* && cd "$TMP/mar"
+C="-n1 -s30 -l20000 -u2e-7 -e10000 -g1e-4 -b1 -C10 -D0.2 -E0.001 --summary -#5"
+"$BIN" $C -oA >/dev/null 2>&1
+"$BIN" $C --min-alt-reads 3 -oB >/dev/null 2>&1
+nA=$(grep -a -vc '^#' A/vcf); nB=$(grep -a -vc '^#' B/vcf)
+[ "$nB" -lt "$nA" ] && [ "$nB" -gt 0 ] && ok "--min-alt-reads 3 keeps fewer sites ($nA -> $nB)" || bad "--min-alt-reads sites ($nA -> $nB)"
+grep -q '"min_alt_reads": 3' B/run.json && ok "run.json records min_alt_reads" || bad "run.json min_alt_reads"
+head -1 A/summary.tsv | grep -q "singleton_sites.singleton_recall" && ok "summary has the singleton columns" || bad "singleton columns"
+"$BIN" $C --min-alt-reads 0 -oC >/dev/null 2>&1; cmp -s <(grep -a -v -i -e date -e time -e Command A/vcf) <(grep -a -v -i -e date -e time -e Command C/vcf) && ok "--min-alt-reads 0 = default" || bad "--min-alt-reads 0"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
