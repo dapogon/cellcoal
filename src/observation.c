@@ -550,6 +550,31 @@ int CellAltCall (int ii, int jj)
 	}
 
 
+/********************* InvariantGenotypeCounts  ************************/
+/* --summary: number of sites that are not variable sites (not written to the VCF) for every unphased genotype of the healthy root
+   (AA, AC, AG, AT, CC, CG, CT, GG, GT, TT). Those sites are not listed one by one: the VCF has the variable sites and these counts
+   say what the rest of the sequence looked like. */
+void InvariantGenotypeCounts (long long *cnt)
+	{
+	int		site, a, b, k, idx[4][4];
+
+	for (k=0, a=0; a<4; a++)
+		for (b=a; b<4; b++, k++)
+			idx[a][b] = idx[b][a] = k;
+	for (k=0; k<10; k++)
+		cnt[k] = 0;
+	for (site=0; site<numSites; site++)
+		{
+		if (allSites[site].isSNV == YES)
+			continue;
+		a = data[MATERNAL][OUTGROUP_ROOT][site];
+		b = data[PATERNAL][OUTGROUP_ROOT][site];
+		if (a >= A && a <= T && b >= A && b <= T)
+			cnt[idx[a][b]]++;
+		}
+	}
+
+
 /********************* TruthMetrics  ************************/
 /* --summary: compares what was called from the reads with the true genotypes (sums of the per-site counts made by
    SimulateSiteReads). Returns NO when there are no reads to compare. A metric that cannot be computed is set to -1.

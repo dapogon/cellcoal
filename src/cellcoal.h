@@ -344,6 +344,7 @@ extern int					doSummary, numSNVsTrue;	/* --summary: write summary.tsv, one row 
 extern FILE				*fpSummary;
 extern int					minAltReads;
 int							CellAltCall (int cellIndex, int site);
+void						InvariantGenotypeCounts (long long *cnt);
 extern double				ampCellVar;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */
 extern double				*cellAmpMean;	/* mean amplification error of every cell (with --amp-cell-var) */
 extern double				*cellAdoRate;	/* ADO rate of every cell (kept only when covAdoCorr != 0) */
