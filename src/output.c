@@ -2504,7 +2504,11 @@ void PrintCheck (FILE *fp)
 		fprintf (fp, "  (it exists: a run would delete it and write it again)");
 	fprintf (fp, "\n");
 	if (doUserTree == YES)
+		{
 		fprintf (fp, "  user tree file:      %s%s\n", userTreeFile, stat (userTreeFile, &st) == 0 ? "" : "  !!! NOT FOUND");
+		if (ignoredNumCells > 0)
+			fprintf (fp, "  note:                -s%d is ignored: the user tree has %d leaves (cells)\n", ignoredNumCells, numCells);
+		}
 	if (doUserGenome == YES)
 		fprintf (fp, "  user genome file:    %s%s\n", userGenomeFile, stat (userGenomeFile, &st) == 0 ? "" : "  !!! NOT FOUND");
 	}

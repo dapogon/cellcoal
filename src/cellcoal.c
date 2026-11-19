@@ -974,7 +974,15 @@ int main (int argc, char **argv)
 		{
 		int nLeaves = CountUserTreeLeaves (strlen(userTreeFile) == 0 ? "usertree" : userTreeFile);
 		if (nLeaves > 0)
+			{
+			if (nLeaves != numCells)
+				{
+				ignoredNumCells = numCells;
+				if (noisy > 0)
+					fprintf (stderr, "\nNOTE: -s%d ignored: the user tree has %d leaves (cells)\n", numCells, nLeaves);
+				}
 			numCells = nLeaves;
+			}
 		}
 
     /* initialize a few variables */

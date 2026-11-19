@@ -222,6 +222,7 @@ extern int		OUTGROUP_ROOT, INGROUP_ROOT;
 extern int		sparseMode;
 extern Geno		**sparseCols;
 extern int		numNodes;
+extern int		ignoredNumCells;
 extern long		numSparseCols;
 /* In sparse mode, ADO and genotyping errors are not written in the genomes (that would create a column for almost
    every site): they are computed on the fly for the cells (see ObservedAllele) once obsActive is set. */
