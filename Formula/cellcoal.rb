@@ -1,8 +1,8 @@
 class Cellcoal < Formula
   desc "Coalescent simulator of single-cell NGS data (somatic mutations, ADO, doublets, reads)"
   homepage "https://github.com/dapogon/cellcoal"
-  url "https://github.com/dapogon/cellcoal/archive/refs/tags/v2.2.6.tar.gz"
-  sha256 "450341260d0746364134af68590621af695782cd34251a2dcc9d55f6778ec0fd"
+  url "https://github.com/dapogon/cellcoal/archive/refs/tags/v2.2.7.tar.gz"
+  sha256 "8f0146d5bc68ed6f50ff9aa47e749e06646621a3884f76ea3d1a069c13e3a3fe"
   license "GPL-2.0-or-later"
 
   depends_on "libomp"
