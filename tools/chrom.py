@@ -68,6 +68,11 @@ def parse_region(region):
     return name, s, e
 
 
+def first_header(fasta):
+    with open(fasta) as fh:
+        return fh.readline()[1:].strip().split()[0]
+
+
 def fetch_region(fasta, name, start, end):
     """Sequence (upper case) of name:start-end (1-based, inclusive) from a FASTA file; start/end None = whole sequence."""
     fai = fasta + ".fai"
@@ -230,11 +235,28 @@ def main():
     chrom_name, region_seq, region_start, germ = "1", None, 1, None
     info = []
     if a.fasta:
+        if a.fasta.endswith(".gz"):  # decompress once (a plain file is needed to read a region)
+            plain = os.path.join(work, "reference.fa")
+            with gzip.open(a.fasta, "rb") as fi, open(plain, "wb") as fo:
+                shutil.copyfileobj(fi, fo)
+            a.fasta = plain
         name, s, e = parse_region(a.region) if a.region else (None, None, None)
+        hdr = first_header(a.fasta)
+        hm = re.match(r"^(.+):(\d+)-(\d+)$", hdr)   # a header such as >chr1:10000001-20000000 (region extracted from a genome)
         if name is None:
-            with open(a.fasta) as fh:
-                name = fh.readline()[1:].split()[0]
-        region_seq, region_start = fetch_region(a.fasta, name, s, e)
+            name = hdr
+        if hm and not os.path.exists(a.fasta + ".fai") and (name == hdr or name == hm.group(1)):
+            h0 = int(hm.group(2))
+            seq, _ = fetch_region(a.fasta, hdr, None, None)
+            if s is None:
+                region_seq, region_start = seq, h0
+            else:
+                if s < h0 or (e or s) > h0 + len(seq) - 1:
+                    sys.exit("--region is outside the sequence %s" % hdr)
+                region_seq, region_start = seq[s - h0: e - h0 + 1], s
+            name = hm.group(1)
+        else:
+            region_seq, region_start = fetch_region(a.fasta, name, s, e)
         chrom_name = name
         if len(region_seq) == 0:
             sys.exit("the region is empty")
