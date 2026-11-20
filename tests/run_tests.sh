@@ -678,5 +678,35 @@ else bad "chrom.py did not write its outputs"; fi
 cd "$ROOT"
 else echo "  skip (python3 not installed)"; fi
 
+echo "2g27. tools/chrom.py with a reference FASTA (several lines, lower case, N)"
+if command -v python3 >/dev/null 2>&1; then
+mkdir -p "$TMP/chf" && rm -rf "$TMP/chf"/* && cd "$TMP/chf"
+python3 - <<'P'
+import random
+random.seed(5)
+s=''.join(random.choice('ACGT') for _ in range(12000))
+s=s[:4000]+'N'*1000+s[5000:]
+s=s[:8000]+s[8000:9000].lower()+s[9000:]
+with open('ref.fa','w') as f:
+    f.write('>chrT description\n')
+    for i in range(0,len(s),60): f.write(s[i:i+60]+'\n')
+open('seq.txt','w').write(s.upper())
+P
+python3 "$ROOT/tools/chrom.py" --exe "$BIN" --fasta ref.fa --region chrT:1001-11000 --block-size 4000 --out ch --jobs 2 --seed 4 -- -s15 -u1e-6 -e10000 -g1e-4 -b1 -C10 -D0.2 -E0.001 --min-alt-reads 2 >chrom.log 2>&1
+if [ -s ch/chrom.vcf ]; then
+  python3 - <<'P' && ok "FASTA region: N left out, positions and counts consistent" || bad "chrom.py FASTA checks"
+s=open('seq.txt').read()
+r=[l.rstrip("\n").split("\t") for l in open("ch/chrom_summary.tsv")]
+h=r[0]; t=r[-1]
+tot=sum(int(t[i]) for i,c in enumerate(h) if c.startswith("inv_"))+int(t[h.index("snv_observed")])
+assert tot==9000, tot   # 10000 sites in the region minus the 1000 N
+pos=[int(l.split("\t")[1]) for l in open("ch/chrom.vcf") if not l.startswith("#")]
+assert pos and all(1001<=p<=11000 and not (4001<=p<=5000) for p in pos)
+assert all(l.split("\t")[0]=="chrT" for l in open("ch/chrom.vcf") if not l.startswith("#"))
+P
+else bad "chrom.py did not write its outputs (FASTA)"; fi
+cd "$ROOT"
+else echo "  skip (python3 not installed)"; fi
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
