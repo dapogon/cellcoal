@@ -1283,11 +1283,6 @@ int main (int argc, char **argv)
 	/* chromosome in blocks (--blocks, --fasta): the reference and the number of blocks */
 	if (blocksN > 0 || strlen (fastaFile) > 0)
 		{
-		if (doBam || doFastq)
-			{
-			fprintf (stderr, "\nERROR: --blocks/--fasta cannot be combined with --bam/--fastq\n");
-			exit (-1);
-			}
 		if (doUserGenome == YES || (SNPrate > 0 && strlen (germlineVcf) > 0))
 			{
 			fprintf (stderr, "\nERROR: --blocks/--fasta cannot be combined with -U, and --germline-vcf with -c\n");
@@ -1538,6 +1533,7 @@ int main (int argc, char **argv)
 			fclose (fp);
 			}
 		BlocksFree ();
+		FinishReadLevel ();
 		}
 
 	ComputeSummaryStatistics ();

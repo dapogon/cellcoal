@@ -1002,6 +1002,9 @@ void SetupCellCoverage (long int *seed)
 	{
 	int	i;
 
+	if (blocksOn && blockIndex > 0 && cellCovMult != NULL)
+		return;		/* a chromosome in blocks: the parameters of a cell are the same in every block */
+
 	free (cellCovMult);
 	cellCovMult = (double*) malloc ((numCells+1) * sizeof(double));
 	if (!cellCovMult)
