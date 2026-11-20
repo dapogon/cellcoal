@@ -62,6 +62,8 @@ know</a></li>
 <ul>
 <li><a href="#parallel-execution-and-reproducibility" id="toc-parallel-execution-and-reproducibility">4.1 Parallel execution
 and reproducibility</a></li>
+<li><a href="#the-three-modes-and-their-options" id="toc-the-three-modes-and-their-options">4.2 The three modes and their
+options</a></li>
 </ul></li>
 <li><a href="#cellcoal-implementation" id="toc-cellcoal-implementation">5. CellCoal implementation</a>
 <ul>
@@ -701,6 +703,141 @@ original version. Note that if no seed is specified the current time is
 used, and that when the arguments are read from a parameter file (option
 -F) the seed has to be specified inside that file.</p>
 </blockquote>
+<h2 id="the-three-modes-and-their-options">4.2 The three modes and their
+options</h2>
+<p>CellCoal produces data in one of three ways, and each option belongs
+to one or more of them. <code>--check</code> says which mode the options
+give, and an option that the mode does not use is an error (reads mode,
+or a read-counts option without <code>-C</code> and <code>--bam</code>)
+or a note (genotypes mode).</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Mode</th>
+<th>How</th>
+<th>What it simulates</th>
+<th>Output</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td><strong>Genotypes</strong></td>
+<td>no <code>-C</code></td>
+<td>genotypes of the cells with allelic dropout and genotyping error
+(<code>-G</code>)</td>
+<td>genotype and haplotype files (<code>-1</code> … <code>-5</code>,
+<code>-Y</code>)</td>
+</tr>
+<tr class="even">
+<td><strong>Read counts</strong></td>
+<td><code>-C</code></td>
+<td>read counts per base, cell and site (not individual reads), ML
+genotypes</td>
+<td>VCF with genotype likelihoods, <code>-8</code> CATG, <code>-9</code>
+PILEUP, <code>-0</code> bulk, <code>--bcf</code></td>
+</tr>
+<tr class="odd">
+<td><strong>Reads</strong></td>
+<td><code>-C</code> and <code>--bam</code> and/or
+<code>--fastq</code></td>
+<td>paired-end reads of the amplified cells, as molecules with PCR
+duplicates</td>
+<td>BAM(+BAI), FASTQ.gz, <code>ref.fa</code>, <code>truth.vcf</code>,
+optional healthy <code>normal.bam</code></td>
+</tr>
+</tbody>
+</table>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Options</th>
+<th>Genotypes</th>
+<th>Read counts</th>
+<th>Reads</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>tree, demography, mutation, signatures, <code>-c</code>,
+<code>-d</code>, <code>-H</code>, <code>-T</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr class="even">
+<td>allelic dropout: <code>-D</code>, <code>-P</code>, <code>-Q</code>,
+<code>--ado-block</code></td>
+<td>yes</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr class="odd">
+<td><code>-G</code> genotyping error</td>
+<td>yes</td>
+<td>no</td>
+<td>no</td>
+</tr>
+<tr class="even">
+<td><code>-C</code>, <code>-J</code>, <code>-A</code>, <code>-E</code>,
+<code>-X</code>, <code>--gain-sd/--gain-len</code>,
+<code>--amp-signature</code>, <code>--cov-ado-corr</code></td>
+<td>no</td>
+<td>yes</td>
+<td>yes</td>
+</tr>
+<tr class="odd">
+<td><code>-V</code>, <code>-O</code>, <code>-R</code>, <code>-I</code>,
+<code>-B</code>, <code>--amp-cell-var</code>,
+<code>--cov-doublet-corr</code>, <code>--ado-doublet-corr</code>,
+<code>--min-alt-reads</code>, <code>--min-alt-vaf</code>,
+<code>-M</code>, <code>--coverage</code>, <code>--fast</code>,
+<code>-8</code>, <code>-9</code>, <code>-0</code>, <code>--bcf</code>,
+<code>-z</code>, <code>-Z</code></td>
+<td>no</td>
+<td>yes</td>
+<td>no</td>
+</tr>
+<tr class="even">
+<td><code>--bam</code>, <code>--fastq</code>, <code>--read-len</code>,
+<code>--insert-mean</code>, <code>--insert-sd</code>,
+<code>--dup-mean</code>, <code>--bulk-depth</code></td>
+<td>no</td>
+<td>no</td>
+<td>yes</td>
+</tr>
+<tr class="odd">
+<td><code>--blocks</code>, <code>--fasta</code>, <code>--region</code>,
+<code>--germline-vcf</code></td>
+<td>no</td>
+<td>yes</td>
+<td>not yet</td>
+</tr>
+</tbody>
+</table>
+<p>Where two options look alike they do different things:
+<code>-M</code> keeps the sites whose <strong>pooled</strong> VAF (all
+the cells together) is at least M, whereas <code>--min-alt-reads</code>
+and <code>--min-alt-vaf</code> keep the sites where some
+<strong>cell</strong> has a call supported by enough reads;
+<code>-D/-P/-Q</code> set how much allelic dropout there is and
+<code>--ado-block</code> how it is spread along the genome (in
+contiguous segments). <code>-F</code> (parameter file) and
+<code>-U</code> (diploid genome in FASTA) are older:
+<code>--config</code> reads the options from a JSON or YAML file, and
+<code>--fasta</code> with <code>--region</code> and
+<code>--germline-vcf</code> gives a real reference.</p>
 <h1 id="cellcoal-implementation">5. CellCoal implementation</h1>
 <p>The main steps of CellCoal are:</p>
 <ol type="1">
@@ -2576,14 +2713,13 @@ healthy genome (no amplification).</p>
 <p>Model. For every cell and haplotype, molecules (fragments of length
 N(<code>--insert-mean</code>, <code>--insert-sd</code>)) start along the
 genome with a density set by <code>-C</code> and <code>-J</code>, the
-gain (<code>--gain-sd</code>/<code>--gain-len</code>), the amplicon
-structure (<code>--amplicon-len</code>, <code>--amplicon-cv</code>,
-gamma multiplier per segment) and the allelic dropout (<code>-D</code>,
-<code>--ado-block</code>: fragments that fall in a lost segment are not
-produced). Errors of the amplification (<code>-A</code>,
-<code>--amp-signature</code>) are events at sites with a fraction of the
-molecules carrying the wrong base; the molecule carries them and
-<strong>copies them to its PCR duplicates</strong>
+gain (<code>--gain-sd</code>/<code>--gain-len</code>: a multiplier per
+haplotype and segment, which is the amplicon structure) and the allelic
+dropout (<code>-D</code>, <code>--ado-block</code>: fragments that fall
+in a lost segment are not produced). Errors of the amplification
+(<code>-A</code>, <code>--amp-signature</code>) are events at sites with
+a fraction of the molecules carrying the wrong base; the molecule
+carries them and <strong>copies them to its PCR duplicates</strong>
 (<code>--dup-mean M</code>: extra copies per molecule, geometric;
 default 0.3, about 23% duplicates). Sequencing errors (<code>-E</code>)
 are independent in each read. Reads are 150 bp

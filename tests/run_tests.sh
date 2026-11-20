@@ -956,5 +956,15 @@ mkdir -p "$TMP/v2" && rm -rf "$TMP/v2"/* && cd "$TMP/v2"
 [ -s A/full_gen ] && cmp -s A/full_gen B/full_gen && ok "the built-in signatures give the same data as the COSMIC v2 file" || bad "built-in signatures differ from the COSMIC v2 file"
 cd "$ROOT"
 
+echo "2g39. the three modes: options that a mode does not use"
+mkdir -p "$TMP/md" && rm -rf "$TMP/md"/* && cd "$TMP/md"
+"$BIN" -n1 -s4 -l1000 -C10 --bam --check > a.txt 2>&1; grep -aq "mode:.*reads (paired-end" a.txt && ok "--check shows the reads mode" || bad "--check mode reads"
+"$BIN" -n1 -s4 -l1000 -C10 --check > b.txt 2>&1; grep -aq "mode:.*read counts" b.txt && ok "--check shows the read counts mode" || bad "--check mode counts"
+"$BIN" -n1 -s4 -l1000 --check > c.txt 2>&1; grep -aq "mode:.*genotypes" c.txt && ok "--check shows the genotypes mode" || bad "--check mode genotypes"
+"$BIN" -n1 -s4 -l1000 -C10 --bam -V5 --check > d.txt 2>&1; grep -aq "reads mode" d.txt && grep -aq "is an option of the read counts" d.txt && ok "reads mode rejects -V" || bad "reads mode -V"
+"$BIN" -n1 -s4 -l1000 -C10 --dup-mean 0.2 --check > e.txt 2>&1; grep -aq "needs --bam" e.txt && ok "counts mode rejects --dup-mean" || bad "counts mode --dup-mean"
+"$BIN" -n1 -s4 -l1000 -E0.001 --check > f.txt 2>&1; grep -aq "ignored without -C" f.txt && ok "genotypes mode says that -E is ignored" || bad "genotypes mode -E note"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

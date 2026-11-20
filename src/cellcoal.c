@@ -335,6 +335,80 @@ static void CheckOptionCombinations (void)
 		}
 	}
 
+/* The three ways CellCoal produces data: genotypes (no -C), read counts (-C) and reads (--bam, --fastq) */
+int RunMode (void)
+	{
+	if (doBam || doFastq)
+		return 2;
+	return (doNGS == YES) ? 1 : 0;
+	}
+
+/* options of a mode that the other modes do not use: an error in reads mode, a warning without -C */
+static void CheckModeOptions (void)
+	{
+	int		reads = (RunMode () == 2), counts = (RunMode () == 1), genotypes = (RunMode () == 0);
+	struct { const char *name; int given; int countsOnly; } o[] =
+		{
+		{"-I (allelic imbalance)", doAllelicImbalance == YES, 1},
+		{"-V (coverage overdispersion)", rateVarCoverage == YES, 1},
+		{"-O (coverage overdispersion between sites)", alphaSiteCoverage > 0.0, 1},
+		{"-R (haploid coverage reduction)", haploidCoverageReduction != 0.5, 1},
+		{"-M (minimum pooled VAF)", minVAFvcf > 0.0, 1},
+		{"--amp-cell-var", ampCellVar > 0.0, 1},
+		{"--fast", fastMode != 0, 1},
+		{"--min-alt-reads", minAltReads > 0, 1},
+		{"--min-alt-vaf", minAltVaf > 0.0, 1},
+		{"--coverage", coverageWindow > 0, 1},
+		{"-8, -9, -0, -Z, -z, --bcf (outputs of read counts)", doPrintCATG == YES || doPrintPILEUP == YES || doPrintBulk == YES || doBCF == YES || doZipVCF == YES, 1},
+		{NULL, 0, 0}
+		};
+	struct { const char *name; int given; } both[] =
+		{
+		{"-J (coverage overdispersion between cells)", alphaCellCoverage > 0.0},
+		{"-A (amplification error)", meanAmplificationError > 0.0},
+		{"-E (sequencing error)", sequencingError > 0.0},
+		{"-X (error matrix)", thereIsEij == YES},
+		{"--gain-sd/--gain-len", gainSd > 0.0 || gainLen > 0.0},
+		{"--amp-signature", ampSignatureFile != NULL},
+		{NULL, 0}
+		};
+	struct { const char *name; int given; } readsOnly[] =
+		{
+		{"--read-len", ExtraOptionGiven ("--read-len")},
+		{"--insert-mean", ExtraOptionGiven ("--insert-mean")},
+		{"--insert-sd", ExtraOptionGiven ("--insert-sd")},
+		{"--dup-mean", ExtraOptionGiven ("--dup-mean")},
+		{"--bulk-depth", ExtraOptionGiven ("--bulk-depth")},
+		{NULL, 0}
+		};
+	int		k;
+
+	if (reads)
+		for (k=0; o[k].name; k++)
+			if (o[k].given)
+				{
+				fprintf (stderr, "\n!!! PARAMETER ERROR: %s is an option of the read counts (-C) and is not used with --bam/--fastq (reads mode): the coverage varies with -J and --gain-sd\n\n", o[k].name);
+				exit (-1);
+				}
+	if (!reads)
+		for (k=0; readsOnly[k].name; k++)
+			if (readsOnly[k].given)
+				{
+				fprintf (stderr, "\n!!! PARAMETER ERROR: %s is an option of the reads mode and needs --bam and/or --fastq\n\n", readsOnly[k].name);
+				exit (-1);
+				}
+	if (genotypes)
+		{
+		for (k=0; o[k].name; k++)
+			if (o[k].given)
+				fprintf (stderr, "\nNote: %s is ignored without -C (genotypes mode: no reads are simulated)\n", o[k].name);
+		for (k=0; both[k].name; k++)
+			if (both[k].given)
+				fprintf (stderr, "\nNote: %s is ignored without -C (genotypes mode: no reads are simulated)\n", both[k].name);
+		}
+	(void) counts;
+	}
+
 /* means and variances over replicates */
 static void ComputeSummaryStatistics (void)
 	{
@@ -1072,6 +1146,7 @@ int main (int argc, char **argv)
 	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
 	ReadParametersFromCommandLine (argc, argv);
 	CheckOptionCombinations ();
+	CheckModeOptions ();
 	if (argc < 2 || doSpecificParameterFile == YES)
         {
 		readingParameterFile = YES;
@@ -1409,8 +1484,8 @@ int main (int argc, char **argv)
 			fprintf (stderr, "\nERROR: bad --read-len/--insert-mean/--insert-sd/--dup-mean\n");
 			exit (-1);
 			}
-		/* the counts and genotype calls of the other read outputs do not exist in this mode */
-		doPrintVCF = NO; doPrintCATG = NO; doPrintPILEUP = NO; doPrintBulk = NO;
+		/* the VCF of read counts and genotype likelihoods does not exist in this mode */
+		doPrintVCF = NO;
 		}
 
 	/* --coverage: depth per cell of the non-variable sites, in <results>/coverage.tsv */

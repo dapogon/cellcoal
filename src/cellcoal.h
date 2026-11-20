@@ -369,13 +369,15 @@ extern char				*signatureFile;
 extern char				*ampSignatureFile;
 extern double				gainSd, gainLen;
 extern int					doBam, doFastq, readLen;
-extern double				insertMean, insertSd, ampliconLen, ampliconCV, bulkDepth, dupMean;
+extern double				insertMean, insertSd, bulkDepth, dupMean;
 void				GenerateReadLevel (long int *seed, int dataSetNum);
 void				WriteTruthVcf (int dataSetNum);
 /* chromosome in blocks (blocks.c) */
 extern int			blocksN, blockIndex, blocksOn, *posMap;
 extern char			*fastaFile, *regionSpec, *germlineVcf, *refUserGenome, *germFlag;
 extern long			blockOffset, blockSize, chromLength;
+int					ExtraOptionGiven (const char *opt);
+int					RunMode (void);	/* 0 genotypes, 1 read counts, 2 reads */
 void				BlocksSetup (void);
 int					BlockPrepare (int b, long int *seed);
 long				BlockSitePos (int j);
