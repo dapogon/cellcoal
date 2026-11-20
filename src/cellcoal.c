@@ -354,7 +354,6 @@ static void CheckModeOptions (void)
 		{"-O (coverage overdispersion between sites)", alphaSiteCoverage > 0.0, 1},
 		{"-R (haploid coverage reduction)", haploidCoverageReduction != 0.5, 1},
 		{"-M (minimum pooled VAF)", minVAFvcf > 0.0, 1},
-		{"--amp-cell-var", ampCellVar > 0.0, 1},
 		{"--fast", fastMode != 0, 1},
 		{"--min-alt-reads", minAltReads > 0, 1},
 		{"--min-alt-vaf", minAltVaf > 0.0, 1},

@@ -966,5 +966,28 @@ mkdir -p "$TMP/md" && rm -rf "$TMP/md"/* && cd "$TMP/md"
 "$BIN" -n1 -s4 -l1000 -E0.001 --check > f.txt 2>&1; grep -aq "ignored without -C" f.txt && ok "genotypes mode says that -E is ignored" || bad "genotypes mode -E note"
 cd "$ROOT"
 
+echo "2g40. --amp-cell-var in reads mode"
+mkdir -p "$TMP/acv" && rm -rf "$TMP/acv"/* && cd "$TMP/acv"
+"$BIN" -n1 -s8 -l60000 -u1e-9 -e1000 -b1 -C10 -E0.0001 -A0.01 0.0002 0 --amp-cell-var 0.00003 --bam -oA -#5 >/dev/null 2>&1
+"$BIN" -n1 -s8 -l60000 -u1e-9 -e1000 -b1 -C10 -E0.0001 -A0.01 0.0002 0 --bam -oB -#5 >/dev/null 2>&1
+ROOT="$ROOT" python3 - <<'P' && ok "reads: the amplification error differs among cells with --amp-cell-var" || bad "--amp-cell-var in reads mode"
+import sys, statistics as st
+sys.path.insert(0, __import__("os").environ["ROOT"] + "/tools")
+import bamcheck as b
+def rates(d):
+    name, ref = b.read_fasta(d + "/reads_1/ref.fa")
+    out = []
+    for i in range(1, 9):
+        _, _, recs = b.parse_bam("%s/reads_1/cell%04d.bam" % (d, i))
+        mm = sum(1 for r in recs if not r["flag"] & 1024 for k, c in enumerate(r["bases"]) if ref[r["pos"]+k] != c)
+        n = sum(len(r["bases"]) for r in recs if not r["flag"] & 1024)
+        out.append(mm / n)
+    return out
+a, c = rates("A"), rates("B")
+cv = lambda x: st.pstdev(x) / st.mean(x)
+assert cv(a) > 1.5 * cv(c) and 0.003 < st.mean(a) < 0.03, (cv(a), cv(c), st.mean(a))
+P
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
