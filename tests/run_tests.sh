@@ -704,6 +704,8 @@ pos=[int(l.split("\t")[1]) for l in open("ch/chrom.vcf") if not l.startswith("#"
 assert pos and all(1001<=p<=11000 and not (4001<=p<=5000) for p in pos)
 assert all(l.split("\t")[0]=="chrT" for l in open("ch/chrom.vcf") if not l.startswith("#"))
 P
+  nb=$(ls ch/chrom_coverage_bed/*.bed 2>/dev/null | wc -l)
+  [ "$nb" = "15" ] && awk -F'\t' '$1!="chrT"||$3<=$2||NF!=5{exit 1}' ch/chrom_coverage_bed/cell0001.bed && ok "one BED per cell with the coverage of the sites not in the VCF" || bad "per-cell BED files ($nb)"
 else bad "chrom.py did not write its outputs (FASTA)"; fi
 cd "$ROOT"
 else echo "  skip (python3 not installed)"; fi

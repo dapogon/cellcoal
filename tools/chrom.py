@@ -27,6 +27,7 @@ Do not give -n, -l, -#, -o, -T, -U or --summary after "--": the script sets them
   chrom_tree.nwk        the tree used for every block
   chrom_coverage.tsv    BED-like: mean depth of every cell over the sites that are NOT in the VCF, per window of
                         --coverage-window sites (default 10000; 0 = off); n_sites = non-variable sites of the window
+  chrom_coverage_bed/   one BED file per cell (chrom, start, end, mean depth, n_sites) with the same windows
   chrom_info.txt        region, masked sites, germline sites used
 """
 import argparse, concurrent.futures, glob, gzip, os, random, re, shutil, subprocess, sys
@@ -301,6 +302,8 @@ def main():
     vcf_path = os.path.join(out, "chrom.vcf" + (".gz" if a.gzip else ""))
     header, rows, nsites, first = None, [], 0, True
     fcov = open(os.path.join(out, "chrom_coverage.tsv"), "w") if COVERAGE_WINDOW > 0 else None
+    bed_dir = os.path.join(out, "chrom_coverage_bed")
+    beds = {}
     with opener(vcf_path) as fv:
         for b in sorted(done):
             d = done[b]
@@ -328,6 +331,9 @@ def main():
                     lines = [l.rstrip("\n").split("\t") for l in fc if l.strip()]
                 if b == min(done):
                     fcov.write("chrom\tstart\tend\tn_sites\t" + "\t".join(lines[0][4:]) + "\n")
+                    os.makedirs(bed_dir, exist_ok=True)
+                    for c in lines[0][4:]:
+                        beds[c] = open(os.path.join(bed_dir, c + ".bed"), "w")
                 for f in lines[1:]:
                     i0, i1 = int(f[1]), int(f[2])
                     if region_seq is None:
@@ -335,11 +341,16 @@ def main():
                     else:
                         g0, g1 = poss[b][i0 - 1], poss[b][i1 - 1]
                     fcov.write("%s\t%d\t%d\t%s\t%s\n" % (chrom_name, g0 - 1, g1, f[3], "\t".join(f[4:])))
+                    for c, v in zip(lines[0][4:], f[4:]):
+                        if v != "NA":
+                            beds[c].write("%s\t%d\t%d\t%s\t%s\n" % (chrom_name, g0 - 1, g1, v, f[3]))
             h, r = read_summary(d)
             header = header or h
             rows.append((b, r))
     if fcov is not None:
         fcov.close()
+        for fb in beds.values():
+            fb.close()
     col = {c: i for i, c in enumerate(header)}
     inv_cols = [c for c in header if c.startswith("inv_")]
     sum_cols = [c for c in COUNT_COLS + inv_cols if c in col]
