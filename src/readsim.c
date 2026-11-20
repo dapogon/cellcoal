@@ -653,3 +653,106 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 	if (noisy > 0)
 		fprintf (stderr, "\rreads: %ld pairs in %d cells -> %s\n", total, numCells, dir);
 	}
+
+
+/********************************** WriteTruthVcf ***********************************/
+/* True genotypes of the cells (before dropout and genotyping errors) at the sites where any cell or the germline differs from the reference
+   (ref.fa, the maternal healthy genome). Called before the observation layer is active. GT is maternal|paternal; a deleted haplotype is '.'.
+   INFO: NC = cells with a non-reference allele, GERMLINE = the healthy genome is heterozygous or differs from the reference, TYPE = SNV. */
+void WriteTruthVcf (int dataSetNum)
+	{
+	char	dir[3*MAX_NAME], path[4*MAX_NAME];
+	FILE	*fp;
+	long	j;
+	int		i, h;
+
+	snprintf (dir, sizeof(dir), "%s/reads_%d", resultsDir, dataSetNum + 1);
+	mkdir (dir, 0755);
+	snprintf (path, sizeof(path), "%s/truth.vcf", dir);
+	if ((fp = fopen (path, "w")) == NULL)
+		{
+		fprintf (stderr, "\nERROR: cannot write %s\n", path);
+		exit (-1);
+		}
+	fprintf (fp, "##fileformat=VCFv4.2\n##source=cellcoal truth\n##contig=<ID=%s,length=%d>\n", contigName, numSites);
+	fprintf (fp, "##INFO=<ID=NC,Number=1,Type=Integer,Description=\"Cells with a non-reference allele\">\n");
+	fprintf (fp, "##INFO=<ID=GERMLINE,Number=0,Type=Flag,Description=\"The healthy genome differs from the reference or is heterozygous\">\n");
+	fprintf (fp, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"True genotype (maternal|paternal)\">\n");
+	fprintf (fp, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
+	for (i=0; i<numCells; i++)
+		fprintf (fp, "\tcell%04d", i + 1);
+	fprintf (fp, "\n");
+	for (j=0; j<numSites; j++)
+		{
+		int		ref = data[MATERNAL][OUTGROUP_ROOT][j], pr = data[PATERNAL][OUTGROUP_ROOT][j], var = (pr != ref), nc = 0, nalt = 0, altBase[4] = {-1,-1,-1,-1}, g[2];
+		char	gt[8];
+
+		if (ref < 0 || ref > 3)
+			continue;
+		if (sparseMode == YES && sparseCols[j] == NULL && !var)
+			continue;
+		for (i=0; i<numCells; i++)
+			{
+			int any = 0;
+
+			for (h=0; h<2; h++)
+				{
+				g[h] = GetG (h, i, (int) j);
+				if (g[h] >= 0 && g[h] < 4 && g[h] != ref)
+					{
+					int k;
+
+					any = 1;
+					for (k=0; k<nalt && altBase[k] != g[h]; k++)
+						;
+					if (k == nalt && nalt < 4)
+						altBase[nalt++] = g[h];
+					}
+				}
+			nc += any;
+			}
+		if (pr >= 0 && pr < 4 && pr != ref)
+			{
+			int k;
+
+			for (k=0; k<nalt && altBase[k] != pr; k++)
+				;
+			if (k == nalt && nalt < 4)
+				altBase[nalt++] = pr;
+			}
+		if (nalt == 0)
+			continue;
+		fprintf (fp, "%s\t%ld\t.\t%c\t", contigName, j + 1, BASES[ref]);
+		{
+		int k;
+
+		for (k=0; k<nalt; k++)
+			fprintf (fp, "%s%c", k ? "," : "", BASES[altBase[k]]);
+		}
+		fprintf (fp, "\t.\tPASS\tNC=%d%s\tGT", nc, var ? ";GERMLINE" : "");
+		for (i=0; i<numCells; i++)
+			{
+			for (h=0; h<2; h++)
+				{
+				int a = GetG (h, i, (int) j), k, code = -1;
+
+				if (a == ref)
+					code = 0;
+				else
+					for (k=0; k<nalt; k++)
+						if (altBase[k] == a)
+							code = k + 1;
+				if (code < 0)
+					strcpy (gt + 2*h, ".");
+				else
+					sprintf (gt + 2*h, "%d", code);
+				if (h == 0)
+					gt[1] = '|';
+				}
+			gt[3] = '\0';
+			fprintf (fp, "\t%s", gt);
+			}
+		fprintf (fp, "\n");
+		}
+	fclose (fp);
+	}

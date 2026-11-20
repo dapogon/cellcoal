@@ -371,6 +371,7 @@ extern double				gainSd, gainLen;
 extern int					doBam, doFastq, readLen;
 extern double				insertMean, insertSd, ampliconLen, ampliconCV, bulkDepth, dupMean;
 void				GenerateReadLevel (long int *seed, int dataSetNum);
+void				WriteTruthVcf (int dataSetNum);
 extern char				*contigName;
 extern int					gainOn;
 void		BuildGain (long int *seed);

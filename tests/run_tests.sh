@@ -884,5 +884,13 @@ P
 "$BIN" -n1 -s5 -l1000 -u1e-6 -e1000 -b1 --bam -oB >B.txt 2>&1; grep -aq "need the mean coverage" B.txt && ok "--bam needs -C" || bad "--bam without -C"
 cd "$ROOT"
 
+echo "2g35. truth.vcf and tools/benchmark.py"
+cd "$TMP/rd"
+python3 "$ROOT/tools/benchmark.py" eval A/reads_1/truth.vcf A/reads_1/truth.vcf > E.txt 2>&1
+grep -q "precision 1.000 recall 1.000" E.txt && ok "benchmark eval: the truth against itself gives 1/1" || bad "benchmark eval"
+python3 "$ROOT/tools/benchmark.py" pileup A/reads_1 --min-alt 2 --min-vaf 0.2 > P.txt 2>&1
+[ $(grep -c "cell-level" P.txt) -eq 2 ] && ok "benchmark pileup: raw and deduplicated" || bad "benchmark pileup"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
