@@ -9,3 +9,5 @@ Used with `--signature-file FILE` (the columns of the file are the signatures 1,
   (github.com/parklab/r-scan2). 67.7% of its mass is C>T; it resembles SBS30 / SBS102.
 
 Each column sums to 1. Rows are `5'[ref>alt]3'` with the pyrimidine as reference, as in COSMIC.
+
+`COSMIC_v2_SBS_GRCh37.txt` (30 signatures, from the reference signatures of SigProfilerAssignment) has the same values as the 30 signatures built into CellCoal (checked: identical profiles and identical simulated data; test 2g38). Signature 1 of COSMIC v2 is 67.5% C>T (the rest is spread over other substitutions); the fraction of C>T seen in a simulation is lower when the sequence has few CpG contexts, because the profile is weighted by the frequency of every context in the sequence.
