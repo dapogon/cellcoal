@@ -801,5 +801,33 @@ P
 "$BIN" -n1 -s10 -l1000 -u1e-6 -e1000 -S1 1 1 --signature-file nofile.txt -oC >C.txt 2>&1; grep -aq "Can't open the signature file" C.txt && ok "missing signature file reported" || bad "missing signature file"
 cd "$ROOT"
 
+echo "2g32. --amp-signature: amplification errors with a 96-context profile (PTA artifact signature of SCAN2)"
+mkdir -p "$TMP/ampsig" && rm -rf "$TMP/ampsig"/* && cd "$TMP/ampsig"
+PS="$ROOT/data/signatures/PTA_artifact_SCAN2.txt"
+python3 - <<'P'
+import random
+random.seed(5)
+s="".join(random.choice("ACGT") for _ in range(100000))
+open("g.fa","w").write(">maternal\n%s\n>paternal\n%s\n" % (s, s))
+open("root.txt","w").write(s)
+P
+"$BIN" -n1 -s10 -l100000 -u1e-9 -e1000 -b1 -C30 -A0.02 0.0002 0 -Ug.fa -0 -#4 --amp-signature "$PS" -oA >/dev/null 2>&1
+python3 - <<'P' && ok "amplification errors follow the PTA signature (about 68% C>T)" || bad "--amp-signature spectrum"
+comp={"A":"T","C":"G","G":"C","T":"A"}
+root=open("root.txt").read()
+ct=n=0
+for l in open("A/bulk"):
+    t=l.split()
+    if len(t)<8 or not t[0].isdigit(): continue
+    ref=root[int(t[0])-1]
+    for a,c in zip("ACGT",map(int,t[2:6])):
+        if a!=ref and c:
+            n+=c
+            if (ref=="C" and a=="T") or (ref=="G" and a=="A"): ct+=c
+assert n>1000 and 0.55 < ct/n < 0.80, (n, ct/n)
+P
+"$BIN" -n1 -s10 -l1000 -u1e-6 -e1000 -b1 -C10 --amp-signature "$PS" -oB >B.txt 2>&1; grep -aq "needs read counts (-C) and an amplification error (-A)" B.txt && ok "--amp-signature needs -A" || bad "--amp-signature without -A"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

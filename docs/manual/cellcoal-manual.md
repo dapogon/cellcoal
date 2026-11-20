@@ -1128,6 +1128,16 @@ To simulate a long chromosome in pieces (`tools/chrom.py`), `--ado-origin O` giv
 
 `-S` uses the 30 COSMIC v2 signatures built into the program. With `--signature-file FILE` the profiles come from a table in COSMIC format instead: a header line (`Type`, name of signature 1, 2, ...) and 96 lines `A[C>A]A v1 v2 ...` (the reference base is the pyrimidine; the columns are normalized to sum 1). The signature numbers of `-S` are then the columns of the file. The folder `data/signatures/` has `COSMIC_v3.6_SBS1_SBS5_GRCh37.txt` (SBS1 and SBS5 of COSMIC v3.6) and `PTA_artifact_SCAN2.txt` (the SNV artifact signature of PTA of SCAN2, Luquette *et al.* 2022; 68% C>T). Example, 40% SBS1 and 60% SBS5: `-S2 1 0.4 2 0.6 --signature-file data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt`. With a real reference as root (`-U`), SBS1 alone gives 98.7% C>T, 94% of them in CpG.
 
+## 8.26 Amplification errors with a trinucleotide profile: `--amp-signature` (unreleased)
+
+The amplification error (`-A`, section 5.3.4) is by default the same at every site and its substitutions follow the error matrix (`-X`). With `--amp-signature FILE`, `FILE` is a table in COSMIC format (the first column is used; see `--signature-file`) with the 96-context profile of the errors, for example `data/signatures/PTA_artifact_SCAN2.txt`, the PTA artifact signature of SCAN2 (Luquette *et al.* 2022; 68% C>T). Then:
+
+- the mean amplification error of a site depends on its trinucleotide context (taken from the healthy root genome): the rate of the context is the mass of the profile in that context divided by the frequency of the context in the sequence, so that the mean over the sequence is still the `-A` value;
+- the variance keeps the concentration of `-A`, and the substitution of an error is drawn with the probabilities of the three substitutions of that context in the profile (a purine base uses the reverse complement context);
+- the genotype likelihoods use the same context-specific substitutions.
+
+Needs read counts (`-C`) and `-A`; the first and last sites of the genome have no context and use the matrix `-X`. In a simulation with the PTA profile the spectrum of the errors reproduces the 96-context signature (correlation 1.0 with 10 cells at 30X, `-A0.02 0.0002 0`). Without `--amp-signature` the data are unchanged.
+
 ## 6.10j Windows (experimental)
 
 CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with read counts and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).
