@@ -20,6 +20,19 @@ static const ExtraOpt extraOpts[] = { READ_OPTS(X_STRUCT) {NULL, NULL, 0, 0, NUL
 static void CfgError (const char *path, const char *msg, const char *what);
 #define X_NAMES(key, opt, flag, kind, var, def) {#key, flag},
 
+static char extraGiven[64];
+
+/* 1 if the long option of the table (--read-len, --dup-mean ...) was given on the command line or in the configuration file */
+int ExtraOptionGiven (const char *opt)
+	{
+	int e;
+
+	for (e=0; extraOpts[e].key; e++)
+		if (strcmp (opt, extraOpts[e].opt) == 0)
+			return extraGiven[e];
+	return 0;
+	}
+
 static int IsExtraOpt (const char *a)
 	{
 	int e;
@@ -50,6 +63,7 @@ static int ParseExtra (char **out, int *i, int n)
 			{
 			const ExtraOpt *o = &extraOpts[e];
 
+			extraGiven[e] = 1;
 			if (o->kind == 0)
 				*(int*) o->ptr = YES;
 			else

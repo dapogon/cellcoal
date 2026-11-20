@@ -206,6 +206,28 @@ The genotype likelihoods of SNV sites can be kept in memory to avoid recalculati
 
 > **Reproducibility.** For a given seed (option -#) and a given set of arguments, the results are identical in every run and *independent of the number of threads*. To achieve this, the read counts of each site are generated from an independent random stream derived from the seed and the site number. As a consequence, **the results obtained with a given seed in version 2.0.0 are different from those obtained with versions 1.x** (the statistical properties are the same). If you need to reproduce an old analysis, use the original version. Note that if no seed is specified the current time is used, and that when the arguments are read from a parameter file (option -F) the seed has to be specified inside that file.
 
+## 4.2 The three modes and their options
+
+CellCoal produces data in one of three ways, and each option belongs to one or more of them. `--check` says which mode the options give, and an option that the mode does not use is an error (reads mode, or a read-counts option without `-C` and `--bam`) or a note (genotypes mode).
+
+| Mode | How | What it simulates | Output |
+|---|---|---|---|
+| **Genotypes** | no `-C` | genotypes of the cells with allelic dropout and genotyping error (`-G`) | genotype and haplotype files (`-1` ... `-5`, `-Y`) |
+| **Read counts** | `-C` | read counts per base, cell and site (not individual reads), ML genotypes | VCF with genotype likelihoods, `-8` CATG, `-9` PILEUP, `-0` bulk, `--bcf` |
+| **Reads** | `-C` and `--bam` and/or `--fastq` | paired-end reads of the amplified cells, as molecules with PCR duplicates | BAM(+BAI), FASTQ.gz, `ref.fa`, `truth.vcf`, optional healthy `normal.bam` |
+
+| Options | Genotypes | Read counts | Reads |
+|---|---|---|---|
+| tree, demography, mutation, signatures, `-c`, `-d`, `-H`, `-T` | yes | yes | yes |
+| allelic dropout: `-D`, `-P`, `-Q`, `--ado-block` | yes | yes | yes |
+| `-G` genotyping error | yes | no | no |
+| `-C`, `-J`, `-A`, `-E`, `-X`, `--gain-sd/--gain-len`, `--amp-signature`, `--cov-ado-corr` | no | yes | yes |
+| `-V`, `-O`, `-R`, `-I`, `-B`, `--amp-cell-var`, `--cov-doublet-corr`, `--ado-doublet-corr`, `--min-alt-reads`, `--min-alt-vaf`, `-M`, `--coverage`, `--fast`, `-8`, `-9`, `-0`, `--bcf`, `-z`, `-Z` | no | yes | no |
+| `--bam`, `--fastq`, `--read-len`, `--insert-mean`, `--insert-sd`, `--dup-mean`, `--bulk-depth` | no | no | yes |
+| `--blocks`, `--fasta`, `--region`, `--germline-vcf` | no | yes | not yet |
+
+Where two options look alike they do different things: `-M` keeps the sites whose **pooled** VAF (all the cells together) is at least M, whereas `--min-alt-reads` and `--min-alt-vaf` keep the sites where some **cell** has a call supported by enough reads; `-D/-P/-Q` set how much allelic dropout there is and `--ado-block` how it is spread along the genome (in contiguous segments). `-F` (parameter file) and `-U` (diploid genome in FASTA) are older: `--config` reads the options from a JSON or YAML file, and `--fasta` with `--region` and `--germline-vcf` gives a real reference.
+
 # 5. CellCoal implementation
 
 The main steps of CellCoal are:
@@ -1154,7 +1176,7 @@ Single-cell whole-genome amplification (MDA, PTA...) does not cover the genome e
 
 With `--bam` and/or `--fastq` (and `-C`, diploid DNA) CellCoal does not simulate read counts but paired-end reads of the amplified genome of every cell, for benchmarking any single-cell caller (SCAN2, PTATO, SCcaller, Monovar...). Output in `<results>/reads_<n>/`: `cellNNNN.bam` (+ `.bai`, sorted, one read group per cell), `cellNNNN.R1.fastq.gz` and `.R2.fastq.gz`, `ref.fa` and `ref.fa.fai` (the healthy root genome, contig `--contig`, default `chr1`) and, with `--bulk-depth D`, `normal.bam`/FASTQ of the healthy genome (no amplification).
 
-Model. For every cell and haplotype, molecules (fragments of length N(`--insert-mean`, `--insert-sd`)) start along the genome with a density set by `-C` and `-J`, the gain (`--gain-sd`/`--gain-len`), the amplicon structure (`--amplicon-len`, `--amplicon-cv`, gamma multiplier per segment) and the allelic dropout (`-D`, `--ado-block`: fragments that fall in a lost segment are not produced). Errors of the amplification (`-A`, `--amp-signature`) are events at sites with a fraction of the molecules carrying the wrong base; the molecule carries them and **copies them to its PCR duplicates** (`--dup-mean M`: extra copies per molecule, geometric; default 0.3, about 23% duplicates). Sequencing errors (`-E`) are independent in each read. Reads are 150 bp (`--read-len`), flags 99/147/83/163, duplicates marked 1024, tags `RG`, `HP` (haplotype 1/2) and `MI` (molecule).
+Model. For every cell and haplotype, molecules (fragments of length N(`--insert-mean`, `--insert-sd`)) start along the genome with a density set by `-C` and `-J`, the gain (`--gain-sd`/`--gain-len`: a multiplier per haplotype and segment, which is the amplicon structure) and the allelic dropout (`-D`, `--ado-block`: fragments that fall in a lost segment are not produced). Errors of the amplification (`-A`, `--amp-signature`) are events at sites with a fraction of the molecules carrying the wrong base; the molecule carries them and **copies them to its PCR duplicates** (`--dup-mean M`: extra copies per molecule, geometric; default 0.3, about 23% duplicates). Sequencing errors (`-E`) are independent in each read. Reads are 150 bp (`--read-len`), flags 99/147/83/163, duplicates marked 1024, tags `RG`, `HP` (haplotype 1/2) and `MI` (molecule).
 
 Truth: `reads_<n>/truth.vcf` has the true genotype of every cell (before dropout and genotyping errors; GT maternal|paternal, INFO `NC` cells carrying the allele, `GERMLINE` for sites where the healthy genome differs from `ref.fa` or is heterozygous). `tools/benchmark.py eval truth.vcf caller.vcf` gives cell-level and site-level precision/recall of any caller's VCF (and singleton recall); `tools/benchmark.py pileup reads_1` is a naive pileup baseline with and without the PCR duplicates.
 

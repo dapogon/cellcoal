@@ -1,7 +1,7 @@
 /* Read-level simulator (--bam, --fastq): paired-end reads from the amplified genome of every cell.
 
    For every cellIdx and haplotype it draws fragments along the genome with a density given by the cellIdx coverage (-C, -J), the amplification
-   gain (--gain-sd), the amplicon structure (--amplicon-len, --amplicon-cv) and the allelic dropout (the lost segments are not covered).
+   gain (--gain-sd) and the allelic dropout (the lost segments are not covered).
    The fragments are molecules: errors of the amplification are carried by the molecule and are copied to its PCR duplicates (--dup-mean);
    sequencing errors (-E) are drawn independently in every read. Output: one BAM (+ BAI) and/or FASTQ.gz pair per cellIdx, the reference (ref.fa)
    and, with --bulk-depth, the BAM of the healthy genome. The BAM flag 0x400 marks the PCR duplicates, the tag MI is the molecule and HP the haplotype. */
@@ -239,56 +239,6 @@ static void WriteBam (const char *path, RecSet *rs, const char *rg, int sorted)
 
 /* ------------------------------------ fragments ------------------------------------ */
 
-typedef struct
-	{
-	double	*gainMult;		/* amplicon multiplier per segment, per haplotype */
-	long	*segEnd;
-	int		nseg;
-	} Amplicon;
-
-static void BuildAmplicons (Amplicon *a, long int *seed)
-	{
-	long	pos = 0, cap = 0;
-	double	shape = (ampliconCV > 0.0) ? 1.0 / (ampliconCV * ampliconCV) : 0.0;
-
-	a->nseg = 0;
-	a->gainMult = NULL;
-	a->segEnd = NULL;
-	if (ampliconCV <= 0.0 || ampliconLen <= 0.0)
-		return;
-	while (pos < numSites)
-		{
-		if (a->nseg == cap)
-			{
-			cap = cap ? cap * 2 : 1024;
-			a->gainMult = (double*) realloc (a->gainMult, cap * sizeof(double));
-			a->segEnd = (long*) realloc (a->segEnd, cap * sizeof(long));
-			}
-		pos += 1 + (long) RandomExponential (ampliconLen, seed);
-		a->segEnd[a->nseg] = pos;
-		a->gainMult[a->nseg] = RandomGamma (shape, seed) / shape;
-		a->nseg++;
-		}
-	}
-
-static double AmpliconAt (const Amplicon *a, long site)
-	{
-	int lo = 0, hi = a->nseg - 1;
-
-	if (a->nseg == 0)
-		return 1.0;
-	while (lo < hi)
-		{
-		int mid = (lo + hi) / 2;
-
-		if (site < a->segEnd[mid])
-			hi = mid;
-		else
-			lo = mid + 1;
-		}
-	return a->gainMult[lo];
-	}
-
 static int CmpEvent (const void *a, const void *b)
 	{
 	const AmpEvent *x = (const AmpEvent*) a, *y = (const AmpEvent*) b;
@@ -416,7 +366,6 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	{
 	RecSet	rs;
 	FastqOut fq;
-	Amplicon amp[2];
 	AmpEvent *ev[2] = {NULL, NULL};
 	long	nev[2] = {0, 0}, pairs = 0, molecule = 0, pos;
 	int		hap, q, L = readLen, i;
@@ -451,14 +400,7 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	for (hap=0; hap<2; hap++)
 		{
 		if (amplified)
-			{
-			BuildAmplicons (&amp[hap], seed);
 			ev[hap] = BuildAmpEvents (cellIdx, hap, seed, &nev[hap]);
-			}
-		else
-			{
-			amp[hap].nseg = 0; amp[hap].gainMult = NULL; amp[hap].segEnd = NULL;
-			}
 		}
 
 	for (hap=0; hap<2; hap++)
@@ -472,7 +414,6 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 				{
 				if (gainOn == YES && cellIdx >= 0)
 					g = GainAt (cellIdx, hap, pos + W/2);
-				g *= AmpliconAt (&amp[hap], pos + W/2);
 				}
 			lambda = depth * cm * 0.5 * g / (2.0 * L * (1.0 + dupMean)) * (double) W;
 			nfrag = RandomPoisson (lambda, seed);
@@ -597,8 +538,6 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	for (i=0; i<2; i++)
 		{
 		free (ev[i]);
-		free (amp[i].gainMult);
-		free (amp[i].segEnd);
 		}
 	free (ta);
 	free (rs.buf);
