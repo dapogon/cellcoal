@@ -2301,6 +2301,9 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n--summary: write summary.tsv, one row of metrics per replicate");
 	fprintf (fp,"\n--sweep \"KEY=V1,V2 ...\": run the grid of values (e.g. --sweep \"C=2,5,10 E=0.001,0.01\") and write sweep.tsv with mean and standard error of the metrics; --sweep-keep keeps the runs");
 	fprintf (fp,"\n--bcf: write the genotype likelihoods as a BCF file (vcf.bcf) instead of a VCF file");
+	fprintf (fp,"\n--min-alt-reads N: a site is written (VCF, catg, pileup) only if a cell has a non-reference call with at least N reads of that allele (e.g. --min-alt-reads 2)");
+	fprintf (fp,"\n--min-alt-vaf F: ... and at least a fraction F of the reads of that cell (e.g. --min-alt-vaf 0.3)");
+	fprintf (fp,"\n--coverage W: mean read depth of every cell over the sites that are not variable sites, in windows of W sites (coverage.tsv; needs -C)");
 	fprintf (fp,"\n--no-outgroup: simulate the tumor only: no healthy outgroup cell in the outputs (the reference is still the healthy root genome)");
 	fprintf (fp,"\n--fast: faster read simulation (same distributions, different random numbers; see the manual)");
 	fprintf (fp,"\n--config FILE: read the options from a JSON or YAML file");

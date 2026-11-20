@@ -1114,6 +1114,8 @@ Example (100 cells, 100 kb, 10X, ADO 0.25, error 0.001, `-u2.4e-8`, one replicat
 | 4 | 303 | 1.00 | 0.89 | 0.57 |
 | 5 | 282 | 1.00 | 0.83 | 0.38 |
 
+Almost all the false sites left with M=2 have exactly 2 alternative reads and a low fraction of the reads of the cell (VAF below 0.3), while true singletons are mostly heterozygous (VAF near 0.5). `--min-alt-vaf F` adds that condition: with `--min-alt-reads 2 --min-alt-vaf 0.3` the precision of the example above is 0.97, keeping 98% of the true sites (93% of the singletons) that M=2 keeps. A VAF threshold assumes balanced amplification; with strong allelic imbalance true singletons can be lost, and the singleton recall of the summary shows it.
+
 The summary table has `singleton_sites` and `singleton_recall`, so that the loss of singletons can be checked for any setting.
 
 ## 6.10j Windows (experimental)

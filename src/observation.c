@@ -522,7 +522,7 @@ void CountMLGenotypingErrors()
    (minAltReads = 0: any non-reference ML allele, the original criterion). A doublet cell is judged by its doublet reads. */
 int CellAltCall (int ii, int jj)
 	{
-	int		ml[2], k, a, ref = allSites[jj].referenceAllele, reads;
+	int		ml[2], k, a, ref = allSites[jj].referenceAllele, reads, depth;
 
 	if (cell[ii].hasDoublet == YES)
 		{
@@ -539,10 +539,11 @@ int CellAltCall (int ii, int jj)
 		a = ml[k];
 		if (a >= A && a <= T && a != ref)
 			{
-			if (minAltReads == 0)
+			if (minAltReads == 0 && minAltVaf == 0.0)
 				return YES;
 			reads = (cell[ii].hasDoublet == YES) ? CD(ii,jj).readCountDoublet[a] : CS(ii,jj).readCount[a];
-			if (reads >= minAltReads)
+			depth = (cell[ii].hasDoublet == YES) ? CD(ii,jj).numReadsDoublet : CS(ii,jj).numReads;
+			if (reads >= minAltReads && (minAltVaf == 0.0 || (depth > 0 && (double) reads / (double) depth >= minAltVaf)))
 				return YES;
 			}
 		}
@@ -763,7 +764,7 @@ int MLCountsAtSite (int j)
 		numAltAllelesInCalls++;
 
 	/* find out whether this site is a SNV (with --min-alt-reads, a cell has to have a non-reference call supported by enough reads) */
-	if (numAltAllelesInCalls > 0 && minAltReads > 0)
+	if (numAltAllelesInCalls > 0 && (minAltReads > 0 || minAltVaf > 0.0))
 		{
 		int	supported = NO;
 		for (i=0; i<NUM_TAXA && supported == NO; i++)

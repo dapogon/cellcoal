@@ -2412,6 +2412,15 @@ count cells, so singletons (a mutation in one cell only) are kept.</p>
 </tr>
 </tbody>
 </table>
+<p>Almost all the false sites left with M=2 have exactly 2 alternative
+reads and a low fraction of the reads of the cell (VAF below 0.3), while
+true singletons are mostly heterozygous (VAF near 0.5).
+<code>--min-alt-vaf F</code> adds that condition: with
+<code>--min-alt-reads 2 --min-alt-vaf 0.3</code> the precision of the
+example above is 0.97, keeping 98% of the true sites (93% of the
+singletons) that M=2 keeps. A VAF threshold assumes balanced
+amplification; with strong allelic imbalance true singletons can be
+lost, and the singleton recall of the summary shows it.</p>
 <p>The summary table has <code>singleton_sites</code> and
 <code>singleton_recall</code>, so that the loss of singletons can be
 checked for any setting.</p>
