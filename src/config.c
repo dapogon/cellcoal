@@ -31,7 +31,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
 	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
 	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'},
-	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {"min_alt_reads",'\23'}, {"coverage_window",'\24'}, {"min_alt_vaf",'\25'}, {"ado_block",'\26'}, {"ado_origin",'\27'}, {"ado_seed",'\30'}, {"signature_file",'\31'}, {NULL,0}
+	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {"min_alt_reads",'\23'}, {"coverage_window",'\24'}, {"min_alt_vaf",'\25'}, {"ado_block",'\26'}, {"ado_origin",'\27'}, {"ado_seed",'\30'}, {"signature_file",'\31'}, {"amp_signature",'\32'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -463,6 +463,7 @@ static const char *LongValueOption (int flag)
 	if (flag == '\27') return "--ado-origin";
 	if (flag == '\30') return "--ado-seed";
 	if (flag == '\31') return "--signature-file";
+	if (flag == '\32') return "--amp-signature";
 	return NULL;
 	}
 
@@ -651,7 +652,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--no-outgroup") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
-			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0 || strcmp (argv[i], "--coverage") == 0 || strcmp (argv[i], "--min-alt-vaf") == 0 || strcmp (argv[i], "--ado-block") == 0 || strcmp (argv[i], "--ado-origin") == 0 || strcmp (argv[i], "--ado-seed") == 0 || strcmp (argv[i], "--signature-file") == 0)
+			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0 || strcmp (argv[i], "--coverage") == 0 || strcmp (argv[i], "--min-alt-vaf") == 0 || strcmp (argv[i], "--ado-block") == 0 || strcmp (argv[i], "--ado-origin") == 0 || strcmp (argv[i], "--ado-seed") == 0 || strcmp (argv[i], "--signature-file") == 0 || strcmp (argv[i], "--amp-signature") == 0)
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -756,6 +757,12 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			if (i + 1 >= n)
 				CfgError ("the command line", "--signature-file needs a file name", NULL);
 			signatureFile = out[++i];
+			}
+		else if (strcmp (out[i], "--amp-signature") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--amp-signature needs a file name", NULL);
+			ampSignatureFile = out[++i];
 			}
 		else if (strcmp (out[i], "--ado-origin") == 0)
 			{
@@ -889,7 +896,7 @@ void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent)
 	JSON_EXTRA (covAdoCorr != 0.0, "cov_ado_correlation", "%.10g", covAdoCorr)
 	JSON_EXTRA (covDoubletCorr != 0.0, "cov_doublet_correlation", "%.10g", covDoubletCorr)
 	JSON_EXTRA (adoDoubletCorr != 0.0, "ado_doublet_correlation", "%.10g", adoDoubletCorr)
-	JSON_EXTRA (signatureFile != NULL, "signature_file", "\"%s\"", signatureFile) JSON_EXTRA (adoBlockLen > 0.0, "ado_block", "%.10g", adoBlockLen) JSON_EXTRA (adoOrigin > 0, "ado_origin", "%lld", adoOrigin) JSON_EXTRA (adoSeedOpt > 0, "ado_seed", "%ld", adoSeedOpt) JSON_EXTRA (minAltVaf > 0.0, "min_alt_vaf", "%.10g", minAltVaf) JSON_EXTRA (coverageWindow > 0, "coverage_window", "%d", coverageWindow) JSON_EXTRA (minAltReads > 0, "min_alt_reads", "%d", minAltReads) JSON_EXTRA (ampCellVar > 0.0, "amplification_error_cell_variance", "%.10g", ampCellVar)
+	JSON_EXTRA (ampSignatureFile != NULL, "amp_signature", "\"%s\"", ampSignatureFile) JSON_EXTRA (signatureFile != NULL, "signature_file", "\"%s\"", signatureFile) JSON_EXTRA (adoBlockLen > 0.0, "ado_block", "%.10g", adoBlockLen) JSON_EXTRA (adoOrigin > 0, "ado_origin", "%lld", adoOrigin) JSON_EXTRA (adoSeedOpt > 0, "ado_seed", "%ld", adoSeedOpt) JSON_EXTRA (minAltVaf > 0.0, "min_alt_vaf", "%.10g", minAltVaf) JSON_EXTRA (coverageWindow > 0, "coverage_window", "%d", coverageWindow) JSON_EXTRA (minAltReads > 0, "min_alt_reads", "%d", minAltReads) JSON_EXTRA (ampCellVar > 0.0, "amplification_error_cell_variance", "%.10g", ampCellVar)
 #undef JSON_EXTRA
 	}
 	fprintf (fp, "\n%s}", indent);

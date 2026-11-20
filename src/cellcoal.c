@@ -1221,6 +1221,21 @@ int main (int argc, char **argv)
 		ReadUserGenome(fpUserGenome);
 		}
 
+	if (ampSignatureFile != NULL)
+		{
+		if (doNGS == NO || meanAmplificationError <= 0.0)
+			{
+			fprintf (stderr, "\nERROR: --amp-signature needs read counts (-C) and an amplification error (-A)\n");
+			exit (-1);
+			}
+		if (alphabet == BINARY)
+			{
+			fprintf (stderr, "\nERROR: --amp-signature needs the DNA alphabet\n");
+			exit (-1);
+			}
+		SetupAmpSignature (ampSignatureFile);
+		}
+
 	if (adoBlockLen > 0.0 && (doADOsite == YES || (fixedADOrate <= 0 && doADOcell == NO)))
 		{
 		fprintf (stderr, "\nERROR: --ado-block needs allelic dropout (-D or -P) and cannot be combined with ADO among sites (-Q)\n");

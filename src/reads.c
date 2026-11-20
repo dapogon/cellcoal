@@ -115,6 +115,23 @@ static void TotalReadCountsAtSite (int j)
 	allSites[j].readCountACGT = countReadsA + countReadsC + countReadsG + countReadsT;
 	}
 
+/* Substitution probability of the amplification error at site j: from base k to base l, given that an error occurs.
+   Without --amp-signature it is the row of the error matrix (-X); with it, it depends on the context (healthy root genome). */
+static inline double AmpSub (long j, int k, int l)
+	{
+	if (__builtin_expect (ampSigOn, 0) && j > 0 && j < numSites - 1 && k >= 0 && k < 4 && l >= 0 && l < 4)
+		return ampSigRow[data[MATERNAL][OUTGROUP_ROOT][j-1]][k][data[MATERNAL][OUTGROUP_ROOT][j+1]][l];
+	return Eij[k][l]/cumEij[k][3];
+	}
+
+/* mean amplification error at site j for allele k, relative to -A (1 without --amp-signature) */
+static inline double AmpSiteMult (long j, int k)
+	{
+	if (__builtin_expect (ampSigOn, 0) && j > 0 && j < numSites - 1 && k >= 0 && k < 4)
+		return ampSigMult[data[MATERNAL][OUTGROUP_ROOT][j-1]][k][data[MATERNAL][OUTGROUP_ROOT][j+1]];
+	return 1.0;
+	}
+
 static void DoubletAtSite (int c1, int c2, int j, const double *gl1, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
 static void TotalReadCountsAtSite (int j);
 int MLCountsAtSite (int j);
@@ -283,7 +300,7 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 		if (CS(ii,jj).numReads > 0)
 			{
 			/* rebuild the amplification error matrices of this site exactly as SiteReadCounts did */
-			BuildAmpMatrices (&CS(ii,jj), ampMat, ampPat);
+			BuildAmpMatrices (&CS(ii,jj), jj, ampMat, ampPat);
 			GenotypeLikelihoods (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
 			}
 		else
@@ -336,6 +353,9 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 void SetupReadModel (double **ngsEij)
 	{
 	int		i, j;
+
+	if (ampSigOn)	/* rates of the amplification signature relative to the composition of the root genome of this replicate */
+		AmpSignatureComposition ((const signed char*) data[MATERNAL][OUTGROUP_ROOT], numSites);
 
 	/* initialize ngsEij now as this will be contant across sites */
 	for (i=0; i<4; i++)
@@ -627,18 +647,25 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
 		if (meanAmplificationError > 0)
 			{
-			if (cellAmpMean == NULL)
+			if (cellAmpMean == NULL && ampSigOn == 0)
 				{
 				maternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
 				paternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
 				}
 			else
 				{
-				/* --amp-cell-var: mean of this cell; the variance keeps the concentration of -A (var / (mean*(1-mean))) */
-				double mc = cellAmpMean[i];
-				double vc = varAmplificationError * mc * (1.0 - mc) / (meanAmplificationError * (1.0 - meanAmplificationError));
-				maternalSiteAmplificationError = RandomBetaMeanVar(mc, vc, seed);
-				paternalSiteAmplificationError = RandomBetaMeanVar(mc, vc, seed);
+				/* --amp-cell-var: mean of this cell; --amp-signature: mean of the context of the site (rate relative to -A).
+				   The variance keeps the concentration of -A (var / (mean*(1-mean))) */
+				double base = (cellAmpMean == NULL) ? meanAmplificationError : cellAmpMean[i];
+				double mm = base * AmpSiteMult (j, maternalAllele), mp = base * AmpSiteMult (j, paternalAllele);
+				double vm, vp;
+
+				if (ampSigOn && mm > 0.95) mm = 0.95;
+				if (ampSigOn && mp > 0.95) mp = 0.95;
+				vm = varAmplificationError * mm * (1.0 - mm) / (meanAmplificationError * (1.0 - meanAmplificationError));
+				vp = varAmplificationError * mp * (1.0 - mp) / (meanAmplificationError * (1.0 - meanAmplificationError));
+				maternalSiteAmplificationError = RandomBetaMeanVar(mm, vm, seed);
+				paternalSiteAmplificationError = RandomBetaMeanVar(mp, vp, seed);
 				}
 			}
 		
@@ -649,7 +676,7 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 				if (k == l)
 					ampEijmat[k][l] = 1.0 - maternalSiteAmplificationError;
 				else
-					ampEijmat[k][l] = Eij[k][l]/cumEij[k][3] * maternalSiteAmplificationError;
+					ampEijmat[k][l] = AmpSub(j,k,l) * maternalSiteAmplificationError;
 				}
 		
 		/* initialize ampEijpat */
@@ -659,7 +686,7 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 				if (k == l)
 					ampEijpat[k][l] = 1.0 - paternalSiteAmplificationError;
 				else
-					ampEijpat[k][l] = Eij[k][l]/cumEij[k][3] * paternalSiteAmplificationError;
+					ampEijpat[k][l] = AmpSub(j,k,l) * paternalSiteAmplificationError;
 				}
 		
 		if (simulateOnlyTwoTemplates == YES)
@@ -668,25 +695,61 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 			ampErrorMaternalAllele = maternalAllele;
 			if (maternalSiteAmplificationError > 0 && thereIsMaternalAllele == YES )
 				{
-				uniform = RandomUniform(seed) * cumEij[maternalAllele][3];
-				for (m=0; m<4; m++)
-					if (uniform <= cumEij[maternalAllele][m])
+				if (ampSigOn)
+					{
+					double cs = 0.0;
+
+					uniform = RandomUniform(seed);
+					for (m=0; m<4; m++)
 						{
-						ampErrorMaternalAllele = m;
-						break;
+						cs += (m == maternalAllele) ? 0.0 : AmpSub (j, maternalAllele, m);
+						if (uniform <= cs)
+							{
+							ampErrorMaternalAllele = m;
+							break;
+							}
 						}
+					}
+				else
+					{
+					uniform = RandomUniform(seed) * cumEij[maternalAllele][3];
+					for (m=0; m<4; m++)
+						if (uniform <= cumEij[maternalAllele][m])
+							{
+							ampErrorMaternalAllele = m;
+							break;
+							}
+					}
 				}
 			/* choose base for wrong paternal template */
 			ampErrorPaternalAllele = paternalAllele;
 			if (paternalSiteAmplificationError > 0 && thereIsPaternalAllele == YES )
 				{
-				uniform = RandomUniform(seed) * cumEij[paternalAllele][3];
-				for (m=0; m<4; m++)
-					if (uniform <= cumEij[paternalAllele][m])
+				if (ampSigOn)
+					{
+					double cs = 0.0;
+
+					uniform = RandomUniform(seed);
+					for (m=0; m<4; m++)
 						{
-						ampErrorPaternalAllele = m;
-						break;
+						cs += (m == paternalAllele) ? 0.0 : AmpSub (j, paternalAllele, m);
+						if (uniform <= cs)
+							{
+							ampErrorPaternalAllele = m;
+							break;
+							}
 						}
+					}
+				else
+					{
+					uniform = RandomUniform(seed) * cumEij[paternalAllele][3];
+					for (m=0; m<4; m++)
+						if (uniform <= cumEij[paternalAllele][m])
+							{
+							ampErrorPaternalAllele = m;
+							break;
+							}
+					}
 				}
 			}
 		
@@ -805,7 +868,7 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 
 
 /* amplification error matrices of a site, exactly as SiteReadCounts builds them */
-void BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat)
+void BuildAmpMatrices (CellSiteStr *c, int j, double **ampMat, double **ampPat)
 	{
 	int k, l;
 
@@ -819,8 +882,8 @@ void BuildAmpMatrices (CellSiteStr *c, double **ampMat, double **ampPat)
 				}
 			else
 				{
-				ampMat[k][l] = Eij[k][l]/cumEij[k][3] * c->maternalSiteAmplificationError;
-				ampPat[k][l] = Eij[k][l]/cumEij[k][3] * c->paternalSiteAmplificationError;
+				ampMat[k][l] = AmpSub(j,k,l) * c->maternalSiteAmplificationError;
+				ampPat[k][l] = AmpSub(j,k,l) * c->paternalSiteAmplificationError;
 				}
 			}
 	}
@@ -844,7 +907,7 @@ void SiteGL (CellSiteStr *c, int i, int j, double *glOut)
 				ngsRows[k][l] = Eij[k][l]/cumEij[k][3] * sequencingError;
 			}
 		}
-	BuildAmpMatrices (c, ampMP, ampPP);
+	BuildAmpMatrices (c, j, ampMP, ampPP);
 	GenotypeLikelihoods (c, i, j, probs, ngsP, ampMP, ampPP, NULL, glOut);
 	}
 
@@ -1230,13 +1293,13 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 						for (template1=0; template1<4; template1++)
 							if (template1 != a1)
 								{
-								pReadGivenA1 += Eij[a1][template1]/cumEij[a1][3] * ((1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
+								pReadGivenA1 += AmpSub(j,a1,template1) * ((1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
 								//fprintf (stderr, "\nread=%c t=[%c][%c] p1=%lf Eijmat[%c][%c]=%lf", WhichNuc(read), WhichNuc(a1), WhichNuc(template1), pReadGivenA1, WhichNuc(a1), WhichNuc(template1), Eij[a1][template1]/cumEij[a1][3]);
 								}
 						for (template2=0; template2<4; template2++)
 							if (template2 != a2)
 								{
-								pReadGivenA2 += Eij[a2][template2]/cumEij[a2][3] * ((1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
+								pReadGivenA2 += AmpSub(j,a2,template2) * ((1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
 								//fprintf (stderr, "\nread=%c t=[%c][%c] p2=%lf Eijpat[%c][%c]=%lf", WhichNuc(read), WhichNuc(a2), WhichNuc(template2), pReadGivenA2, WhichNuc(a2), WhichNuc(template2), Eij[a2][template2]/cumEij[a2][3]);
 								}
 						logGL[a1][a2] += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
@@ -1299,10 +1362,10 @@ void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **
 					{
 					for (template1=0; template1<4; template1++)
 						if (template1 != k)
-							pReadGivenA1 += Eij[k][template1]/cumEij[k][3] * ((1.0 - maternalSiteAmplificationError) * ngsEij[k][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
+							pReadGivenA1 += AmpSub(j,k,template1) * ((1.0 - maternalSiteAmplificationError) * ngsEij[k][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
 					for (template2=0; template2<4; template2++)
 						if (template2 != k)
-							pReadGivenA2 += Eij[k][template2]/cumEij[k][3] * ((1.0 - paternalSiteAmplificationError) * ngsEij[k][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
+							pReadGivenA2 += AmpSub(j,k,template2) * ((1.0 - paternalSiteAmplificationError) * ngsEij[k][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
 					}
 				else
 					{

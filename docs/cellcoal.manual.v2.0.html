@@ -154,6 +154,9 @@ Allelic dropout in contiguous segments: <code>--ado-block</code>
 <li><a href="#signature-profiles-from-a-file---signature-file-unreleased" id="toc-signature-profiles-from-a-file---signature-file-unreleased">8.25
 Signature profiles from a file: <code>--signature-file</code>
 (unreleased)</a></li>
+<li><a href="#amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased" id="toc-amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased">8.26
+Amplification errors with a trinucleotide profile:
+<code>--amp-signature</code> (unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2475,6 +2478,36 @@ Example, 40% SBS1 and 60% SBS5:
 <code>-S2 1 0.4 2 0.6 --signature-file data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt</code>.
 With a real reference as root (<code>-U</code>), SBS1 alone gives 98.7%
 C&gt;T, 94% of them in CpG.</p>
+<h2 id="amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased">8.26
+Amplification errors with a trinucleotide profile:
+<code>--amp-signature</code> (unreleased)</h2>
+<p>The amplification error (<code>-A</code>, section 5.3.4) is by
+default the same at every site and its substitutions follow the error
+matrix (<code>-X</code>). With <code>--amp-signature FILE</code>,
+<code>FILE</code> is a table in COSMIC format (the first column is used;
+see <code>--signature-file</code>) with the 96-context profile of the
+errors, for example <code>data/signatures/PTA_artifact_SCAN2.txt</code>,
+the PTA artifact signature of SCAN2 (Luquette <em>et al.</em> 2022; 68%
+C&gt;T). Then:</p>
+<ul>
+<li>the mean amplification error of a site depends on its trinucleotide
+context (taken from the healthy root genome): the rate of the context is
+the mass of the profile in that context divided by the frequency of the
+context in the sequence, so that the mean over the sequence is still the
+<code>-A</code> value;</li>
+<li>the variance keeps the concentration of <code>-A</code>, and the
+substitution of an error is drawn with the probabilities of the three
+substitutions of that context in the profile (a purine base uses the
+reverse complement context);</li>
+<li>the genotype likelihoods use the same context-specific
+substitutions.</li>
+</ul>
+<p>Needs read counts (<code>-C</code>) and <code>-A</code>; the first
+and last sites of the genome have no context and use the matrix
+<code>-X</code>. In a simulation with the PTA profile the spectrum of
+the errors reproduces the 96-context signature (correlation 1.0 with 10
+cells at 30X, <code>-A0.02 0.0002 0</code>). Without
+<code>--amp-signature</code> the data are unchanged.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

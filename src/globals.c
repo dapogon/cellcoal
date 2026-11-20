@@ -88,6 +88,10 @@ long long			*covSum = NULL;	/* [window * numCells + cell]: sum of the depth over
 long long			*covSites = NULL;	/* [window]: number of non-variable sites of the window */
 int					covNumWindows = 0;
 FILE				*fpCoverage = NULL;
+char				*ampSignatureFile = NULL;	/* --amp-signature: 96-context profile of the amplification errors (COSMIC format) */
+int					ampSigOn = 0;
+double				ampSigMult[4][4][4];	/* [5' base][base][3' base]: rate of the amplification error relative to the mean (-A) */
+double				ampSigRow[4][4][4][4];	/* [5'][base][3'][new base]: probability of each substitution given an error */
 char				*signatureFile = NULL;	/* --signature-file: table with the 96-context profiles (COSMIC format) that replaces the built-in signatures */
 int					numSignatureProfiles = NUM_SIGNATURES;	/* number of profiles available (30 built-in, or the columns of --signature-file) */
 double				adoBlockLen = 0.0;	/* --ado-block L: ADO in contiguous segments of mean length L sites (0 = independent per site) */

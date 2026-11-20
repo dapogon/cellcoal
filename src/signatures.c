@@ -15,6 +15,8 @@
 
 extern char *signatureFile;
 extern int  numSignatureProfiles, numUserSignatures, *signatureID;
+extern int  ampSigOn;
+extern double ampSigMult[4][4][4], ampSigRow[4][4][4][4];
 
 
 /*************** CountSignatureColumns, ReadSignatureFile **********************/
@@ -126,6 +128,116 @@ static void ReadSignatureFile (const char *path)
 					geneticSignature[l][i][j][k] /= sum[l];
 		}
 	free (sum);
+	}
+
+static double ampS[4][4][4][4];	/* normalized profile [5'][base][3'][new base], pyrimidine reference */
+
+/* Rates and substitution probabilities of the signature for a sequence: g (frequency of the context class) comes from the sequence itself
+   (root[0..n-1], values 0-3) so that -A stays the mean amplification error of the sequence; with root == NULL, from the human genome. */
+void AmpSignatureComposition (const signed char *root, long n)
+	{
+	double (*S)[4][4][4] = ampS, cnt[64], tot = 0.0;
+	int    l, b, r, a, cmpl[4] = {T, G, C, A};
+	long   p;
+
+	for (l=0; l<64; l++)
+		cnt[l] = 0.0;
+	if (root != NULL)
+		{
+		for (p=1; p<n-1; p++)
+			if (root[p-1] >= 0 && root[p-1] < 4 && root[p] >= 0 && root[p] < 4 && root[p+1] >= 0 && root[p+1] < 4)
+				{
+				cnt[trinuc(root[p-1],root[p],root[p+1])] += 1.0;
+				tot += 1.0;
+				}
+		}
+	if (root == NULL || tot < 1000.0)
+		{
+		for (l=0; l<64; l++)
+			cnt[l] = triNucFreq[l];
+		tot = 1.0;
+		}
+	for (l=0; l<4; l++)
+		for (b=0; b<4; b++)
+			for (r=0; r<4; r++)
+				{
+				int cl = l, cb = b, cr = r, flip = 0;
+				double sub = 0.0, g;
+
+				if (b == A || b == G)
+					{
+					cl = cmpl[r]; cb = cmpl[b]; cr = cmpl[l]; flip = 1;
+					}
+				for (a=0; a<4; a++)
+					if (a != cb)
+						sub += S[cl][cb][cr][a];
+				g = (cnt[trinuc(cl,cb,cr)] + cnt[trinuc(cmpl[cr],cmpl[cb],cmpl[cl])]) / tot;
+				ampSigMult[l][b][r] = (g > 0.0) ? sub / g : 1.0;
+				for (a=0; a<4; a++)
+					ampSigRow[l][b][r][a] = 0.0;
+				for (a=0; a<4; a++)
+					if (a != cb)
+						ampSigRow[l][b][r][flip ? cmpl[a] : a] = (sub > 0.0) ? S[cl][cb][cr][a] / sub : 1.0 / 3.0;
+				}
+	}
+
+/*************** SetupAmpSignature **********************/
+/* Amplification errors with a trinucleotide profile (--amp-signature). The profile S (96 contexts, pyrimidine reference, first column of
+   the file, normalized to sum 1) is the spectrum of the errors. A site with context (l, b, r) is given an error rate, relative to the
+   mean rate -A, of R / 1 with R = sum over the three substitutions of S / g, where g is the frequency of that context class (both strands)
+   in the human genome: averaged over the genome R is 1, so -A stays the mean amplification error. Given an error, the new base is drawn
+   with probabilities proportional to the S entries of the context. Purine bases use the reverse complement context. */
+void SetupAmpSignature (const char *path)
+	{
+	FILE   *fp = fopen (path, "r");
+	char   line[65536], *tok, *save;
+	double (*S)[4][4][4] = ampS, sum = 0.0, v;
+	int    l, b, r, a, n = 0, seen = 0;
+
+	if (fp == NULL)
+		{
+		fprintf (stderr, "\nERROR: Can't open the amplification signature file \"%s\"\n", path);
+		exit (-1);
+		}
+	memset (ampS, 0, sizeof(ampS));
+	if (fgets (line, sizeof(line), fp) == NULL)
+		exit (-1);
+	while (fgets (line, sizeof(line), fp) != NULL)
+		{
+		tok = strtok_r (line, " \t\r\n", &save);
+		if (tok == NULL)
+			continue;
+		if (strlen (tok) != 7 || tok[1] != '[' || tok[3] != '>' || tok[5] != ']' || SigBase (tok[0]) < 0 || SigBase (tok[6]) < 0 || SigBase (tok[2]) < 0 || SigBase (tok[4]) < 0 || (tok[2] != 'C' && tok[2] != 'T'))
+			{
+			fprintf (stderr, "\nERROR: Bad context \"%s\" in the amplification signature file (it has to look like A[C>T]G)\n", tok);
+			exit (-1);
+			}
+		tok = strtok_r (NULL, " \t\r\n", &save);
+		if (tok == NULL || sscanf (tok, "%lf", &v) != 1 || v < 0.0)
+			{
+			fprintf (stderr, "\nERROR: Bad or missing value in the amplification signature file\n");
+			exit (-1);
+			}
+		S[SigBase(line[0])][SigBase(line[2])][SigBase(line[6])][SigBase(line[4])] = v;	/* line[] was tokenized in place: the first token is still at the start */
+		sum += v;
+		n++;
+		}
+	fclose (fp);
+	if (n != 96 || !(sum > 0.0))
+		{
+		fprintf (stderr, "\nERROR: The amplification signature file needs the 96 contexts (%d read) and a positive profile\n", n);
+		exit (-1);
+		}
+	(void) seen;
+	for (l=0; l<4; l++)
+		for (b=0; b<4; b++)
+			for (r=0; r<4; r++)
+				for (a=0; a<4; a++)
+					S[l][b][r][a] /= sum;
+	if (triNucFreq == NULL)
+		LoadTrinucleotideFrequencies ();
+	AmpSignatureComposition (NULL, 0);
+	ampSigOn = 1;
 	}
 
 /*************** PrepareGeneticSignatures **********************/
