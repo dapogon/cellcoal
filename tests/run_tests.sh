@@ -893,5 +893,35 @@ python3 "$ROOT/tools/benchmark.py" pileup A/reads_1 --min-alt 2 --min-vaf 0.2 > 
 [ $(grep -c "cell-level" P.txt) -eq 2 ] && ok "benchmark pileup: raw and deduplicated" || bad "benchmark pileup"
 cd "$ROOT"
 
+echo "2g36. tools/chrom.py with germline SNPs of the user: REF is the reference base"
+mkdir -p "$TMP/gl" && rm -rf "$TMP/gl"/* && cd "$TMP/gl"
+python3 - <<'P'
+import random
+r = random.Random(5); s = "".join(r.choice("ACGT") for _ in range(40000))
+open("g.fa", "w").write(">chrT\n" + "\n".join(s[i:i+60] for i in range(0, len(s), 60)) + "\n")
+v = ["##fileformat=VCFv4.2", "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS"]
+for p in sorted(r.sample(range(1, 40001), 60)):
+    alt = r.choice([x for x in "ACGT" if x != s[p-1]])
+    v.append("chrT\t%d\t.\t%s\t%s\t.\t.\t.\tGT\t%s" % (p, s[p-1], alt, r.choice(["0|1", "1|0", "1|1", "0/1"])))
+open("g.vcf", "w").write("\n".join(v) + "\n")
+P
+python3 "$ROOT/tools/chrom.py" --exe "$BIN" --fasta g.fa --region chrT:1-40000 --germline-vcf g.vcf --block-size 20000 --out o --seed 3 -- -s6 -u1e-6 -e1000 -b1 -C10 > chrom.log 2>&1
+python3 - <<'P' && ok "chrom.py: REF = reference base, germline sites flagged GERMLINE" || bad "chrom.py germline REF"
+seq = "".join(l.strip() for l in open("g.fa") if not l.startswith(">"))
+germ = {int(l.split("\t")[1]) for l in open("g.vcf") if not l.startswith("#")}
+n = g = 0
+for l in open("o/chrom.vcf"):
+    if l.startswith("#"):
+        continue
+    f = l.split("\t")
+    n += 1
+    assert f[3] == seq[int(f[1]) - 1], (f[1], f[3])
+    if int(f[1]) in germ:
+        assert "GERMLINE" in f[7] and "SOMATIC" not in f[7], f[7]
+        g += 1
+assert n > 0 and g > 20, (n, g)
+P
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

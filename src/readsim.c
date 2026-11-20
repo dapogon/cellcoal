@@ -1,9 +1,9 @@
 /* Read-level simulator (--bam, --fastq): paired-end reads from the amplified genome of every cell.
 
-   For every cell and haplotype it draws fragments along the genome with a density given by the cell coverage (-C, -J), the amplification
+   For every cellIdx and haplotype it draws fragments along the genome with a density given by the cellIdx coverage (-C, -J), the amplification
    gain (--gain-sd), the amplicon structure (--amplicon-len, --amplicon-cv) and the allelic dropout (the lost segments are not covered).
    The fragments are molecules: errors of the amplification are carried by the molecule and are copied to its PCR duplicates (--dup-mean);
-   sequencing errors (-E) are drawn independently in every read. Output: one BAM (+ BAI) and/or FASTQ.gz pair per cell, the reference (ref.fa)
+   sequencing errors (-E) are drawn independently in every read. Output: one BAM (+ BAI) and/or FASTQ.gz pair per cellIdx, the reference (ref.fa)
    and, with --bulk-depth, the BAM of the healthy genome. The BAM flag 0x400 marks the PCR duplicates, the tag MI is the molecule and HP the haplotype. */
 
 #include "cellcoal.h"
@@ -40,11 +40,11 @@ static void Grow (unsigned char **b, size_t *cap, size_t need)
 		}
 	}
 
-static inline int Allele (int hap, int cell, long j)
+static inline int Allele (int hap, int cellIdx, long j)
 	{
-	if (cell < 0)
+	if (cellIdx < 0)
 		return data[hap][OUTGROUP_ROOT][j];
-	return GetG (hap, cell, (int) j);
+	return GetG (hap, cellIdx, (int) j);
 	}
 
 static double Normal (long int *seed)
@@ -139,7 +139,7 @@ static void WriteBam (const char *path, RecSet *rs, const char *rg, int sorted)
 	Chunk		*bins;
 	uint64_t	*lin;
 	long		nlin = (numSites >> 14) + 2, k;
-	char		bai[4*MAX_NAME];
+	char		bai[4*MAX_NAME+8];
 	unsigned char *buf;
 	uint64_t	firstOff = 0, lastEnd = 0;
 
@@ -297,21 +297,21 @@ static int CmpEvent (const void *a, const void *b)
 	}
 
 /* Errors of the amplification of one haplotype: sites where a fraction f of the molecules carry a wrong base */
-static AmpEvent *BuildAmpEvents (int cell, int hap, long int *seed, long *nev)
+static AmpEvent *BuildAmpEvents (int cellIdx, int hap, long int *seed, long *nev)
 	{
-	double	eps = meanAmplificationError, v = varAmplificationError, kappa, a, meanSb, rho, maxMult = 1.0;
+	double	eps = meanAmplificationError, v = varAmplificationError, conc, a, meanSb, rho, maxMult = 1.0;
 	long	n, i, cnt = 0, cap = 0;
 	AmpEvent *ev = NULL;
 	int		x, y, z;
 
 	*nev = 0;
-	if (cell < 0 || eps <= 0.0)
+	if (cellIdx < 0 || eps <= 0.0)
 		return NULL;
 	if (v <= 0.0 || v >= eps * (1.0 - eps))
 		v = 0.5 * eps * (1.0 - eps);
-	kappa = eps * (1.0 - eps) / v - 1.0;
-	a = eps * kappa;
-	meanSb = (a + 1.0) / (kappa + 1.0);			/* an error at a site is seen in a fraction of molecules distributed as Beta(a+1,b) */
+	conc = eps * (1.0 - eps) / v - 1.0;
+	a = eps * conc;
+	meanSb = (a + 1.0) / (conc + 1.0);			/* an error at a site is seen in a fraction of molecules distributed as Beta(a+1,b) */
 	rho = eps / meanSb;
 	if (ampSigOn)
 		for (x=0; x<4; x++)
@@ -323,7 +323,7 @@ static AmpEvent *BuildAmpEvents (int cell, int hap, long int *seed, long *nev)
 	for (i=0; i<n; i++)
 		{
 		long	j = (long) (RandomUniform (seed) * numSites);
-		int		al = Allele (hap, cell, j), alt, l;
+		int		al = Allele (hap, cellIdx, j), alt, l;
 		double	u, cum;
 
 		if (al < 0 || al > 3)
@@ -349,7 +349,7 @@ static AmpEvent *BuildAmpEvents (int cell, int hap, long int *seed, long *nev)
 			}
 		ev[cnt].site = j;
 		ev[cnt].alt = alt;
-		ev[cnt].f = RandomBetaMeanVar (meanSb, meanSb * (1.0 - meanSb) / (kappa + 2.0), seed);
+		ev[cnt].f = RandomBetaMeanVar (meanSb, meanSb * (1.0 - meanSb) / (conc + 2.0), seed);
 		cnt++;
 		}
 	if (cnt > 1)
@@ -411,8 +411,8 @@ static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int 
 	BgzfWrite (z, "\n", 1);
 	}
 
-/* Reads of one cell (cell >= 0) or of the healthy genome (cell = -1). Returns the number of read pairs. */
-static long SimulateGenome (int cell, double depth, int amplified, const char *prefix, const char *rg, long int *seed)
+/* Reads of one cell (cellIdx >= 0) or of the healthy genome (cellIdx = -1). Returns the number of read pairs. */
+static long SimulateGenome (int cellIdx, double depth, int amplified, const char *prefix, const char *rg, long int *seed)
 	{
 	RecSet	rs;
 	FastqOut fq;
@@ -423,7 +423,7 @@ static long SimulateGenome (int cell, double depth, int amplified, const char *p
 	char	*ta, *tb, *ra, *rb, name[96], path[4*MAX_NAME];
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
-	double	cm = (cell >= 0 && cellCovMult != NULL) ? cellCovMult[cell] : 1.0;
+	double	cm = (cellIdx >= 0 && cellCovMult != NULL) ? cellCovMult[cellIdx] : 1.0;
 
 	memset (&rs, 0, sizeof(rs));
 	memset (&fq, 0, sizeof(fq));
@@ -453,7 +453,7 @@ static long SimulateGenome (int cell, double depth, int amplified, const char *p
 		if (amplified)
 			{
 			BuildAmplicons (&amp[hap], seed);
-			ev[hap] = BuildAmpEvents (cell, hap, seed, &nev[hap]);
+			ev[hap] = BuildAmpEvents (cellIdx, hap, seed, &nev[hap]);
 			}
 		else
 			{
@@ -470,8 +470,8 @@ static long SimulateGenome (int cell, double depth, int amplified, const char *p
 
 			if (amplified)
 				{
-				if (gainOn == YES && cell >= 0)
-					g = GainAt (cell, hap, pos + W/2);
+				if (gainOn == YES && cellIdx >= 0)
+					g = GainAt (cellIdx, hap, pos + W/2);
 				g *= AmpliconAt (&amp[hap], pos + W/2);
 				}
 			lambda = depth * cm * 0.5 * g / (2.0 * L * (1.0 + dupMean)) * (double) W;
@@ -490,7 +490,7 @@ static long SimulateGenome (int cell, double depth, int amplified, const char *p
 					continue;
 				for (j=0; j<L && !lost; j++)
 					{
-					int a = Allele (hap, cell, s + j), b = Allele (hap, cell, s + ins - L + j);
+					int a = Allele (hap, cellIdx, s + j), b = Allele (hap, cellIdx, s + ins - L + j);
 
 					if (a < 0 || a > 3 || b < 0 || b > 3)
 						lost = 1;

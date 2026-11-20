@@ -173,6 +173,23 @@ def make_block_genome(seq, offset, germ, rng):
 
 
 # ---------------------------------------------------------------------------------------- blocks
+def fix_germline_site(f, refbase, is_germline):
+    """VCF row of CellCoal -> REF is the base of the reference sequence (it is the maternal base, which is the germline ALT at some
+    heterozygous sites), the genotypes are renumbered, and the germline sites of --germline-vcf are flagged GERMLINE instead of SOMATIC."""
+    if is_germline:
+        f[7] = f[7].replace("SOMATIC", "GERMLINE")
+    if f[3] == refbase:
+        return
+    alleles = [f[3]] + f[4].split(",")
+    new = [refbase] + [x for x in alleles if x != refbase]
+    remap = {str(i): str(new.index(x)) for i, x in enumerate(alleles)}
+    f[3] = refbase
+    f[4] = ",".join(new[1:])
+    for k in range(9, len(f)):
+        gt, sep, rest = f[k].partition(":")
+        f[k] = re.sub(r"\d", lambda m: remap.get(m.group(0), m.group(0)), gt) + sep + rest
+
+
 def one_block(exe, opts, tree, b, size, seed, workdir, genome=None, origin=0, ado_seed=0):
     d = os.path.join(workdir, "block_%04d" % b)
     shutil.rmtree(d, ignore_errors=True)
@@ -277,6 +294,8 @@ def main():
         nblocks = a.blocks
         total_len = a.blocks * a.block_size
 
+    if not a.germline_vcf:
+        germ = {}
     # 1. one tree for the whole chromosome (tumor only, ingroup tree, as -T reads it)
     tree = os.path.join(out, "chrom_tree.nwk")
     if a.tree:
@@ -357,6 +376,8 @@ def main():
                 f[0] = chrom_name
                 f[1] = str(pos)
                 f[2] = "snv%09d" % pos
+                if region_seq is not None:
+                    fix_germline_site(f, region_seq[pos - region_start], pos in germ)
                 fv.write("\t".join(f) + "\n")
                 nsites += 1
             first = False
