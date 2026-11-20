@@ -168,6 +168,10 @@ Reads of single-cell genomes: <code>--bam</code>, <code>--fastq</code>
 <li><a href="#a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased" id="toc-a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased">8.29
 A chromosome in blocks: <code>--blocks</code>, <code>--fasta</code>,
 <code>--region</code>, <code>--germline-vcf</code> (unreleased)</a></li>
+<li><a href="#base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-unreleased" id="toc-base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-unreleased">8.30
+Base qualities and strand bias in the reads (<code>--qual-sd</code>,
+<code>--qual-slope</code>, <code>--strand-bias</code>,
+unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -812,7 +816,9 @@ optional healthy <code>normal.bam</code></td>
 <tr class="even">
 <td><code>--bam</code>, <code>--fastq</code>, <code>--read-len</code>,
 <code>--insert-mean</code>, <code>--insert-sd</code>,
-<code>--dup-mean</code>, <code>--bulk-depth</code></td>
+<code>--dup-mean</code>, <code>--bulk-depth</code>,
+<code>--qual-sd</code>, <code>--qual-slope</code>,
+<code>--strand-bias</code></td>
 <td>no</td>
 <td>no</td>
 <td>yes</td>
@@ -2792,6 +2798,40 @@ the files of earlier versions (<code>chrom.vcf</code>,
 BED per cell) and uses <code>--min-alt-reads 2 --min-alt-vaf 0.3</code>
 by default. Not combined with <code>--bam</code>/<code>--fastq</code> or
 <code>-U</code>.</p>
+<h2 id="base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-unreleased">8.30
+Base qualities and strand bias in the reads (<code>--qual-sd</code>,
+<code>--qual-slope</code>, <code>--strand-bias</code>, unreleased)</h2>
+<p>By default every base of the reads has the same quality, Q = -10
+log10(E). <strong><code>--qual-sd S</code></strong> and
+<strong><code>--qual-slope B</code></strong> make it variable: the
+probability of a sequencing error of a base is <code>E * w * m</code>,
+where <code>w</code> rises along the read (log-slope <code>B</code>
+between the first and the last cycle; positive = worse towards the end,
+as in Illumina) and <code>m</code> is a lognormal multiplier of every
+base (log-sd <code>S</code>); both have mean 1, so <code>-E</code> stays
+the mean error. The quality written to the BAM and the FASTQ is the
+quality of that probability (Q = -10 log10 p, between 2 and 41), so it
+is calibrated: the observed error rate of the bases with Q 20-23 is
+about 0.007. The cycle of the second read of a pair runs from its own 5’
+end. Quality-aware callers can then be tested;
+<code>benchmark.py pileup --min-bq Q</code> ignores the bases below Q.
+Default 0 and 0 (constant quality): the data are identical to
+before.</p>
+<p><strong><code>--strand-bias P</code></strong> makes a fraction P of
+the errors of the amplification strand specific: the molecule that
+carries the error shows it only in the reads of one strand (the left
+read of the pair is the forward strand, the right read the reverse
+strand). In real data many artifacts (damage, copy errors of one strand)
+have this signature and callers filter them with the alternative reads
+on each strand. <code>benchmark.py pileup --both-strands</code> adds the
+baseline that requires alternative reads on both strands: with
+<code>--strand-bias 0.8</code> (20 cells, 8X) the false positives of the
+baseline fall from 1229 (duplicates out) to 407 and its recall from 0.74
+to 0.58. Default 0.</p>
+<p>In reads mode allelic dropout has to be given in segments
+(<code>--ado-block</code>); with <code>-D</code> alone (independent at
+every site) almost no fragment of 300 bp survives, and CellCoal now says
+so instead of writing empty BAM files.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

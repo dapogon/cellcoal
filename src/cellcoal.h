@@ -369,7 +369,7 @@ extern char				*signatureFile;
 extern char				*ampSignatureFile;
 extern double				gainSd, gainLen;
 extern int					doBam, doFastq, readLen;
-extern double				insertMean, insertSd, bulkDepth, dupMean;
+extern double				insertMean, insertSd, bulkDepth, dupMean, qualSd, qualSlope, strandBias;
 void				GenerateReadLevel (long int *seed, int dataSetNum);
 void				WriteTruthVcf (int dataSetNum);
 void				FinishReadLevel (void);

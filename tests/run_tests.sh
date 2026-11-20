@@ -1034,5 +1034,49 @@ assert os.path.exists(d + "/cell0001.R1.fastq.gz") and os.path.exists(d + "/cell
 P
 cd "$ROOT"
 
+echo "2g42. variable base qualities and strand-specific amplification errors"
+mkdir -p "$TMP/qs" && rm -rf "$TMP/qs"/* && cd "$TMP/qs"
+"$BIN" -n1 -s2 -l60000 -u1e-9 -e1000 -b1 -C20 -E0.004 --qual-sd 0.8 --qual-slope 2 --bam --fastq -oQ -#5 >/dev/null 2>&1
+"$BIN" -n1 -s2 -l60000 -u1e-9 -e1000 -b1 -C20 -E0.0002 -A0.01 0.0002 0 --dup-mean 0.001 --bam -oS0 -#5 >/dev/null 2>&1
+"$BIN" -n1 -s2 -l60000 -u1e-9 -e1000 -b1 -C20 -E0.0002 -A0.01 0.0002 0 --dup-mean 0.001 --strand-bias 1 --bam -oS1 -#5 >/dev/null 2>&1
+ROOT="$ROOT" python3 - <<'P' && ok "qualities: the error rate follows the quality, rises along the read; strand-specific errors are seen on one strand" || bad "qualities / strand bias"
+import os, sys, collections
+sys.path.insert(0, os.environ["ROOT"] + "/tools")
+import bamcheck as b
+_, ref = b.read_fasta("Q/reads_1/ref.fa")
+_, _, recs = b.parse_bam("Q/reads_1/cell0001.bam")
+n = collections.Counter(); m = collections.Counter(); cyc = collections.Counter(); cm = collections.Counter()
+for r in recs:
+    rev = bool(r["flag"] & 16)
+    for i, c in enumerate(r["bases"]):
+        q = r["qual"][i] // 4; k = ((len(r["bases"]) - 1 - i) if rev else i) // 50
+        n[q] += 1; cyc[k] += 1
+        if c != ref[r["pos"] + i]:
+            m[q] += 1; cm[k] += 1
+tot = sum(m.values()) / sum(n.values())
+assert 0.003 < tot < 0.005, tot
+for q in n:
+    if n[q] > 20000:
+        exp = 10 ** (-(4 * q + 1.5) / 10)
+        assert 0.6 * exp < m[q] / n[q] < 1.6 * exp, (q, m[q] / n[q], exp)
+assert cm[2] / cyc[2] > 1.5 * cm[0] / cyc[0], "the error does not rise along the read"
+assert len({x for r in recs[:50] for x in r["qual"]}) > 5
+assert os.path.getsize("Q/reads_1/cell0001.R1.fastq.gz") > 1000
+def one_strand(d):
+    _, ref = b.read_fasta(d + "/reads_1/ref.fa")
+    _, _, recs = b.parse_bam(d + "/reads_1/cell0001.bam")
+    st = collections.defaultdict(lambda: [0, 0])
+    for r in recs:
+        for i, c in enumerate(r["bases"]):
+            if c != ref[r["pos"] + i]:
+                st[(r["pos"] + i, c)][1 if r["flag"] & 16 else 0] += 1
+    multi = [v for v in st.values() if sum(v) >= 3]
+    return len(multi), sum(1 for v in multi if min(v) == 0) / len(multi)
+n0, f0 = one_strand("S0"); n1, f1 = one_strand("S1")
+assert n0 > 100 and n1 > 20 and f0 < 0.4 and f1 > 0.8, (n0, f0, n1, f1)
+P
+"$BIN" -n1 -s4 -l5000 -C10 -D0.1 --bam -oE >e.txt 2>&1; grep -aq "has to come in segments" e.txt && ok "reads mode asks for --ado-block when there is dropout" || bad "reads mode ADO without --ado-block"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

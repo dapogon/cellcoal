@@ -7,7 +7,7 @@
   # 2a. evaluate any caller: a VCF with one column per cell (cell0001 ...) or one non-empty call per site (--vcf-sites)
   benchmark.py eval  out/reads_1/truth.vcf  caller.vcf
   # 2b. built-in pileup baseline on the BAM files, with and without PCR duplicates, to see what duplicates do
-  benchmark.py pileup out/reads_1  --min-alt 2 --min-vaf 0.3
+  benchmark.py pileup out/reads_1  --min-alt 2 --min-vaf 0.3 [--min-bq 20] [--both-strands]
 
 Truth: somatic sites of truth.vcf (germline sites are ignored). A call is a true positive if the cell carries the allele,
 a false positive otherwise. Needs numpy (pileup mode only)."""
@@ -102,28 +102,40 @@ def cmd_pileup(a):
     for i, c in enumerate('ACGT'):
         code[ord(c)] = i
     refc = code[np.frombuffer(ref.encode(), np.uint8)]
-    calls = {True: set(), False: set()}      # True = remove duplicates
+    modes = [('pileup, all reads', False, False), ('pileup, PCR duplicates out', True, False)]
+    if a.both_strands:
+        modes.append(('pileup, dedup + alt on both strands', True, True))
+    calls = {m[0]: set() for m in modes}
     for ci, cell in enumerate(cells):
         path = os.path.join(a.dir, cell + '.bam')
         _, _, recs = b.parse_bam(path)
-        for dedup in (False, True):
-            cnt = np.zeros((5, L), np.int32)
+        for label, dedup, both in modes:
+            cnt = np.zeros((2, 5, L), np.int32)       # strand, base, position
             for r in recs:
                 if dedup and r['flag'] & 1024:
                     continue
-                cnt[code[np.frombuffer(r['bases'].encode(), np.uint8)], np.arange(r['pos'], r['pos'] + len(r['bases']))] += 1
-            depth = cnt[:4].sum(axis=0)
-            altc = cnt[:4].copy()
+                bs = code[np.frombuffer(r['bases'].encode(), np.uint8)]
+                ps = np.arange(r['pos'], r['pos'] + len(bs))
+                if a.min_bq > 0:
+                    keep = np.frombuffer(bytes(r['qual']), np.uint8) >= a.min_bq
+                    bs, ps = bs[keep], ps[keep]
+                cnt[1 if r['flag'] & 16 else 0, bs, ps] += 1
+            tot = cnt.sum(axis=0)
+            depth = tot[:4].sum(axis=0)
+            altc = tot[:4].copy()
             altc[refc[np.arange(L)] % 4, np.arange(L)] = 0
             altbase = altc.argmax(axis=0)
             altn = altc.max(axis=0)
-            sel = np.nonzero((altn >= a.min_alt) & (altn >= a.min_vaf * np.maximum(depth, 1)))[0]
-            for pos0 in sel:
-                calls[dedup].add((int(pos0) + 1, ci, 'ACGT'[altbase[pos0]]))
+            ok = (altn >= a.min_alt) & (altn >= a.min_vaf * np.maximum(depth, 1))
+            if both:
+                idx = np.arange(L)
+                ok &= (cnt[0][altbase, idx] > 0) & (cnt[1][altbase, idx] > 0)
+            for pos0 in np.nonzero(ok)[0]:
+                calls[label].add((int(pos0) + 1, ci, 'ACGT'[altbase[pos0]]))
         sys.stderr.write('\r%s' % cell)
     sys.stderr.write('\n')
-    evaluate(cells, sites, calls[False], 'pileup, all reads')
-    evaluate(cells, sites, calls[True], 'pileup, PCR duplicates out')
+    for label, dedup, both in modes:
+        evaluate(cells, sites, calls[label], label)
 
 
 def main():
@@ -136,6 +148,8 @@ def main():
     p.add_argument('dir')
     p.add_argument('--min-alt', type=int, default=2)
     p.add_argument('--min-vaf', type=float, default=0.3)
+    p.add_argument('--min-bq', type=int, default=0, help='ignore bases with a quality below this value')
+    p.add_argument('--both-strands', action='store_true', help='also report the baseline that requires alternative reads on both strands')
     a = ap.parse_args()
     (cmd_eval if a.cmd == 'eval' else cmd_pileup)(a)
 
