@@ -344,6 +344,13 @@ extern int					doSummary, numSNVsTrue;	/* --summary: write summary.tsv, one row 
 extern FILE				*fpSummary;
 extern int					minAltReads;
 extern double				minAltVaf;
+extern double				adoBlockLen;
+extern long long			adoOrigin;
+extern long				adoSeedOpt;
+void		BuildAdoBlocks (long int *seed);
+void		FreeAdoBlocks (void);
+int			AdoBlockLost (int node, int genome, long site);
+extern int			adoBlocksOn;
 extern int					coverageWindow, covNumWindows;
 extern long long			*covSum, *covSites;
 extern FILE					*fpCoverage;

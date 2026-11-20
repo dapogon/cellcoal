@@ -190,7 +190,12 @@ Geno ObservedAllele (int genome, int node, int site, Geno trueAllele)
 
 	if (trueAllele == DELETION)
 		return trueAllele;
-	if (sparseADO)
+	if (sparseADO && adoBlocksOn)
+		{
+		if (AdoBlockLost (node, genome, site))
+			return ADO;
+		}
+	else if (sparseADO)
 		{
 		if (sparseAdoCell == NULL)
 			rate = sparseAdoFixed;
@@ -228,6 +233,7 @@ void ResetObservationLayer (void)
 
 	obsActive = NO;
 	sparseADO = NO;
+	FreeAdoBlocks ();
 	free (sparseAdoCell);
 	free (sparseAdoSite);
 	sparseAdoCell = sparseAdoSite = NULL;
@@ -248,6 +254,12 @@ void SparseAllelicDropout (long int *seed)
 	{
 	int i, j;
 
+	if (adoBlockLen > 0.0)
+		{
+		BuildAdoBlocks (seed);
+		sparseADO = YES;
+		return;
+		}
 	sparseAdoBase = ((uint64_t)(RandomUniform (seed) * 4294967296.0) << 32) | (uint64_t)(RandomUniform (seed) * 4294967296.0);
 	if (doADOcell == NO && doADOsite == NO)
 		sparseAdoFixed = 1.0 - sqrt (1.0 - fixedADOrate);	/* ADO rate of an allele */
