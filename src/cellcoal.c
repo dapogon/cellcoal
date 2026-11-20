@@ -742,7 +742,12 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				}
 
 			/* generate NGS read counts */
-			if (streamMode == YES)
+			if (doBam || doFastq)
+				{
+				SetupCellCoverage (seed);
+				GenerateReadLevel (seed, dataSetNum);
+				}
+			else if (streamMode == YES)
 				{
 				GenerateStreamedReads (seed, dataSetNum);
 				}
@@ -750,7 +755,9 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				GenerateReadCounts(seed);
 
 			/* count how many alleles are at each site and how many SNVs we observe now, after ADO and genotype errors/read generation */
-			if (streamMode == YES)
+			if (doBam || doFastq)
+				numSNVs = numSNVsTrue;	/* the reads are written to files; no genotype calling here */
+			else if (streamMode == YES)
 				;	/* already counted by StreamReads */
 			else if (doNGS == YES)
 				{
@@ -1258,6 +1265,28 @@ int main (int argc, char **argv)
 		{
 		fprintf (stderr, "\nERROR: --ado-block needs allelic dropout (-D or -P) and cannot be combined with ADO among sites (-Q)\n");
 		exit (-1);
+		}
+
+	/* read-level simulator: --bam, --fastq */
+	if (doBam || doFastq)
+		{
+		if (doNGS == NO || alphabet == BINARY || ploidy != 2)
+			{
+			fprintf (stderr, "\nERROR: --bam/--fastq need the mean coverage (-C) and diploid DNA\n");
+			exit (-1);
+			}
+		if (meanDoubletRate > 0.0)
+			{
+			fprintf (stderr, "\nERROR: --bam/--fastq cannot be combined with doublets\n");
+			exit (-1);
+			}
+		if (readLen < 20 || readLen > 400 || insertMean < readLen || insertSd < 0.0 || dupMean < 0.0)
+			{
+			fprintf (stderr, "\nERROR: bad --read-len/--insert-mean/--insert-sd/--dup-mean\n");
+			exit (-1);
+			}
+		/* the counts and genotype calls of the other read outputs do not exist in this mode */
+		doPrintVCF = NO; doPrintCATG = NO; doPrintPILEUP = NO; doPrintBulk = NO;
 		}
 
 	/* --coverage: depth per cell of the non-variable sites, in <results>/coverage.tsv */

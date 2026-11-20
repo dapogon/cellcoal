@@ -268,6 +268,26 @@ static inline Geno GetG (int genome, int node, int site)
 		}
 	return data[genome][node][site];
 	}
+extern int					ampSigOn;
+extern double				ampSigMult[4][4][4];
+extern double				ampSigRow[4][4][4][4];
+/* Substitution probability of the amplification error at site j: from base k to base l, given that an error occurs.
+   Without --amp-signature it is the row of the error matrix (-X); with it, it depends on the context (healthy root genome). */
+static inline double AmpSub (long j, int k, int l)
+	{
+	if (__builtin_expect (ampSigOn, 0) && j > 0 && j < numSites - 1 && k >= 0 && k < 4 && l >= 0 && l < 4)
+		return ampSigRow[data[MATERNAL][OUTGROUP_ROOT][j-1]][k][data[MATERNAL][OUTGROUP_ROOT][j+1]][l];
+	return Eij[k][l]/cumEij[k][3];
+	}
+
+/* mean amplification error at site j for allele k, relative to -A (1 without --amp-signature) */
+static inline double AmpSiteMult (long j, int k)
+	{
+	if (__builtin_expect (ampSigOn, 0) && j > 0 && j < numSites - 1 && k >= 0 && k < 4)
+		return ampSigMult[data[MATERNAL][OUTGROUP_ROOT][j-1]][k][data[MATERNAL][OUTGROUP_ROOT][j+1]];
+	return 1.0;
+	}
+
 static inline Geno SetG (int genome, int node, int site, Geno value)
 	{
 	if (__builtin_expect (sparseMode, 0) && node != OUTGROUP_ROOT)
@@ -349,15 +369,13 @@ extern char				*signatureFile;
 extern char				*ampSignatureFile;
 extern double				gainSd, gainLen;
 extern int					doBam, doFastq, readLen;
-extern double				insertMean, insertSd, ampliconLen, ampliconCV, bulkDepth;
+extern double				insertMean, insertSd, ampliconLen, ampliconCV, bulkDepth, dupMean;
+void				GenerateReadLevel (long int *seed, int dataSetNum);
 extern char				*contigName;
 extern int					gainOn;
 void		BuildGain (long int *seed);
 void		FreeGain (void);
 double		GainAt (int node, int genome, long site);
-extern int					ampSigOn;
-extern double				ampSigMult[4][4][4];
-extern double				ampSigRow[4][4][4][4];
 void		SetupAmpSignature (const char *path);
 void		AmpSignatureComposition (const signed char *root, long n);
 extern int					numSignatureProfiles;

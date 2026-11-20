@@ -11,5 +11,6 @@
 	X(amplicon_len,   "--amplicon-len",   '\205', 2, ampliconLen, 2000) \
 	X(amplicon_cv,    "--amplicon-cv",    '\206', 2, ampliconCV,  0.5)  \
 	X(bulk_depth,     "--bulk-depth",     '\207', 2, bulkDepth,   0)    \
-	X(contig,         "--contig",         '\210', 3, contigName,  0)
+	X(contig,         "--contig",         '\210', 3, contigName,  0)    \
+	X(dup_mean,       "--dup-mean",       '\211', 2, dupMean,     0.3)
 #endif

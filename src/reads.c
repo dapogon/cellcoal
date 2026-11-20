@@ -115,23 +115,6 @@ static void TotalReadCountsAtSite (int j)
 	allSites[j].readCountACGT = countReadsA + countReadsC + countReadsG + countReadsT;
 	}
 
-/* Substitution probability of the amplification error at site j: from base k to base l, given that an error occurs.
-   Without --amp-signature it is the row of the error matrix (-X); with it, it depends on the context (healthy root genome). */
-static inline double AmpSub (long j, int k, int l)
-	{
-	if (__builtin_expect (ampSigOn, 0) && j > 0 && j < numSites - 1 && k >= 0 && k < 4 && l >= 0 && l < 4)
-		return ampSigRow[data[MATERNAL][OUTGROUP_ROOT][j-1]][k][data[MATERNAL][OUTGROUP_ROOT][j+1]][l];
-	return Eij[k][l]/cumEij[k][3];
-	}
-
-/* mean amplification error at site j for allele k, relative to -A (1 without --amp-signature) */
-static inline double AmpSiteMult (long j, int k)
-	{
-	if (__builtin_expect (ampSigOn, 0) && j > 0 && j < numSites - 1 && k >= 0 && k < 4)
-		return ampSigMult[data[MATERNAL][OUTGROUP_ROOT][j-1]][k][data[MATERNAL][OUTGROUP_ROOT][j+1]];
-	return 1.0;
-	}
-
 static void DoubletAtSite (int c1, int c2, int j, const double *gl1, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
 static void TotalReadCountsAtSite (int j);
 int MLCountsAtSite (int j);
