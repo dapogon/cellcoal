@@ -59,6 +59,7 @@ FILE			*catgBody = NULL;	/* temporary file with the CATG site lines of a streame
 int			streamBlock = 0;		/* number of sites in a block */
 int			*doubletDonor = NULL;	/* donor cell of each doublet cell when streaming */
 int			sparseADO = 0;
+int			adoBlocksOn = 0;
 int			*errCount = NULL;
 int		readingParameterFile, simulateOnlyTwoTemplates;
 int 		doGATK, do2T, do4T, doGATK_ADO, do2T_ADO, do4T_ADO;
@@ -87,6 +88,9 @@ long long			*covSum = NULL;	/* [window * numCells + cell]: sum of the depth over
 long long			*covSites = NULL;	/* [window]: number of non-variable sites of the window */
 int					covNumWindows = 0;
 FILE				*fpCoverage = NULL;
+double				adoBlockLen = 0.0;	/* --ado-block L: ADO in contiguous segments of mean length L sites (0 = independent per site) */
+long long			adoOrigin = 0;	/* --ado-origin O: position (0-based, in sites) of the first site of this data set along the chromosome */
+long				adoSeedOpt = 0;	/* --ado-seed S: seed of the dropout segments and of the ADO rate of the cells (0 = derived from the main seed) */
 double				minAltVaf = 0.0;	/* --min-alt-vaf: minimum fraction of the reads of the cell that support the non-reference allele */
 int					minAltReads = 0;	/* --min-alt-reads: a site is variable only when a cell has a non-reference call supported by at least this many reads (0 = any non-reference call) */
 double				ampCellVar = 0.0;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */

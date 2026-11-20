@@ -1221,6 +1221,12 @@ int main (int argc, char **argv)
 		ReadUserGenome(fpUserGenome);
 		}
 
+	if (adoBlockLen > 0.0 && (doADOsite == YES || (fixedADOrate <= 0 && doADOcell == NO)))
+		{
+		fprintf (stderr, "\nERROR: --ado-block needs allelic dropout (-D or -P) and cannot be combined with ADO among sites (-Q)\n");
+		exit (-1);
+		}
+
 	/* --coverage: depth per cell of the non-variable sites, in <results>/coverage.tsv */
 	if (coverageWindow > 0)
 		{

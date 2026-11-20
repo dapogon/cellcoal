@@ -738,5 +738,40 @@ grep -q '"min_alt_vaf": 0.3' B/run.json && ok "run.json records min_alt_vaf" || 
 "$BIN" $C --min-alt-vaf 1.5 -oC >C.txt 2>&1; grep -qi "between 0 and 1" C.txt && ok "--min-alt-vaf range checked" || bad "--min-alt-vaf range"
 cd "$ROOT"
 
+echo "2g30. --ado-block: allelic dropout in contiguous segments"
+mkdir -p "$TMP/adob" && rm -rf "$TMP/adob"/* && cd "$TMP/adob"
+C="-n1 -s20 -l100000 -u1e-7 -e1000 -b1 -D0.25 --ado-block 2000 --ado-seed 7"
+"$BIN" $C -oA -3 -#3 >/dev/null 2>&1
+"$BIN" -n1 -s20 -l50000 -u1e-7 -e1000 -b1 -D0.25 --ado-block 2000 --ado-seed 7 --ado-origin 50000 -oB -3 -#9 >/dev/null 2>&1
+CELLCOAL_SPARSE=1 "$BIN" $C -oS -3 -#3 >/dev/null 2>&1
+CELLCOAL_SPARSE=0 "$BIN" $C -oD -3 -#3 >/dev/null 2>&1
+python3 - <<'P' && ok "--ado-block: lost fraction, contiguous segments, continuity with --ado-origin" || bad "--ado-block content"
+def rd(f):
+    d={}
+    for l in open(f).read().split("\n")[3:]:
+        if l.strip():
+            t=l.split(); d[t[0]]="".join(t[1:])
+    return d
+a=rd("A/full_gen"); b=rd("B/full_gen")
+fr=0; runs=0; n=0
+for c in a:
+    m=a[c][0::2]; fr+=m.count("?")/len(m); n+=1
+    prev=False
+    for ch in m:
+        q=(ch=="?")
+        if q and not prev: runs+=1
+        prev=q
+fr/=n
+assert 0.07 < fr < 0.20, fr             # expected 1-sqrt(0.75) = 0.134
+assert runs < 12*n, runs                 # about 7 segments per allele (independent sites would give ~10000)
+for c in a:
+    x=a[c][2*50000:]; y=b[c]
+    assert [ch=="?" for ch in x[0::2]]==[ch=="?" for ch in y[0::2]]
+    assert [ch=="?" for ch in x[1::2]]==[ch=="?" for ch in y[1::2]]
+P
+cmp -s S/full_gen D/full_gen && ok "--ado-block: sparse and dense genomes give the same data" || bad "--ado-block sparse vs dense"
+"$BIN" -n1 -s5 -l1000 -u1e-6 -e1000 -b1 -C10 -P0.2 0.01 -Q0.1 0.01 --ado-block 100 -oE >E.txt 2>&1; grep -aq "cannot be combined" E.txt && ok "--ado-block cannot be combined with -Q" || bad "--ado-block with -Q"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

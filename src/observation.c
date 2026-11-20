@@ -18,11 +18,163 @@
  a = 1 - sqrt(1-A)
 */
 
+/* ADO in contiguous segments (--ado-block). Every allele of every cell is a two-state chain along the chromosome (present / lost),
+   alternating segments of exponential length: lost segments of mean L sites and present segments of mean L(1-a)/a, so that a fraction
+   a of the allele is lost (a = allele ADO rate). The chain starts in its stationary state at chromosome position 0 and is generated from
+   a seed that depends only on --ado-seed, the cell and the allele: runs on consecutive pieces of a chromosome (--ado-origin) therefore see
+   one continuous process, and the same ADO rate of every cell. Intervals are kept sparse (start, end) and looked up by binary search. */
+typedef struct { long *s, *e; int n, cap; } AdoIv;
+static AdoIv *adoIv = NULL;
+
+void FreeAdoBlocks (void)
+	{
+	int k;
+
+	if (adoIv != NULL)
+		{
+		for (k=0; k<2*(numCells+1); k++)
+			{
+			free (adoIv[k].s);
+			free (adoIv[k].e);
+			}
+		free (adoIv);
+		adoIv = NULL;
+		}
+	adoBlocksOn = NO;
+	}
+
+static void AdoIvAdd (AdoIv *v, long s, long e)
+	{
+	if (v->n == v->cap)
+		{
+		v->cap = v->cap ? 2 * v->cap : 8;
+		v->s = (long*) realloc (v->s, v->cap * sizeof(long));
+		v->e = (long*) realloc (v->e, v->cap * sizeof(long));
+		if (!v->s || !v->e)
+			{
+			fprintf (stderr, "Could not allocate the ADO segments\n");
+			exit (-1);
+			}
+		}
+	v->s[v->n] = s;
+	v->e[v->n++] = e;
+	}
+
+void BuildAdoBlocks (long int *seed)
+	{
+	int			i, g;
+	long int	cseed;
+	uint64_t	base, x;
+	double		a, rA, mean[2], u;
+	long long	pos, end, len;
+	int			lost;
+
+	FreeAdoBlocks ();
+	if (adoSeedOpt > 0)
+		base = (uint64_t) adoSeedOpt;
+	else
+		base = ((uint64_t)(RandomUniform (seed) * 4294967296.0) << 32) | (uint64_t)(RandomUniform (seed) * 4294967296.0);
+	adoIv = (AdoIv*) calloc (2 * (numCells + 1), sizeof(AdoIv));
+	if (!adoIv)
+		{
+		fprintf (stderr, "Could not allocate the ADO segments\n");
+		exit (-1);
+		}
+	x = base ^ 0xA5A5A5A55A5A5A5AULL;
+	cseed = 1 + (long int)(SplitMix64 (&x) % 2147483646ULL);	/* for the Beta draws of the cells, the same in every piece */
+	double *cellRate = NULL;
+	if (doADOcell == YES)
+		{
+		cellRate = (double*) calloc (numCells + 1, sizeof(double));
+		for (i=0; i<numCells+1; i++)
+			cellRate[i] = RandomBetaMeanVar (meanADOcell, varADOcell, &cseed);
+		WriteADOCells (cellRate, adoReplicate);
+		KeepCellADO (cellRate);
+		}
+	end = adoOrigin + numSites;
+	for (i=0; i<numCells+1; i++)
+		{
+		a = (cellRate == NULL) ? 1.0 - sqrt (1.0 - fixedADOrate) : 1.0 - sqrt (1.0 - cellRate[i]);
+		for (g=0; g<2; g++)
+			{
+			AdoIv *v = &adoIv[2 * i + g];
+			if (a <= 0.0)
+				continue;
+			if (a >= 1.0)
+				{
+				AdoIvAdd (v, 0, numSites);
+				continue;
+				}
+			x = base ^ ((uint64_t)(i + 1) * 0x9E3779B97F4A7C15ULL) ^ ((uint64_t)(g + 1) * 0xC2B2AE3D27D4EB4FULL);
+			(void) SplitMix64 (&x);
+			mean[1] = adoBlockLen;						/* lost */
+			mean[0] = adoBlockLen * (1.0 - a) / a;		/* present */
+			rA = (double)((SplitMix64 (&x) >> 11) + 0.5) * (1.0 / 9007199254740992.0);
+			lost = (rA < a);
+			pos = 0;
+			while (pos < end)
+				{
+				u = (double)((SplitMix64 (&x) >> 11) + 0.5) * (1.0 / 9007199254740992.0);
+				len = (long long) ceil (-log (u) * mean[lost]);
+				if (len < 1)
+					len = 1;
+				if (lost && pos + len > adoOrigin)
+					{
+					long long s0 = (pos > adoOrigin) ? pos : adoOrigin, e0 = (pos + len < end) ? pos + len : end;
+					AdoIvAdd (v, (long)(s0 - adoOrigin), (long)(e0 - adoOrigin));
+					}
+				pos += len;
+				lost = !lost;
+				}
+			}
+		}
+	free (cellRate);
+	adoBlocksOn = YES;
+	}
+
+int AdoBlockLost (int node, int genome, long site)
+	{
+	AdoIv	*v = &adoIv[2 * node + genome];
+	int		lo = 0, hi = v->n - 1;
+
+	while (lo <= hi)
+		{
+		int mid = (lo + hi) / 2;
+		if (site < v->s[mid])
+			hi = mid - 1;
+		else if (site >= v->e[mid])
+			lo = mid + 1;
+		else
+			return 1;
+		}
+	return 0;
+	}
+
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
 	double alleleADOrateMean = 0.0, *ADOrateCell = NULL, *ADOrateSite = NULL;
 	double alleleRate, cellSiteRate;
+
+	if (adoBlockLen > 0.0)
+		{
+		BuildAdoBlocks (seed);
+		for (i=0; i<numCells+1; i++)
+			for (j=0; j<numSites; j++)
+				{
+				if (AdoBlockLost (i, MATERNAL, j) && GetG(MATERNAL, i, j) != DELETION)
+					{
+					SetG(MATERNAL, i, j, ADO);
+					allSites[j].hasADO = YES;
+					}
+				if (AdoBlockLost (i, PATERNAL, j) && GetG(PATERNAL, i, j) != DELETION)
+					{
+					SetG(PATERNAL, i, j, ADO);
+					allSites[j].hasADO = YES;
+					}
+				}
+		return;
+		}
 
 	/* The rate of each genotype is computed on the fly from the rate of its cell and the rate of its site,
 	   so that no cells x sites matrix of rates has to be stored. */

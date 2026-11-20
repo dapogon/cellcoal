@@ -20,6 +20,9 @@ Usage (real reference sequence):
                     Unphased heterozygous genotypes are phased at random.  It cannot be used together with -c (germline
                     SNPs simulated by CellCoal on the reference).
 
+  --ado-block L (after "--") makes the allelic dropout (-D) come in contiguous segments of mean length L sites; the segments are
+  continuous from block to block (the origin of every block is passed with --ado-origin, the same --ado-seed to all).
+
 Do not give -n, -l, -#, -o, -T, -U or --summary after "--": the script sets them.  It also sets --no-outgroup and,
 unless you give them, --min-alt-reads 2 --min-alt-vaf 0.3 (a site is written only if a cell has a non-reference call with at least
 2 alternative reads and 30% of its reads).  A tree can be given with --tree FILE
@@ -169,7 +172,7 @@ def make_block_genome(seq, offset, germ, rng):
 
 
 # ---------------------------------------------------------------------------------------- blocks
-def one_block(exe, opts, tree, b, size, seed, workdir, genome=None):
+def one_block(exe, opts, tree, b, size, seed, workdir, genome=None, origin=0, ado_seed=0):
     d = os.path.join(workdir, "block_%04d" % b)
     shutil.rmtree(d, ignore_errors=True)
     env = dict(os.environ, OMP_NUM_THREADS="1")
@@ -178,6 +181,8 @@ def one_block(exe, opts, tree, b, size, seed, workdir, genome=None):
         cmd.append("-U%s" % genome)
     if COVERAGE_WINDOW > 0:
         cmd += ["--coverage", str(COVERAGE_WINDOW)]
+    if "--ado-block" in opts:  # dropout segments that continue from one block to the next
+        cmd += ["--ado-origin", str(origin), "--ado-seed", str(ado_seed)]
     run(cmd, env)
     return b, d
 
@@ -302,7 +307,7 @@ def main():
     jobs_list = []
     for b in range(nblocks):
         if region_seq is None:
-            jobs_list.append((b, a.block_size, None))
+            jobs_list.append((b, a.block_size, None, b * a.block_size))
             continue
         off = b * a.block_size
         seq = region_seq[off: off + a.block_size]
@@ -315,10 +320,10 @@ def main():
         with open(g, "w") as fg:
             fg.write(">maternal\n%s\n>paternal\n%s\n" % (mat, pat))
         poss[b] = pos
-        jobs_list.append((b, len(pos), g))
+        jobs_list.append((b, len(pos), g, off))
     done = {}
     with concurrent.futures.ThreadPoolExecutor(max_workers=max(1, a.jobs)) as ex:
-        futs = [ex.submit(one_block, exe, opts, tree, b, n, a.seed, work, g) for b, n, g in jobs_list]
+        futs = [ex.submit(one_block, exe, opts, tree, b, n, a.seed, work, g, o, a.seed + 1) for b, n, g, o in jobs_list]
         for k, fu in enumerate(concurrent.futures.as_completed(futs), 1):
             b, d = fu.result()
             done[b] = d

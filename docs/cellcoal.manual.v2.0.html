@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.3.0)</p>
+<p class="date">November, 2026 (CellCoal 2.2.7)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -143,10 +143,14 @@ Version 2.2.5: quickstart, more truth metrics, Windows binary</a></li>
 2.2.6: –version, –check, Intel Mac binary</a></li>
 <li><a href="#version-2.2.7-amplification-error-among-cells" id="toc-version-2.2.7-amplification-error-among-cells">8.21 Version
 2.2.7: amplification error among cells</a></li>
-<li><a href="#tumor-only---no-outgroup-2.3.0" id="toc-tumor-only---no-outgroup-2.3.0">8.22 Tumor only:
-<code>--no-outgroup</code> (2.3.0)</a></li>
-<li><a href="#fewer-false-variable-sites---min-alt-reads-2.3.0" id="toc-fewer-false-variable-sites---min-alt-reads-2.3.0">8.23 Fewer
-false variable sites: <code>--min-alt-reads</code> (2.3.0)</a></li>
+<li><a href="#tumor-only---no-outgroup-unreleased" id="toc-tumor-only---no-outgroup-unreleased">8.22 Tumor only:
+<code>--no-outgroup</code> (unreleased)</a></li>
+<li><a href="#fewer-false-variable-sites---min-alt-reads-unreleased" id="toc-fewer-false-variable-sites---min-alt-reads-unreleased">8.23
+Fewer false variable sites: <code>--min-alt-reads</code>
+(unreleased)</a></li>
+<li><a href="#allelic-dropout-in-contiguous-segments---ado-block-unreleased" id="toc-allelic-dropout-in-contiguous-segments---ado-block-unreleased">8.24
+Allelic dropout in contiguous segments: <code>--ado-block</code>
+(unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2334,8 +2338,8 @@ not record the long options (<code>--fast</code>,
 manual (section 1.1), <code>CITATION.cff</code> and the source header
 state that CellCoal 2 was developed together with Claude (Anthropic).
 Without the new option the output is identical to 2.2.6.</p>
-<h2 id="tumor-only---no-outgroup-2.3.0">8.22 Tumor only:
-<code>--no-outgroup</code> (2.3.0)</h2>
+<h2 id="tumor-only---no-outgroup-unreleased">8.22 Tumor only:
+<code>--no-outgroup</code> (unreleased)</h2>
 <p>By default the simulation includes one healthy outgroup cell
 (<code>outgcell</code>) that hangs from the healthy root. With
 <code>--no-outgroup</code> only the tumor cells are reported:</p>
@@ -2351,8 +2355,9 @@ which is the format <code>-T</code> expects, so it can be read back
 without editing;</li>
 <li>the simulation of the tumor cells is not changed.</li>
 </ul>
-<h2 id="fewer-false-variable-sites---min-alt-reads-2.3.0">8.23 Fewer
-false variable sites: <code>--min-alt-reads</code> (2.3.0)</h2>
+<h2 id="fewer-false-variable-sites---min-alt-reads-unreleased">8.23
+Fewer false variable sites: <code>--min-alt-reads</code>
+(unreleased)</h2>
 <p>A site is written to the VCF when some cell has a non-reference
 maximum-likelihood genotype. With many cells this is almost always true,
 because a small genotype error per cell adds up (100 cells, 10X, error
@@ -2422,6 +2427,34 @@ lost, and the singleton recall of the summary shows it.</p>
 <p>The summary table has <code>singleton_sites</code> and
 <code>singleton_recall</code>, so that the loss of singletons can be
 checked for any setting.</p>
+<h2 id="allelic-dropout-in-contiguous-segments---ado-block-unreleased">8.24
+Allelic dropout in contiguous segments: <code>--ado-block</code>
+(unreleased)</h2>
+<p>By default allelic dropout (ADO, <code>-D</code>, <code>-P</code>) is
+drawn independently at every site. In real data whole segments of one
+allele are lost (a region of a chromosome that was not amplified). With
+<code>--ado-block L</code> every allele of every cell is a two-state
+chain along the genome, <em>present</em> or <em>lost</em>, with segments
+of exponential length: lost segments of mean length L sites and present
+segments of mean length L(1-a)/a, where a = 1 - sqrt(1-D) is the ADO
+rate of an allele. The fraction of the genome lost is therefore the same
+as without <code>--ado-block</code>, but the lost sites are contiguous.
+A cell can lose one allele and keep the other, so at a heterozygous site
+the genotype looks homozygous over a whole segment. The ADO rate of the
+cells can still vary (<code>-P</code>); ADO among sites
+(<code>-Q</code>) cannot be combined with <code>--ado-block</code>.</p>
+<p>To simulate a long chromosome in pieces
+(<code>tools/chrom.py</code>), <code>--ado-origin O</code> gives the
+position of the first site of the piece on the chromosome and
+<code>--ado-seed S</code> the seed of the segments (and of the ADO rate
+of the cells): the segments are generated from the start of the
+chromosome with a seed that depends only on S, the cell and the allele,
+so consecutive pieces see one continuous process.
+<code>tools/chrom.py</code> passes both automatically when
+<code>--ado-block</code> is given after <code>--</code>. The likelihood
+models of the genotype caller still assume the mean ADO rate
+(<code>-D</code>), as before. Sparse and dense genomes give the same
+data.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:
