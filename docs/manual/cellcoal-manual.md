@@ -223,7 +223,7 @@ CellCoal produces data in one of three ways, and each option belongs to one or m
 | `-G` genotyping error | yes | no | no |
 | `-C`, `-J`, `-A`, `-E`, `-X`, `--gain-sd/--gain-len`, `--amp-signature`, `--amp-cell-var`, `--cov-ado-corr` | no | yes | yes |
 | `-V`, `-O`, `-R`, `-I`, `-B`, `--cov-doublet-corr`, `--ado-doublet-corr`, `--min-alt-reads`, `--min-alt-vaf`, `-M`, `--coverage`, `--fast`, `-8`, `-9`, `-0`, `--bcf`, `-z`, `-Z` | no | yes | no |
-| `--bam`, `--fastq`, `--read-len`, `--insert-mean`, `--insert-sd`, `--dup-mean`, `--bulk-depth` | no | no | yes |
+| `--bam`, `--fastq`, `--read-len`, `--insert-mean`, `--insert-sd`, `--dup-mean`, `--bulk-depth`, `--qual-sd`, `--qual-slope`, `--strand-bias` | no | no | yes |
 | `--blocks`, `--fasta`, `--region`, `--germline-vcf` | no | yes | yes |
 
 Where two options look alike they do different things: `-M` keeps the sites whose **pooled** VAF (all the cells together) is at least M, whereas `--min-alt-reads` and `--min-alt-vaf` keep the sites where some **cell** has a call supported by enough reads; `-D/-P/-Q` set how much allelic dropout there is and `--ado-block` how it is spread along the genome (in contiguous segments). `-F` (parameter file) and `-U` (diploid genome in FASTA) are older: `--config` reads the options from a JSON or YAML file, and `--fasta` with `--region` and `--germline-vcf` gives a real reference.
@@ -1193,6 +1193,14 @@ Limits of this first version: no indels, no doublets, one contig, the quality is
 **Blocks and reads.** `--blocks` or `--fasta` together with `--bam`/`--fastq` simulates the reads of a whole chromosome: the reads of each block are written, in the coordinates of the chromosome, to one BAM (+BAI) and one FASTQ pair per cell (`reads_1/cellNNNN.*`), so a block is processed and released before the next one and the memory is that of one block. The BAM header and `ref.fa` have the length of the chromosome (`chrom:start-end` regions keep the real coordinates; what lies before the region, after the last block and the masked sites are `N`), and `truth.vcf` has the real CHROM and POS, REF = the reference base and the flag GERMLINE at the germline sites. No read spans the boundary between blocks nor a masked site, and the coverage, the amplification error and the gain of a cell are the same in all the blocks (the per-cell parameters are drawn in the first block).
 
 `tools/chrom.py` is a wrapper of these options that writes the files of earlier versions (`chrom.vcf`, `chrom_summary.tsv`, `chrom_coverage.tsv` and one BED per cell) and uses `--min-alt-reads 2 --min-alt-vaf 0.3` by default. Not combined with `--bam`/`--fastq` or `-U`.
+
+## 8.30 Base qualities and strand bias in the reads (`--qual-sd`, `--qual-slope`, `--strand-bias`, unreleased)
+
+By default every base of the reads has the same quality, Q = -10 log10(E). **`--qual-sd S`** and **`--qual-slope B`** make it variable: the probability of a sequencing error of a base is `E * w * m`, where `w` rises along the read (log-slope `B` between the first and the last cycle; positive = worse towards the end, as in Illumina) and `m` is a lognormal multiplier of every base (log-sd `S`); both have mean 1, so `-E` stays the mean error. The quality written to the BAM and the FASTQ is the quality of that probability (Q = -10 log10 p, between 2 and 41), so it is calibrated: the observed error rate of the bases with Q 20-23 is about 0.007. The cycle of the second read of a pair runs from its own 5' end. Quality-aware callers can then be tested; `benchmark.py pileup --min-bq Q` ignores the bases below Q. Default 0 and 0 (constant quality): the data are identical to before.
+
+**`--strand-bias P`** makes a fraction P of the errors of the amplification strand specific: the molecule that carries the error shows it only in the reads of one strand (the left read of the pair is the forward strand, the right read the reverse strand). In real data many artifacts (damage, copy errors of one strand) have this signature and callers filter them with the alternative reads on each strand. `benchmark.py pileup --both-strands` adds the baseline that requires alternative reads on both strands: with `--strand-bias 0.8` (20 cells, 8X) the false positives of the baseline fall from 1229 (duplicates out) to 407 and its recall from 0.74 to 0.58. Default 0.
+
+In reads mode allelic dropout has to be given in segments (`--ado-block`); with `-D` alone (independent at every site) almost no fragment of 300 bp survives, and CellCoal now says so instead of writing empty BAM files.
 
 ## 6.10j Windows (experimental)
 

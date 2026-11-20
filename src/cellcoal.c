@@ -378,6 +378,9 @@ static void CheckModeOptions (void)
 		{"--insert-sd", ExtraOptionGiven ("--insert-sd")},
 		{"--dup-mean", ExtraOptionGiven ("--dup-mean")},
 		{"--bulk-depth", ExtraOptionGiven ("--bulk-depth")},
+		{"--qual-sd", ExtraOptionGiven ("--qual-sd")},
+		{"--qual-slope", ExtraOptionGiven ("--qual-slope")},
+		{"--strand-bias", ExtraOptionGiven ("--strand-bias")},
 		{NULL, 0}
 		};
 	int		k;
@@ -1473,9 +1476,19 @@ int main (int argc, char **argv)
 			fprintf (stderr, "\nERROR: --bam/--fastq cannot be combined with doublets\n");
 			exit (-1);
 			}
+		if ((fixedADOrate > 0 || doADOcell == YES || doADOsite == YES) && adoBlockLen <= 0.0)
+			{
+			fprintf (stderr, "\nERROR: in reads mode the allelic dropout has to come in segments (--ado-block L, e.g. 3000): with dropout independent at every site almost no fragment of %d bp survives\n", 2 * readLen);
+			exit (-1);
+			}
 		if (readLen < 20 || readLen > 400 || insertMean < readLen || insertSd < 0.0 || dupMean < 0.0)
 			{
 			fprintf (stderr, "\nERROR: bad --read-len/--insert-mean/--insert-sd/--dup-mean\n");
+			exit (-1);
+			}
+		if (qualSd < 0.0 || qualSd > 3.0 || qualSlope < -6.0 || qualSlope > 6.0 || strandBias < 0.0 || strandBias > 1.0)
+			{
+			fprintf (stderr, "\nERROR: bad --qual-sd (0 to 3), --qual-slope (-6 to 6) or --strand-bias (0 to 1)\n");
 			exit (-1);
 			}
 		/* the VCF of read counts and genotype likelihoods does not exist in this mode */

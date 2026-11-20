@@ -89,7 +89,7 @@ long long			*covSites = NULL;	/* [window]: number of non-variable sites of the w
 int					covNumWindows = 0;
 FILE				*fpCoverage = NULL;
 int					doBam = 0, doFastq = 0, readLen = 150;	/* read-level simulator (--bam, --fastq, --read-len) */
-double				insertMean = 400.0, insertSd = 60.0, bulkDepth = 0.0, dupMean = 0.3;
+double				insertMean = 400.0, insertSd = 60.0, bulkDepth = 0.0, dupMean = 0.3, qualSd = 0.0, qualSlope = 0.0, strandBias = 0.0;
 char				*contigName = "chr1";
 double				gainSd = 0.0;	/* --gain-sd: standard deviation of the log amplification gain of a haplotype (0 = off) */
 double				gainLen = 0.0;	/* --gain-len: mean length (sites) of the segments of constant gain */

@@ -22,7 +22,7 @@ typedef struct
 	long			ni, capi;
 	} RecSet;
 
-typedef struct { long site; int alt; double f; } AmpEvent;
+typedef struct { long site; int alt; double f; int strand; } AmpEvent;	/* strand: -1 both, 0 forward, 1 reverse */
 
 static const char BASES[] = "ACGT";
 
@@ -70,7 +70,7 @@ static int Reg2Bin (long beg, long end)
 static void Put16 (unsigned char *p, int v) { p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF; }
 
 /* BAM record of one read (sequence in the orientation of the reference) */
-static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mpos, long tlen, const char *seq, int len, int q, const char *rg, int hap, int mol)
+static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mpos, long tlen, const char *seq, int len, int q, const unsigned char *qv, const char *rg, int hap, int mol)
 	{
 	size_t	need, o;
 	int		nl = (int) strlen (name) + 1, rgl = (int) strlen (rg) + 1, i;
@@ -104,7 +104,11 @@ static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mp
 
 		p[o++] = (unsigned char) ((code[a] << 4) | (b >= 0 ? code[b] : 0));
 		}
-	memset (p + o, q, len); o += len;
+	if (qv != NULL)
+		memcpy (p + o, qv, len);
+	else
+		memset (p + o, q, len);
+	o += len;
 	p[o++] = 'R'; p[o++] = 'G'; p[o++] = 'Z'; memcpy (p + o, rg, rgl); o += rgl;
 	p[o++] = 'H'; p[o++] = 'P'; p[o++] = 'C'; p[o++] = (unsigned char) hap;
 	p[o++] = 'M'; p[o++] = 'I'; p[o++] = 'i'; Put32le (p + o, (uint32_t) mol); o += 4;
@@ -344,6 +348,9 @@ static AmpEvent *BuildAmpEvents (int cellIdx, int hap, long int *seed, long *nev
 		ev[cnt].site = j;
 		ev[cnt].alt = alt;
 		ev[cnt].f = RandomBetaMeanVar (meanSb, meanSb * (1.0 - meanSb) / (conc + 2.0), seed);
+		ev[cnt].strand = -1;
+		if (strandBias > 0.0 && RandomUniform (seed) < strandBias)
+			ev[cnt].strand = (RandomUniform (seed) < 0.5) ? 0 : 1;
 		cnt++;
 		}
 	if (cnt > 1)
@@ -377,6 +384,68 @@ static void SeqErrors (char *s, int len, long int *seed)
 		}
 	}
 
+/* Base qualities (--qual-sd, --qual-slope): the error probability of every base is eps * w(cycle) * m, where w rises along the read (log-slope
+   --qual-slope between the first and the last cycle) and m is a lognormal multiplier of the base (log-sd --qual-sd); both have mean 1, so -E stays the
+   mean error. The quality written is the one of that probability (calibrated: Q = -10 log10 p). The qualities are in the orientation of the BAM. */
+static double	qualMult[1024], qualW[512];
+static int		qualReady = 0;
+
+static void QualSetup (int len, long int *seed)
+	{
+	int		k, i;
+	double	sum = 0.0, sd = qualSd;
+
+	if (qualReady)
+		return;
+	for (k=0; k<1024; k++)
+		{
+		qualMult[k] = (sd > 0.0) ? exp (sd * Normal (seed)) : 1.0;
+		sum += qualMult[k];
+		}
+	for (k=0; k<1024; k++)
+		qualMult[k] *= 1024.0 / sum;
+	sum = 0.0;
+	for (i=0; i<len; i++)
+		{
+		qualW[i] = exp (qualSlope * ((len > 1 ? (double) i / (len - 1) : 0.0) - 0.5));
+		sum += qualW[i];
+		}
+	for (i=0; i<len; i++)
+		qualW[i] *= len / sum;
+	qualReady = 1;
+	}
+
+static void SeqErrorsQ (char *s, int len, int reverse, unsigned char *qv, double eps, long int *seed)
+	{
+	int		i;
+
+	for (i=0; i<len; i++)
+		{
+		double	e = eps * qualW[reverse ? len - 1 - i : i] * qualMult[RandomUniformTo (1024, seed)];
+		int		qq;
+
+		if (e > 0.75) e = 0.75;
+		qq = (int) (-10.0 * log10 (e) + 0.5);
+		qv[i] = (unsigned char) (qq > 41 ? 41 : (qq < 2 ? 2 : qq));
+		if (sequencingError > 0.0 && RandomUniform (seed) < e)
+			{
+			int		a = (int) (strchr (BASES, s[i]) - BASES), l;
+			double	u = RandomUniform (seed), cum = 0.0;
+
+			for (l=0; l<4; l++)
+				if (l != a)
+					{
+					cum += Eij[a][l] / cumEij[a][3];
+					if (u <= cum)
+						break;
+					}
+			if (l > 3)
+				l = (a + 1) & 3;
+			s[i] = BASES[l];
+			}
+		}
+	}
+
 static void RevComp (const char *s, char *o, int len)
 	{
 	int	i;
@@ -400,7 +469,7 @@ static inline long CP (long j)
 	return blocksOn ? BlockSitePos ((int) j) - 1 : j;
 	}
 
-static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int len, int q)
+static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int len, int q, const unsigned char *qv, int reverse)
 	{
 	char	line[512], qs[1024];
 	int		n;
@@ -409,7 +478,15 @@ static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int 
 	BgzfWrite (z, line, n);
 	BgzfWrite (z, seq, len);
 	BgzfWrite (z, "\n+\n", 3);
-	memset (qs, q, len);
+	if (qv == NULL)
+		memset (qs, q + 33, len);
+	else
+		{
+		int i;
+
+		for (i=0; i<len; i++)
+			qs[i] = (char) (qv[reverse ? len - 1 - i : i] + 33);
+		}
 	BgzfWrite (z, qs, len);
 	BgzfWrite (z, "\n", 1);
 	}
@@ -423,6 +500,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	long	nev[2] = {0, 0}, pairs = 0, molecule = ro->molecule, pos;
 	int		hap, q, L = readLen, i;
 	char	*ta, *tb, *ra, *rb, name[96];
+	unsigned char qa[512], qb[512];
+	int		qualOn = (qualSd > 0.0 || qualSlope != 0.0);
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
 	double	cm = (cellIdx >= 0 && cellCovMult != NULL) ? cellCovMult[cellIdx] : 1.0;
@@ -432,6 +511,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	if (q > 41) q = 41;
 	if (q < 2) q = 2;
 	q += 0;	/* BAM stores the raw Phred value */
+	if (qualOn)
+		QualSetup (L, seed);
 	ta = (char*) malloc (4 * (size_t) (L + 2));
 	tb = ta + L + 2; ra = tb + L + 2; rb = ra + L + 2;
 	for (hap=0; hap<2; hap++)
@@ -459,7 +540,7 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 				long	s = pos + (long) (RandomUniform (seed) * W), ins, j, e, k;
 				int		lost = 0, copies, c, fwdFrag, nerr = 0;
 				long	errSite[16];
-				int		errAlt[16];
+				int		errAlt[16], errStr[16];
 
 				ins = (long) (insertMean + insertSd * Normal (seed) + 0.5);
 				if (ins < L)
@@ -502,14 +583,14 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 						if (e < s + L || e >= s + ins - L)
 							if (RandomUniform (seed) < ev[hap][k].f)
 								{
-								errSite[nerr] = e; errAlt[nerr] = ev[hap][k].alt; nerr++;
+								errSite[nerr] = e; errAlt[nerr] = ev[hap][k].alt; errStr[nerr] = ev[hap][k].strand; nerr++;
 								}
 						}
 					for (k=0; k<nerr; k++)
 						{
-						if (errSite[k] < s + L)
+						if (errSite[k] < s + L && errStr[k] != 1)
 							ta[errSite[k] - s] = BASES[errAlt[k]];
-						if (errSite[k] >= s + ins - L)
+						if (errSite[k] >= s + ins - L && errStr[k] != 0)
 							tb[errSite[k] - (s + ins - L)] = BASES[errAlt[k]];
 						}
 					}
@@ -528,8 +609,16 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 					int fa, fb;
 
 					memcpy (ra, ta, L); memcpy (rb, tb, L);
-					SeqErrors (ra, L, seed);
-					SeqErrors (rb, L, seed);
+					if (qualOn)
+						{
+						SeqErrorsQ (ra, L, 0, qa, qerr, seed);
+						SeqErrorsQ (rb, L, 1, qb, qerr, seed);
+						}
+					else
+						{
+						SeqErrors (ra, L, seed);
+						SeqErrors (rb, L, seed);
+						}
 					snprintf (name, sizeof(name), "%s:%ld", rg, molecule);
 					if (fwdFrag)
 						{ fa = 99; fb = 147; }
@@ -539,8 +628,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 						{ fa |= 1024; fb |= 1024; }
 					if (doBam)
 						{
-						AddRecord (&rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, rg, hap + 1, (int) molecule);
-						AddRecord (&rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, rg, hap + 1, (int) molecule);
+						AddRecord (&rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, qualOn ? qa : NULL, rg, hap + 1, (int) molecule);
+						AddRecord (&rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, qualOn ? qb : NULL, rg, hap + 1, (int) molecule);
 						}
 					if (doFastq)
 						{
@@ -549,14 +638,14 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 						if (fwdFrag)
 							{
 							RevComp (rb, rc, L);
-							FastqPut (&fq->r1, name, 1, ra, L, q + 33);
-							FastqPut (&fq->r2, name, 2, rc, L, q + 33);
+							FastqPut (&fq->r1, name, 1, ra, L, q, qualOn ? qa : NULL, 0);
+							FastqPut (&fq->r2, name, 2, rc, L, q, qualOn ? qb : NULL, 1);
 							}
 						else
 							{
 							RevComp (rb, rc, L);
-							FastqPut (&fq->r1, name, 1, rc, L, q + 33);
-							FastqPut (&fq->r2, name, 2, ra, L, q + 33);
+							FastqPut (&fq->r1, name, 1, rc, L, q, qualOn ? qb : NULL, 1);
+							FastqPut (&fq->r2, name, 2, ra, L, q, qualOn ? qa : NULL, 0);
 							}
 						}
 					pairs++;
