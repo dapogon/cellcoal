@@ -88,6 +88,8 @@ long long			*covSum = NULL;	/* [window * numCells + cell]: sum of the depth over
 long long			*covSites = NULL;	/* [window]: number of non-variable sites of the window */
 int					covNumWindows = 0;
 FILE				*fpCoverage = NULL;
+char				*signatureFile = NULL;	/* --signature-file: table with the 96-context profiles (COSMIC format) that replaces the built-in signatures */
+int					numSignatureProfiles = NUM_SIGNATURES;	/* number of profiles available (30 built-in, or the columns of --signature-file) */
 double				adoBlockLen = 0.0;	/* --ado-block L: ADO in contiguous segments of mean length L sites (0 = independent per site) */
 long long			adoOrigin = 0;	/* --ado-origin O: position (0-based, in sites) of the first site of this data set along the chromosome */
 long				adoSeedOpt = 0;	/* --ado-seed S: seed of the dropout segments and of the ADO rate of the cells (0 = derived from the main seed) */

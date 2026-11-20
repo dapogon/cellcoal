@@ -773,5 +773,33 @@ cmp -s S/full_gen D/full_gen && ok "--ado-block: sparse and dense genomes give t
 "$BIN" -n1 -s5 -l1000 -u1e-6 -e1000 -b1 -C10 -P0.2 0.01 -Q0.1 0.01 --ado-block 100 -oE >E.txt 2>&1; grep -aq "cannot be combined" E.txt && ok "--ado-block cannot be combined with -Q" || bad "--ado-block with -Q"
 cd "$ROOT"
 
+echo "2g31. --signature-file: COSMIC v3.6 SBS1/SBS5 profiles"
+mkdir -p "$TMP/sigf" && rm -rf "$TMP/sigf"/* && cd "$TMP/sigf"
+SF="$ROOT/data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt"
+python3 - <<'P'
+import random
+random.seed(3)
+s="".join(random.choice("ACGT") for _ in range(60000))
+open("g.fa","w").write(">maternal\n%s\n>paternal\n%s\n" % (s, s))
+open("root.txt","w").write(s)
+P
+"$BIN" -n1 -s20 -l60000 -u5e-8 -e1000 -S1 1 1 --signature-file "$SF" -Ug.fa -oA -Y -#4 >/dev/null 2>&1
+python3 - <<'P' && ok "SBS1 (v3.6) gives mostly C>T" || bad "SBS1 from --signature-file is not mostly C>T"
+comp={"A":"T","C":"G","G":"C","T":"A"}
+root=open("root.txt").read()
+n=ct=0
+for l in open("A/true_hap").read().split("\n")[3:]:
+    t=l.split()
+    if len(t)<2 or t[0].startswith("outg"): continue
+    for a,b in zip(root,t[1]):
+        if a!=b:
+            n+=1
+            if (a=="C" and b=="T") or (a=="G" and b=="A"): ct+=1
+assert n>50 and ct/n>0.9, (n, ct)
+P
+"$BIN" -n1 -s10 -l1000 -u1e-6 -e1000 -S1 3 1 --signature-file "$SF" -oB >B.txt 2>&1; grep -aq "does not exist" B.txt && ok "signature number checked against the file" || bad "signature number not checked"
+"$BIN" -n1 -s10 -l1000 -u1e-6 -e1000 -S1 1 1 --signature-file nofile.txt -oC >C.txt 2>&1; grep -aq "Can't open the signature file" C.txt && ok "missing signature file reported" || bad "missing signature file"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
