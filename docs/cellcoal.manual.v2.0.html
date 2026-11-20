@@ -2580,8 +2580,16 @@ are independent in each read. Reads are 150 bp
 (<code>--read-len</code>), flags 99/147/83/163, duplicates marked 1024,
 tags <code>RG</code>, <code>HP</code> (haplotype 1/2) and
 <code>MI</code> (molecule).</p>
+<p>Truth: <code>reads_&lt;n&gt;/truth.vcf</code> has the true genotype
+of every cell (before dropout and genotyping errors; GT
+maternal|paternal, INFO <code>NC</code> cells carrying the allele,
+<code>GERMLINE</code> for sites where the healthy genome differs from
+<code>ref.fa</code> or is heterozygous).
+<code>tools/benchmark.py eval truth.vcf caller.vcf</code> gives
+cell-level and site-level precision/recall of any caller’s VCF (and
+singleton recall); <code>tools/benchmark.py pileup reads_1</code> is a
+naive pileup baseline with and without the PCR duplicates.</p>
 <p>Limits of this first version: no indels, no doublets, one contig, the
-truth is given by the usual outputs (<code>-6</code> and so on), the
 quality is constant (Phred from <code>-E</code>).
 <code>tools/bamcheck.py ref.fa x.bam</code> is a dependency-free BAM
 checker.</p>

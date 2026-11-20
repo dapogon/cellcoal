@@ -700,6 +700,9 @@ static void RunReplicate (int dataSetNum, long int *seed)
                 PrintTrueFullHaplotypes(fpTrueHaplotypes);
 				}
 
+			if (doBam || doFastq)
+				WriteTruthVcf (dataSetNum);
+
 			/* do alellic dropout */
 			adoReplicate = dataSetNum;
 			if (fixedADOrate > 0 || doADOcell == YES || doADOsite == YES)
