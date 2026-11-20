@@ -829,5 +829,34 @@ P
 "$BIN" -n1 -s10 -l1000 -u1e-6 -e1000 -b1 -C10 --amp-signature "$PS" -oB >B.txt 2>&1; grep -aq "needs read counts (-C) and an amplification error (-A)" B.txt && ok "--amp-signature needs -A" || bad "--amp-signature without -A"
 cd "$ROOT"
 
+echo "2g33. --gain-sd / --gain-len: autocorrelated coverage from the amplification gain"
+mkdir -p "$TMP/gain" && rm -rf "$TMP/gain"/* && cd "$TMP/gain"
+B="-n1 -s10 -u1e-9 -e1000 -b1 -C30 --coverage 5000 --ado-seed 9"
+"$BIN" $B -l200000 --gain-sd 0.6 --gain-len 40000 -oA -#3 >/dev/null 2>&1
+"$BIN" $B -l100000 --gain-sd 0.6 --gain-len 40000 --ado-origin 100000 -oB -#8 >/dev/null 2>&1
+"$BIN" $B -l200000 -oC -#3 >/dev/null 2>&1
+python3 - <<'P' && ok "gain: mean depth kept, windows autocorrelated, continuous across --ado-origin" || bad "--gain-sd coverage"
+import math, statistics as st
+def rd(f):
+    r=[l.rstrip("\n").split("\t") for l in open(f)]
+    return [[float(x) for x in row[4:] if x!="NA"] for row in r[1:]]
+def ac(w):
+    out=[]
+    for c in range(len(w[0])):
+        s=[x[c] for x in w]; mu=st.mean(s)
+        out.append(sum((s[i]-mu)*(s[i+1]-mu) for i in range(len(s)-1))/sum((v-mu)**2 for v in s))
+    return st.mean(out)
+a=rd("A/coverage.tsv"); b=rd("B/coverage.tsv"); c=rd("C/coverage.tsv")
+m=st.mean(v for x in a for v in x)
+assert 25 < m < 36, m
+assert ac(a) > 0.6 and abs(ac(c)) < 0.3, (ac(a), ac(c))
+h=len(a)//2; x=[v for r in a[h:] for v in r]; y=[v for r in b for v in r]
+mx,my=st.mean(x),st.mean(y)
+r=sum((p-mx)*(q-my) for p,q in zip(x,y))/math.sqrt(sum((p-mx)**2 for p in x)*sum((q-my)**2 for q in y))
+assert r > 0.9, r
+P
+"$BIN" -n1 -s5 -l1000 -u1e-6 -e1000 -b1 -C10 --gain-sd 0.5 -oD >D.txt 2>&1; grep -aq "go together" D.txt && ok "--gain-sd needs --gain-len" || bad "--gain-sd without --gain-len"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

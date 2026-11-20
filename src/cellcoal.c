@@ -710,6 +710,10 @@ static void RunReplicate (int dataSetNum, long int *seed)
 					AllelicDropout(seed);
 				}
 	
+			/* amplification gain along the genome (--gain-sd, --gain-len) */
+			if (gainSd > 0.0)
+				BuildGain (seed);
+
 			/* introduce errors directly in the genotypes */
 			if (meanGenotypingError > 0)
 				{
@@ -1219,6 +1223,20 @@ int main (int argc, char **argv)
 		if (noisy > 2)
 			fprintf (stderr, "\n>> Reading user genome ...");
 		ReadUserGenome(fpUserGenome);
+		}
+
+	if (gainSd > 0.0 || gainLen > 0.0)
+		{
+		if (!(gainSd > 0.0 && gainLen > 0.0))
+			{
+			fprintf (stderr, "\nERROR: --gain-sd and --gain-len go together\n");
+			exit (-1);
+			}
+		if (doNGS == NO)
+			{
+			fprintf (stderr, "\nERROR: --gain-sd needs read counts (-C)\n");
+			exit (-1);
+			}
 		}
 
 	if (ampSignatureFile != NULL)

@@ -2303,6 +2303,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n--bcf: write the genotype likelihoods as a BCF file (vcf.bcf) instead of a VCF file");
 	fprintf (fp,"\n--min-alt-reads N: a site is written (VCF, catg, pileup) only if a cell has a non-reference call with at least N reads of that allele (e.g. --min-alt-reads 2)");
 	fprintf (fp,"\n--min-alt-vaf F: ... and at least a fraction F of the reads of that cell (e.g. --min-alt-vaf 0.3)");
+	fprintf (fp,"\n--gain-sd S --gain-len L: amplification gain of every haplotype of every cell that changes along the genome (lognormal with log-sd S, constant over segments of mean length L sites; mean 1) and multiplies the read depth of the allele: autocorrelated coverage, allelic imbalance and (with -D) dropout from the same mechanism; needs -C");
 	fprintf (fp,"\n--amp-signature FILE: the amplification error (-A) depends on the trinucleotide context and its substitutions follow the 96-context profile in FILE (first column), e.g. data/signatures/PTA_artifact_SCAN2.txt; needs -A and read counts");
 	fprintf (fp,"\n--signature-file FILE: 96-context signature profiles (COSMIC format, one column per signature) used by -S instead of the 30 built-in ones, e.g. data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt");
 	fprintf (fp,"\n--ado-block L: allelic dropout in contiguous segments of mean length L sites (a Markov chain along each allele, with the ADO rate of -D/-P); --ado-origin O: position of the first site on the chromosome; --ado-seed S: seed of the segments");

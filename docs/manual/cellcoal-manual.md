@@ -1138,6 +1138,16 @@ The amplification error (`-A`, section 5.3.4) is by default the same at every si
 
 Needs read counts (`-C`) and `-A`; the first and last sites of the genome have no context and use the matrix `-X`. In a simulation with the PTA profile the spectrum of the errors reproduces the 96-context signature (correlation 1.0 with 10 cells at 30X, `-A0.02 0.0002 0`). Without `--amp-signature` the data are unchanged.
 
+## 8.27 Amplification gain along the genome: `--gain-sd`, `--gain-len` (unreleased)
+
+Single-cell whole-genome amplification (MDA, PTA...) does not cover the genome evenly: the depth of a cell changes smoothly over regions of kilobases to megabases, and the two haplotypes are amplified differently. With the default model the depth of every site is drawn independently, so there is no such structure. With `--gain-sd S --gain-len L` every haplotype of every cell has a *gain*: a lognormal multiplier with mean 1 and log-standard deviation S that is constant over segments of exponential length (mean L sites) and independent between segments. The mean read depth of each allele is multiplied by its gain, so one mechanism produces:
+
+- **autocorrelated coverage** (the total depth is the sum of the two haplotypes),
+- **allelic imbalance** that changes along the genome (the haplotypes have different gains),
+- together with `-D` / `--ado-block`, dropout where the gain is low.
+
+`--ado-block` is the all-or-nothing version of the same idea (a segment of an allele is present or lost); the gain is the continuous one, and both can be used together. The process starts at chromosome position 0 and is generated from a seed that depends only on `--ado-seed`, the cell and the haplotype, so that the pieces of a chromosome simulated with `--ado-origin` (as `tools/chrom.py` does) see one continuous process. Example: `-C30 --gain-sd 0.6 --gain-len 40000` gives windows of 5 kb with a correlation between neighbours of 0.86 and the same mean depth (30); without it the correlation is 0. Larger S and L mimic MDA, smaller values PTA; these parameters have to be taken from real data (for example from the per-cell coverage profile that `--coverage` writes). Needs read counts (`-C`). Without these options the data are unchanged.
+
 ## 6.10j Windows (experimental)
 
 CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with read counts and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).

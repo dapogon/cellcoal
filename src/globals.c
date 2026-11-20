@@ -88,6 +88,12 @@ long long			*covSum = NULL;	/* [window * numCells + cell]: sum of the depth over
 long long			*covSites = NULL;	/* [window]: number of non-variable sites of the window */
 int					covNumWindows = 0;
 FILE				*fpCoverage = NULL;
+int					doBam = 0, doFastq = 0, readLen = 150;	/* read-level simulator (--bam, --fastq, --read-len) */
+double				insertMean = 400.0, insertSd = 60.0, ampliconLen = 2000.0, ampliconCV = 0.5, bulkDepth = 0.0;
+char				*contigName = "chr1";
+double				gainSd = 0.0;	/* --gain-sd: standard deviation of the log amplification gain of a haplotype (0 = off) */
+double				gainLen = 0.0;	/* --gain-len: mean length (sites) of the segments of constant gain */
+int					gainOn = 0;
 char				*ampSignatureFile = NULL;	/* --amp-signature: 96-context profile of the amplification errors (COSMIC format) */
 int					ampSigOn = 0;
 double				ampSigMult[4][4][4];	/* [5' base][base][3' base]: rate of the amplification error relative to the mean (-A) */

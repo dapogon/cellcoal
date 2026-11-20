@@ -20,8 +20,9 @@ Usage (real reference sequence):
                     Unphased heterozygous genotypes are phased at random.  It cannot be used together with -c (germline
                     SNPs simulated by CellCoal on the reference).
 
-  --ado-block L (after "--") makes the allelic dropout (-D) come in contiguous segments of mean length L sites; the segments are
-  continuous from block to block (the origin of every block is passed with --ado-origin, the same --ado-seed to all).
+  --ado-block L, --gain-sd S --gain-len L (after "--"): allelic dropout in contiguous segments / amplification gain along the genome
+  (autocorrelated coverage); the processes are continuous from block to block (the origin of every block is passed with
+  --ado-origin and the same --ado-seed to all).
 
 Do not give -n, -l, -#, -o, -T, -U or --summary after "--": the script sets them.  It also sets --no-outgroup and,
 unless you give them, --min-alt-reads 2 --min-alt-vaf 0.3 (a site is written only if a cell has a non-reference call with at least
@@ -181,7 +182,7 @@ def one_block(exe, opts, tree, b, size, seed, workdir, genome=None, origin=0, ad
         cmd.append("-U%s" % genome)
     if COVERAGE_WINDOW > 0:
         cmd += ["--coverage", str(COVERAGE_WINDOW)]
-    if "--ado-block" in opts:  # dropout segments that continue from one block to the next
+    if "--ado-block" in opts or "--gain-sd" in opts:  # dropout segments / amplification gain that continue from one block to the next
         cmd += ["--ado-origin", str(origin), "--ado-seed", str(ado_seed)]
     run(cmd, env)
     return b, d
