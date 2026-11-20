@@ -25,6 +25,8 @@ Do not give -n, -l, -#, -o, -T, -U or --summary after "--": the script sets them
   chrom.vcf[.gz]        variable sites of all the blocks (CHROM and POS of the chromosome)
   chrom_summary.tsv     one row per block, plus a TOTAL row
   chrom_tree.nwk        the tree used for every block
+  chrom_coverage.tsv    BED-like: mean depth of every cell over the sites that are NOT in the VCF, per window of
+                        --coverage-window sites (default 10000; 0 = off); n_sites = non-variable sites of the window
   chrom_info.txt        region, masked sites, germline sites used
 """
 import argparse, concurrent.futures, glob, gzip, os, random, re, shutil, subprocess, sys
@@ -32,6 +34,7 @@ import argparse, concurrent.futures, glob, gzip, os, random, re, shutil, subproc
 COUNT_COLS = ["mutations", "deletions", "cnloh", "snv_true", "snv_observed", "singleton_sites"]
 WEIGHTED = {"snv_precision": "snv_observed", "snv_recall": "snv_true", "singleton_recall": "singleton_sites"}
 COMP = str.maketrans("ACGT", "TGCA")
+COVERAGE_WINDOW = 0
 
 
 def run(cmd, env=None):
@@ -165,6 +168,8 @@ def one_block(exe, opts, tree, b, size, seed, workdir, genome=None):
     cmd = [exe, "-n1", "-l%d" % size, "-T%s" % tree, "--summary", "-#%d" % (seed + b + 1), "-o%s" % d] + opts
     if genome:
         cmd.append("-U%s" % genome)
+    if COVERAGE_WINDOW > 0:
+        cmd += ["--coverage", str(COVERAGE_WINDOW)]
     run(cmd, env)
     return b, d
 
@@ -194,20 +199,24 @@ def main():
     ap.add_argument("--fasta", default=None)
     ap.add_argument("--region", default=None)
     ap.add_argument("--germline-vcf", default=None)
+    ap.add_argument("--coverage-window", type=int, default=10000,
+                    help="window (sites) of chrom_coverage.tsv, the mean depth per cell of the sites that are not in the VCF (0 = off)")
     ap.add_argument("--keep", action="store_true", help="keep the folders of the blocks")
     ap.add_argument("--gzip", action="store_true", help="write chrom.vcf.gz")
     ap.add_argument("opts", nargs=argparse.REMAINDER)
     a = ap.parse_args()
     opts = [o for o in a.opts if o != "--"]
     for o in opts:
-        if re.match(r"^(-n|-l|-#|-o|-T|-U)", o) or o == "--summary":
-            sys.exit("do not give %s: the script sets -n, -l, -#, -o, -T, -U and --summary" % o)
+        if re.match(r"^(-n|-l|-#|-o|-T|-U)", o) or o in ("--summary", "--coverage"):
+            sys.exit("do not give %s: the script sets -n, -l, -#, -o, -T, -U, --summary and --coverage" % o)
     if a.germline_vcf and any(re.match(r"^-c(\d|\.|$)", o) for o in opts):
         sys.exit("germline SNPs are either simulated (-c) or given by the user (--germline-vcf), not both")
     if a.germline_vcf and not a.fasta:
         sys.exit("--germline-vcf needs --fasta")
     if not a.fasta and a.blocks < 1:
         sys.exit("give --blocks (or --fasta with a region)")
+    global COVERAGE_WINDOW
+    COVERAGE_WINDOW = max(0, a.coverage_window)
     exe = os.path.abspath(a.exe)
     out = os.path.abspath(a.out)
     os.makedirs(out, exist_ok=True)
@@ -291,6 +300,7 @@ def main():
     opener = (lambda p: gzip.open(p, "wt")) if a.gzip else (lambda p: open(p, "w"))
     vcf_path = os.path.join(out, "chrom.vcf" + (".gz" if a.gzip else ""))
     header, rows, nsites, first = None, [], 0, True
+    fcov = open(os.path.join(out, "chrom_coverage.tsv"), "w") if COVERAGE_WINDOW > 0 else None
     with opener(vcf_path) as fv:
         for b in sorted(done):
             d = done[b]
@@ -313,9 +323,23 @@ def main():
                 fv.write("\t".join(f) + "\n")
                 nsites += 1
             first = False
+            if fcov is not None:
+                with open(find_one(d, ["coverage.tsv"])) as fc:
+                    lines = [l.rstrip("\n").split("\t") for l in fc if l.strip()]
+                if b == min(done):
+                    fcov.write("chrom\tstart\tend\tn_sites\t" + "\t".join(lines[0][4:]) + "\n")
+                for f in lines[1:]:
+                    i0, i1 = int(f[1]), int(f[2])
+                    if region_seq is None:
+                        g0, g1 = i0 + b * a.block_size, i1 + b * a.block_size
+                    else:
+                        g0, g1 = poss[b][i0 - 1], poss[b][i1 - 1]
+                    fcov.write("%s\t%d\t%d\t%s\t%s\n" % (chrom_name, g0 - 1, g1, f[3], "\t".join(f[4:])))
             h, r = read_summary(d)
             header = header or h
             rows.append((b, r))
+    if fcov is not None:
+        fcov.close()
     col = {c: i for i, c in enumerate(header)}
     inv_cols = [c for c in header if c.startswith("inv_")]
     sum_cols = [c for c in COUNT_COLS + inv_cols if c in col]

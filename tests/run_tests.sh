@@ -708,5 +708,22 @@ else bad "chrom.py did not write its outputs (FASTA)"; fi
 cd "$ROOT"
 else echo "  skip (python3 not installed)"; fi
 
+echo "2g28. --coverage: depth per cell of the sites that are not in the VCF"
+mkdir -p "$TMP/cov" && rm -rf "$TMP/cov"/* && cd "$TMP/cov"
+"$BIN" -n1 -s12 -l20000 -u2e-7 -e10000 -g1e-4 -b1 -C10 -D0.2 -E0.001 --summary --min-alt-reads 2 --coverage 5000 -#5 -oA >/dev/null 2>&1
+if [ -s A/coverage.tsv ]; then
+  python3 - <<'P' && ok "coverage.tsv: windows, sites and mean depth are consistent with the VCF" || bad "coverage.tsv content"
+r=[l.rstrip("\n").split("\t") for l in open("A/coverage.tsv")]
+assert r[0][:4]==["replicate","start","end","n_sites"] and len(r[0])==4+12 and len(r)==5, r[0]
+s=[l.rstrip("\n").split("\t") for l in open("A/summary.tsv")]
+d=dict(zip(s[0],s[1]))
+assert sum(int(x[3]) for x in r[1:])+int(d["snv_observed"])==20000
+m=[float(v) for x in r[1:] for v in x[4:]]
+assert 5 < sum(m)/len(m) < 11, sum(m)/len(m)
+P
+else bad "--coverage did not write coverage.tsv"; fi
+"$BIN" -n1 -s5 -l1000 -u1e-6 -e10000 --coverage 100 -#5 -oB >B.txt 2>&1; grep -q "needs read counts" B.txt && ok "--coverage needs -C" || bad "--coverage without -C"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

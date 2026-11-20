@@ -550,6 +550,51 @@ int CellAltCall (int ii, int jj)
 	}
 
 
+/********************* Coverage per cell of the sites that are not variable  ************************/
+/* --coverage W: the sites that do not go to the VCF are not listed, so the depth of every cell there is summarized in windows of
+   W sites: sum of the depth over the non-variable sites of the window (the mean depth is that sum divided by the number of sites). */
+void CoverageAddSite (int site)
+	{
+	int		i, w;
+
+	if (coverageWindow == 0 || allSites[site].isSNV == YES)
+		return;
+	w = site / coverageWindow;
+	#pragma omp atomic
+	covSites[w]++;
+	for (i=0; i<numCells; i++)
+		{
+		int	d = (cell[i].hasDoublet == YES) ? CD(i,site).numReadsDoublet : CS(i,site).numReads;
+		#pragma omp atomic
+		covSum[(long) w * numCells + i] += d;
+		}
+	}
+
+/* one block of lines per window of the replicate (window start and end in sites, number of non-variable sites, mean depth of every cell) */
+void CoverageWrite (int replicate)
+	{
+	int		w, i;
+
+	for (w=0; w<covNumWindows; w++)
+		{
+		long	start = (long) w * coverageWindow + 1, end = (long) (w + 1) * coverageWindow;
+
+		if (end > numSites)
+			end = numSites;
+		fprintf (fpCoverage, "%d\t%ld\t%ld\t%lld", replicate, start, end, covSites[w]);
+		for (i=0; i<numCells; i++)
+			if (covSites[w] > 0)
+				fprintf (fpCoverage, "\t%.4f", covSum[(long) w * numCells + i] / (double) covSites[w]);
+			else
+				fprintf (fpCoverage, "\tNA");
+		fprintf (fpCoverage, "\n");
+		}
+	fflush (fpCoverage);
+	memset (covSum, 0, (size_t) covNumWindows * numCells * sizeof(long long));
+	memset (covSites, 0, (size_t) covNumWindows * sizeof(long long));
+	}
+
+
 /********************* InvariantGenotypeCounts  ************************/
 /* --summary: number of sites that are not variable sites (not written to the VCF) for every unphased genotype of the healthy root
    (AA, AC, AG, AT, CC, CG, CT, GG, GT, TT). Those sites are not listed one by one: the VCF has the variable sites and these counts

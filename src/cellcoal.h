@@ -343,6 +343,11 @@ extern double				covDoubletCorr, adoDoubletCorr;	/* --cov-doublet-corr, --ado-do
 extern int					doSummary, numSNVsTrue;	/* --summary: write summary.tsv, one row of metrics per replicate */
 extern FILE				*fpSummary;
 extern int					minAltReads;
+extern int					coverageWindow, covNumWindows;
+extern long long			*covSum, *covSites;
+extern FILE					*fpCoverage;
+void						CoverageAddSite (int site);
+void						CoverageWrite (int replicate);
 int							CellAltCall (int cellIndex, int site);
 void						InvariantGenotypeCounts (long long *cnt);
 extern double				ampCellVar;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */
