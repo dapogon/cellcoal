@@ -745,7 +745,7 @@ void		CheckTree (char *treeStr)
 				thereIsError = YES;
 			if (treeStr[i+1] != ')' && treeStr[i+1] != ',' && treeStr[i+1] != ':')
 				thereIsError = YES;
-			if (treeStr[i+1] == ';' && i == strlen(treeStr)-3)
+			if (treeStr[i+1] == ';' && (size_t) i == strlen(treeStr)-3)
 				thereIsError = NO;
 			numRightPar++;
 			}
