@@ -221,7 +221,7 @@ CellCoal produces data in one of three ways, and each option belongs to one or m
 | tree, demography, mutation, signatures, `-c`, `-d`, `-H`, `-T` | yes | yes | yes |
 | allelic dropout: `-D`, `-P`, `-Q`, `--ado-block` | yes | yes | yes |
 | `-G` genotyping error | yes | no | no |
-| `-C`, `-J`, `-A`, `-E`, `-X`, `--gain-sd/--gain-len`, `--amp-signature`, `--cov-ado-corr` | no | yes | yes |
+| `-C`, `-J`, `-A`, `-E`, `-X`, `--gain-sd/--gain-len`, `--amp-signature`, `--amp-cell-var`, `--cov-ado-corr` | no | yes | yes |
 | `-V`, `-O`, `-R`, `-I`, `-B`, `--cov-doublet-corr`, `--ado-doublet-corr`, `--min-alt-reads`, `--min-alt-vaf`, `-M`, `--coverage`, `--fast`, `-8`, `-9`, `-0`, `--bcf`, `-z`, `-Z` | no | yes | no |
 | `--bam`, `--fastq`, `--read-len`, `--insert-mean`, `--insert-sd`, `--dup-mean`, `--bulk-depth` | no | no | yes |
 | `--blocks`, `--fasta`, `--region`, `--germline-vcf` | no | yes | not yet |
