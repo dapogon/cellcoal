@@ -259,6 +259,17 @@ static AmpEvent *BuildAmpEvents (int cellIdx, int hap, long int *seed, long *nev
 		return NULL;
 	if (v <= 0.0 || v >= eps * (1.0 - eps))
 		v = 0.5 * eps * (1.0 - eps);
+	if (cellAmpMean != NULL)	/* --amp-cell-var: the mean of this cell; the concentration of -A is kept */
+		{
+		double e0 = eps;
+
+		eps = cellAmpMean[cellIdx];
+		if (eps <= 0.0)
+			return NULL;
+		if (eps > 0.95)
+			eps = 0.95;
+		v = v * eps * (1.0 - eps) / (e0 * (1.0 - e0));
+		}
 	conc = eps * (1.0 - eps) / v - 1.0;
 	a = eps * conc;
 	meanSb = (a + 1.0) / (conc + 1.0);			/* an error at a site is seen in a fraction of molecules distributed as Beta(a+1,b) */
