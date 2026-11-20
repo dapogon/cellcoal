@@ -835,6 +835,11 @@ void CoverageWrite (int replicate)
 
 		if (end > numSites)
 			end = numSites;
+		if (blocksOn)	/* coordinates of the chromosome */
+			{
+			start = BlockSitePos ((int) start - 1);
+			end = BlockSitePos ((int) end - 1);
+			}
 		fprintf (fpCoverage, "%d\t%ld\t%ld\t%lld", replicate, start, end, covSites[w]);
 		for (i=0; i<numCells; i++)
 			if (covSites[w] > 0)

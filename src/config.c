@@ -95,7 +95,7 @@ static void JsonExtras (FILE *fp, const char *indent, int *emitted)
 		else if (o->kind == 2)
 			set = (*(double*) o->ptr != o->def);
 		else
-			set = (strcmp (*(char**) o->ptr, "chr1") != 0);
+			set = (strlen (*(char**) o->ptr) > 0 && strcmp (*(char**) o->ptr, "chr1") != 0);
 		if (!set)
 			continue;
 		fprintf (fp, "%s\n%s  \"%s\": ", *emitted ? "," : "", indent, o->key);

@@ -348,12 +348,19 @@ static void ComputeSummaryStatistics (void)
 	runStats.cnloh.mean = runStats.cnloh.sum / (double) numDataSets;
 	}
 
+/* "[#n]" separates the replicates in the output files (not in the chromosome in blocks, which is one data set) */
+static void RepMarker (FILE *fp, int dataSetNum)
+	{
+	if (blocksOn == 0)
+		fprintf (fp, "[#%d]\n", dataSetNum+1);
+	}
+
 /* reads simulated, summarized and printed (VCF, PILEUP, bulk, CATG) in blocks of sites */
 static void GenerateStreamedReads (long int *seed, int dataSetNum)
 	{
 	/* reads are simulated, summarized and printed (VCF, PILEUP) in blocks of sites */
 	if (doPrintVCF == YES && doPrintSeparateReplicates == NO)
-		fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
+		RepMarker (fpVCF, dataSetNum);
 	if (doPrintCATG == YES)
 		{
 		catgBody = tmpfile ();
@@ -377,12 +384,12 @@ static void GenerateStreamedReads (long int *seed, int dataSetNum)
 		fclose (catgBody);
 		catgBody = NULL;
 		if (doPrintSeparateReplicates == NO)
-			fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
+			RepMarker (fpCATG, dataSetNum);
 		}
 	if (doPrintPILEUP == YES && doPrintSeparateReplicates == NO)
-		fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+		RepMarker (fpPILEUP, dataSetNum);
 	if (doPrintBulk == YES && doPrintSeparateReplicates == NO)
-		fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
+		RepMarker (fpBulk, dataSetNum);
 	}
 
 /* per-replicate messages and output of genotypes, haplotypes and reads */
@@ -406,25 +413,25 @@ static void PrintReplicateOutputs (int dataSetNum)
 	if (doPrintSNVgenotypes == YES && numSNVs > 0) /* we only print replicates with variation */
 		{
 		if (doPrintSeparateReplicates == NO)
-			fprintf (fpSNVgenotypes, "[#%d]\n", dataSetNum+1);
+			RepMarker (fpSNVgenotypes, dataSetNum);
 		PrintSNVGenotypes(fpSNVgenotypes);
 		}
 	if (doPrintSNVhaplotypes == YES && numSNVs > 0) /* we only print replicates with variation */
 		{
 		if (doPrintSeparateReplicates == NO)
-			fprintf (fpSNVhaplotypes, "[#%d]\n", dataSetNum+1);
+			RepMarker (fpSNVhaplotypes, dataSetNum);
 		PrintSNVHaplotypes(fpSNVhaplotypes, NO);
 		}
 	if (doPrintFullGenotypes == YES)
 		{
 		if (doPrintSeparateReplicates == NO)
-			fprintf (fpFullGenotypes, "[#%d]\n", dataSetNum+1);
+			RepMarker (fpFullGenotypes, dataSetNum);
 		PrintFullGenotypes(fpFullGenotypes);
 		}
 	if (doPrintFullHaplotypes == YES)
 		{
 		if (doPrintSeparateReplicates == NO)
-			fprintf (fpFullHaplotypes, "[#%d]\n", dataSetNum+1);
+			RepMarker (fpFullHaplotypes, dataSetNum);
 		PrintFullHaplotypes(fpFullHaplotypes);
 		}
 	CloseFullStore ();
@@ -434,28 +441,104 @@ static void PrintReplicateOutputs (int dataSetNum)
 		if (doPrintVCF == YES)
 			{
 			if (doPrintSeparateReplicates == NO)
-				fprintf (fpVCF, "[#%d]\n", dataSetNum+1);
+				RepMarker (fpVCF, dataSetNum);
 			PrintVCF (fpVCF);
 			}
 		if (doPrintCATG == YES)
 			{
 			PrintCATG(fpCATG);
 			if (doPrintSeparateReplicates == NO)
-				fprintf (fpCATG, "[#%d]\n", dataSetNum+1);
+				RepMarker (fpCATG, dataSetNum);
 			}
 		if (doPrintPILEUP == YES)
 			{
 			PrintPILEUP(fpPILEUP);
 			if (doPrintSeparateReplicates == NO)
-				fprintf (fpPILEUP, "[#%d]\n", dataSetNum+1);
+				RepMarker (fpPILEUP, dataSetNum);
 			}
 		if (doPrintBulk == YES)
 			{
 			PrintBulk (fpBulk);
 			if (doPrintSeparateReplicates == NO)
-				fprintf (fpBulk, "[#%d]\n", dataSetNum+1);
+				RepMarker (fpBulk, dataSetNum);
 			}
 		}
+	}
+
+/* chromosome in blocks: the rows of summary.tsv are kept to write the TOTAL row */
+static struct { double cnt[5]; double m[NUM_TRUTH_METRICS]; long long inv[10]; } *blockRows = NULL;
+static int numBlockRows = 0;
+
+static void StoreBlockRow (int mu, int del, int cnloh, int snvTrue, int snvObs, const double *metric, const long long *inv)
+	{
+	int		k;
+
+	blockRows = realloc (blockRows, (size_t) (numBlockRows + 1) * sizeof(*blockRows));
+	blockRows[numBlockRows].cnt[0] = mu; blockRows[numBlockRows].cnt[1] = del; blockRows[numBlockRows].cnt[2] = cnloh;
+	blockRows[numBlockRows].cnt[3] = snvTrue; blockRows[numBlockRows].cnt[4] = snvObs;
+	for (k=0; k<NUM_TRUTH_METRICS; k++)
+		blockRows[numBlockRows].m[k] = metric[k];
+	for (k=0; k<10; k++)
+		blockRows[numBlockRows].inv[k] = inv[k];
+	numBlockRows++;
+	}
+
+/* TOTAL row of the chromosome: counts are added, rates are averaged (precision, recall and singleton recall weighted by their denominator) */
+static void WriteBlocksTotal (void)
+	{
+	int		k, b;
+	double	sum[5] = {0,0,0,0,0}, single = 0.0;
+	long long	inv[10] = {0,0,0,0,0,0,0,0,0,0};
+	static const int meanIdx[] = {0, 1, 4, 5, 6, 8, 9};
+
+	for (b=0; b<numBlockRows; b++)
+		{
+		for (k=0; k<5; k++)
+			sum[k] += blockRows[b].cnt[k];
+		for (k=0; k<10; k++)
+			inv[k] += blockRows[b].inv[k];
+		if (blockRows[b].m[10] > 0.0)
+			single += blockRows[b].m[10];
+		}
+	fprintf (fpSummary, "TOTAL\tNA\t%.0f\t%.0f\t%.0f\t%.0f\t%.0f\tNA", sum[0], sum[1], sum[2], sum[3], sum[4]);
+	for (k=0; k<NUM_TRUTH_METRICS; k++)
+		{
+		double	num = 0.0, den = 0.0;
+		int		w = (k == 2) ? 4 : (k == 3) ? 3 : -1, isMean = 0, j;
+
+		for (j=0; j<7; j++)
+			if (meanIdx[j] == k)
+				isMean = 1;
+		if (k == 7)
+			{ fprintf (fpSummary, "\tNA"); continue; }
+		if (k == 10)
+			{ fprintf (fpSummary, "\t%.0f", single); continue; }
+		for (b=0; b<numBlockRows; b++)
+			{
+			double v = blockRows[b].m[k], wt = 1.0;
+
+			if (v < 0.0)
+				continue;
+			if (k == 11)
+				wt = blockRows[b].m[10];
+			else if (w >= 0)
+				wt = blockRows[b].cnt[w];
+			if (!isMean && wt <= 0.0)
+				continue;
+			num += wt * v;
+			den += wt;
+			}
+		if (den > 0.0)
+			fprintf (fpSummary, "\t%.6f", num / den);
+		else
+			fprintf (fpSummary, "\tNA");
+		}
+	for (k=0; k<10; k++)
+		fprintf (fpSummary, "\t%lld", inv[k]);
+	fprintf (fpSummary, "\n");
+	free (blockRows);
+	blockRows = NULL;
+	numBlockRows = 0;
 	}
 
 /* one replicate: genealogy, mutations, deletions/cnLOH, ADO, errors, reads and all the per-replicate outputs */
@@ -463,7 +546,13 @@ static void RunReplicate (int dataSetNum, long int *seed)
 	{
 	int		i, j;
 
+        {
+        double	keepTMRCA = TMRCA;
+
         numCA = numMU = numDEL = numCNLOH = numProposedMU = TMRCA = numSNVmaternal = 0;
+        if (blocksOn && dataSetNum > 0)
+        	TMRCA = keepTMRCA;	/* chromosome in blocks: the tree of the first block */
+        }
 
 		if (doPrintSeparateReplicates == YES)
 			PrepareSeparateFiles(dataSetNum);
@@ -481,8 +570,8 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				}
 			}
 			
-        /* Generate coalescence tree */
-		if (doUserTree == NO)
+        /* Generate coalescence tree (chromosome in blocks: only for the first block; the others use the same tree) */
+		if (doUserTree == NO && !(blocksOn && dataSetNum > 0))
 			{
 			if (noisy > 2)
 				fprintf (stderr, "\n>> Starting coalescent tree ...");
@@ -505,10 +594,10 @@ static void RunReplicate (int dataSetNum, long int *seed)
 
 		totalTreeLength = SumBranches (healthyRoot);
 
-        if (doPrintTree == YES)
+        if (doPrintTree == YES && !(blocksOn && dataSetNum > 0))
             PrintTree (healthyRoot, fpTrees);
 
-        if (doPrintTimes == YES)
+        if (doPrintTimes == YES && !(blocksOn && dataSetNum > 0))
             PrintTimes (0, fpTimes);
  
  
@@ -696,7 +785,7 @@ static void RunReplicate (int dataSetNum, long int *seed)
 			if (doPrintTrueHaplotypes == YES)
 				{
   				if (doPrintSeparateReplicates == NO)
-					fprintf (fpTrueHaplotypes, "[#%d]\n", dataSetNum+1);
+					RepMarker (fpTrueHaplotypes, dataSetNum);
                 PrintTrueFullHaplotypes(fpTrueHaplotypes);
 				}
 
@@ -784,6 +873,13 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				int		k;
 
 				TruthMetrics (metric);
+				if (blocksOn)
+					{
+					long long	invb[10];
+
+					InvariantGenotypeCounts (invb);
+					StoreBlockRow (numMU, numDEL, numCNLOH, numSNVsTrue, numSNVs, metric, invb);
+					}
 				fprintf (fpSummary, "%d\t%.6f\t%d\t%d\t%d\t%d\t%d\t%.6f", dataSetNum+1, TMRCA, numMU, numDEL, numCNLOH, numSNVsTrue, numSNVs,
 					numSNVsTrue > 0 ? numSNVs / (double) numSNVsTrue : 0.0);
 				for (k=0; k<NUM_TRUTH_METRICS; k++)	/* NA when there are no reads or the metric is undefined */
@@ -854,8 +950,8 @@ static void RunReplicate (int dataSetNum, long int *seed)
 			CountMLGenotypingErrors();
 		#endif
 		
-		// free all the necessary stuff for this replicate
-		if (doUserTree == NO)
+		// free all the necessary stuff for this replicate (the tree of a chromosome in blocks is kept until the last block)
+		if (doUserTree == NO && !(blocksOn && dataSetNum < numDataSets - 1))
 			{
             for (i=0; i<numNodes; i++)
 	            free(treeNodes[i].name);
@@ -1106,7 +1202,32 @@ int main (int argc, char **argv)
 	
     originalSeed = seed;
     for (i=0; i<100; i++)
+        {
         RandomUniform(&seed);
+        }
+
+	/* chromosome in blocks (--blocks, --fasta): the reference and the number of blocks */
+	if (blocksN > 0 || strlen (fastaFile) > 0)
+		{
+		if (doBam || doFastq)
+			{
+			fprintf (stderr, "\nERROR: --blocks/--fasta cannot be combined with --bam/--fastq\n");
+			exit (-1);
+			}
+		if (doUserGenome == YES || (SNPrate > 0 && strlen (germlineVcf) > 0))
+			{
+			fprintf (stderr, "\nERROR: --blocks/--fasta cannot be combined with -U, and --germline-vcf with -c\n");
+			exit (-1);
+			}
+		BlocksSetup ();
+		if (strlen (fastaFile) > 0)
+			{
+			doUserGenome = YES;
+			snprintf (userGenomeFile, sizeof(userGenomeFile), "%s", fastaFile);
+			}
+		if (adoSeedOpt == 0)
+			adoSeedOpt = originalSeed + 1;
+		}
 
     if (noisy > 0)
 		{
@@ -1228,7 +1349,7 @@ int main (int argc, char **argv)
 		}
 
 	/* Read user genomefile  */
-	if (doUserGenome == YES)
+	if (doUserGenome == YES && strlen (fastaFile) == 0)
 		{
 		if (noisy > 2)
 			fprintf (stderr, "\n>> Reading user genome ...");
@@ -1327,7 +1448,23 @@ int main (int argc, char **argv)
 		fprintf(stderr, "\n");
 	
 	for (dataSetNum=0; dataSetNum<numDataSets; dataSetNum++)
+		{
+		if (blocksOn && BlockPrepare (dataSetNum, &seed) == 0)
+			continue;	/* a block with no A, C, G, T sites */
 		RunReplicate (dataSetNum, &seed);
+		}
+	if (blocksOn)
+		{
+		if (fpSummary != NULL)
+			WriteBlocksTotal ();
+		snprintf (File, sizeof(File), "%s/%s", resultsDir, "blocks_info.txt");
+		if ((fp = fopen (File, "w")) != NULL)
+			{
+			BlocksInfo (fp);
+			fclose (fp);
+			}
+		BlocksFree ();
+		}
 
 	ComputeSummaryStatistics ();
 

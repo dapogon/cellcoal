@@ -923,5 +923,31 @@ assert n > 0 and g > 20, (n, g)
 P
 cd "$ROOT"
 
+echo "2g37. --blocks / --fasta / --region / --germline-vcf in the binary"
+mkdir -p "$TMP/nb" && rm -rf "$TMP/nb"/* && cd "$TMP/nb"
+"$BIN" -s8 -l6000 --blocks 4 -u1e-6 -e1000 -b1 -C10 -E0.001 --min-alt-reads 2 --summary --coverage 3000 -oA -#4 >/dev/null 2>&1
+python3 - <<'P' && ok "blocks: one plain VCF along the chromosome, one tree, TOTAL row, coverage in chromosome coordinates" || bad "native --blocks"
+rows = [l.rstrip("\n").split("\t") for l in open("A/vcf")]
+assert rows[0][0].startswith("##fileformat"), rows[0][:1]
+body = [r for r in rows if not r[0].startswith("#")]
+assert body and all(len(r) > 9 for r in body), "blank or short lines"
+pos = [int(r[1]) for r in body]
+assert pos == sorted(pos) and max(pos) > 18000 and max(pos) <= 24000, (min(pos), max(pos))
+s = [l.rstrip("\n").split("\t") for l in open("A/summary.tsv")]
+h = s[0]; assert s[-1][0] == "TOTAL" and len(s) == 6
+t = float(s[1][h.index("tmrca")])
+assert all(abs(float(r[h.index("tmrca")]) - t) < 1e-9 for r in s[1:-1]), "the tree changed between blocks"
+inv = sum(int(s[-1][i]) for i, c in enumerate(h) if c.startswith("inv_")) + int(s[-1][h.index("snv_observed")])
+assert inv == 24000, inv
+c = [l.split("\t") for l in open("A/coverage.tsv")][1:]
+assert int(c[-1][2]) == 24000 and int(c[0][1]) == 1
+P
+"$BIN" -s6 -l5000 --fasta "$TMP/gl/g.fa" --region chrT:1-12000 -u1e-6 -e1000 -b1 -C10 --blocks 2 -oB -#4 >/dev/null 2>&1
+python3 - <<'P' && ok "--blocks limits the number of blocks of --fasta" || bad "--blocks with --fasta"
+pos = [int(l.split("\t")[1]) for l in open("B/vcf") if not l.startswith("#") and l.strip()]
+assert pos and max(pos) <= 10000
+P
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail
