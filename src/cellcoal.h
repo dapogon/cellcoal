@@ -345,6 +345,8 @@ extern FILE				*fpSummary;
 extern int					minAltReads;
 extern double				minAltVaf;
 extern double				adoBlockLen;
+extern char				*signatureFile;
+extern int					numSignatureProfiles;
 extern long long			adoOrigin;
 extern long				adoSeedOpt;
 void		BuildAdoBlocks (long int *seed);

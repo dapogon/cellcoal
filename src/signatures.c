@@ -13,6 +13,120 @@
 #include "signatures.h"
 #include "definitions.h"
 
+extern char *signatureFile;
+extern int  numSignatureProfiles, numUserSignatures, *signatureID;
+
+
+/*************** CountSignatureColumns, ReadSignatureFile **********************/
+/* A signature table in COSMIC format: a header line (Type, name of signature 1, 2, ...), then 96 lines "A[C>A]A v1 v2 ...".
+   The profiles are normalized to sum 1. */
+static int CountSignatureColumns (const char *path)
+	{
+	FILE *fp = fopen (path, "r");
+	char line[65536], *tok;
+	int  n = 0;
+
+	if (fp == NULL)
+		{
+		fprintf (stderr, "\nERROR: Can't open the signature file \"%s\"\n", path);
+		exit (-1);
+		}
+	if (fgets (line, sizeof(line), fp) == NULL)
+		{
+		fprintf (stderr, "\nERROR: The signature file \"%s\" is empty\n", path);
+		exit (-1);
+		}
+	fclose (fp);
+	for (tok = strtok (line, " \t\r\n"); tok != NULL; tok = strtok (NULL, " \t\r\n"))
+		n++;
+	if (n < 2)
+		{
+		fprintf (stderr, "\nERROR: The signature file \"%s\" needs a header with Type and at least one signature\n", path);
+		exit (-1);
+		}
+	return n - 1;
+	}
+
+static int SigBase (char c)
+	{
+	return (c == 'A') ? A : (c == 'C') ? C : (c == 'G') ? G : (c == 'T') ? T : -1;
+	}
+
+static void ReadSignatureFile (const char *path)
+	{
+	FILE   *fp = fopen (path, "r");
+	char   line[65536], *tok, *save;
+	int    l, i, j, k, nrows = 0, seen[4][6][4];
+	double v, *sum = (double*) calloc (numSignatureProfiles, sizeof(double));
+
+	if (fp == NULL || sum == NULL)
+		{
+		fprintf (stderr, "\nERROR: Can't open the signature file \"%s\"\n", path);
+		exit (-1);
+		}
+	memset (seen, 0, sizeof(seen));
+	if (fgets (line, sizeof(line), fp) == NULL)	/* header */
+		exit (-1);
+	while (fgets (line, sizeof(line), fp) != NULL)
+		{
+		tok = strtok_r (line, " \t\r\n", &save);
+		if (tok == NULL)
+			continue;
+		if (strlen (tok) != 7 || tok[1] != '[' || tok[3] != '>' || tok[5] != ']' || SigBase (tok[0]) < 0 || SigBase (tok[6]) < 0)
+			{
+			fprintf (stderr, "\nERROR: Bad context \"%s\" in the signature file (it has to look like A[C>T]G)\n", tok);
+			exit (-1);
+			}
+		i = SigBase (tok[0]);
+		k = SigBase (tok[6]);
+		if (tok[2] == 'C' && tok[4] == 'A') j = CG_AT;
+		else if (tok[2] == 'C' && tok[4] == 'G') j = CG_GC;
+		else if (tok[2] == 'C' && tok[4] == 'T') j = CG_TA;
+		else if (tok[2] == 'T' && tok[4] == 'A') j = TA_AT;
+		else if (tok[2] == 'T' && tok[4] == 'C') j = TA_CG;
+		else if (tok[2] == 'T' && tok[4] == 'G') j = TA_GC;
+		else
+			{
+			fprintf (stderr, "\nERROR: Bad substitution in \"%s\": the reference base has to be a pyrimidine (C or T)\n", tok);
+			exit (-1);
+			}
+		for (l=0; l<numSignatureProfiles; l++)
+			{
+			tok = strtok_r (NULL, " \t\r\n", &save);
+			if (tok == NULL || sscanf (tok, "%lf", &v) != 1 || v < 0.0)
+				{
+				fprintf (stderr, "\nERROR: Bad or missing value in the signature file (signature %d)\n", l + 1);
+				exit (-1);
+				}
+			geneticSignature[l][i][j][k] = v;
+			sum[l] += v;
+			}
+		seen[i][j][k] = 1;
+		nrows++;
+		}
+	fclose (fp);
+	for (i=0; i<4; i++)
+		for (j=0; j<6; j++)
+			for (k=0; k<4; k++)
+				if (!seen[i][j][k])
+					{
+					fprintf (stderr, "\nERROR: The signature file does not have all the 96 contexts (%d rows read)\n", nrows);
+					exit (-1);
+					}
+	for (l=0; l<numSignatureProfiles; l++)
+		{
+		if (!(sum[l] > 0.0))
+			{
+			fprintf (stderr, "\nERROR: Signature %d of the signature file is all zeros\n", l + 1);
+			exit (-1);
+			}
+		for (i=0; i<4; i++)
+			for (j=0; j<6; j++)
+				for (k=0; k<4; k++)
+					geneticSignature[l][i][j][k] /= sum[l];
+		}
+	free (sum);
+	}
 
 /*************** PrepareGeneticSignatures **********************/
 /*
@@ -39,14 +153,24 @@ void PrepareGeneticSignatures (void)
 		exit (-1);
 		}
 
+	/* --signature-file: the number of profiles is the number of columns of the table */
+	if (signatureFile != NULL)
+		numSignatureProfiles = CountSignatureColumns (signatureFile);
+	for (i=0; i<numUserSignatures; i++)
+		if (signatureID[i] < 1 || signatureID[i] > numSignatureProfiles)
+			{
+			fprintf (stderr, "\n!!! PARAMETER ERROR: signature %d does not exist (there are %d signatures%s)\n\n", signatureID[i], numSignatureProfiles, signatureFile ? " in the --signature-file" : "");
+			exit (-1);
+			}
+
 	/* allocate memory for signatures */
-	geneticSignature = (double****) calloc (NUM_SIGNATURES, sizeof(double***));
+	geneticSignature = (double****) calloc (numSignatureProfiles, sizeof(double***));
 	if (!geneticSignature)
 		{
 		fprintf (stderr, "Could not allocate the geneticSignature array\n");
 		exit (-1);
 		}
-	for (l=0; l<NUM_SIGNATURES; l++)
+	for (l=0; l<numSignatureProfiles; l++)
 		{
 		geneticSignature[l] = (double***) calloc (4, sizeof(double**));
 		if (!geneticSignature[l])
@@ -75,13 +199,13 @@ void PrepareGeneticSignatures (void)
 		}
 
 	/* allocate matrix to store the signatures in 2D */
-	signatureProbs = (double**) calloc (NUM_SIGNATURES, sizeof(double));
+	signatureProbs = (double**) calloc (numSignatureProfiles, sizeof(double));
 	if (!signatureProbs)
 		{
 		fprintf (stderr, "Could not allocate the signatureProbs array\n");
 		exit (-1);
 		}
-	for (i=0; i<NUM_SIGNATURES; i++)
+	for (i=0; i<numSignatureProfiles; i++)
 		{
 		signatureProbs[i] = (double*) calloc (96, sizeof(double));
 		if (!signatureProbs[i])
@@ -121,7 +245,10 @@ void PrepareGeneticSignatures (void)
 
 	#ifdef LOAD_INTERNAL_SIGNATURES
 	/* load internal signatures */
-	LoadSignatures();
+	if (signatureFile != NULL)
+		ReadSignatureFile (signatureFile);
+	else
+		LoadSignatures();
 	#else
 	/* open signatures file */
 	FILE 	*fpSign;
@@ -140,7 +267,7 @@ void PrepareGeneticSignatures (void)
 			for (k=0; k<4; k++)
 			 	{
 			 	fscanf (fpSign, "%s %s %s", token, token, token);
-				for (l=0; l<NUM_SIGNATURES; l++)
+				for (l=0; l<numSignatureProfiles; l++)
 					fscanf (fpSign, "%lf", &geneticSignature[l][i][j][k]);
 				}
 	/* close signatures file */
@@ -151,7 +278,7 @@ void PrepareGeneticSignatures (void)
 	#ifdef PRINT_SIGNATURES
 	/* print all the signatures */
 	fprintf (stderr, "\nSubstitution Type\tTrinucleotide\tSomatic Mutation Type");
-	for (l=1; l<NUM_SIGNATURES; l++)
+	for (l=1; l<numSignatureProfiles; l++)
 		fprintf (stderr, "\tSignature %d",l);
 	for (i=0; i<4; i++)
 		for (j=0; j<6; j++)
@@ -165,7 +292,7 @@ void PrepareGeneticSignatures (void)
 			for (k=0; k<4; k++)
 				{
 				fprintf (stderr, "\n%s %c%c%c %c[%s]%c",  token, WhichNuc(i), token[0], WhichNuc(k), WhichNuc(i), token, WhichNuc(k));
-				for (l=0; l<NUM_SIGNATURES; l++)
+				for (l=0; l<numSignatureProfiles; l++)
 					fprintf (stderr, "\t%14.12lf", geneticSignature[l][i][j][k]);
 				}
 			}
@@ -194,7 +321,7 @@ void PrepareGeneticSignatures (void)
 	/* print for hard coding */
 	#undef PRINT_CODE
 	#ifdef PRINT_CODE
-	for (l=0; l<NUM_SIGNATURES; l++)
+	for (l=0; l<numSignatureProfiles; l++)
 		{
 		fprintf (stderr, "\n\n/* Signature %02d */", l+1);
 		for (i=0; i<4; i++)
@@ -214,7 +341,7 @@ void PrepareGeneticSignatures (void)
 	#endif
 	
 	/* copy in the selected genetic signature  */
-	for (l=0; l<NUM_SIGNATURES; l++)
+	for (l=0; l<numSignatureProfiles; l++)
 		for (i=0; i<4; i++)
 			for (j=0; j<6; j++)
 				for (k=0; k<4; k++)
@@ -226,7 +353,7 @@ void PrepareGeneticSignatures (void)
 	for (i=0; i<96; i++)
 		{
 		fprintf (stderr, "\n");
-		for (l=0; l<NUM_SIGNATURES; l++)
+		for (l=0; l<numSignatureProfiles; l++)
 			fprintf(stderr, "%14.12lf ", signatureProbs[l][i]);
 		}
 	exit(-1);
@@ -247,7 +374,7 @@ void PrepareGeneticSignatures (void)
 	/* free memopry */
 	free(header);
 	free(token);
-	for (l=0; l<NUM_SIGNATURES; l++)
+	for (l=0; l<numSignatureProfiles; l++)
 		{
 		for (i=0; i<4; i++)
 			{

@@ -151,6 +151,9 @@ Fewer false variable sites: <code>--min-alt-reads</code>
 <li><a href="#allelic-dropout-in-contiguous-segments---ado-block-unreleased" id="toc-allelic-dropout-in-contiguous-segments---ado-block-unreleased">8.24
 Allelic dropout in contiguous segments: <code>--ado-block</code>
 (unreleased)</a></li>
+<li><a href="#signature-profiles-from-a-file---signature-file-unreleased" id="toc-signature-profiles-from-a-file---signature-file-unreleased">8.25
+Signature profiles from a file: <code>--signature-file</code>
+(unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2455,6 +2458,23 @@ so consecutive pieces see one continuous process.
 models of the genotype caller still assume the mean ADO rate
 (<code>-D</code>), as before. Sparse and dense genomes give the same
 data.</p>
+<h2 id="signature-profiles-from-a-file---signature-file-unreleased">8.25
+Signature profiles from a file: <code>--signature-file</code>
+(unreleased)</h2>
+<p><code>-S</code> uses the 30 COSMIC v2 signatures built into the
+program. With <code>--signature-file FILE</code> the profiles come from
+a table in COSMIC format instead: a header line (<code>Type</code>, name
+of signature 1, 2, …) and 96 lines <code>A[C&gt;A]A v1 v2 ...</code>
+(the reference base is the pyrimidine; the columns are normalized to sum
+1). The signature numbers of <code>-S</code> are then the columns of the
+file. The folder <code>data/signatures/</code> has
+<code>COSMIC_v3.6_SBS1_SBS5_GRCh37.txt</code> (SBS1 and SBS5 of COSMIC
+v3.6) and <code>PTA_artifact_SCAN2.txt</code> (the SNV artifact
+signature of PTA of SCAN2, Luquette <em>et al.</em> 2022; 68% C&gt;T).
+Example, 40% SBS1 and 60% SBS5:
+<code>-S2 1 0.4 2 0.6 --signature-file data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt</code>.
+With a real reference as root (<code>-U</code>), SBS1 alone gives 98.7%
+C&gt;T, 94% of them in CpG.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:
