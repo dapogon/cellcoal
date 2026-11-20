@@ -949,5 +949,12 @@ assert pos and max(pos) <= 10000
 P
 cd "$ROOT"
 
+echo "2g38. built-in signatures = COSMIC v2 table of the repository"
+mkdir -p "$TMP/v2" && rm -rf "$TMP/v2"/* && cd "$TMP/v2"
+"$BIN" -n1 -s6 -l30000 -u1e-6 -e1000 -b1 -S1 1 1 -oA -#3 -5 >/dev/null 2>&1
+"$BIN" -n1 -s6 -l30000 -u1e-6 -e1000 -b1 -S1 1 1 --signature-file "$ROOT/data/signatures/COSMIC_v2_SBS_GRCh37.txt" -oB -#3 -5 >/dev/null 2>&1
+[ -s A/full_gen ] && cmp -s A/full_gen B/full_gen && ok "the built-in signatures give the same data as the COSMIC v2 file" || bad "built-in signatures differ from the COSMIC v2 file"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

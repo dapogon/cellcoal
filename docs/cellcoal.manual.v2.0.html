@@ -2487,6 +2487,13 @@ Example, 40% SBS1 and 60% SBS5:
 <code>-S2 1 0.4 2 0.6 --signature-file data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt</code>.
 With a real reference as root (<code>-U</code>), SBS1 alone gives 98.7%
 C&gt;T, 94% of them in CpG.</p>
+<p>Note on the built-in signatures: they are the 30 signatures of COSMIC
+v2 and have exactly the values of
+<code>data/signatures/COSMIC_v2_SBS_GRCh37.txt</code>. Signature 1 has
+67.5% C&gt;T in the profile; in a simulation the share depends on how
+many CpG contexts the sequence has (a human sequence has few),
+e.g. about 59% in 200 kb of hg38. For the 96-context profiles of COSMIC
+v3.x use <code>--signature-file</code>.</p>
 <h2 id="amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased">8.26
 Amplification errors with a trinucleotide profile:
 <code>--amp-signature</code> (unreleased)</h2>
