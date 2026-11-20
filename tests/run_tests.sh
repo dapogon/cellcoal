@@ -727,5 +727,16 @@ else bad "--coverage did not write coverage.tsv"; fi
 "$BIN" -n1 -s5 -l1000 -u1e-6 -e10000 --coverage 100 -#5 -oB >B.txt 2>&1; grep -q "needs read counts" B.txt && ok "--coverage needs -C" || bad "--coverage without -C"
 cd "$ROOT"
 
+echo "2g29. --min-alt-vaf"
+mkdir -p "$TMP/vaf" && rm -rf "$TMP/vaf"/* && cd "$TMP/vaf"
+C="-n1 -s30 -l20000 -u2e-7 -e10000 -g1e-4 -b1 -C10 -D0.2 -E0.001 --summary -#5"
+"$BIN" $C --min-alt-reads 2 -oA >/dev/null 2>&1
+"$BIN" $C --min-alt-reads 2 --min-alt-vaf 0.3 -oB >/dev/null 2>&1
+nA=$(grep -a -vc '^#' A/vcf); nB=$(grep -a -vc '^#' B/vcf)
+[ "$nB" -lt "$nA" ] && [ "$nB" -gt 0 ] && ok "--min-alt-vaf 0.3 keeps fewer sites ($nA -> $nB)" || bad "--min-alt-vaf sites ($nA -> $nB)"
+grep -q '"min_alt_vaf": 0.3' B/run.json && ok "run.json records min_alt_vaf" || bad "run.json min_alt_vaf"
+"$BIN" $C --min-alt-vaf 1.5 -oC >C.txt 2>&1; grep -qi "between 0 and 1" C.txt && ok "--min-alt-vaf range checked" || bad "--min-alt-vaf range"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

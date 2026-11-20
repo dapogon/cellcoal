@@ -343,6 +343,7 @@ extern double				covDoubletCorr, adoDoubletCorr;	/* --cov-doublet-corr, --ado-do
 extern int					doSummary, numSNVsTrue;	/* --summary: write summary.tsv, one row of metrics per replicate */
 extern FILE				*fpSummary;
 extern int					minAltReads;
+extern double				minAltVaf;
 extern int					coverageWindow, covNumWindows;
 extern long long			*covSum, *covSites;
 extern FILE					*fpCoverage;

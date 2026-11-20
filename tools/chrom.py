@@ -21,7 +21,8 @@ Usage (real reference sequence):
                     SNPs simulated by CellCoal on the reference).
 
 Do not give -n, -l, -#, -o, -T, -U or --summary after "--": the script sets them.  It also sets --no-outgroup and,
-unless you give it, --min-alt-reads 2 (a site is written only if a cell has a non-reference call with at least 2 alternative reads).  A tree can be given with --tree FILE
+unless you give them, --min-alt-reads 2 --min-alt-vaf 0.3 (a site is written only if a cell has a non-reference call with at least
+2 alternative reads and 30% of its reads).  A tree can be given with --tree FILE
 (it is then not generated).  Outputs, in the --out folder:
   chrom.vcf[.gz]        variable sites of all the blocks (CHROM and POS of the chromosome)
   chrom_summary.tsv     one row per block, plus a TOTAL row
@@ -270,6 +271,8 @@ def main():
         opts.append("--no-outgroup")
     if "--min-alt-reads" not in opts and not any(o.startswith("--min-alt-reads=") for o in opts):
         opts += ["--min-alt-reads", "2"]   # default of the block mode: one alternative read is not believed (see manual 8.23)
+    if "--min-alt-vaf" not in opts and not any(o.startswith("--min-alt-vaf=") for o in opts):
+        opts += ["--min-alt-vaf", "0.3"]   # and at least 30% of the reads of the cell (separates most single-cell errors)
 
     # 2. the blocks, in parallel
     rng = random.Random(a.seed)
