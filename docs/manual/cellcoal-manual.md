@@ -1158,6 +1158,16 @@ Truth: `reads_<n>/truth.vcf` has the true genotype of every cell (before dropout
 
 Limits of this first version: no indels, no doublets, one contig, the quality is constant (Phred from `-E`). `tools/bamcheck.py ref.fa x.bam` is a dependency-free BAM checker.
 
+## 8.29 A chromosome in blocks: `--blocks`, `--fasta`, `--region`, `--germline-vcf` (unreleased)
+
+`--blocks B` simulates a chromosome of B blocks of `-l` sites on **one** coalescent tree (made in the first block and reused in the others). With no recombination the sites are independent given the tree, so the blocks add up to a long chromosome without holding it in memory. The output is that of one data set: one VCF with the positions of the chromosome (CHROM `--contig`, default `chr1`; ID `snv<position>`), `summary.tsv` with one row per block and a TOTAL row (counts added, rates averaged, precision/recall/singleton recall weighted), `coverage.tsv` in chromosome coordinates, and `blocks_info.txt`. `-n` is ignored. `--ado-block` and `--gain-sd` continue from one block to the next (`--ado-origin` is set by the program; give `--ado-seed` to fix the processes).
+
+`--fasta FILE` (plain or `.gz`, several lines per sequence, upper or lower case) uses a real reference: with `--region chrom:start-end` (1-based, inclusive) the region, otherwise the first sequence; `-l` is the size of the blocks and `--blocks B` limits their number. Sites that are not A, C, G or T are left out (not simulated, not in the VCF, not in the invariant counts); the positions of the VCF are the real ones. The reference base is the REF of the VCF.
+
+`--germline-vcf FILE` gives the germline SNVs of the healthy genome (SNVs only; GT 0|1, 1|0, 1|1, 0/1, 1/1; unphased heterozygous genotypes are phased at random; it cannot be used with `-c`). Those sites carry the flag `GERMLINE` instead of `SOMATIC` in the VCF.
+
+`tools/chrom.py` is a wrapper of these options that writes the files of earlier versions (`chrom.vcf`, `chrom_summary.tsv`, `chrom_coverage.tsv` and one BED per cell) and uses `--min-alt-reads 2 --min-alt-vaf 0.3` by default. Not combined with `--bam`/`--fastq` or `-U`.
+
 ## 6.10j Windows (experimental)
 
 CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with read counts and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).

@@ -188,7 +188,8 @@ void PrepareGlobalFiles(int argc, char **argv)
         PrintDate (fpVCF);
         fprintf (fpVCF, "Read counts and genotype likelihoods\n");
         PrintCommandLine (fpVCF, argc, argv);*/
-        fprintf (fpVCF,"%d\n", numDataSets);
+        if (blocksOn == 0)
+            fprintf (fpVCF,"%d\n", numDataSets);	/* a chromosome in blocks is one data set: a plain VCF */
         }
 
 	if (doPrintCATG == YES)
@@ -2306,6 +2307,7 @@ void PrintUsage(FILE *fp)
 	fprintf (fp,"\n--gain-sd S --gain-len L: amplification gain of every haplotype of every cell that changes along the genome (lognormal with log-sd S, constant over segments of mean length L sites; mean 1) and multiplies the read depth of the allele: autocorrelated coverage, allelic imbalance and (with -D) dropout from the same mechanism; needs -C");
 
 	fprintf (fp,"\n--bam, --fastq: simulate paired-end reads of every cell (needs -C, diploid DNA): <results>/reads_<n>/cellNNNN.bam(.bai), .R1/.R2.fastq.gz, ref.fa. Molecules with PCR duplicates (flag 1024; --dup-mean M extra copies, default 0.3) share the errors of the amplification (-A); sequencing errors (-E) are independent; gain, ADO blocks and amplicon structure shape the coverage. --read-len (150), --insert-mean (400), --insert-sd (60), --amplicon-len (2000), --amplicon-cv (0.5; 0 = off), --bulk-depth D (BAM of the healthy genome), --contig NAME");	fprintf (fp,"\n--amp-signature FILE: the amplification error (-A) depends on the trinucleotide context and its substitutions follow the 96-context profile in FILE (first column), e.g. data/signatures/PTA_artifact_SCAN2.txt; needs -A and read counts");
+	fprintf (fp,"\n--blocks B (with -l = sites per block): a chromosome of B blocks on one tree, one VCF with the positions of the chromosome, one summary row per block and a TOTAL; --fasta FILE[.gz] [--region chr:start-end] [--germline-vcf FILE]: real reference (sites that are not ACGT are left out), -l is the block size, --blocks limits the blocks; germline sites are flagged GERMLINE; see tools/chrom.py");
 	fprintf (fp,"\n--signature-file FILE: 96-context signature profiles (COSMIC format, one column per signature) used by -S instead of the 30 built-in ones, e.g. data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt");
 	fprintf (fp,"\n--ado-block L: allelic dropout in contiguous segments of mean length L sites (a Markov chain along each allele, with the ADO rate of -D/-P); --ado-origin O: position of the first site on the chromosome; --ado-seed S: seed of the segments");
 	fprintf (fp,"\n--coverage W: mean read depth of every cell over the sites that are not variable sites, in windows of W sites (coverage.tsv; needs -C)");

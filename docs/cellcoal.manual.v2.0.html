@@ -163,6 +163,9 @@ Amplification gain along the genome: <code>--gain-sd</code>,
 <li><a href="#reads-of-single-cell-genomes---bam---fastq-unreleased" id="toc-reads-of-single-cell-genomes---bam---fastq-unreleased">8.28
 Reads of single-cell genomes: <code>--bam</code>, <code>--fastq</code>
 (unreleased)</a></li>
+<li><a href="#a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased" id="toc-a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased">8.29
+A chromosome in blocks: <code>--blocks</code>, <code>--fasta</code>,
+<code>--region</code>, <code>--germline-vcf</code> (unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2593,6 +2596,43 @@ naive pileup baseline with and without the PCR duplicates.</p>
 quality is constant (Phred from <code>-E</code>).
 <code>tools/bamcheck.py ref.fa x.bam</code> is a dependency-free BAM
 checker.</p>
+<h2 id="a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased">8.29
+A chromosome in blocks: <code>--blocks</code>, <code>--fasta</code>,
+<code>--region</code>, <code>--germline-vcf</code> (unreleased)</h2>
+<p><code>--blocks B</code> simulates a chromosome of B blocks of
+<code>-l</code> sites on <strong>one</strong> coalescent tree (made in
+the first block and reused in the others). With no recombination the
+sites are independent given the tree, so the blocks add up to a long
+chromosome without holding it in memory. The output is that of one data
+set: one VCF with the positions of the chromosome (CHROM
+<code>--contig</code>, default <code>chr1</code>; ID
+<code>snv&lt;position&gt;</code>), <code>summary.tsv</code> with one row
+per block and a TOTAL row (counts added, rates averaged,
+precision/recall/singleton recall weighted), <code>coverage.tsv</code>
+in chromosome coordinates, and <code>blocks_info.txt</code>.
+<code>-n</code> is ignored. <code>--ado-block</code> and
+<code>--gain-sd</code> continue from one block to the next
+(<code>--ado-origin</code> is set by the program; give
+<code>--ado-seed</code> to fix the processes).</p>
+<p><code>--fasta FILE</code> (plain or <code>.gz</code>, several lines
+per sequence, upper or lower case) uses a real reference: with
+<code>--region chrom:start-end</code> (1-based, inclusive) the region,
+otherwise the first sequence; <code>-l</code> is the size of the blocks
+and <code>--blocks B</code> limits their number. Sites that are not A,
+C, G or T are left out (not simulated, not in the VCF, not in the
+invariant counts); the positions of the VCF are the real ones. The
+reference base is the REF of the VCF.</p>
+<p><code>--germline-vcf FILE</code> gives the germline SNVs of the
+healthy genome (SNVs only; GT 0|1, 1|0, 1|1, 0/1, 1/1; unphased
+heterozygous genotypes are phased at random; it cannot be used with
+<code>-c</code>). Those sites carry the flag <code>GERMLINE</code>
+instead of <code>SOMATIC</code> in the VCF.</p>
+<p><code>tools/chrom.py</code> is a wrapper of these options that writes
+the files of earlier versions (<code>chrom.vcf</code>,
+<code>chrom_summary.tsv</code>, <code>chrom_coverage.tsv</code> and one
+BED per cell) and uses <code>--min-alt-reads 2 --min-alt-vaf 0.3</code>
+by default. Not combined with <code>--bam</code>/<code>--fastq</code> or
+<code>-U</code>.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

@@ -486,6 +486,14 @@ static void VCFSiteLine (FILE *fp, int j)
 
 		
 	/* VFC: CHROMOSOME */
+	if (blocksOn)
+		{
+		long	pos = BlockSitePos (j);
+
+		fprintf (fp,"\n%s\t%ld\t%s%09ld", BlocksChrom (), pos, (allSites[j].isSNV == NO) ? "inv" : "snv", pos);
+		}
+	else
+		{
 	fprintf (fp,"\n%d", 1);
 	
 	/* VFC: POSITION */
@@ -496,6 +504,7 @@ static void VCFSiteLine (FILE *fp, int j)
 		fprintf (fp,"\tinv%06d", j+1);
 	else
 		fprintf (fp,"\tsnv%06d", j+1);
+		}
 
 	/* VFC: REFERENCE allele(s) => healthy root alleles */
 	referenceAllele = allSites[j].referenceAllele;
@@ -542,7 +551,7 @@ static void VCFSiteLine (FILE *fp, int j)
 	}
 
 	/* VFC: INFO : SOMATIC */
-	fprintf (fp, ";SOMATIC");
+	fprintf (fp, (germFlag != NULL && germFlag[j]) ? ";GERMLINE" : ";SOMATIC");
 	
 	/* VFC: FORMAT */
 	fprintf (fp, "\tGT:DP:RC:G10:G10N:GL:GLN:PL:PLN:ML:NG:DG:TG");
@@ -570,16 +579,23 @@ static void PrintVCFHeader (FILE *fp)
 	{
 	int		i;
 
+	if (blocksOn && blockIndex > 0)
+		return;	/* chromosome in blocks: one header */
 	/* print file header */
 	fprintf (fp,"##fileformat=VCFv4.3");
 	fprintf (fp,"\n##filedate=");
 	PrintDate (fp);
 	fprintf (fp,"##source=CellCoal SNV simulation");
-	fprintf (fp,"\n##contig=<ID=1>");
+	if (blocksOn)
+		fprintf (fp,"\n##contig=<ID=%s,length=%ld>", BlocksChrom (), chromLength);
+	else
+		fprintf (fp,"\n##contig=<ID=1>");
 	fprintf (fp,"\n##INFO=<ID=AA,Number=1,Type=String,Description=\"Ancestral allele\">");
 	fprintf (fp,"\n##INFO=<ID=NS,Number=1,Type=Integer,Description=\"Number of samples with data\">");
 	fprintf (fp,"\n##INFO=<ID=AF,Number=R,Type=Float,Description=\"True alternate/s allele frequency (ignores doublets)\">");
 	fprintf (fp,"\n##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description=\"Somatic SNV flag\">");
+	if (blocksOn && germFlag != NULL)
+		fprintf (fp,"\n##INFO=<ID=GERMLINE,Number=0,Type=Flag,Description=\"Germline SNV of --germline-vcf\">");
 	fprintf (fp,"\n##FILTER=<ID=s50,Description=\"Less than half of samples have data\">");
 	fprintf (fp,"\n##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Called ML genotype\">");
 	fprintf (fp,"\n##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read depth\">");
@@ -657,7 +673,8 @@ void PrintVCF (FILE *fp)
 		for (snv=0; snv<numSNVs; snv++)
 			VCFSiteLine (fp, SNVsites[snv]);
 	
-	fprintf (fp, "\n");
+	if (blocksOn == 0 || blockIndex == numDataSets - 1)	/* a chromosome in blocks: the lines of the blocks follow each other */
+		fprintf (fp, "\n");
 	}
 
 
@@ -1198,7 +1215,7 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 			siteGL[j] = NULL;
 			}
 		}
-	if (fpVCFout)
+	if (fpVCFout && (blocksOn == 0 || blockIndex == numDataSets - 1))
 		fprintf (fpVCFout, "\n");
 
 	siteOff = 0;

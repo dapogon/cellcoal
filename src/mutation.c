@@ -30,7 +30,7 @@ void InitializeGenomes (TreeNode *p, long int *seed)
 						{
 						SetG(MATERNAL, cell, site, WhichNucChar(maternalUserGenome[site]));
 						SetG(PATERNAL, cell, site, WhichNucChar(paternalUserGenome[site]));
-						allSites[site].referenceAllele = GetG(MATERNAL, cell, site);   // then allSites[site].referenceAllele hosts the reference genome
+						allSites[site].referenceAllele = (refUserGenome != NULL) ? WhichNucChar(refUserGenome[site]) : GetG(MATERNAL, cell, site);   // then allSites[site].referenceAllele hosts the reference genome
 						}
 					}
   				else if (doGeneticSignatures == NO) /* initialize genome with mononucleotide frequencies */
