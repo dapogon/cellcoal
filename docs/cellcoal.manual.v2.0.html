@@ -157,6 +157,9 @@ Signature profiles from a file: <code>--signature-file</code>
 <li><a href="#amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased" id="toc-amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased">8.26
 Amplification errors with a trinucleotide profile:
 <code>--amp-signature</code> (unreleased)</a></li>
+<li><a href="#amplification-gain-along-the-genome---gain-sd---gain-len-unreleased" id="toc-amplification-gain-along-the-genome---gain-sd---gain-len-unreleased">8.27
+Amplification gain along the genome: <code>--gain-sd</code>,
+<code>--gain-len</code> (unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2508,6 +2511,41 @@ and last sites of the genome have no context and use the matrix
 the errors reproduces the 96-context signature (correlation 1.0 with 10
 cells at 30X, <code>-A0.02 0.0002 0</code>). Without
 <code>--amp-signature</code> the data are unchanged.</p>
+<h2 id="amplification-gain-along-the-genome---gain-sd---gain-len-unreleased">8.27
+Amplification gain along the genome: <code>--gain-sd</code>,
+<code>--gain-len</code> (unreleased)</h2>
+<p>Single-cell whole-genome amplification (MDA, PTA…) does not cover the
+genome evenly: the depth of a cell changes smoothly over regions of
+kilobases to megabases, and the two haplotypes are amplified
+differently. With the default model the depth of every site is drawn
+independently, so there is no such structure. With
+<code>--gain-sd S --gain-len L</code> every haplotype of every cell has
+a <em>gain</em>: a lognormal multiplier with mean 1 and log-standard
+deviation S that is constant over segments of exponential length (mean L
+sites) and independent between segments. The mean read depth of each
+allele is multiplied by its gain, so one mechanism produces:</p>
+<ul>
+<li><strong>autocorrelated coverage</strong> (the total depth is the sum
+of the two haplotypes),</li>
+<li><strong>allelic imbalance</strong> that changes along the genome
+(the haplotypes have different gains),</li>
+<li>together with <code>-D</code> / <code>--ado-block</code>, dropout
+where the gain is low.</li>
+</ul>
+<p><code>--ado-block</code> is the all-or-nothing version of the same
+idea (a segment of an allele is present or lost); the gain is the
+continuous one, and both can be used together. The process starts at
+chromosome position 0 and is generated from a seed that depends only on
+<code>--ado-seed</code>, the cell and the haplotype, so that the pieces
+of a chromosome simulated with <code>--ado-origin</code> (as
+<code>tools/chrom.py</code> does) see one continuous process. Example:
+<code>-C30 --gain-sd 0.6 --gain-len 40000</code> gives windows of 5 kb
+with a correlation between neighbours of 0.86 and the same mean depth
+(30); without it the correlation is 0. Larger S and L mimic MDA, smaller
+values PTA; these parameters have to be taken from real data (for
+example from the per-cell coverage profile that <code>--coverage</code>
+writes). Needs read counts (<code>-C</code>). Without these options the
+data are unchanged.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

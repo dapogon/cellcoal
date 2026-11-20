@@ -554,7 +554,7 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	int		readsLeft, badReads;
 	double	cumProb;
 	double	uniform, goodTemplateProb, badTemplateProb, noSeqError;
-	double 	allelicImbalance;
+	double 	allelicImbalance, gM, gP;
 	
 	readCount = c->readCount;
 	
@@ -586,6 +586,10 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	else
 		allelicImbalance = 0.5;
 
+	/* amplification gain of the two haplotypes at this site (--gain-sd) */
+	gM = (gainOn == YES) ? GainAt (i, MATERNAL, j) : 1.0;
+	gP = (gainOn == YES) ? GainAt (i, PATERNAL, j) : 1.0;
+
 	/* number of reads will follow a Poisson or a Negative Binomial distribution (overdispersed coverage) around mean coverage, and are randomly assigned to maternal/paternal chromosome */
 	numMaternalReads = 0;
 	numPaternalReads = 0;
@@ -594,18 +598,18 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		{
 		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
 			{
-			numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
-			numPaternalReads = RandomNegativeBinomial((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
+			numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage*siteCovMult*cellCovMult[i]*gM, alphaCoverage, seed);
+			numPaternalReads = RandomNegativeBinomial((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i]*gP, alphaCoverage, seed);
 			}
 		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 			{
-			numMaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
+			numMaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gM, alphaCoverage, seed);
 			numPaternalReads = 0;
 			}
 		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 			{
 			numMaternalReads = 0;
-			numPaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], alphaCoverage, seed);
+			numPaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gP, alphaCoverage, seed);
 			}
 		else /* no allele is present (locus dropout/deletion) */
 			{
@@ -617,18 +621,18 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		{
 		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
 			{
-			numMaternalReads = RandomPoisson(allelicImbalance*coverage*siteCovMult*cellCovMult[i], seed);
-			numPaternalReads = RandomPoisson((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i], seed);
+			numMaternalReads = RandomPoisson(allelicImbalance*coverage*siteCovMult*cellCovMult[i]*gM, seed);
+			numPaternalReads = RandomPoisson((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i]*gP, seed);
 			}
 		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
 			{
-			numMaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], seed);
+			numMaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gM, seed);
 			numPaternalReads = 0;
 			}
 		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
 			{
 			numMaternalReads = 0;
-			numPaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i], seed);
+			numPaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gP, seed);
 			}
 		else /* no allele is present (locus dropout/deletion) */
 			{

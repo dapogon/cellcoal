@@ -11,6 +11,106 @@
 */
 #include "cellcoal.h"
 
+#include "readopts.h"
+
+/* generic table of the long options of the read-level simulator (see readopts.h) */
+typedef struct { const char *key, *opt; char flag; int kind; void *ptr; double def; } ExtraOpt;
+#define X_STRUCT(key, opt, flag, kind, var, def) {#key, opt, flag, kind, &var, def},
+static const ExtraOpt extraOpts[] = { READ_OPTS(X_STRUCT) {NULL, NULL, 0, 0, NULL, 0} };
+static void CfgError (const char *path, const char *msg, const char *what);
+#define X_NAMES(key, opt, flag, kind, var, def) {#key, flag},
+
+static int IsExtraOpt (const char *a)
+	{
+	int e;
+
+	for (e=0; extraOpts[e].key; e++)
+		if (strcmp (a, extraOpts[e].opt) == 0)
+			return 1;
+	return 0;
+	}
+
+static int ExtraBoolFlag (int flag)
+	{
+	int e;
+
+	for (e=0; extraOpts[e].key; e++)
+		if (extraOpts[e].flag == flag && extraOpts[e].kind == 0)
+			return 1;
+	return 0;
+	}
+
+/* parses the option out[*i] if it is one of the table; returns 1 when it was */
+static int ParseExtra (char **out, int *i, int n)
+	{
+	int e;
+
+	for (e=0; extraOpts[e].key; e++)
+		if (strcmp (out[*i], extraOpts[e].opt) == 0)
+			{
+			const ExtraOpt *o = &extraOpts[e];
+
+			if (o->kind == 0)
+				*(int*) o->ptr = YES;
+			else
+				{
+				char msg[160];
+
+				if (*i + 1 >= n)
+					{
+					snprintf (msg, sizeof(msg), "%s needs a value", o->opt);
+					CfgError ("the command line", msg, NULL);
+					}
+				(*i)++;
+				if (o->kind == 1)
+					*(int*) o->ptr = atoi (out[*i]);
+				else if (o->kind == 2)
+					*(double*) o->ptr = atof (out[*i]);
+				else
+					*(char**) o->ptr = out[*i];
+				if ((o->kind == 1 || o->kind == 2) && !(atof (out[*i]) > 0.0 || (o->kind == 2 && strcmp (o->opt, "--bulk-depth") == 0 && atof (out[*i]) >= 0.0)))
+					{
+					snprintf (msg, sizeof(msg), "%s has to be > 0", o->opt);
+					CfgError ("the command line", msg, out[*i]);
+					}
+				}
+			return 1;
+			}
+	return 0;
+	}
+
+static void JsonExtras (FILE *fp, const char *indent, int *emitted)
+	{
+	int e;
+
+	for (e=0; extraOpts[e].key; e++)
+		{
+		const ExtraOpt *o = &extraOpts[e];
+		int set = 0;
+
+		if (o->kind == 0)
+			set = *(int*) o->ptr;
+		else if (o->kind == 1)
+			set = (*(int*) o->ptr != (int) o->def);
+		else if (o->kind == 2)
+			set = (*(double*) o->ptr != o->def);
+		else
+			set = (strcmp (*(char**) o->ptr, "chr1") != 0);
+		if (!set)
+			continue;
+		fprintf (fp, "%s\n%s  \"%s\": ", *emitted ? "," : "", indent, o->key);
+		if (o->kind == 0)
+			fprintf (fp, "true");
+		else if (o->kind == 1)
+			fprintf (fp, "%d", *(int*) o->ptr);
+		else if (o->kind == 2)
+			fprintf (fp, "%.10g", *(double*) o->ptr);
+		else
+			fprintf (fp, "\"%s\"", *(char**) o->ptr);
+		(*emitted)++;
+		}
+	}
+
 static const struct { const char *name; char flag; } optionNames[] =
 	{
 	{"parameter_file",'F'}, {"replicates",'n'}, {"cells",'s'}, {"sites",'l'}, {"population_size",'e'},
@@ -31,7 +131,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
 	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
 	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'},
-	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {"min_alt_reads",'\23'}, {"coverage_window",'\24'}, {"min_alt_vaf",'\25'}, {"ado_block",'\26'}, {"ado_origin",'\27'}, {"ado_seed",'\30'}, {"signature_file",'\31'}, {"amp_signature",'\32'}, {NULL,0}
+	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {"min_alt_reads",'\23'}, {"coverage_window",'\24'}, {"min_alt_vaf",'\25'}, {"ado_block",'\26'}, {"ado_origin",'\27'}, {"ado_seed",'\30'}, {"signature_file",'\31'}, {"amp_signature",'\32'}, {"gain_sd",'\33'}, READ_OPTS(X_NAMES) {"gain_len",'\34'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -464,6 +564,14 @@ static const char *LongValueOption (int flag)
 	if (flag == '\30') return "--ado-seed";
 	if (flag == '\31') return "--signature-file";
 	if (flag == '\32') return "--amp-signature";
+	if (flag == '\33') return "--gain-sd";
+	if (flag == '\34') return "--gain-len";
+	{
+	int e;
+	for (e=0; extraOpts[e].key; e++)
+		if (extraOpts[e].flag == flag)
+			return extraOpts[e].opt;
+	}
 	return NULL;
 	}
 
@@ -501,6 +609,8 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 				snprintf (tok, 16, "--sweep-keep");
 			else if (flag == '\20')
 				snprintf (tok, 16, "--sweep-resume");
+			else if (ExtraBoolFlag (flag))
+				snprintf (tok, 16, "%s", LongValueOption (flag));
 			else if (LongValueOption (flag))
 				continue;
 			else
@@ -652,7 +762,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--no-outgroup") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
-			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0 || strcmp (argv[i], "--coverage") == 0 || strcmp (argv[i], "--min-alt-vaf") == 0 || strcmp (argv[i], "--ado-block") == 0 || strcmp (argv[i], "--ado-origin") == 0 || strcmp (argv[i], "--ado-seed") == 0 || strcmp (argv[i], "--signature-file") == 0 || strcmp (argv[i], "--amp-signature") == 0)
+			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0 || strcmp (argv[i], "--coverage") == 0 || strcmp (argv[i], "--min-alt-vaf") == 0 || strcmp (argv[i], "--ado-block") == 0 || strcmp (argv[i], "--ado-origin") == 0 || strcmp (argv[i], "--ado-seed") == 0 || strcmp (argv[i], "--signature-file") == 0 || strcmp (argv[i], "--amp-signature") == 0 || strcmp (argv[i], "--gain-sd") == 0 || strcmp (argv[i], "--gain-len") == 0 || IsExtraOpt (argv[i]))
 			found = YES;
 	if (found == NO)
 		return argv;
@@ -764,6 +874,22 @@ char **ExpandConfigArgs (int *argc, char **argv)
 				CfgError ("the command line", "--amp-signature needs a file name", NULL);
 			ampSignatureFile = out[++i];
 			}
+		else if (strcmp (out[i], "--gain-sd") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--gain-sd needs a standard deviation (> 0)", NULL);
+			gainSd = atof (out[++i]);
+			if (!(gainSd > 0.0))
+				CfgError ("the command line", "--gain-sd has to be > 0", out[i]);
+			}
+		else if (strcmp (out[i], "--gain-len") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--gain-len needs a mean segment length in sites (> 0)", NULL);
+			gainLen = atof (out[++i]);
+			if (!(gainLen > 0.0))
+				CfgError ("the command line", "--gain-len has to be > 0", out[i]);
+			}
 		else if (strcmp (out[i], "--ado-origin") == 0)
 			{
 			if (i + 1 >= n)
@@ -796,6 +922,8 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			if (minAltReads < 0)
 				CfgError ("the command line", "--min-alt-reads has to be >= 0", out[i]);
 			}
+		else if (ParseExtra (out, &i, n))
+			;
 		else if (strcmp (out[i], "--fast") == 0)
 			fastMode = YES;
 		else if (strcmp (out[i], "--no-outgroup") == 0)
@@ -896,8 +1024,9 @@ void WriteOptionsJson (FILE *fp, const char *commandLine, const char *indent)
 	JSON_EXTRA (covAdoCorr != 0.0, "cov_ado_correlation", "%.10g", covAdoCorr)
 	JSON_EXTRA (covDoubletCorr != 0.0, "cov_doublet_correlation", "%.10g", covDoubletCorr)
 	JSON_EXTRA (adoDoubletCorr != 0.0, "ado_doublet_correlation", "%.10g", adoDoubletCorr)
-	JSON_EXTRA (ampSignatureFile != NULL, "amp_signature", "\"%s\"", ampSignatureFile) JSON_EXTRA (signatureFile != NULL, "signature_file", "\"%s\"", signatureFile) JSON_EXTRA (adoBlockLen > 0.0, "ado_block", "%.10g", adoBlockLen) JSON_EXTRA (adoOrigin > 0, "ado_origin", "%lld", adoOrigin) JSON_EXTRA (adoSeedOpt > 0, "ado_seed", "%ld", adoSeedOpt) JSON_EXTRA (minAltVaf > 0.0, "min_alt_vaf", "%.10g", minAltVaf) JSON_EXTRA (coverageWindow > 0, "coverage_window", "%d", coverageWindow) JSON_EXTRA (minAltReads > 0, "min_alt_reads", "%d", minAltReads) JSON_EXTRA (ampCellVar > 0.0, "amplification_error_cell_variance", "%.10g", ampCellVar)
+	JSON_EXTRA (gainSd > 0.0, "gain_sd", "%.10g", gainSd) JSON_EXTRA (gainLen > 0.0, "gain_len", "%.10g", gainLen) JSON_EXTRA (ampSignatureFile != NULL, "amp_signature", "\"%s\"", ampSignatureFile) JSON_EXTRA (signatureFile != NULL, "signature_file", "\"%s\"", signatureFile) JSON_EXTRA (adoBlockLen > 0.0, "ado_block", "%.10g", adoBlockLen) JSON_EXTRA (adoOrigin > 0, "ado_origin", "%lld", adoOrigin) JSON_EXTRA (adoSeedOpt > 0, "ado_seed", "%ld", adoSeedOpt) JSON_EXTRA (minAltVaf > 0.0, "min_alt_vaf", "%.10g", minAltVaf) JSON_EXTRA (coverageWindow > 0, "coverage_window", "%d", coverageWindow) JSON_EXTRA (minAltReads > 0, "min_alt_reads", "%d", minAltReads) JSON_EXTRA (ampCellVar > 0.0, "amplification_error_cell_variance", "%.10g", ampCellVar)
 #undef JSON_EXTRA
+	JsonExtras (fp, indent, &emitted);
 	}
 	fprintf (fp, "\n%s}", indent);
 	free (copy);

@@ -150,6 +150,107 @@ int AdoBlockLost (int node, int genome, long site)
 	return 0;
 	}
 
+
+/* Amplification gain along the genome (--gain-sd, --gain-len). Every haplotype of every cell has a gain, a lognormal multiplier with mean 1
+   (log-sd gainSd) that is constant over segments of exponential length (mean gainLen sites) and independent between segments. It multiplies
+   the mean read depth of the allele. As for --ado-block, the process starts at chromosome position 0 and is generated from a seed that
+   depends only on --ado-seed, the cell and the haplotype, so that pieces of a chromosome (--ado-origin) see one continuous process. */
+typedef struct { long *e; float *v; int n, cap; } GainIv;
+static GainIv *gainIv = NULL;
+
+void FreeGain (void)
+	{
+	int k;
+
+	if (gainIv != NULL)
+		{
+		for (k=0; k<2*(numCells+1); k++)
+			{
+			free (gainIv[k].e);
+			free (gainIv[k].v);
+			}
+		free (gainIv);
+		gainIv = NULL;
+		}
+	gainOn = NO;
+	}
+
+void BuildGain (long int *seed)
+	{
+	int			i, g;
+	uint64_t	base, x;
+	long long	pos, end, len;
+	double		u1, u2, z;
+
+	FreeGain ();
+	if (adoSeedOpt > 0)
+		base = (uint64_t) adoSeedOpt ^ 0x1234567887654321ULL;
+	else
+		base = ((uint64_t)(RandomUniform (seed) * 4294967296.0) << 32) | (uint64_t)(RandomUniform (seed) * 4294967296.0);
+	gainIv = (GainIv*) calloc (2 * (numCells + 1), sizeof(GainIv));
+	if (!gainIv)
+		{
+		fprintf (stderr, "Could not allocate the gain segments\n");
+		exit (-1);
+		}
+	end = adoOrigin + numSites;
+	for (i=0; i<numCells+1; i++)
+		for (g=0; g<2; g++)
+			{
+			GainIv *v = &gainIv[2 * i + g];
+
+			x = base ^ ((uint64_t)(i + 1) * 0x9E3779B97F4A7C15ULL) ^ ((uint64_t)(g + 1) * 0xC2B2AE3D27D4EB4FULL);
+			(void) SplitMix64 (&x);
+			pos = 0;
+			while (pos < end)
+				{
+				u1 = (double)((SplitMix64 (&x) >> 11) + 0.5) * (1.0 / 9007199254740992.0);
+				len = (long long) ceil (-log (u1) * gainLen);
+				if (len < 1)
+					len = 1;
+				u1 = (double)((SplitMix64 (&x) >> 11) + 0.5) * (1.0 / 9007199254740992.0);
+				u2 = (double)((SplitMix64 (&x) >> 11) + 0.5) * (1.0 / 9007199254740992.0);
+				z = sqrt (-2.0 * log (u1)) * cos (6.283185307179586 * u2);
+				if (pos + len > adoOrigin)
+					{
+					long long e0 = (pos + len < end) ? pos + len : end;
+
+					if (v->n == v->cap)
+						{
+						v->cap = v->cap ? 2 * v->cap : 8;
+						v->e = (long*) realloc (v->e, v->cap * sizeof(long));
+						v->v = (float*) realloc (v->v, v->cap * sizeof(float));
+						if (!v->e || !v->v)
+							{
+							fprintf (stderr, "Could not allocate the gain segments\n");
+							exit (-1);
+							}
+						}
+					v->e[v->n] = (long)(e0 - adoOrigin);
+					v->v[v->n++] = (float) exp (gainSd * z - 0.5 * gainSd * gainSd);
+					}
+				pos += len;
+				}
+			}
+	gainOn = YES;
+	}
+
+double GainAt (int node, int genome, long site)
+	{
+	GainIv	*v = &gainIv[2 * node + genome];
+	int		lo = 0, hi = v->n - 1;
+
+	while (lo < hi)	/* first segment whose end is beyond the site */
+		{
+		int mid = (lo + hi) / 2;
+		if (site < v->e[mid])
+			hi = mid;
+		else
+			lo = mid + 1;
+		}
+	return (v->n > 0) ? (double) v->v[lo] : 1.0;
+	}
+
 void AllelicDropout (long int *seed)
 	{
 	int i,j;
