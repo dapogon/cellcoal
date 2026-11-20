@@ -867,6 +867,7 @@ sys.path.insert(0, __import__("os").environ["ROOT"] + "/tools")
 import bamcheck as b
 name, ref = b.read_fasta("A/reads_1/ref.fa")
 assert len(ref) == 60000
+assert open("A/reads_1/ref.fa.fai").read().split() == ["chr1", "60000", "6", "60", "61"]
 _, refs, recs = b.parse_bam("A/reads_1/cell0001.bam")
 assert refs[0][1] == 60000 and all(recs[i]["pos"] <= recs[i+1]["pos"] for i in range(len(recs)-1))
 dup = sum(1 for r in recs if r["flag"] & 1024) / len(recs)

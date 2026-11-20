@@ -636,6 +636,13 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 	if (numSites % 60)
 		fputc ('\n', fp);
 	fclose (fp);
+	/* index of the reference (samtools faidx format) */
+	snprintf (path, sizeof(path), "%s/ref.fa.fai", dir);
+	if ((fp = fopen (path, "w")) != NULL)
+		{
+		fprintf (fp, "%s\t%d\t%d\t60\t61\n", contigName, numSites, (int) strlen (contigName) + 2);
+		fclose (fp);
+		}
 
 	for (i=0; i<numCells; i++)
 		{

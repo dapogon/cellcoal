@@ -2559,9 +2559,9 @@ any single-cell caller (SCAN2, PTATO, SCcaller, Monovar…). Output in
 <code>&lt;results&gt;/reads_&lt;n&gt;/</code>: <code>cellNNNN.bam</code>
 (+ <code>.bai</code>, sorted, one read group per cell),
 <code>cellNNNN.R1.fastq.gz</code> and <code>.R2.fastq.gz</code>,
-<code>ref.fa</code> (the healthy root genome, contig
-<code>--contig</code>, default <code>chr1</code>) and, with
-<code>--bulk-depth D</code>, <code>normal.bam</code>/FASTQ of the
+<code>ref.fa</code> and <code>ref.fa.fai</code> (the healthy root
+genome, contig <code>--contig</code>, default <code>chr1</code>) and,
+with <code>--bulk-depth D</code>, <code>normal.bam</code>/FASTQ of the
 healthy genome (no amplification).</p>
 <p>Model. For every cell and haplotype, molecules (fragments of length
 N(<code>--insert-mean</code>, <code>--insert-sd</code>)) start along the
