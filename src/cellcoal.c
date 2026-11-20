@@ -722,6 +722,21 @@ static void RunReplicate (int dataSetNum, long int *seed)
 			if (sparseMode == YES)
 				obsActive = YES;	/* from now on the cell genotypes are observed with ADO and errors */
 	
+			/* the windows of --coverage start empty in every replicate */
+			if (coverageWindow > 0)
+				{
+				covNumWindows = (numSites + coverageWindow - 1) / coverageWindow;
+				free (covSum);
+				free (covSites);
+				covSum = (long long*) calloc ((size_t) covNumWindows * numCells, sizeof(long long));
+				covSites = (long long*) calloc ((size_t) covNumWindows, sizeof(long long));
+				if (!covSum || !covSites)
+					{
+					fprintf (stderr, "Could not allocate the coverage windows\n");
+					exit (-1);
+					}
+				}
+
 			/* generate NGS read counts */
 			if (streamMode == YES)
 				{
@@ -734,7 +749,16 @@ static void RunReplicate (int dataSetNum, long int *seed)
 			if (streamMode == YES)
 				;	/* already counted by StreamReads */
 			else if (doNGS == YES)
+				{
 				numSNVs = CountAllelesInMLGenotypes();
+				if (coverageWindow > 0)
+					{
+					int	jc;
+
+					for (jc=0; jc<numSites; jc++)
+						CoverageAddSite (jc);
+					}
+				}
 			else
 				numSNVs = CountAllelesInObservedGenotypes();
 
@@ -765,6 +789,9 @@ static void RunReplicate (int dataSetNum, long int *seed)
 				fprintf (fpSummary, "\n");
 				fflush (fpSummary);
 				}
+
+			if (coverageWindow > 0)
+				CoverageWrite (dataSetNum+1);
 
 			if (numSNVs == 0)
                 zeroSNVs++;
@@ -1194,6 +1221,31 @@ int main (int argc, char **argv)
 		ReadUserGenome(fpUserGenome);
 		}
 
+	/* --coverage: depth per cell of the non-variable sites, in <results>/coverage.tsv */
+	if (coverageWindow > 0)
+		{
+		int		ic;
+
+		if (doNGS == NO)
+			{
+			fprintf (stderr, "\nERROR: --coverage needs read counts (-C)\n");
+			exit (-1);
+			}
+		snprintf (File, sizeof(File), "%s/%s", resultsDir, "coverage.tsv");
+		if ((fpCoverage = fopen(File, "w")) == NULL)
+			{
+			fprintf (stderr, "Can't open \"%s\"\n", File);
+			exit(-1);
+			}
+		fprintf (fpCoverage, "replicate\tstart\tend\tn_sites");
+		for (ic=0; ic<numCells; ic++)
+			if (doUserTree == NO)
+				fprintf (fpCoverage, "\t%s%04d", inCellName, ic+1);
+			else
+				fprintf (fpCoverage, "\t%s", cellNames[ic]);
+		fprintf (fpCoverage, "\n");
+		}
+
 	OUTGROUP_ROOT = 2 * numCells;
 	INGROUP_ROOT = (2 * numCells) - 1;
 
@@ -1284,6 +1336,8 @@ int main (int argc, char **argv)
 
 	if (fpSummary != NULL)
 		fclose (fpSummary);
+	if (fpCoverage != NULL)
+		fclose (fpCoverage);
 #ifdef COUNT_ML_GENOTYPE_ERRORS
 	fprintf (stdout, "\n\n Mean probability for untrue genotype calls     =   %8.6f", runStats.mlErr.mean);
 	fprintf (stdout, "\n Variance probability for untrue genotype calls =   %8.6f", runStats.mlErr.var);

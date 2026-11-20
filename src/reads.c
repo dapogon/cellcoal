@@ -328,6 +328,7 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 		{
 		TotalReadCountsAtSite (jj);
 		MLCountsAtSite (jj);
+		CoverageAddSite (jj);
 		}
 	}
 

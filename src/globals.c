@@ -82,6 +82,11 @@ int					fastMode = 0;
 int					doBCF = 0;
 double				covAdoCorr = 0.0;
 double				*cellAdoRate = NULL;
+int					coverageWindow = 0;	/* --coverage W: depth per cell of the sites that are not variable, in windows of W sites (0 = off) */
+long long			*covSum = NULL;	/* [window * numCells + cell]: sum of the depth over the non-variable sites of the window */
+long long			*covSites = NULL;	/* [window]: number of non-variable sites of the window */
+int					covNumWindows = 0;
+FILE				*fpCoverage = NULL;
 int					minAltReads = 0;	/* --min-alt-reads: a site is variable only when a cell has a non-reference call supported by at least this many reads (0 = any non-reference call) */
 double				ampCellVar = 0.0;	/* --amp-cell-var: variance among cells of the mean amplification error (-A) */
 double				*cellAmpMean = NULL;	/* mean amplification error of every cell (with --amp-cell-var) */
