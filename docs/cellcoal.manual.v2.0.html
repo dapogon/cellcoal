@@ -822,7 +822,7 @@ optional healthy <code>normal.bam</code></td>
 <code>--germline-vcf</code></td>
 <td>no</td>
 <td>yes</td>
-<td>not yet</td>
+<td>yes</td>
 </tr>
 </tbody>
 </table>
@@ -2770,6 +2770,22 @@ healthy genome (SNVs only; GT 0|1, 1|0, 1|1, 0/1, 1/1; unphased
 heterozygous genotypes are phased at random; it cannot be used with
 <code>-c</code>). Those sites carry the flag <code>GERMLINE</code>
 instead of <code>SOMATIC</code> in the VCF.</p>
+<p><strong>Blocks and reads.</strong> <code>--blocks</code> or
+<code>--fasta</code> together with
+<code>--bam</code>/<code>--fastq</code> simulates the reads of a whole
+chromosome: the reads of each block are written, in the coordinates of
+the chromosome, to one BAM (+BAI) and one FASTQ pair per cell
+(<code>reads_1/cellNNNN.*</code>), so a block is processed and released
+before the next one and the memory is that of one block. The BAM header
+and <code>ref.fa</code> have the length of the chromosome
+(<code>chrom:start-end</code> regions keep the real coordinates; what
+lies before the region, after the last block and the masked sites are
+<code>N</code>), and <code>truth.vcf</code> has the real CHROM and POS,
+REF = the reference base and the flag GERMLINE at the germline sites. No
+read spans the boundary between blocks nor a masked site, and the
+coverage, the amplification error and the gain of a cell are the same in
+all the blocks (the per-cell parameters are drawn in the first
+block).</p>
 <p><code>tools/chrom.py</code> is a wrapper of these options that writes
 the files of earlier versions (<code>chrom.vcf</code>,
 <code>chrom_summary.tsv</code>, <code>chrom_coverage.tsv</code> and one

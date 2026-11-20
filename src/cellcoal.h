@@ -372,6 +372,7 @@ extern int					doBam, doFastq, readLen;
 extern double				insertMean, insertSd, bulkDepth, dupMean;
 void				GenerateReadLevel (long int *seed, int dataSetNum);
 void				WriteTruthVcf (int dataSetNum);
+void				FinishReadLevel (void);
 /* chromosome in blocks (blocks.c) */
 extern int			blocksN, blockIndex, blocksOn, *posMap;
 extern char			*fastaFile, *regionSpec, *germlineVcf, *refUserGenome, *germFlag;

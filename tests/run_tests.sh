@@ -989,5 +989,50 @@ assert cv(a) > 1.5 * cv(c) and 0.003 < st.mean(a) < 0.03, (cv(a), cv(c), st.mean
 P
 cd "$ROOT"
 
+echo "2g41. --blocks / --fasta with reads: one BAM per cell along the chromosome"
+mkdir -p "$TMP/br" && rm -rf "$TMP/br"/* && cd "$TMP/br"
+python3 - <<'P'
+import random
+r = random.Random(9); s = [r.choice("ACGT") for _ in range(30000)]
+for a, b in ((7000, 7400), (21000, 21050)):
+    for i in range(a, b): s[i] = "N"
+s = "".join(s)
+open("g.fa", "w").write(">chrR\n" + "\n".join(s[i:i+70] for i in range(0, len(s), 70)) + "\n")
+v = ["##fileformat=VCFv4.2", "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT\tS"]
+for p in sorted(r.sample([q for q in range(5001, 30001) if s[q-1] != "N"], 40)):
+    alt = r.choice([x for x in "ACGT" if x != s[p-1]])
+    v.append("chrR\t%d\t.\t%s\t%s\t.\t.\t.\tGT\t0|1" % (p, s[p-1], alt))
+open("g.vcf", "w").write("\n".join(v) + "\n")
+P
+"$BIN" -n1 -s5 -l10000 --fasta g.fa --region chrR:5001-30000 --germline-vcf g.vcf -u1e-6 -e1000 -b1 -C12 -E0.001 --blocks 2 --bam --fastq -oA -#6 >log.txt 2>&1
+ROOT="$ROOT" python3 - <<'P' && ok "blocks + reads: BAM in chromosome coordinates, ref.fa and truth.vcf consistent" || bad "blocks + reads"
+import os, sys
+sys.path.insert(0, os.environ["ROOT"] + "/tools")
+import bamcheck as b
+d = "A/reads_1"
+seq = "".join(l.strip() for l in open("g.fa") if not l.startswith(">"))
+name, ref = b.read_fasta(d + "/ref.fa")
+assert name == "chrR" and len(ref) == 30000, (name, len(ref))
+assert ref[5000:25000].replace("N", "") == seq[5000:25000].replace("N", "") and set(ref[:5000]) == {"N"} and set(ref[25000:]) == {"N"}
+assert ref[7000:7400] == "N" * 400 and ref[:100] == "N" * 100
+n = 0
+for c in range(1, 6):
+    text, refs, recs = b.parse_bam("%s/cell%04d.bam" % (d, c))
+    assert refs[0] == ("chrR", 30000), refs
+    pos = [r["pos"] for r in recs]
+    assert pos == sorted(pos) and min(pos) >= 5000 and len(recs) > 800
+    for r in recs:
+        for k, ch in enumerate(r["bases"]):
+            assert ref[r["pos"] + k] != "N", "read over a masked site"
+    n += len(recs)
+v = [l.split("\t") for l in open(d + "/truth.vcf") if not l.startswith("#")]
+p = [int(x[1]) for x in v]
+assert p == sorted(p) and min(p) > 5000 and max(p) > 15000 and max(p) <= 25000
+assert all(x[3] == seq[int(x[1]) - 1] for x in v)
+assert sum("GERMLINE" in x[7] for x in v) > 20
+assert os.path.exists(d + "/cell0001.R1.fastq.gz") and os.path.exists(d + "/cell0001.bam.bai")
+P
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

@@ -129,112 +129,145 @@ static int CmpIdx (const void *a, const void *b)
 
 typedef struct { uint64_t beg, end; } Chunk;
 
-static void WriteBam (const char *path, RecSet *rs, const char *rg, int sorted)
+/* a BAM file that is written in pieces (the blocks of a chromosome), with its index */
+typedef struct
 	{
 	Bgzf		bz;
 	FILE		*fp;
-	unsigned char l4[4], hdr[1024];
-	char		text[1024];
-	int			tl, nbin = 37450 + 1, i;
 	Chunk		*bins;
 	uint64_t	*lin;
-	long		nlin = (numSites >> 14) + 2, k;
-	char		bai[4*MAX_NAME+8];
-	unsigned char *buf;
-	uint64_t	firstOff = 0, lastEnd = 0;
+	long		nlin, ni, reflen;
+	uint64_t	firstOff, lastEnd;
+	char		path[4*MAX_NAME+8];
+	int			isOpen;
+	} BamOut;
 
-	if ((fp = fopen (path, "wb")) == NULL)
+static long ReadRefLen (void)		/* length of the reference sequence of the BAM header */
+	{
+	return blocksOn ? chromLength : (long) numSites;
+	}
+
+static const char *ReadContig (void)
+	{
+	return blocksOn ? BlocksChrom () : contigName;
+	}
+
+static void BamOpen (BamOut *bo, const char *path, const char *rg)
+	{
+	unsigned char l4[4], hdr[8];
+	char		text[1024];
+	int			tl;
+	const char	*cn = ReadContig ();
+
+	memset (bo, 0, sizeof(*bo));
+	snprintf (bo->path, sizeof(bo->path), "%s", path);
+	if ((bo->fp = fopen (path, "wb")) == NULL)
 		{
 		fprintf (stderr, "\nERROR: cannot write %s\n", path);
 		exit (-1);
 		}
-	memset (&bz, 0, sizeof(bz));
-	bz.fp = fp;
+	bo->bz.fp = bo->fp;
 	CrcInit ();
-	tl = snprintf (text, sizeof(text), "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:%s\tLN:%d\n@RG\tID:%s\tSM:%s\tPL:ILLUMINA\n@PG\tID:cellcoal\tPN:cellcoal\n", contigName, numSites, rg, rg);
+	bo->reflen = ReadRefLen ();
+	bo->nlin = (bo->reflen >> 14) + 2;
+	bo->bins = (Chunk*) calloc (37450 + 1, sizeof(Chunk));
+	bo->lin = (uint64_t*) calloc (bo->nlin, sizeof(uint64_t));
+	tl = snprintf (text, sizeof(text), "@HD\tVN:1.6\tSO:coordinate\n@SQ\tSN:%s\tLN:%ld\n@RG\tID:%s\tSM:%s\tPL:ILLUMINA\n@PG\tID:cellcoal\tPN:cellcoal\n", cn, bo->reflen, rg, rg);
 	memcpy (hdr, "BAM\1", 4);
-	BgzfWrite (&bz, hdr, 4);
-	Put32le (l4, (uint32_t) tl); BgzfWrite (&bz, l4, 4);
-	BgzfWrite (&bz, text, tl);
-	Put32le (l4, 1); BgzfWrite (&bz, l4, 4);
-	Put32le (l4, (uint32_t) strlen (contigName) + 1); BgzfWrite (&bz, l4, 4);
-	BgzfWrite (&bz, contigName, strlen (contigName) + 1);
-	Put32le (l4, (uint32_t) numSites); BgzfWrite (&bz, l4, 4);
+	BgzfWrite (&bo->bz, hdr, 4);
+	Put32le (l4, (uint32_t) tl); BgzfWrite (&bo->bz, l4, 4);
+	BgzfWrite (&bo->bz, text, tl);
+	Put32le (l4, 1); BgzfWrite (&bo->bz, l4, 4);
+	Put32le (l4, (uint32_t) strlen (cn) + 1); BgzfWrite (&bo->bz, l4, 4);
+	BgzfWrite (&bo->bz, cn, strlen (cn) + 1);
+	Put32le (l4, (uint32_t) bo->reflen); BgzfWrite (&bo->bz, l4, 4);
+	bo->isOpen = 1;
+	}
 
-	if (sorted)
-		qsort (rs->idx, rs->ni, sizeof(RecIdx), CmpIdx);
-	bins = (Chunk*) calloc (nbin, sizeof(Chunk));
-	lin = (uint64_t*) calloc (nlin, sizeof(uint64_t));
-	buf = rs->buf;
+/* appends the records of rs (sorted here; their positions have to follow those already written) */
+static void BamAppend (BamOut *bo, RecSet *rs)
+	{
+	unsigned char *buf = rs->buf;
+	long		k;
+
+	qsort (rs->idx, rs->ni, sizeof(RecIdx), CmpIdx);
 	for (k=0; k<rs->ni; k++)
 		{
 		RecIdx	*r = &rs->idx[k];
-		uint64_t b0 = BgzfTell (&bz), b1;
+		uint64_t b0 = BgzfTell (&bo->bz), b1;
 		long	end = r->pos + (long) (buf[r->off+20] | (buf[r->off+21]<<8) | (buf[r->off+22]<<16) | ((long)buf[r->off+23]<<24));
 		int		bin = Reg2Bin (r->pos, end);
 		long	w;
 
-		BgzfWrite (&bz, buf + r->off, r->len);
-		b1 = BgzfTell (&bz);
-		if (k == 0)
-			firstOff = b0;
-		lastEnd = b1;
-		if (bins[bin].end == 0)
-			bins[bin].beg = b0;
-		bins[bin].end = b1;
+		BgzfWrite (&bo->bz, buf + r->off, r->len);
+		b1 = BgzfTell (&bo->bz);
+		if (bo->ni == 0)
+			bo->firstOff = b0;
+		bo->ni++;
+		bo->lastEnd = b1;
+		if (bo->bins[bin].end == 0)
+			bo->bins[bin].beg = b0;
+		bo->bins[bin].end = b1;
 		for (w = r->pos >> 14; w <= (end - 1) >> 14; w++)
-			if (lin[w] == 0)
-				lin[w] = b0;
+			if (bo->lin[w] == 0)
+				bo->lin[w] = b0;
 		}
-	BgzfClose (&bz);
-	fclose (fp);
+	}
 
-	/* BAI */
-	snprintf (bai, sizeof(bai), "%s.bai", path);
-	if ((fp = fopen (bai, "wb")) == NULL)
+static void BamClose (BamOut *bo)
+	{
+	FILE		*fp;
+	int			nbin = 37450 + 1, i;
+	char		bai[4*MAX_NAME+16];
+	long		k;
+
+	if (!bo->isOpen)
 		return;
-	{
-	int nb = 0;
-	unsigned char w4[4];
-	uint64_t w8;
-
-	for (i=0; i<nbin-1; i++)
-		if (bins[i].end)
-			nb++;
-	fwrite ("BAI\1", 1, 4, fp);
-	Put32le (w4, 1); fwrite (w4, 1, 4, fp);
-	Put32le (w4, (uint32_t) (nb + 1)); fwrite (w4, 1, 4, fp);
-	for (i=0; i<nbin-1; i++)
-		if (bins[i].end)
-			{
-			Put32le (w4, (uint32_t) i); fwrite (w4, 1, 4, fp);
-			Put32le (w4, 1); fwrite (w4, 1, 4, fp);
-			w8 = bins[i].beg; fwrite (&w8, 1, 8, fp);
-			w8 = bins[i].end; fwrite (&w8, 1, 8, fp);
-			}
-	Put32le (w4, 37450); fwrite (w4, 1, 4, fp);
-	Put32le (w4, 2); fwrite (w4, 1, 4, fp);
-	w8 = firstOff; fwrite (&w8, 1, 8, fp);
-	w8 = lastEnd; fwrite (&w8, 1, 8, fp);
-	w8 = (uint64_t) rs->ni; fwrite (&w8, 1, 8, fp);
-	w8 = 0; fwrite (&w8, 1, 8, fp);
-	{
-	long last = (rs->ni > 0) ? ((numSites - 1) >> 14) + 1 : 0;
-	uint64_t prev = 0;
-
-	Put32le (w4, (uint32_t) last); fwrite (w4, 1, 4, fp);
-	for (k=0; k<last; k++)
+	BgzfClose (&bo->bz);
+	fclose (bo->fp);
+	bo->isOpen = 0;
+	snprintf (bai, sizeof(bai), "%s.bai", bo->path);
+	if ((fp = fopen (bai, "wb")) != NULL)
 		{
-		if (lin[k] == 0)
-			lin[k] = prev;
-		prev = lin[k];
-		fwrite (&lin[k], 1, 8, fp);
+		int nb = 0;
+		unsigned char w4[4];
+		uint64_t w8;
+		long last = (bo->ni > 0) ? ((bo->reflen - 1) >> 14) + 1 : 0;
+		uint64_t prev = 0;
+
+		for (i=0; i<nbin-1; i++)
+			if (bo->bins[i].end)
+				nb++;
+		fwrite ("BAI\1", 1, 4, fp);
+		Put32le (w4, 1); fwrite (w4, 1, 4, fp);
+		Put32le (w4, (uint32_t) (nb + 1)); fwrite (w4, 1, 4, fp);
+		for (i=0; i<nbin-1; i++)
+			if (bo->bins[i].end)
+				{
+				Put32le (w4, (uint32_t) i); fwrite (w4, 1, 4, fp);
+				Put32le (w4, 1); fwrite (w4, 1, 4, fp);
+				w8 = bo->bins[i].beg; fwrite (&w8, 1, 8, fp);
+				w8 = bo->bins[i].end; fwrite (&w8, 1, 8, fp);
+				}
+		Put32le (w4, 37450); fwrite (w4, 1, 4, fp);
+		Put32le (w4, 2); fwrite (w4, 1, 4, fp);
+		w8 = bo->firstOff; fwrite (&w8, 1, 8, fp);
+		w8 = bo->lastEnd; fwrite (&w8, 1, 8, fp);
+		w8 = (uint64_t) bo->ni; fwrite (&w8, 1, 8, fp);
+		w8 = 0; fwrite (&w8, 1, 8, fp);
+		Put32le (w4, (uint32_t) last); fwrite (w4, 1, 4, fp);
+		for (k=0; k<last; k++)
+			{
+			if (bo->lin[k] == 0)
+				bo->lin[k] = prev;
+			prev = bo->lin[k];
+			fwrite (&bo->lin[k], 1, 8, fp);
+			}
+		fclose (fp);
 		}
-	}
-	}
-	fclose (fp);
-	free (bins);
-	free (lin);
+	free (bo->bins);
+	free (bo->lin);
+	bo->bins = NULL; bo->lin = NULL;
 	}
 
 /* ------------------------------------ fragments ------------------------------------ */
@@ -358,6 +391,15 @@ static void RevComp (const char *s, char *o, int len)
 
 typedef struct { Bgzf r1, r2; FILE *f1, *f2; } FastqOut;
 
+/* the output files of one cell (or of the healthy genome); in a chromosome in blocks they stay open until the last block */
+typedef struct { BamOut bo; FastqOut fq; long molecule; } ReadOut;
+
+/* position (0-based) in the BAM of the site j of the current block */
+static inline long CP (long j)
+	{
+	return blocksOn ? BlockSitePos ((int) j) - 1 : j;
+	}
+
 static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int len, int q)
 	{
 	char	line[512], qs[1024];
@@ -373,41 +415,25 @@ static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int 
 	}
 
 /* Reads of one cell (cellIdx >= 0) or of the healthy genome (cellIdx = -1). Returns the number of read pairs. */
-static long SimulateGenome (int cellIdx, double depth, int amplified, const char *prefix, const char *rg, long int *seed)
+static long SimulateGenome (int cellIdx, double depth, int amplified, const char *rg, long int *seed, ReadOut *ro)
 	{
 	RecSet	rs;
-	FastqOut fq;
+	FastqOut *fq = &ro->fq;
 	AmpEvent *ev[2] = {NULL, NULL};
-	long	nev[2] = {0, 0}, pairs = 0, molecule = 0, pos;
+	long	nev[2] = {0, 0}, pairs = 0, molecule = ro->molecule, pos;
 	int		hap, q, L = readLen, i;
-	char	*ta, *tb, *ra, *rb, name[96], path[4*MAX_NAME];
+	char	*ta, *tb, *ra, *rb, name[96];
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
 	double	cm = (cellIdx >= 0 && cellCovMult != NULL) ? cellCovMult[cellIdx] : 1.0;
 
 	memset (&rs, 0, sizeof(rs));
-	memset (&fq, 0, sizeof(fq));
 	q = (int) (-10.0 * log10 (qerr) + 0.5);
 	if (q > 41) q = 41;
 	if (q < 2) q = 2;
 	q += 0;	/* BAM stores the raw Phred value */
 	ta = (char*) malloc (4 * (size_t) (L + 2));
 	tb = ta + L + 2; ra = tb + L + 2; rb = ra + L + 2;
-	if (doFastq)
-		{
-		snprintf (path, sizeof(path), "%s.R1.fastq.gz", prefix);
-		fq.f1 = fopen (path, "wb");
-		snprintf (path, sizeof(path), "%s.R2.fastq.gz", prefix);
-		fq.f2 = fopen (path, "wb");
-		if (!fq.f1 || !fq.f2)
-			{
-			fprintf (stderr, "\nERROR: cannot write the FASTQ files %s\n", prefix);
-			exit (-1);
-			}
-		memset (&fq.r1, 0, sizeof(Bgzf)); memset (&fq.r2, 0, sizeof(Bgzf));
-		fq.r1.fp = fq.f1; fq.r2.fp = fq.f2;
-		CrcInit ();
-		}
 	for (hap=0; hap<2; hap++)
 		{
 		if (amplified)
@@ -440,6 +466,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 					ins = L;
 				if (s + ins > numSites)
 					continue;
+				if (posMap != NULL && CP (s + ins - 1) - CP (s) != ins - 1)
+					continue;	/* the fragment would span masked sites (N) */
 				for (j=0; j<L && !lost; j++)
 					{
 					int a = Allele (hap, cellIdx, s + j), b = Allele (hap, cellIdx, s + ins - L + j);
@@ -511,8 +539,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 						{ fa |= 1024; fb |= 1024; }
 					if (doBam)
 						{
-						AddRecord (&rs, name, fa, s, s + ins - L, ins, ra, L, q, rg, hap + 1, (int) molecule);
-						AddRecord (&rs, name, fb, s + ins - L, s, -ins, rb, L, q, rg, hap + 1, (int) molecule);
+						AddRecord (&rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, rg, hap + 1, (int) molecule);
+						AddRecord (&rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, rg, hap + 1, (int) molecule);
 						}
 					if (doFastq)
 						{
@@ -521,14 +549,14 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 						if (fwdFrag)
 							{
 							RevComp (rb, rc, L);
-							FastqPut (&fq.r1, name, 1, ra, L, q + 33);
-							FastqPut (&fq.r2, name, 2, rc, L, q + 33);
+							FastqPut (&fq->r1, name, 1, ra, L, q + 33);
+							FastqPut (&fq->r2, name, 2, rc, L, q + 33);
 							}
 						else
 							{
 							RevComp (rb, rc, L);
-							FastqPut (&fq.r1, name, 1, rc, L, q + 33);
-							FastqPut (&fq.r2, name, 2, ra, L, q + 33);
+							FastqPut (&fq->r1, name, 1, rc, L, q + 33);
+							FastqPut (&fq->r2, name, 2, ra, L, q + 33);
 							}
 						}
 					pairs++;
@@ -537,15 +565,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 			}
 		}
 	if (doBam)
-		{
-		snprintf (path, sizeof(path), "%s.bam", prefix);
-		WriteBam (path, &rs, rg, 1);
-		}
-	if (doFastq)
-		{
-		BgzfClose (&fq.r1); BgzfClose (&fq.r2);
-		fclose (fq.f1); fclose (fq.f2);
-		}
+		BamAppend (&ro->bo, &rs);
+	ro->molecule = molecule;
 	for (i=0; i<2; i++)
 		{
 		free (ev[i]);
@@ -557,58 +578,145 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	}
 
 /********************************** GenerateReadLevel ***********************************/
+/* Output slots: one per cell and one for the healthy genome (--bulk-depth). Without --blocks they are opened and closed here;
+   with --blocks they stay open from the first block to FinishReadLevel. */
+static ReadOut	*routs = NULL;
+static int		nrouts = 0;
+static FILE		*refFp = NULL;
+static long		refPos = 0;			/* bases of the chromosome already written to ref.fa */
+static char		readDir[3*MAX_NAME];
+
+static void RefPut (int c)
+	{
+	fputc (c, refFp);
+	refPos++;
+	if (refPos % 60 == 0)
+		fputc ('\n', refFp);
+	}
+
+static void ReadOutOpen (const char *name, ReadOut *ro)
+	{
+	char	path[4*MAX_NAME];
+
+	memset (ro, 0, sizeof(*ro));
+	if (doBam)
+		{
+		snprintf (path, sizeof(path), "%s/%s.bam", readDir, name);
+		BamOpen (&ro->bo, path, name);
+		}
+	if (doFastq)
+		{
+		snprintf (path, sizeof(path), "%s/%s.R1.fastq.gz", readDir, name);
+		ro->fq.f1 = fopen (path, "wb");
+		snprintf (path, sizeof(path), "%s/%s.R2.fastq.gz", readDir, name);
+		ro->fq.f2 = fopen (path, "wb");
+		if (!ro->fq.f1 || !ro->fq.f2)
+			{
+			fprintf (stderr, "\nERROR: cannot write the FASTQ files %s/%s\n", readDir, name);
+			exit (-1);
+			}
+		ro->fq.r1.fp = ro->fq.f1;
+		ro->fq.r2.fp = ro->fq.f2;
+		CrcInit ();
+		}
+	}
+
+static void ReadOutClose (ReadOut *ro)
+	{
+	if (doBam)
+		BamClose (&ro->bo);
+	if (doFastq)
+		{
+		BgzfClose (&ro->fq.r1); BgzfClose (&ro->fq.r2);
+		fclose (ro->fq.f1); fclose (ro->fq.f2);
+		}
+	}
+
+void FinishReadLevel (void)
+	{
+	char	path[4*MAX_NAME];
+	FILE	*fp;
+	int		i;
+	long	len = ReadRefLen ();
+
+	if (routs == NULL)
+		return;
+	for (i=0; i<nrouts; i++)
+		ReadOutClose (&routs[i]);
+	free (routs);
+	routs = NULL;
+	while (refPos < len)
+		RefPut ('N');
+	if (refPos % 60)
+		fputc ('\n', refFp);
+	fclose (refFp);
+	refFp = NULL;
+	/* index of the reference (samtools faidx format) */
+	snprintf (path, sizeof(path), "%s/ref.fa.fai", readDir);
+	if ((fp = fopen (path, "w")) != NULL)
+		{
+		fprintf (fp, "%s\t%ld\t%d\t60\t61\n", ReadContig (), len, (int) strlen (ReadContig ()) + 2);
+		fclose (fp);
+		}
+	}
+
 void GenerateReadLevel (long int *seed, int dataSetNum)
 	{
-	char	dir[3*MAX_NAME], path[4*MAX_NAME], rg[64];
-	FILE	*fp;
+	char	path[4*MAX_NAME], rg[64];
 	long	j, total = 0;
 	int		i;
 
-	snprintf (dir, sizeof(dir), "%s/reads_%d", resultsDir, dataSetNum + 1);
-	mkdir (dir, 0755);
-
-	/* the reference is the healthy root genome */
-	snprintf (path, sizeof(path), "%s/ref.fa", dir);
-	if ((fp = fopen (path, "w")) == NULL)
+	if (routs == NULL)
 		{
-		fprintf (stderr, "\nERROR: cannot write %s\n", path);
-		exit (-1);
+		snprintf (readDir, sizeof(readDir), "%s/reads_%d", resultsDir, blocksOn ? 1 : dataSetNum + 1);
+		mkdir (readDir, 0755);
+		snprintf (path, sizeof(path), "%s/ref.fa", readDir);
+		if ((refFp = fopen (path, "w")) == NULL)
+			{
+			fprintf (stderr, "\nERROR: cannot write %s\n", path);
+			exit (-1);
+			}
+		fprintf (refFp, ">%s\n", ReadContig ());
+		refPos = 0;
+		nrouts = numCells + (bulkDepth > 0.0 ? 1 : 0);
+		routs = (ReadOut*) calloc (nrouts, sizeof(ReadOut));
+		for (i=0; i<nrouts; i++)
+			{
+			if (i < numCells)
+				snprintf (rg, sizeof(rg), "cell%04d", i + 1);
+			else
+				snprintf (rg, sizeof(rg), "normal");
+			ReadOutOpen (rg, &routs[i]);
+			}
 		}
-	fprintf (fp, ">%s\n", contigName);
+
+	/* the reference is the healthy root genome (the FASTA with --fasta); sites that are not in the simulation are N */
 	for (j=0; j<numSites; j++)
 		{
+		long p0 = CP (j);
 		int a = data[MATERNAL][OUTGROUP_ROOT][j];
+		char c = (a >= 0 && a < 4) ? BASES[a] : 'N';
 
-		fputc ((a >= 0 && a < 4) ? BASES[a] : 'N', fp);
-		if ((j + 1) % 60 == 0)
-			fputc ('\n', fp);
-		}
-	if (numSites % 60)
-		fputc ('\n', fp);
-	fclose (fp);
-	/* index of the reference (samtools faidx format) */
-	snprintf (path, sizeof(path), "%s/ref.fa.fai", dir);
-	if ((fp = fopen (path, "w")) != NULL)
-		{
-		fprintf (fp, "%s\t%d\t%d\t60\t61\n", contigName, numSites, (int) strlen (contigName) + 2);
-		fclose (fp);
+		if (refUserGenome != NULL)
+			c = refUserGenome[j];
+		while (refPos < p0)
+			RefPut ('N');
+		RefPut (c);
 		}
 
 	for (i=0; i<numCells; i++)
 		{
 		snprintf (rg, sizeof(rg), "cell%04d", i + 1);
-		snprintf (path, sizeof(path), "%s/%s", dir, rg);
-		total += SimulateGenome (i, coverage, 1, path, rg, seed);
+		total += SimulateGenome (i, coverage, 1, rg, seed, &routs[i]);
 		if (noisy > 0)
 			fprintf (stderr, "\rreads: cell %d/%d", i + 1, numCells);
 		}
 	if (bulkDepth > 0.0)
-		{
-		snprintf (path, sizeof(path), "%s/normal", dir);
-		SimulateGenome (-1, bulkDepth, 0, path, "normal", seed);
-		}
+		SimulateGenome (-1, bulkDepth, 0, "normal", seed, &routs[numCells]);
 	if (noisy > 0)
-		fprintf (stderr, "\rreads: %ld pairs in %d cells -> %s\n", total, numCells, dir);
+		fprintf (stderr, "\rreads: %ld pairs in %d cells -> %s\n", total, numCells, readDir);
+	if (blocksOn == 0)
+		FinishReadLevel ();
 	}
 
 
@@ -623,15 +731,19 @@ void WriteTruthVcf (int dataSetNum)
 	long	j;
 	int		i, h;
 
-	snprintf (dir, sizeof(dir), "%s/reads_%d", resultsDir, dataSetNum + 1);
+	static int started = 0;		/* with --blocks the file is written block after block */
+
+	snprintf (dir, sizeof(dir), "%s/reads_%d", resultsDir, blocksOn ? 1 : dataSetNum + 1);
 	mkdir (dir, 0755);
 	snprintf (path, sizeof(path), "%s/truth.vcf", dir);
-	if ((fp = fopen (path, "w")) == NULL)
+	if ((fp = fopen (path, (blocksOn && started) ? "a" : "w")) == NULL)
 		{
 		fprintf (stderr, "\nERROR: cannot write %s\n", path);
 		exit (-1);
 		}
-	fprintf (fp, "##fileformat=VCFv4.2\n##source=cellcoal truth\n##contig=<ID=%s,length=%d>\n", contigName, numSites);
+	if (!(blocksOn && started))
+		{
+	fprintf (fp, "##fileformat=VCFv4.2\n##source=cellcoal truth\n##contig=<ID=%s,length=%ld>\n", ReadContig (), ReadRefLen ());
 	fprintf (fp, "##INFO=<ID=NC,Number=1,Type=Integer,Description=\"Cells with a non-reference allele\">\n");
 	fprintf (fp, "##INFO=<ID=GERMLINE,Number=0,Type=Flag,Description=\"The healthy genome differs from the reference or is heterozygous\">\n");
 	fprintf (fp, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"True genotype (maternal|paternal)\">\n");
@@ -639,11 +751,16 @@ void WriteTruthVcf (int dataSetNum)
 	for (i=0; i<numCells; i++)
 		fprintf (fp, "\tcell%04d", i + 1);
 	fprintf (fp, "\n");
+		}
+	started = 1;
 	for (j=0; j<numSites; j++)
 		{
-		int		ref = data[MATERNAL][OUTGROUP_ROOT][j], pr = data[PATERNAL][OUTGROUP_ROOT][j], var = (pr != ref), nc = 0, nalt = 0, altBase[4] = {-1,-1,-1,-1}, g[2];
+		int		mr = data[MATERNAL][OUTGROUP_ROOT][j], ref = mr, pr = data[PATERNAL][OUTGROUP_ROOT][j], var, nc = 0, nalt = 0, altBase[4] = {-1,-1,-1,-1}, g[2];
 		char	gt[8];
 
+		if (refUserGenome != NULL)	/* the reference is the FASTA; the healthy genome may carry germline alleles */
+			ref = (int) (strchr (BASES, refUserGenome[j]) - BASES);
+		var = (pr != ref || mr != ref);
 		if (ref < 0 || ref > 3)
 			continue;
 		if (sparseMode == YES && sparseCols[j] == NULL && !var)
@@ -668,18 +785,21 @@ void WriteTruthVcf (int dataSetNum)
 				}
 			nc += any;
 			}
-		if (pr >= 0 && pr < 4 && pr != ref)
+		for (h=0; h<2; h++)
 			{
-			int k;
+			int k, gh = (h == 0) ? mr : pr;
 
-			for (k=0; k<nalt && altBase[k] != pr; k++)
-				;
-			if (k == nalt && nalt < 4)
-				altBase[nalt++] = pr;
+			if (gh >= 0 && gh < 4 && gh != ref)
+				{
+				for (k=0; k<nalt && altBase[k] != gh; k++)
+					;
+				if (k == nalt && nalt < 4)
+					altBase[nalt++] = gh;
+				}
 			}
 		if (nalt == 0)
 			continue;
-		fprintf (fp, "%s\t%ld\t.\t%c\t", contigName, j + 1, BASES[ref]);
+		fprintf (fp, "%s\t%ld\t.\t%c\t", ReadContig (), CP (j) + 1, BASES[ref]);
 		{
 		int k;
 
