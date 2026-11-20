@@ -858,5 +858,31 @@ P
 "$BIN" -n1 -s5 -l1000 -u1e-6 -e1000 -b1 -C10 --gain-sd 0.5 -oD >D.txt 2>&1; grep -aq "go together" D.txt && ok "--gain-sd needs --gain-len" || bad "--gain-sd without --gain-len"
 cd "$ROOT"
 
+echo "2g34. --bam / --fastq: paired-end reads of the amplified cells (molecules, PCR duplicates)"
+mkdir -p "$TMP/rd" && rm -rf "$TMP/rd"/* && cd "$TMP/rd"
+"$BIN" -n1 -s3 -l60000 -u1e-7 -e1000 -b1 -C10 -E0.001 -A0.01 0.0002 0 -D0.2 --ado-block 3000 --ado-seed 3 --gain-sd 0.4 --gain-len 5000 --bam --fastq --bulk-depth 20 --dup-mean 0.3 -oA -#5 >/dev/null 2>&1
+ROOT="$ROOT" python3 - <<'P' && ok "reads: sorted paired BAM+BAI, depth, duplicates, errors, FASTQ agrees with the BAM" || bad "read-level simulator"
+import sys, gzip, glob, subprocess
+sys.path.insert(0, __import__("os").environ["ROOT"] + "/tools")
+import bamcheck as b
+name, ref = b.read_fasta("A/reads_1/ref.fa")
+assert len(ref) == 60000
+_, refs, recs = b.parse_bam("A/reads_1/cell0001.bam")
+assert refs[0][1] == 60000 and all(recs[i]["pos"] <= recs[i+1]["pos"] for i in range(len(recs)-1))
+dup = sum(1 for r in recs if r["flag"] & 1024) / len(recs)
+assert 0.18 < dup < 0.28, dup
+depth = sum(len(r["bases"]) for r in recs) / 60000.0
+assert 4 < depth < 16, depth
+_, _, nrm = b.parse_bam("A/reads_1/normal.bam")
+mm = sum(1 for r in nrm for i, c in enumerate(r["bases"]) if ref[r["pos"]+i] != c) / sum(len(r["bases"]) for r in nrm)
+assert 0.0006 < mm < 0.0015, mm
+mmc = sum(1 for r in recs for i, c in enumerate(r["bases"]) if ref[r["pos"]+i] != c) / sum(len(r["bases"]) for r in recs)
+assert 0.005 < mmc < 0.02, mmc
+n = sum(1 for _ in gzip.open("A/reads_1/cell0001.R1.fastq.gz", "rt")) // 4
+assert n == len(recs) // 2, (n, len(recs))
+P
+"$BIN" -n1 -s5 -l1000 -u1e-6 -e1000 -b1 --bam -oB >B.txt 2>&1; grep -aq "need the mean coverage" B.txt && ok "--bam needs -C" || bad "--bam without -C"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

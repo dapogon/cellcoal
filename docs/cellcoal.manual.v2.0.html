@@ -160,6 +160,9 @@ Amplification errors with a trinucleotide profile:
 <li><a href="#amplification-gain-along-the-genome---gain-sd---gain-len-unreleased" id="toc-amplification-gain-along-the-genome---gain-sd---gain-len-unreleased">8.27
 Amplification gain along the genome: <code>--gain-sd</code>,
 <code>--gain-len</code> (unreleased)</a></li>
+<li><a href="#reads-of-single-cell-genomes---bam---fastq-unreleased" id="toc-reads-of-single-cell-genomes---bam---fastq-unreleased">8.28
+Reads of single-cell genomes: <code>--bam</code>, <code>--fastq</code>
+(unreleased)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2546,6 +2549,42 @@ values PTA; these parameters have to be taken from real data (for
 example from the per-cell coverage profile that <code>--coverage</code>
 writes). Needs read counts (<code>-C</code>). Without these options the
 data are unchanged.</p>
+<h2 id="reads-of-single-cell-genomes---bam---fastq-unreleased">8.28
+Reads of single-cell genomes: <code>--bam</code>, <code>--fastq</code>
+(unreleased)</h2>
+<p>With <code>--bam</code> and/or <code>--fastq</code> (and
+<code>-C</code>, diploid DNA) CellCoal does not simulate read counts but
+paired-end reads of the amplified genome of every cell, for benchmarking
+any single-cell caller (SCAN2, PTATO, SCcaller, Monovar…). Output in
+<code>&lt;results&gt;/reads_&lt;n&gt;/</code>: <code>cellNNNN.bam</code>
+(+ <code>.bai</code>, sorted, one read group per cell),
+<code>cellNNNN.R1.fastq.gz</code> and <code>.R2.fastq.gz</code>,
+<code>ref.fa</code> (the healthy root genome, contig
+<code>--contig</code>, default <code>chr1</code>) and, with
+<code>--bulk-depth D</code>, <code>normal.bam</code>/FASTQ of the
+healthy genome (no amplification).</p>
+<p>Model. For every cell and haplotype, molecules (fragments of length
+N(<code>--insert-mean</code>, <code>--insert-sd</code>)) start along the
+genome with a density set by <code>-C</code> and <code>-J</code>, the
+gain (<code>--gain-sd</code>/<code>--gain-len</code>), the amplicon
+structure (<code>--amplicon-len</code>, <code>--amplicon-cv</code>,
+gamma multiplier per segment) and the allelic dropout (<code>-D</code>,
+<code>--ado-block</code>: fragments that fall in a lost segment are not
+produced). Errors of the amplification (<code>-A</code>,
+<code>--amp-signature</code>) are events at sites with a fraction of the
+molecules carrying the wrong base; the molecule carries them and
+<strong>copies them to its PCR duplicates</strong>
+(<code>--dup-mean M</code>: extra copies per molecule, geometric;
+default 0.3, about 23% duplicates). Sequencing errors (<code>-E</code>)
+are independent in each read. Reads are 150 bp
+(<code>--read-len</code>), flags 99/147/83/163, duplicates marked 1024,
+tags <code>RG</code>, <code>HP</code> (haplotype 1/2) and
+<code>MI</code> (molecule).</p>
+<p>Limits of this first version: no indels, no doublets, one contig, the
+truth is given by the usual outputs (<code>-6</code> and so on), the
+quality is constant (Phred from <code>-E</code>).
+<code>tools/bamcheck.py ref.fa x.bam</code> is a dependency-free BAM
+checker.</p>
 <h2 id="j-windows-experimental">6.10j Windows (experimental)</h2>
 <p>CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64
 toolchain:

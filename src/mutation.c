@@ -386,7 +386,7 @@ void DecideSparseMode (void)
 	double	denseMB, limitMB = 2048.0;
 	int		force = -1;
 
-	if (doNGS == YES && doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == NO)
+	if (doNGS == YES && doBam == 0 && doFastq == 0 && doPrintVCF == NO && doPrintCATG == NO && doPrintPILEUP == NO && doPrintBulk == NO)
 		{
 		fprintf (stderr, "\nERROR: -Z (no VCF) needs another read output: -8 (CATG), -9 (PILEUP) or -0 (bulk)\n");
 		exit (-1);
@@ -394,7 +394,7 @@ void DecideSparseMode (void)
 	sparseMode = NO;
 	streamMode = NO;
 	readsOnly = NO;
-	if (doNGS == YES)
+	if (doNGS == YES && doBam == 0 && doFastq == 0)
 		{
 		/* reads of data sets whose per-cell, per-site data would not fit in memory are streamed in blocks of sites */
 		double	cellMB = (double) (numCells+1) * (double) numSites * (double) sizeof(CellSiteStr) / 1048576.0, streamLimitMB = 2048.0;
