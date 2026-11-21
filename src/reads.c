@@ -838,19 +838,6 @@ static __thread long			glLookups = 0, glHits = 0;
 static __thread int				glCacheOff = 0;
 static int						glCacheEnv = -1;	/* CELLCOAL_NO_GL_CACHE=1 switches the cache off (to check that it does not change the results) */
 
-/* ******************** GenotypeLikelihoods  ************************/
-/*
- Calculate genotype likelihoods (GLs) for a given site and cell given the simulated reads
- according to three different models
- 
- **	Genotype likelihoods can be calculated given the read counts and the sequencing error
- (see Korneliussen 2013 BMCBioinf)
-
- Calculations are done GLs for all 16 phased genotypes, as different errors can occurs for maternal and paternal alleles, so the phase matters. But then we will report the GLs for the 10 unphased genotypes
- 00 01 02 03 11 12 13 22 23 33
- AA AC AG AT CC CG CT GG GT TT
- */
-
 /* log10 of x, reusing the result of an earlier call with exactly the same argument (keys/vals hold the
    previous arguments and results, n their number). log10 is a pure function, so the result is bit-identical;
    with symmetric error matrices (the default) many of the arguments of one cell and site coincide, and log10
@@ -866,103 +853,28 @@ static inline double Log10Memo (double x, double *keys, double *vals, int *n)
 	vals[*n] = fastMode ? Log10Approx (x) : log10 (x);
 	return vals[(*n)++];
 	}
+/* allele dropout rate assumed in the likelihoods of this run */
+static double AssumedADORate (void)
+	{
+	if (thereisADO == NO)
+		return 0;
+	if (doADOcell == NO && doADOsite == NO)
+		return fixedADOrate;
+	if (doADOcell == YES && doADOsite == NO)
+		return meanADOcell;
+	if (doADOcell == NO && doADOsite == YES)
+		return meanADOsite;
+	return meanADOcell + meanADOsite - (meanADOcell * meanADOsite);
+	}
 
-
-void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEijmat, double **ampEijpat, double *glOut)
+/* MODEL 0 (GATK): genotype log10 likelihoods according to the observed reads assuming a single sequencing error
+   independent of the nucleotides involved, and no amplification error. Extended from Korneliussen 2013 BMCBioinf:
+   p(D|G=A1,A2) = multiply over reads [ 1/2 p(read i|A1) + 1/2 p(read i|A2) ],  p(read|A) = e/3 if b!=A, 1-e if b=A */
+static void GLModelGATK (const int *readCount, double (*logGL)[4])
 	{
 	int		k, a1, a2;
-	int		read;
-	int		*readCount;
-	double  maternalSiteAmplificationError, paternalSiteAmplificationError;
-	int		template, template1, template2;
-	double	maxLike, pReadGivenA1, pReadGivenA2;
 	double	homozygote_for_read, heterozygote_for_read, no_allele_for_read;
-	double	(*logGL)[4], (*normLogGL)[4];
-	double 	MLmatAllele, MLpatAllele;
-	double	alleleDropoutRate;
-	long double	term1, term2, term3, maxterm, num1, num2, num3, number1, number2;
-	double 	GL[4][4] = {{0}};
-	double	pA1tab[4][4], pA2tab[4][4], lgA1tab[4][4], lgA2tab[4][4];
-	long double	T2a[4], T3a[4];
-	double	logGLm[4][4] = {{0}}, normLogGLm[4][4] = {{0}};
-	double	L1tab[4][4][4], memoKeys[32], memoVals[32];
-	int		memoN;
-	GLCacheEntry	*cacheEntry;
-	
-	readCount = c->readCount;
-	logGL = logGLm;
-	normLogGL = normLogGLm;
-	maternalSiteAmplificationError = c->maternalSiteAmplificationError;
-	paternalSiteAmplificationError = c->paternalSiteAmplificationError;
 
-	
-	/* find ADO for this site */
-	if (thereisADO == NO)
-		alleleDropoutRate = 0;
-	else
-		{
-		if (doADOcell == NO && doADOsite == NO)
-			alleleDropoutRate = fixedADOrate;
-		else if (doADOcell == YES && doADOsite == NO)
-			alleleDropoutRate = meanADOcell;
-		else if (doADOcell == NO && doADOsite == YES)
-			alleleDropoutRate = meanADOsite;
-		else
-			alleleDropoutRate = meanADOcell + meanADOsite - (meanADOcell * meanADOsite);
-		}
-	
-	
-	/* genotype likelihoods already computed for the same counts and amplification errors in this thread */
-	cacheEntry = NULL;
-	if (glCacheEnv < 0)
-		{
-		const char *e = getenv ("CELLCOAL_NO_GL_CACHE");
-
-		glCacheEnv = (e != NULL && e[0] == '1') ? 1 : 0;
-		}
-	if (glCacheEnv == 1)
-		glCacheOff = 1;
-	if (glCacheOff == 0)
-		{
-		uint64_t	hk, kb[2];
-
-		if (glCache == NULL)
-			{
-			glCache = (GLCacheEntry*) calloc (GLCACHE_SIZE, sizeof(GLCacheEntry));
-			if (glCache == NULL)
-				glCacheOff = 1;
-			}
-		if (glCache != NULL)
-			{
-			memcpy (kb, &maternalSiteAmplificationError, 8);
-			memcpy (kb + 1, &paternalSiteAmplificationError, 8);
-			hk = ((uint64_t)(unsigned) readCount[0] * 0x9E3779B97F4A7C15ULL) ^ ((uint64_t)(unsigned) readCount[1] * 0xC2B2AE3D27D4EB4FULL)
-				^ ((uint64_t)(unsigned) readCount[2] * 0x165667B19E3779F9ULL) ^ ((uint64_t)(unsigned) readCount[3] * 0x27D4EB2F165667C5ULL)
-				^ (kb[0] * 0x9E3779B97F4A7C15ULL) ^ (kb[1] * 0xC2B2AE3D27D4EB4FULL);
-			hk ^= hk >> 29;
-			cacheEntry = &glCache[(hk * 0xD6E8FEB86659FD93ULL) >> (64 - 12)];
-			glLookups++;
-			if (cacheEntry->valid && cacheEntry->rc[0] == readCount[0] && cacheEntry->rc[1] == readCount[1] && cacheEntry->rc[2] == readCount[2]
-				&& cacheEntry->rc[3] == readCount[3] && cacheEntry->matErr == maternalSiteAmplificationError && cacheEntry->patErr == paternalSiteAmplificationError)
-				{
-				memcpy (logGLm, cacheEntry->gl, sizeof(cacheEntry->gl));
-				glHits++;
-				goto glDone;
-				}
-			if (glLookups == 4096 && glHits * 16 < glLookups)	/* fewer than 1 in 16 repeated: not worth it */
-				glCacheOff = 1;
-			}
-		}
-
-	/************************** MODEL 0 (GATK) *************************************/
-	/* MODEL 0: genotype log10 likelihoods according to the observed read assuming a single sequencing error independent of the nucleotides involved, and no amplification error */
-	/* extended from Korneliussen 2013 BMCBioinf
-	 p(D|G=A1,A2) = multiply over reads [ 1/2 p(read i|A1) + 1/2 p(read i|A2)]
-	 where p(read|A) e/3 if b!=A  or 1-e if b=A
-	 N.B: ANGSD seems to use natural logs!
-	 */
-	if (doGATK == YES)
-		{
 		homozygote_for_read = log10(1.0 - sequencingError);
 		no_allele_for_read = log10(sequencingError/3.0);
 		heterozygote_for_read = log10((1.0 - sequencingError)/2.0 + sequencingError/6.0);
@@ -981,19 +893,19 @@ void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEi
 							logGL[a1][a2] += readCount[k] * no_allele_for_read;
 						else
 							logGL[a1][a2] += readCount[k] * heterozygote_for_read;
-							//fprintf (stderr, "\nGATK read=%c gl[%c][%c] = %lf", WhichNuc(k), WhichNuc(a1), WhichNuc(a2), logGL[a1][a2]);
 						}
 					}
 				logGL[a2][a1] = logGL[a1][a2];
 				}
 		
-		} // model 0
-	
-	
-	/************************** MODEL 1 (4-templates) *************************************/
-	/* MODEL 1 (4-templates): genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with all 4 templates */
-	if (do4T == YES)
-		{
+	}
+
+/* MODEL 1 (4 templates): single sequencing error independent of the nucleotides, amplification error with all 4 templates */
+static void GLModel4T (const int *readCount, double **ngsEij, double **ampEijmat, double **ampEijpat, double (*logGL)[4])
+	{
+	int		a1, a2, read, template;
+	double	pReadGivenA1, pReadGivenA2;
+
 		for (a1=0; a1<4; a1++) //a1 is maternal
 			for (a2=0; a2<4; a2++) //a2 is paternal
 				{
@@ -1007,21 +919,21 @@ void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEi
 							{
 							pReadGivenA1 += ampEijmat[a1][template] * ngsEij[template][read];
 							pReadGivenA2 += ampEijpat[a2][template] * ngsEij[template][read];
-							//fprintf (stderr, "\n ampEijmat[%c]][%c]=%lf ngsEij[%c]][%c]=%lf ", WhichNuc(a1), WhichNuc(template), ampEijmat[a1][template], WhichNuc(a2), WhichNuc(template), ngsEij[template][read]);
 							}
 						logGL[a1][a2] += readCount[read] * log10 (meanAllelicImbalance * pReadGivenA1 + (1.0-meanAllelicImbalance) * pReadGivenA2);
 						}
-					//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), logGL[a1][a2],pReadGivenA1,pReadGivenA2);
 					}
 				}
 		
-		} //model 1
-	
-	
-	/************************** MODEL 2 (2-templates) *************************************/
-	/* MODEL 2 (2-templates): genotype log10 likelihoods according to the observed read, assuming a single sequencing error independent of the nucleotides involved, and amplification error with up to 2 templates */
-	if (do2T == YES)
-		{
+	}
+
+/* MODEL 2 (2 templates): single sequencing error independent of the nucleotides, amplification error with up to 2 templates */
+static void GLModel2T (const int *readCount, int j, double errM, double errP, double **ngsEij, double (*logGL)[4])
+	{
+	int		a1, a2, read, template1, template2;
+	double	pReadGivenA1, pReadGivenA2;
+	double	maternalSiteAmplificationError = errM, paternalSiteAmplificationError = errP;
+
 		for (a1=0; a1<4; a1++) //a1 is maternal
 			for (a2=0; a2<4; a2++) //a2 is paternal
 				{
@@ -1035,44 +947,38 @@ void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEi
 							if (template1 != a1)
 								{
 								pReadGivenA1 += AmpSub(j,a1,template1) * ((1.0 - maternalSiteAmplificationError) * ngsEij[a1][read] + maternalSiteAmplificationError * ngsEij[template1][read]);
-								//fprintf (stderr, "\nread=%c t=[%c][%c] p1=%lf Eijmat[%c][%c]=%lf", WhichNuc(read), WhichNuc(a1), WhichNuc(template1), pReadGivenA1, WhichNuc(a1), WhichNuc(template1), Eij[a1][template1]/cumEij[a1][3]);
 								}
 						for (template2=0; template2<4; template2++)
 							if (template2 != a2)
 								{
 								pReadGivenA2 += AmpSub(j,a2,template2) * ((1.0 - paternalSiteAmplificationError) * ngsEij[a2][read] + paternalSiteAmplificationError * ngsEij[template2][read]);
-								//fprintf (stderr, "\nread=%c t=[%c][%c] p2=%lf Eijpat[%c][%c]=%lf", WhichNuc(read), WhichNuc(a2), WhichNuc(template2), pReadGivenA2, WhichNuc(a2), WhichNuc(template2), Eij[a2][template2]/cumEij[a2][3]);
 								}
 						logGL[a1][a2] += readCount[read] * log10(meanAllelicImbalance * pReadGivenA1 + (1.0 - meanAllelicImbalance) * pReadGivenA2);
 						}
-					//fprintf (stderr, "\n***read=%c gl[%c][%c] = %lf  (p1=%lf p2=%lf)", WhichNuc(read), WhichNuc(a1), WhichNuc(a2), logGL[a1][a2],pReadGivenA1,pReadGivenA2);
 					}//read
 				} //a1,a2
 		
-		} // model 2
-	
-	
+	}
 
-/* ************************* MODEL GENERAL *************************************/
-/* MODEL: genotype log10 likelihoods according to the observed reads, assuming a single sequencing error independent of the nucleotides involved, amplification errors and ADO. Note that ADO does not change the likelihoods
+/* GENERAL MODEL: genotype log10 likelihoods according to the observed reads, assuming a single sequencing error
+   independent of the nucleotides involved, amplification errors and ADO. Note that ADO does not change the likelihoods
 
-	M = multiply over reads
-	b = read
-
-	p1 = p(b_i|A1)
-	p2 = p(b_i|A2)
-	where p(b_i|A) is defined by the specific amplification model (GATK, 2T or 4T)
-	
 	P(D|G=A1,A2) = (1-ADO) * M[1/2 p1 + 1/2 p2] + ADO/2 * M[p1] + ADO/2 * M[p2]
- 
-	term1 = M[1/2 p1 + 1/2 p2]
-	term2 = M[p1]
-	term3 = M[p2]
- 
-	M is the product over reads
-*/
-	if (doGATK_ADO == YES || do4T_ADO == YES || do2T_ADO == YES)
-		{
+	term1 = M[1/2 p1 + 1/2 p2],  term2 = M[p1],  term3 = M[p2],  M is the product over reads
+	p1 = p(b_i|A1), p2 = p(b_i|A2) as defined by the amplification model (GATK, 2T or 4T) */
+static void GLModelGeneral (const int *readCount, int j, double errM, double errP, double alleleDropoutRate,
+							double **ngsEij, double **ampEijmat, double **ampEijpat, double (*logGL)[4])
+	{
+	int		k, a1, a2, read, template, template1, template2;
+	double	pReadGivenA1, pReadGivenA2;
+	double	maternalSiteAmplificationError = errM, paternalSiteAmplificationError = errP;
+	long double	term1, term2, term3, maxterm, num1, num2, num3;
+	double 	GL[4][4] = {{0}};
+	double	pA1tab[4][4], pA2tab[4][4], lgA1tab[4][4], lgA2tab[4][4];
+	long double	T2a[4], T3a[4];
+	double	L1tab[4][4][4], memoKeys[32], memoVals[32];
+	int		memoN;
+
 		/* p(read|allele) and its log10 depend only on (allele, read), not on the genotype pair: compute them once */
 		for (read=0; read<4; read++)
 			{
@@ -1163,7 +1069,6 @@ void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEi
 						if (alleleDropoutRate != 1)
 							term1 += readCount[read] * L1tab[read][a1][a2];
 						}
-					//fprintf (stderr, "\n***read=%c count=%3d gl[%c][%c] = %lf  logGL[%c][%c] = %lf (p1=%e p2=%e), term1=%Lf term2=%Lf term3=%Lf", WhichNuc(read), readCount[read], WhichNuc(a1), WhichNuc(a2), GL[a1][a2],  WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], pReadGivenA1,pReadGivenA2, term1, term2, term3);
 					} // reads
 				if (alleleDropoutRate != 0)
 					{
@@ -1219,8 +1124,13 @@ void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEi
 		
 			}
 
-		} //model general
+	}
 
+/* unphased GLs: combines the GLs of both phases of the heterozygotes */
+static void UnphaseGL (double (*logGL)[4])
+	{
+	int		a1, a2;
+	long double	number1, number2;
 
 	/* obtain unphased GLs by combining GLs from both phases -only heterozygotes */
 	for (a1=0; a1<4; a1++)
@@ -1232,6 +1142,87 @@ void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEi
 				logGL[a1][a2] = logGL[a2][a1] = fastMode ? Log10Approx (number1 + number2) : log10(number1 + number2);
 				//fprintf (stderr, "\n1/2GL[%c][%c]=%Lf   1/2GL[%c][%c]=%Lf   logGL[%c][%c]=%f  logGL[%c][%c]=%f ", WhichNuc(a1), WhichNuc(a2), number1, WhichNuc(a2), WhichNuc(a1), number2, WhichNuc(a1), WhichNuc(a2), logGL[a1][a2], WhichNuc(a2), WhichNuc(a1), logGL[a2][a1] );
 				}
+
+	}
+
+/* ******************** GenotypeLikelihoods  ************************/
+/*
+ Calculate genotype likelihoods (GLs) for a given site and cell given the simulated reads
+ according to three different models
+ 
+ **	Genotype likelihoods can be calculated given the read counts and the sequencing error
+ (see Korneliussen 2013 BMCBioinf)
+
+ Calculations are done GLs for all 16 phased genotypes, as different errors can occurs for maternal and paternal alleles, so the phase matters. But then we will report the GLs for the 10 unphased genotypes
+ 00 01 02 03 11 12 13 22 23 33
+ AA AC AG AT CC CG CT GG GT TT
+ */
+
+void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEijmat, double **ampEijpat, double *glOut)
+	{
+	int		a1, a2;
+	int		*readCount = c->readCount;
+	double  maternalSiteAmplificationError = c->maternalSiteAmplificationError;
+	double	paternalSiteAmplificationError = c->paternalSiteAmplificationError;
+	double	maxLike;
+	double 	MLmatAllele, MLpatAllele;
+	double	alleleDropoutRate = AssumedADORate ();
+	double	logGLm[4][4] = {{0}}, normLogGLm[4][4] = {{0}};
+	double	(*logGL)[4] = logGLm, (*normLogGL)[4] = normLogGLm;
+	GLCacheEntry	*cacheEntry;
+	
+	/* genotype likelihoods already computed for the same counts and amplification errors in this thread */
+	cacheEntry = NULL;
+	if (glCacheEnv < 0)
+		{
+		const char *e = getenv ("CELLCOAL_NO_GL_CACHE");
+
+		glCacheEnv = (e != NULL && e[0] == '1') ? 1 : 0;
+		}
+	if (glCacheEnv == 1)
+		glCacheOff = 1;
+	if (glCacheOff == 0)
+		{
+		uint64_t	hk, kb[2];
+
+		if (glCache == NULL)
+			{
+			glCache = (GLCacheEntry*) calloc (GLCACHE_SIZE, sizeof(GLCacheEntry));
+			if (glCache == NULL)
+				glCacheOff = 1;
+			}
+		if (glCache != NULL)
+			{
+			memcpy (kb, &maternalSiteAmplificationError, 8);
+			memcpy (kb + 1, &paternalSiteAmplificationError, 8);
+			hk = ((uint64_t)(unsigned) readCount[0] * 0x9E3779B97F4A7C15ULL) ^ ((uint64_t)(unsigned) readCount[1] * 0xC2B2AE3D27D4EB4FULL)
+				^ ((uint64_t)(unsigned) readCount[2] * 0x165667B19E3779F9ULL) ^ ((uint64_t)(unsigned) readCount[3] * 0x27D4EB2F165667C5ULL)
+				^ (kb[0] * 0x9E3779B97F4A7C15ULL) ^ (kb[1] * 0xC2B2AE3D27D4EB4FULL);
+			hk ^= hk >> 29;
+			cacheEntry = &glCache[(hk * 0xD6E8FEB86659FD93ULL) >> (64 - 12)];
+			glLookups++;
+			if (cacheEntry->valid && cacheEntry->rc[0] == readCount[0] && cacheEntry->rc[1] == readCount[1] && cacheEntry->rc[2] == readCount[2]
+				&& cacheEntry->rc[3] == readCount[3] && cacheEntry->matErr == maternalSiteAmplificationError && cacheEntry->patErr == paternalSiteAmplificationError)
+				{
+				memcpy (logGLm, cacheEntry->gl, sizeof(cacheEntry->gl));
+				glHits++;
+				goto glDone;
+				}
+			if (glLookups == 4096 && glHits * 16 < glLookups)	/* fewer than 1 in 16 repeated: not worth it */
+				glCacheOff = 1;
+			}
+		}
+
+	if (doGATK == YES)
+		GLModelGATK (readCount, logGL);
+	if (do4T == YES)
+		GLModel4T (readCount, ngsEij, ampEijmat, ampEijpat, logGL);
+	if (do2T == YES)
+		GLModel2T (readCount, j, maternalSiteAmplificationError, paternalSiteAmplificationError, ngsEij, logGL);
+	if (doGATK_ADO == YES || do4T_ADO == YES || do2T_ADO == YES)
+		GLModelGeneral (readCount, j, maternalSiteAmplificationError, paternalSiteAmplificationError, alleleDropoutRate, ngsEij, ampEijmat, ampEijpat, logGL);
+
+	UnphaseGL (logGL);
 
 	if (cacheEntry != NULL)
 		{
