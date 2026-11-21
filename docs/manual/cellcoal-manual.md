@@ -952,6 +952,8 @@ The keys are the option letters (`"s": 20`, `"A": [0.05, 0.01, 0]`, `"1": true`)
 
 `--help` lists every option by sections and, at the end, the key of the configuration file of each one (e.g. `amplification_error` for `-A`). Examples for the three modes: `examples/config.genotypes.yaml`, `examples/config.readcounts.yaml` and `examples/config.reads.yaml`.
 
+Related options can also be given as one grouped option, `--GROUP key=value,key,...`, where `:` separates several numbers. The groups are `--tree`, `--mutation`, `--substitution`, `--ado`, `--errors`, `--amplification`, `--depth`, `--cell-corr`, `--call-filter`, `--reads`, `--chromosome` and `--output`. For example, `--ado cells=0.1:0.001,sites=0.2:0.01 --depth mean=20,cells=0.3 --output snv-genotypes,vcf-gz` is the same as `-P0.1 0.001 -Q0.2 0.01 -C20 -J0.3 -1 -z`. The single-letter options keep working and give identical results; `--help` lists every group, its keys, and the single-letter equivalent of each key. The group names can be used as keys in configuration files.
+
 Errors in the file are reported with the line and column and the text of the line, and a misspelled key suggests the closest option name:
 
 ```

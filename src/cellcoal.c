@@ -304,33 +304,33 @@ static void CheckOptionCombinations (void)
 		{
 		if (doZipVCF == YES || doPrintVCF == NO)
 			{
-			fprintf (stderr, "\n!!! PARAMETER ERROR: --bcf replaces the VCF file: it cannot be combined with -z or -Z\n\n");
+			fprintf (stderr, "\n!!! PARAMETER ERROR: --bcf replaces the VCF file: it cannot be combined with --output vcf-gz or --output no-vcf\n\n");
 			exit (-1);
 			}
 		if (numDataSets > 1 && doPrintSeparateReplicates == NO)
 			{
-			fprintf (stderr, "\n!!! PARAMETER ERROR: --bcf with several replicates needs -v (one BCF file per replicate)\n\n");
+			fprintf (stderr, "\n!!! PARAMETER ERROR: --bcf with several replicates needs --output replicate-folders (one BCF file per replicate)\n\n");
 			exit (-1);
 			}
 		}
 	if (ampCellVar > 0.0 && (meanAmplificationError <= 0.0 || ampCellVar >= meanAmplificationError * (1.0 - meanAmplificationError)))
 		{
-		fprintf (stderr, "\n!!! PARAMETER ERROR: --amp-cell-var needs an amplification error (-A) and a variance < mean*(1-mean) of -A\n\n");
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --amp-cell-var needs an amplification error (--amplification error) and a variance < mean*(1-mean) of --amplification error\n\n");
 		exit (-1);
 		}
 	if (covAdoCorr != 0.0 && (alphaCellCoverage <= 0.0 || doADOcell == NO))
 		{
-		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-ado-corr needs coverage variation among cells (-J) and ADO variation among cells (-P)\n\n");
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-ado-corr needs coverage variation among cells (--depth cells) and ADO variation among cells (--ado cells)\n\n");
 		exit (-1);
 		}
 	if (covDoubletCorr != 0.0 && (alphaCellCoverage <= 0.0 || meanDoubletRate <= 0))
 		{
-		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-doublet-corr needs coverage variation among cells (-J) and doublets (-B)\n\n");
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --cov-doublet-corr needs coverage variation among cells (--depth cells) and doublets (--depth doublets)\n\n");
 		exit (-1);
 		}
 	if (adoDoubletCorr != 0.0 && (doADOcell == NO || meanDoubletRate <= 0))
 		{
-		fprintf (stderr, "\n!!! PARAMETER ERROR: --ado-doublet-corr needs ADO variation among cells (-P) and doublets (-B)\n\n");
+		fprintf (stderr, "\n!!! PARAMETER ERROR: --ado-doublet-corr needs ADO variation among cells (--ado cells) and doublets (--depth doublets)\n\n");
 		exit (-1);
 		}
 	}
@@ -389,7 +389,7 @@ static void CheckModeOptions (void)
 		for (k=0; o[k].name; k++)
 			if (o[k].given)
 				{
-				fprintf (stderr, "\n!!! PARAMETER ERROR: %s is an option of the read counts (-C) and is not used with --bam/--fastq (reads mode): the coverage varies with -J and --gain-sd\n\n", o[k].name);
+				fprintf (stderr, "\n!!! PARAMETER ERROR: %s is an option of the read counts (-C) and is not used with --bam/--fastq (reads mode): the coverage varies with --depth cells and --gain-sd\n\n", o[k].name);
 				exit (-1);
 				}
 	if (!reads)
@@ -1096,7 +1096,7 @@ static void CheckReadOptions (void)
 		{
 		if (doNGS == NO || meanAmplificationError <= 0.0)
 			{
-			fprintf (stderr, "\nERROR: --amp-signature needs read counts (-C) and an amplification error (-A)\n");
+			fprintf (stderr, "\nERROR: --amp-signature needs read counts (-C) and an amplification error (--amplification error)\n");
 			exit (-1);
 			}
 		if (alphabet == BINARY)
@@ -1109,7 +1109,7 @@ static void CheckReadOptions (void)
 
 	if (adoBlockLen > 0.0 && (doADOsite == YES || (fixedADOrate <= 0 && doADOcell == NO)))
 		{
-		fprintf (stderr, "\nERROR: --ado-block needs allelic dropout (-D or -P) and cannot be combined with ADO among sites (-Q)\n");
+		fprintf (stderr, "\nERROR: --ado-block needs allelic dropout (--ado mean or --ado cells) and cannot be combined with ADO among sites (--ado sites)\n");
 		exit (-1);
 		}
 
@@ -1300,7 +1300,7 @@ int main (int argc, char **argv)
 		{
 		if (doUserGenome == YES || (SNPrate > 0 && strlen (germlineVcf) > 0))
 			{
-			fprintf (stderr, "\nERROR: --blocks/--fasta cannot be combined with -U, and --germline-vcf with -c\n");
+			fprintf (stderr, "\nERROR: --blocks/--fasta cannot be combined with --mutation genome, and --germline-vcf with --mutation germline-rate\n");
 			exit (-1);
 			}
 		BlocksSetup ();

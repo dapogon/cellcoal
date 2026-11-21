@@ -250,7 +250,7 @@ if python3 -c "import numpy" 2>/dev/null; then
   python3 -c "import sys; sys.exit(0 if $c2 > 0.5 else 1)" && ok "cov_ado_correlation: 0.8 in a config file ($c2)" || bad "cov-ado positive ($c2)"
   cmp -s "$TMP/cv0/Results/ado_cells" "$TMP/cv1/Results/ado_cells" && ok "the ADO rates themselves do not change" || bad "cov-ado changed the ADO rates"
 else echo "  skip (numpy not installed)"; fi
-if "$BIN" --cov-ado-corr 0.5 -s5 2>&1 | grep -q 'needs coverage variation among cells (-J) and ADO variation'; then ok "--cov-ado-corr needs -J and -P"; else bad "cov-ado validation"; fi
+if "$BIN" --cov-ado-corr 0.5 -s5 2>&1 | grep -q 'needs coverage variation among cells (--depth cells) and ADO variation'; then ok "--cov-ado-corr needs -J and -P"; else bad "cov-ado validation"; fi
 
 echo "2g10b. Amplification error that varies among cells (--amp-cell-var)"
 cat > "$TMP/ampcell.py" <<'PY'
@@ -279,7 +279,7 @@ if python3 -c "import numpy" 2>/dev/null; then
   cmp -s "$TMP/am1/Results/pileup" "$TMP/am2/Results/pileup" && ok "amplification_error_cell_variance in a config file" || bad "amp-cell-var config"
   [ ! -e "$TMP/am0/Results/cell_params" ] && ok "no cell_params without the option" || bad "cell_params without --amp-cell-var"
 else echo "  skip (numpy not installed)"; fi
-if "$BIN" --amp-cell-var 0.001 -s5 2>&1 | grep -q 'needs an amplification error (-A)'; then ok "--amp-cell-var needs -A"; else bad "amp-cell-var validation"; fi
+if "$BIN" --amp-cell-var 0.001 -s5 2>&1 | grep -q 'needs an amplification error (--amplification error)'; then ok "--amp-cell-var needs -A"; else bad "amp-cell-var validation"; fi
 
 echo "2g11. BCF output (--bcf)"
 BQ="-n2 -s30 -l1500 -u3e-6 -e10000 -b1 -C8 -V5 -E0.01 -A0.05 0.01 0 -D0.1 -B0.1 0.005 -J3 -O3 -v -#9"
@@ -319,7 +319,7 @@ if command -v bcftools >/dev/null 2>&1; then
   r2=$(grep -v '^#' "$v" | grep "$(printf '\t')" | awk -F'\t' '$2>=20000 && $2<=50000 {print $2}' | md5sum)
   if [ "$nidx" = "$ntxt" ] && [ "$ntxt" -gt 50 ] && [ "$r1" = "$r2" ]; then ok "bcftools uses our .csi: $nidx records, region query equals the VCF"; else bad "bcftools with our .csi (count $nidx vs $ntxt)"; bcftools view -H -r 1:20000-50000 "$f" 2>&1 | head -3; fi
 fi
-if "$BIN" --bcf -z -s5 2>&1 | grep -q 'cannot be combined' && "$BIN" --bcf -n3 -s5 2>&1 | grep -q 'needs -v'; then ok "--bcf option checks"; else bad "--bcf option checks"; fi
+if "$BIN" --bcf -z -s5 2>&1 | grep -q 'cannot be combined' && "$BIN" --bcf -n3 -s5 2>&1 | grep -q 'needs --output replicate-folders'; then ok "--bcf option checks"; else bad "--bcf option checks"; fi
 
 echo "2g12. Cache of genotype likelihoods (same counts and amplification errors) does not change the results"
 GQ="-n1 -s60 -l2000 -u2e-6 -e10000 -b1 -C6 -E0.01 -D0.1 -B0.1 0.005 -1 -8 -#12"
@@ -826,7 +826,7 @@ for l in open("A/bulk"):
             if (ref=="C" and a=="T") or (ref=="G" and a=="A"): ct+=c
 assert n>1000 and 0.55 < ct/n < 0.80, (n, ct/n)
 P
-"$BIN" -n1 -s10 -l1000 -u1e-6 -e1000 -b1 -C10 --amp-signature "$PS" -oB >B.txt 2>&1; grep -aq "needs read counts (-C) and an amplification error (-A)" B.txt && ok "--amp-signature needs -A" || bad "--amp-signature without -A"
+"$BIN" -n1 -s10 -l1000 -u1e-6 -e1000 -b1 -C10 --amp-signature "$PS" -oB >B.txt 2>&1; grep -aq "needs read counts (-C) and an amplification error (--amplification error)" B.txt && ok "--amp-signature needs -A" || bad "--amp-signature without -A"
 cd "$ROOT"
 
 echo "2g33. --gain-sd / --gain-len: autocorrelated coverage from the amplification gain"
@@ -1095,6 +1095,16 @@ for f in genotypes readcounts reads; do
   "$BIN" --config "$ROOT/examples/config.$f.yaml" -n1 -l1500 >/dev/null 2>&1 && [ -s Results/run.json ] && ok "examples/config.$f.yaml runs" || bad "examples/config.$f.yaml"
   cd "$ROOT"
 done
+
+echo "2g45. Grouped options (--ado, --depth, --output, ...) are equivalent to the single-letter options"
+mkdir -p "$TMP/grp" && cd "$TMP/grp" && rm -rf ./*
+"$BIN" -n2 -s7 -l800 -u1e-6 -e1000 -b1 -C20 -P0.1 0.001 -J0.3 -Q0.2 0.01 -1 -3 -oL >/dev/null 2>&1
+"$BIN" -n2 -s7 -l800 -u1e-6 -e1000 -b1 --depth mean=20,cells=0.3 --ado cells=0.1:0.001,sites=0.2:0.01 --output snv-genotypes,full-genotypes,dir=G >/dev/null 2>&1
+[ -s L/snv_gen ] && [ "$(cat L/snv_gen L/full_gen | md5sum)" = "$(cat G/snv_gen G/full_gen | md5sum)" ] && ok "group options = legacy letters" || bad "group options = legacy letters"
+"$BIN" -n1 -s7 -l800 --ado nokey=1 >E.txt 2>&1; grep -aqi "unknown" E.txt && ok "unknown group key is rejected" || bad "unknown group key"
+printf 'cells: 2\nsites: 800\nseed: 7\nmutation: rate=1e-6\n' > c.yaml
+"$BIN" --config c.yaml -n2 -l800 -s7 -u1e-6 -oC >/dev/null 2>&1 && ok "config accepts group keys" || bad "config group key"
+cd "$ROOT"
 
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

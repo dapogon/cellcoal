@@ -616,6 +616,25 @@ void PrintConfigKeys (FILE *fp)
 	fprintf (fp, "\n");
 	}
 
+static int IsOptionName (const char *key)
+	{
+	int i;
+
+	for (i=0; optionNames[i].name; i++)
+		if (strcmp (optionNames[i].name, key) == 0)
+			return 1;
+	return 0;
+	}
+
+static char *Join2 (const char *a, const char *b)
+	{
+	char *s = (char*) malloc (strlen (a) + strlen (b) + 1);
+
+	strcpy (s, a);
+	strcat (s, b);
+	return s;
+	}
+
 static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int onlyKnown)
 	{
 	int k, v;
@@ -632,6 +651,31 @@ static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int o
 				continue;
 			CfgErrorAt (path, it->line, it->col, "the key has no value", it->key, NULL);
 			}
+		{
+		char norm[64];
+
+		/* a group written as a string (ado: mean=0.1,block=3000) or as a list (output: [snv-genotypes, vcf-gz]) */
+		if (it->nvals >= 1 && IsGroupKeyName (it->key, norm, sizeof(norm)) && (strchr (it->vals[0], '=') != NULL || !IsOptionName (it->key)))
+			{
+			size_t len = 1;
+			char *joined;
+			int w;
+
+			for (w=0; w<it->nvals; w++)
+				len += strlen (it->vals[w]) + 1;
+			joined = (char*) malloc (len);
+			joined[0] = '\0';
+			for (w=0; w<it->nvals; w++)
+				{
+				if (w > 0)
+					strcat (joined, ",");
+				strcat (joined, it->vals[w]);
+				}
+			out[(*n)++] = Join2 ("--", norm);
+			out[(*n)++] = joined;
+			continue;
+			}
+		}
 		flag = KeyToFlag (it, path);
 		if (it->isBool == YES && it->nvals == 0)
 			{
@@ -810,6 +854,9 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
 			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0 || strcmp (argv[i], "--coverage") == 0 || strcmp (argv[i], "--min-alt-vaf") == 0 || strcmp (argv[i], "--ado-block") == 0 || strcmp (argv[i], "--ado-origin") == 0 || strcmp (argv[i], "--ado-seed") == 0 || strcmp (argv[i], "--signature-file") == 0 || strcmp (argv[i], "--amp-signature") == 0 || strcmp (argv[i], "--gain-sd") == 0 || strcmp (argv[i], "--gain-len") == 0 || IsExtraOpt (argv[i]))
 			found = YES;
+	for (i=1; i<*argc; i++)
+		if (argv[i][0] == '-' && argv[i][1] == '-' && IsGroupName (argv[i] + 2))
+			found = YES;
 	if (found == NO)
 		return argv;
 	out = (char**) Checked (calloc(CFG_MAX_TOKENS + *argc + 1, sizeof(char*)), "Could not allocate the expanded arguments\n");
@@ -828,6 +875,13 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		else
 			out[n++] = argv[i];
 		}
+	/* grouped options (--ado mean=0.1,block=3000 ...) are turned into the single options */
+	{
+	char **expanded = (char**) Checked (calloc(CFG_MAX_TOKENS * 4 + *argc + 1, sizeof(char*)), "Could not allocate the expanded arguments\n");
+
+	n = ExpandGroups (out, n, expanded);
+	out = expanded;
+	}
 	/* --sweep SPEC: the program runs itself once per combination and exits */
 	{
 	const char *sweepSpec = NULL;
