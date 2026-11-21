@@ -164,6 +164,12 @@ static void FailLine (long lineNo, const char *msg)
 	exit (-1);
 	}
 
+/* integer range check: smallest BCF integer type holding lo..hi */
+static int IntType (long lo, long hi)
+	{
+	return (lo >= -120 && hi <= 127) ? T_INT8 : (lo >= -32760 && hi <= 32767) ? T_INT16 : T_INT32;
+	}
+
 /* integers of one FORMAT field of all samples: writes the type descriptor and the values */
 static void PutIntVectors (Bytes *b, long *vals, unsigned char *miss, int ns, int len)
 	{
@@ -176,7 +182,7 @@ static void PutIntVectors (Bytes *b, long *vals, unsigned char *miss, int ns, in
 			if (vals[i] < lo) lo = vals[i];
 			if (vals[i] > hi) hi = vals[i];
 			}
-	type = (lo >= -120 && hi <= 127) ? T_INT8 : (lo >= -32760 && hi <= 32767) ? T_INT16 : T_INT32;
+	type = IntType (lo, hi);
 	PutDesc (b, type, len);
 	for (i=0; i<ns*len; i++)
 		{
@@ -190,138 +196,230 @@ static void PutIntVectors (Bytes *b, long *vals, unsigned char *miss, int ns, in
 		}
 	}
 
-static void ConvertRecord (Bytes *rec, char *line, int nsamples, long lineNo)
+/* value of an INFO key: flag, string, integer or float vector */
+static void PutInfoValue (Bytes *body, int kind, char *val)
 	{
-	enum { MAXKEYS = 32 };
-	static char		**tok = NULL;
-	char			*alts[8], *filt[8], *info[16], *keys[MAXKEYS], *vals[64];
-	Bytes			shared = {0,0,0}, indiv = {0,0,0};
-	int				ntok, nalt, nallele, ninfo, nfilt, nkeys, k, s, v, idx, nv;
-	long			pos;
+	char	*vals[64];
+	int		v, nv;
 
-	if (!tok)
-		tok = (char**) malloc ((size_t)(nsamples + 16) * sizeof(char*));
-	ntok = Split (line, '\t', tok, nsamples + 16);
-	if (ntok < 9 + nsamples)
-		FailLine (lineNo, "too few fields");
-
-	/* CHROM, POS, rlen, QUAL, counts */
-	idx = -1;
-	for (k=0; k<ncontig; k++)
-		if (strcmp (bcfContig[k], tok[0]) == 0)
-			idx = k;
-	if (idx < 0)
-		FailLine (lineNo, "unknown contig");
-	BPut32 (&shared, (uint32_t) idx);
-	pos = atol (tok[1]);
-	BPut32 (&shared, (uint32_t)(pos - 1));
-	BPut32 (&shared, (uint32_t) strlen (tok[3]));
-	if (strcmp (tok[5], ".") == 0)
-		BPut32 (&shared, F_MISSING);
-	else
-		BPutFloat (&shared, strtof (tok[5], NULL));
-
-	/* alleles */
-	if (strcmp (tok[4], ".") == 0)
-		nalt = 0;
-	else
-		nalt = Split (tok[4], ',', alts, 8);
-	nallele = 1 + nalt;
-	nfilt = (strcmp (tok[6], ".") == 0) ? 0 : Split (tok[6], ';', filt, 8);
-	ninfo = (strcmp (tok[7], ".") == 0) ? 0 : Split (tok[7], ';', info, 16);
-
-	{
-	Bytes	body = {0,0,0};
-
-	/* ID */
-	if (strcmp (tok[2], ".") == 0)
-		PutTypedString (&body, "", 0);
-	else
-		PutTypedString (&body, tok[2], strlen (tok[2]));
-	PutTypedString (&body, tok[3], strlen (tok[3]));
-	for (k=0; k<nalt; k++)
-		PutTypedString (&body, alts[k], strlen (alts[k]));
-	/* FILTER */
-	if (nfilt == 0)
-		BPut8 (&body, 0);
-	else
+	if (kind == K_FLAG || val == NULL)
 		{
-		PutDesc (&body, T_INT8, nfilt);
-		for (k=0; k<nfilt; k++)
-			{
-			int d = DictFind (filt[k]);
+		BPut8 (body, 0);
+		return;
+		}
+	if (kind == K_STRING)
+		{
+		PutTypedString (body, val, strlen (val));
+		return;
+		}
+	nv = Split (val, ',', vals, 64);
+	if (kind == K_INT)
+		{
+		long lo = 0, hi = 0, x;
+		int type;
 
-			if (d < 0)
-				FailLine (lineNo, "undeclared FILTER");
-			BPut8 (&body, (unsigned) d);
+		for (v=0; v<nv; v++)
+			{
+			x = atol (vals[v]);
+			if (x < lo) lo = x;
+			if (x > hi) hi = x;
+			}
+		type = IntType (lo, hi);
+		PutDesc (body, type, nv);
+		for (v=0; v<nv; v++)
+			{
+			x = atol (vals[v]);
+			if (type == T_INT8) BPut8 (body, (unsigned)(x & 0xFF));
+			else if (type == T_INT16) BPut16 (body, (unsigned)(x & 0xFFFF));
+			else BPut32 (body, (uint32_t) x);
 			}
 		}
-	/* INFO */
+	else
+		{
+		PutDesc (body, T_FLOAT, nv);
+		for (v=0; v<nv; v++)
+			BPutFloat (body, strtof (vals[v], NULL));
+		}
+	}
+
+/* ID, REF, ALT, FILTER and INFO of a record (the variable-size part of the shared block) */
+static void PutSharedBody (Bytes *body, char **tok, char **alts, int nalt, char **filt, int nfilt, char **info, int ninfo, long lineNo)
+	{
+	int		k, d;
+
+	if (strcmp (tok[2], ".") == 0)
+		PutTypedString (body, "", 0);
+	else
+		PutTypedString (body, tok[2], strlen (tok[2]));
+	PutTypedString (body, tok[3], strlen (tok[3]));
+	for (k=0; k<nalt; k++)
+		PutTypedString (body, alts[k], strlen (alts[k]));
+	if (nfilt == 0)
+		BPut8 (body, 0);
+	else
+		{
+		PutDesc (body, T_INT8, nfilt);
+		for (k=0; k<nfilt; k++)
+			{
+			d = DictFind (filt[k]);
+			if (d < 0)
+				FailLine (lineNo, "undeclared FILTER");
+			BPut8 (body, (unsigned) d);
+			}
+		}
 	for (k=0; k<ninfo; k++)
 		{
 		char *eq = strchr (info[k], '='), *val = NULL;
-		int d, kind;
 
 		if (eq)
 			{ *eq = '\0'; val = eq + 1; }
 		d = DictFind (info[k]);
 		if (d < 0)
 			FailLine (lineNo, "undeclared INFO key");
-		kind = dict[d].kind;
-		PutTypedInt (&body, d);
-		if (kind == K_FLAG || val == NULL)
-			BPut8 (&body, 0);
-		else if (kind == K_STRING)
-			PutTypedString (&body, val, strlen (val));
-		else
-			{
-			nv = Split (val, ',', vals, 64);
-			if (kind == K_INT)
-				{
-				long lo = 0, hi = 0, x;
-				int type;
+		PutTypedInt (body, d);
+		PutInfoValue (body, dict[d].kind, val);
+		}
+	}
 
-				for (v=0; v<nv; v++)
-					{
-					x = atol (vals[v]);
-					if (x < lo) lo = x;
-					if (x > hi) hi = x;
-					}
-				type = (lo >= -120 && hi <= 127) ? T_INT8 : (lo >= -32760 && hi <= 32767) ? T_INT16 : T_INT32;
-				PutDesc (&body, type, nv);
-				for (v=0; v<nv; v++)
-					{
-					x = atol (vals[v]);
-					if (type == T_INT8) BPut8 (&body, (unsigned)(x & 0xFF));
-					else if (type == T_INT16) BPut16 (&body, (unsigned)(x & 0xFFFF));
-					else BPut32 (&body, (uint32_t) x);
-					}
+/* GT of all the samples: integer vectors (allele + 1) << 1 | phased, 0 for a missing allele (htslib requires this) */
+static void PutGenotypeField (Bytes *indiv, char ***cell, int k, int nsamples, long lineNo)
+	{
+	int		s, ploidy = 1;
+	char	*z;
+
+	for (z=cell[0][k]; *z; z++)
+		if (*z == '|' || *z == '/')
+			ploidy++;
+	PutDesc (indiv, T_INT8, ploidy);
+	for (s=0; s<nsamples; s++)
+		{
+		int np = 0;
+
+		z = cell[s][k];
+		while (np < ploidy)
+			{
+			int allele = -1, phased = 0;
+
+			if (np > 0)
+				{
+				if (*z != '|' && *z != '/')
+					FailLine (lineNo, "inconsistent ploidy in GT");
+				phased = (*z == '|');
+				z++;
+				}
+			if (*z == '.')
+				z++;
+			else if (*z >= '0' && *z <= '9')
+				{
+				allele = 0;
+				while (*z >= '0' && *z <= '9')
+					allele = allele * 10 + (*z++ - '0');
 				}
 			else
+				FailLine (lineNo, "bad GT");
+			BPut8 (indiv, (unsigned)(((allele + 1) << 1) | phased));
+			np++;
+			}
+		}
+	}
+
+/* a string FORMAT key: fixed-width, padded with zeros */
+static void PutStringField (Bytes *indiv, char ***cell, int k, int nsamples)
+	{
+	size_t	mx = 0, l;
+	int		s;
+
+	for (s=0; s<nsamples; s++)
+		if (strlen (cell[s][k]) > mx)
+			mx = strlen (cell[s][k]);
+	PutDesc (indiv, T_CHAR, (long) mx);
+	for (s=0; s<nsamples; s++)
+		{
+		l = strlen (cell[s][k]);
+		BPutRaw (indiv, cell[s][k], l);
+		for (; l<mx; l++)
+			BPut8 (indiv, 0);
+		}
+	}
+
+/* an integer or float FORMAT key: vectors padded to the longest one */
+static void PutNumericField (Bytes *indiv, char ***cell, int k, int kind, int nsamples, long lineNo)
+	{
+	long	*iv;
+	unsigned char *miss;
+	char	tmp[8192];
+	int		s, v, len = 1;
+
+	for (s=0; s<nsamples; s++)
+		{
+		int c = 1;
+		char *z;
+
+		for (z=cell[s][k]; *z; z++)
+			if (*z == ',')
+				c++;
+		if (c > len)
+			len = c;
+		}
+	iv = (long*) malloc ((size_t) nsamples * len * sizeof(long));
+	miss = (unsigned char*) malloc ((size_t) nsamples * len);
+	for (s=0; s<nsamples; s++)
+		{
+		int nn;
+		char *vv[64];
+
+		if (strlen (cell[s][k]) >= sizeof(tmp))
+			FailLine (lineNo, "field too long");
+		strcpy (tmp, cell[s][k]);
+		nn = Split (tmp, ',', vv, 64);
+		for (v=0; v<len; v++)
+			{
+			long *pv = &iv[(size_t) s * len + v];
+			unsigned char *pm = &miss[(size_t) s * len + v];
+
+			if (v >= nn)
+				{ *pv = 0; *pm = 2; }
+			else if (strcmp (vv[v], ".") == 0)
+				{ *pv = 0; *pm = 1; }
+			else
 				{
-				PutDesc (&body, T_FLOAT, nv);
-				for (v=0; v<nv; v++)
-					BPutFloat (&body, strtof (vals[v], NULL));
+				*pm = 0;
+				if (kind == K_FLOAT)
+					{
+					float f = strtof (vv[v], NULL);
+					memcpy (pv, &f, sizeof(float));
+					}
+				else
+					*pv = atol (vv[v]);
 				}
 			}
 		}
-	BPut16 (&shared, (unsigned) ninfo);
-	BPut16 (&shared, (unsigned) nallele);
-	/* n_sample (24 bits) and n_fmt (8 bits) are written after FORMAT is known */
-	{
-	size_t where = shared.n;
+	if (kind == K_FLOAT)
+		{
+		PutDesc (indiv, T_FLOAT, len);
+		for (s=0; s<nsamples*len; s++)
+			{
+			float f;
 
-	BPut32 (&shared, 0);
-	BPutRaw (&shared, body.d, body.n);
-	free (body.d);
+			if (miss[s] == 1) BPut32 (indiv, F_MISSING);
+			else if (miss[s] == 2) BPut32 (indiv, F_END);
+			else { memcpy (&f, &iv[s], sizeof(float)); BPutFloat (indiv, f); }
+			}
+		}
+	else
+		PutIntVectors (indiv, iv, miss, nsamples, len);
+	free (iv); free (miss);
+	}
 
-	/* FORMAT: keys and, for every key, the values of all the samples */
-	nkeys = Split (tok[8], ':', keys, MAXKEYS);
+/* FORMAT: for every key, the values of all the samples */
+static void PutFormatFields (Bytes *indiv, char **tok, char **keys, int nkeys, int nsamples, long lineNo)
 	{
+	enum { MAXKEYS = 32 };
 	char	***cell = (char***) malloc (nsamples * sizeof(char**));
 	char	*parts[MAXKEYS];
-	int		*kd = (int*) malloc (nkeys * sizeof(int));
+	int		k, s, d;
 
+	/* the text of the parts lives in the line buffer, which stays valid until the record is done */
 	for (s=0; s<nsamples; s++)
 		{
 		int np;
@@ -330,149 +428,72 @@ static void ConvertRecord (Bytes *rec, char *line, int nsamples, long lineNo)
 		np = Split (tok[9+s], ':', parts, MAXKEYS);
 		for (k=0; k<nkeys; k++)
 			cell[s][k] = (k < np) ? parts[k] : (char*) ".";
-		/* the text of the parts lives in the line buffer, which stays valid until the record is done */
 		}
 	for (k=0; k<nkeys; k++)
 		{
-		int kind, len = 1;
-
-		kd[k] = DictFind (keys[k]);
-		if (kd[k] < 0)
+		d = DictFind (keys[k]);
+		if (d < 0)
 			FailLine (lineNo, "undeclared FORMAT key");
-		kind = dict[kd[k]].kind;
-		PutTypedInt (&indiv, kd[k]);
+		PutTypedInt (indiv, d);
 		if (strcmp (keys[k], "GT") == 0)
-			{
-			/* genotypes are integer vectors in BCF: (allele + 1) << 1 | phased, 0 for a missing allele (htslib requires this for GT) */
-			int ploidy = 1;
-			char *z;
-
-			for (z=cell[0][k]; *z; z++)
-				if (*z == '|' || *z == '/')
-					ploidy++;
-			PutDesc (&indiv, T_INT8, ploidy);
-			for (s=0; s<nsamples; s++)
-				{
-				int np = 0;
-
-				z = cell[s][k];
-				while (np < ploidy)
-					{
-					int allele = -1, phased = 0;
-
-					if (np > 0)
-						{
-						if (*z != '|' && *z != '/')
-							FailLine (lineNo, "inconsistent ploidy in GT");
-						phased = (*z == '|');
-						z++;
-						}
-					if (*z == '.')
-						z++;
-					else if (*z >= '0' && *z <= '9')
-						{
-						allele = 0;
-						while (*z >= '0' && *z <= '9')
-							allele = allele * 10 + (*z++ - '0');
-						}
-					else
-						FailLine (lineNo, "bad GT");
-					BPut8 (&indiv, (unsigned)(((allele + 1) << 1) | phased));
-					np++;
-					}
-				}
-			}
-		else if (kind == K_STRING)
-			{
-			size_t mx = 0;
-
-			for (s=0; s<nsamples; s++)
-				if (strlen (cell[s][k]) > mx)
-					mx = strlen (cell[s][k]);
-			PutDesc (&indiv, T_CHAR, (long) mx);
-			for (s=0; s<nsamples; s++)
-				{
-				size_t l = strlen (cell[s][k]);
-
-				BPutRaw (&indiv, cell[s][k], l);
-				for (; l<mx; l++)
-					BPut8 (&indiv, 0);
-				}
-			}
+			PutGenotypeField (indiv, cell, k, nsamples, lineNo);
+		else if (dict[d].kind == K_STRING)
+			PutStringField (indiv, cell, k, nsamples);
 		else
-			{
-			long	*iv;
-			unsigned char *miss;
-			char	tmp[8192];
-
-			for (s=0; s<nsamples; s++)
-				{
-				int c = 1;
-				char *z;
-
-				for (z=cell[s][k]; *z; z++)
-					if (*z == ',')
-						c++;
-				if (c > len)
-					len = c;
-				}
-			iv = (long*) malloc ((size_t) nsamples * len * sizeof(long));
-			miss = (unsigned char*) malloc ((size_t) nsamples * len);
-			for (s=0; s<nsamples; s++)
-				{
-				int nn;
-				char *vv[64];
-
-				if (strlen (cell[s][k]) >= sizeof(tmp))
-					FailLine (lineNo, "field too long");
-				strcpy (tmp, cell[s][k]);
-				nn = Split (tmp, ',', vv, 64);
-				for (v=0; v<len; v++)
-					{
-					long *pv = &iv[(size_t) s * len + v];
-					unsigned char *pm = &miss[(size_t) s * len + v];
-
-					if (v >= nn)
-						{ *pv = 0; *pm = 2; }
-					else if (strcmp (vv[v], ".") == 0)
-						{ *pv = 0; *pm = 1; }
-					else
-						{
-						*pm = 0;
-						if (kind == K_FLOAT)
-							{
-							float f = strtof (vv[v], NULL);
-							memcpy (pv, &f, sizeof(float));
-							}
-						else
-							*pv = atol (vv[v]);
-						}
-					}
-				}
-			if (kind == K_FLOAT)
-				{
-				PutDesc (&indiv, T_FLOAT, len);
-				for (s=0; s<nsamples*len; s++)
-					{
-					float f;
-
-					if (miss[s] == 1) BPut32 (&indiv, F_MISSING);
-					else if (miss[s] == 2) BPut32 (&indiv, F_END);
-					else { memcpy (&f, &iv[s], sizeof(float)); BPutFloat (&indiv, f); }
-					}
-				}
-			else
-				PutIntVectors (&indiv, iv, miss, nsamples, len);
-			free (iv); free (miss);
-			}
+			PutNumericField (indiv, cell, k, dict[d].kind, nsamples, lineNo);
 		}
 	for (s=0; s<nsamples; s++)
 		free (cell[s]);
-	free (cell); free (kd);
+	free (cell);
 	}
+
+static void ConvertRecord (Bytes *rec, char *line, int nsamples, long lineNo)
+	{
+	enum { MAXKEYS = 32 };
+	static char		**tok = NULL;
+	char			*alts[8], *filt[8], *info[16], *keys[MAXKEYS];
+	Bytes			shared = {0,0,0}, indiv = {0,0,0}, body = {0,0,0};
+	int				ntok, nalt, nfilt, nkeys, k, idx, ninfo;
+	size_t			where;
+
+	if (!tok)
+		tok = (char**) malloc ((size_t)(nsamples + 16) * sizeof(char*));
+	ntok = Split (line, '\t', tok, nsamples + 16);
+	if (ntok < 9 + nsamples)
+		FailLine (lineNo, "too few fields");
+
+	/* CHROM, POS, rlen, QUAL */
+	idx = -1;
+	for (k=0; k<ncontig; k++)
+		if (strcmp (bcfContig[k], tok[0]) == 0)
+			idx = k;
+	if (idx < 0)
+		FailLine (lineNo, "unknown contig");
+	BPut32 (&shared, (uint32_t) idx);
+	BPut32 (&shared, (uint32_t)(atol (tok[1]) - 1));
+	BPut32 (&shared, (uint32_t) strlen (tok[3]));
+	if (strcmp (tok[5], ".") == 0)
+		BPut32 (&shared, F_MISSING);
+	else
+		BPutFloat (&shared, strtof (tok[5], NULL));
+
+	nalt = (strcmp (tok[4], ".") == 0) ? 0 : Split (tok[4], ',', alts, 8);
+	nfilt = (strcmp (tok[6], ".") == 0) ? 0 : Split (tok[6], ';', filt, 8);
+	ninfo = (strcmp (tok[7], ".") == 0) ? 0 : Split (tok[7], ';', info, 16);
+
+	PutSharedBody (&body, tok, alts, nalt, filt, nfilt, info, ninfo, lineNo);
+	BPut16 (&shared, (unsigned) ninfo);
+	BPut16 (&shared, (unsigned)(1 + nalt));
+	/* n_sample (24 bits) and n_fmt (8 bits) are written after FORMAT is known */
+	where = shared.n;
+	BPut32 (&shared, 0);
+	BPutRaw (&shared, body.d, body.n);
+	free (body.d);
+
+	nkeys = Split (tok[8], ':', keys, MAXKEYS);
+	PutFormatFields (&indiv, tok, keys, nkeys, nsamples, lineNo);
 	Put32le (shared.d + where, (uint32_t) nsamples | ((uint32_t) nkeys << 24));
-	}
-	}
+
 	rec->n = 0;
 	BPut32 (rec, (uint32_t) shared.n);
 	BPut32 (rec, (uint32_t) indiv.n);
