@@ -1007,6 +1007,8 @@ static void InitCumulativeTables (void)
 			cumEij[i][0] = Eij[i][0];
 			for (j=1; j<4; j++)
 				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
+			for (j=0; j<4; j++)
+				ampSubRow[i][j] = Eij[i][j] / cumEij[i][3];
 			}
 		}
 	}

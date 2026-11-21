@@ -275,6 +275,7 @@ static inline Geno GetG (int genome, int node, int site)
 		}
 	return data[genome][node][site];
 	}
+extern double				ampSubRow[4][4];	/* Eij[k][l]/cumEij[k][3] */
 extern int					ampSigOn;
 extern double				ampSigMult[4][4][4];
 extern double				ampSigRow[4][4][4][4];
@@ -284,7 +285,7 @@ static inline double AmpSub (long j, int k, int l)
 	{
 	if (__builtin_expect (ampSigOn, 0) && j > 0 && j < numSites - 1 && k >= 0 && k < 4 && l >= 0 && l < 4)
 		return ampSigRow[data[MATERNAL][OUTGROUP_ROOT][j-1]][k][data[MATERNAL][OUTGROUP_ROOT][j+1]][l];
-	return Eij[k][l]/cumEij[k][3];
+	return ampSubRow[k][l];
 	}
 
 /* mean amplification error at site j for allele k, relative to -A (1 without --amp-signature) */

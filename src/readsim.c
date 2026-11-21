@@ -374,7 +374,7 @@ static void SeqErrors (char *s, int len, long int *seed)
 		for (l=0; l<4; l++)
 			if (l != a)
 				{
-				cum += Eij[a][l] / cumEij[a][3];
+				cum += ampSubRow[a][l];
 				if (u <= cum)
 					break;
 				}
@@ -435,7 +435,7 @@ static void SeqErrorsQ (char *s, int len, int reverse, unsigned char *qv, double
 			for (l=0; l<4; l++)
 				if (l != a)
 					{
-					cum += Eij[a][l] / cumEij[a][3];
+					cum += ampSubRow[a][l];
 					if (u <= cum)
 						break;
 					}
