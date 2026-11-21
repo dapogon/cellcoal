@@ -961,13 +961,227 @@ static void RunReplicate (int dataSetNum, long int *seed)
 	FreeReplicate (dataSetNum);
 	}
 
+static void SetCoalescentExpectations (void)
+	{
+	int		i;
+	double	a = 0, a2 = 0;
+
+	numNodes = 2 * numCells + 1;
+	maxTreeRateSwitches = numCells;
+    for (i=1; i<numCells; i++) /* ignoring outgroup (healthy cell) */
+        {
+        a += 1.0/(double)i;
+        a2 += 1.0/(double)pow(i,2);
+        }
+    theta = 2.0 * N * mutationRate * 2.0 * numSites * ((1.0-propAltModelSites) + nonISMRelMutRate*propAltModelSites);
+    expNumMU = theta * a;
+    expVarNumMU =  theta * a + pow(theta,2) * a2;
+    expTMRCA = 2 * (1 - 1.0/numCells) /* 2.0 * N */;
+    expVarTMRCA = 0;
+	for (i=2; i<=numCells; i++)
+		expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
+	}
+
+static void InitCumulativeTables (void)
+	{
+	int		i, j;
+
+	if (doSimulateData == YES && alphabet == DNA)
+		{
+		/* initialize cumfreq */
+		cumfreq[0] = freq[0];
+		for (i=1; i<4; i++)
+			cumfreq[i] = cumfreq[i-1] + freq[i];
+	
+		/* initialize cumMij */
+		for (i=0; i<4; i++)
+			{
+			cumMij[i][0] = Mij[i][0];
+			for (j=1; j<4; j++)
+				cumMij[i][j] = cumMij[i][j-1] + Mij[i][j];
+			}
+
+		/* initialize cumEij */
+		for (i=0; i<4; i++)
+			{
+			cumEij[i][0] = Eij[i][0];
+			for (j=1; j<4; j++)
+				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
+			}
+		}
+	}
+
+static void SetNamesAndPaths (void)
+	{
+	/* set names for taxa */
+	if (doTumorNames == YES)
+		{
+		strcpy(inCellName, "tumcell");
+		strcpy(outCellName, "healthycell");
+		strcpy(inRootCellName, "tumoralroot");
+		strcpy(outRootCellName, "healthyroot");
+		stringPrecision = 12;
+		}
+	else
+		{
+		strcpy(inCellName, "cell");
+		strcpy(outCellName, "outgcell");
+		strcpy(inRootCellName, "ingrroot");
+		strcpy(outRootCellName, "outgroot");
+		stringPrecision = 9;
+		}
+	
+	if (doPrintIUPAChaplotypes == YES)
+		stringPrecision += 1;
+	
+    /* set file dirs and names */
+	if (strlen(resultsDir) == 0)
+		strcpy(resultsDir, "Results");
+	// clean previous results directory
+	RemoveDir (resultsDir);
+	// create new results directory
+	MAKE_DIR (resultsDir);
+
+   	strcpy(treeDir, "trees_dir");
+   	strcpy(timesDir, "times_dir");
+	strcpy(SNVgenotypesDir, "snv_genotypes_dir");
+    strcpy(SNVhaplotypesDir, "snv_haplotypes_dir");
+    strcpy(trueHaplotypesDir, "true_haplotypes_dir");
+    strcpy(fullHaplotypesDir, "full_haplotypes_dir");
+	strcpy(MLhaplotypesDir, "ML_haplotypes_dir");
+    strcpy(fullGenotypesDir, "full_genotypes_dir");
+    strcpy(CATGdir, "catg_dir");
+	strcpy(PILEUPdir, "pileup_dir");
+	strcpy(bulkDir, "bulk_dir");
+	strcpy(VCFdir, "vcf_dir");
+	
+	strcpy(SNVgenotypesFile, "snv_gen");
+    strcpy(SNVhaplotypesFile, "snv_hap");
+    strcpy(trueHaplotypesFile, "true_hap");
+    strcpy(fullHaplotypesFile, "full_hap");
+	strcpy(MLhaplotypesFile, "ML_hap");
+    strcpy(fullGenotypesFile, "full_gen");
+    strcpy(treeFile, "trees");
+    strcpy(timesFile, "times");
+	if (strlen(userTreeFile) == 0)
+		strcpy(userTreeFile, "usertree");
+	if (strlen(userGenomeFile) == 0)
+		strcpy(userGenomeFile, "usergenome");
+    strcpy(CATGfile, "catg");
+	strcpy(PILEUPfile, "pileup");
+	strcpy(bulkFile, "bulk");
+	strcpy(VCFfile, "vcf");
+    strcpy(logFile, "log");
+	strcpy(settingsFile, "log");
+ 
+	}
+
+static void CheckReadOptions (void)
+	{
+	if (gainSd > 0.0 || gainLen > 0.0)
+		{
+		if (!(gainSd > 0.0 && gainLen > 0.0))
+			{
+			fprintf (stderr, "\nERROR: --gain-sd and --gain-len go together\n");
+			exit (-1);
+			}
+		if (doNGS == NO)
+			{
+			fprintf (stderr, "\nERROR: --gain-sd needs read counts (-C)\n");
+			exit (-1);
+			}
+		}
+
+	if (ampSignatureFile != NULL)
+		{
+		if (doNGS == NO || meanAmplificationError <= 0.0)
+			{
+			fprintf (stderr, "\nERROR: --amp-signature needs read counts (-C) and an amplification error (-A)\n");
+			exit (-1);
+			}
+		if (alphabet == BINARY)
+			{
+			fprintf (stderr, "\nERROR: --amp-signature needs the DNA alphabet\n");
+			exit (-1);
+			}
+		SetupAmpSignature (ampSignatureFile);
+		}
+
+	if (adoBlockLen > 0.0 && (doADOsite == YES || (fixedADOrate <= 0 && doADOcell == NO)))
+		{
+		fprintf (stderr, "\nERROR: --ado-block needs allelic dropout (-D or -P) and cannot be combined with ADO among sites (-Q)\n");
+		exit (-1);
+		}
+
+	/* read-level simulator: --bam, --fastq */
+	if (doBam || doFastq)
+		{
+		if (doNGS == NO || alphabet == BINARY || ploidy != 2)
+			{
+			fprintf (stderr, "\nERROR: --bam/--fastq need the mean coverage (-C) and diploid DNA\n");
+			exit (-1);
+			}
+		if (meanDoubletRate > 0.0)
+			{
+			fprintf (stderr, "\nERROR: --bam/--fastq cannot be combined with doublets\n");
+			exit (-1);
+			}
+		if ((fixedADOrate > 0 || doADOcell == YES || doADOsite == YES) && adoBlockLen <= 0.0)
+			{
+			fprintf (stderr, "\nERROR: in reads mode the allelic dropout has to come in segments (--ado-block L, e.g. 3000): with dropout independent at every site almost no fragment of %d bp survives\n", 2 * readLen);
+			exit (-1);
+			}
+		if (readLen < 20 || readLen > 400 || insertMean < readLen || insertSd < 0.0 || dupMean < 0.0)
+			{
+			fprintf (stderr, "\nERROR: bad --read-len/--insert-mean/--insert-sd/--dup-mean\n");
+			exit (-1);
+			}
+		if (qualSd < 0.0 || qualSd > 3.0 || qualSlope < -6.0 || qualSlope > 6.0 || strandBias < 0.0 || strandBias > 1.0)
+			{
+			fprintf (stderr, "\nERROR: bad --qual-sd (0 to 3), --qual-slope (-6 to 6) or --strand-bias (0 to 1)\n");
+			exit (-1);
+			}
+		/* the VCF of read counts and genotype likelihoods does not exist in this mode */
+		doPrintVCF = NO;
+		}
+	}
+
+static void CloseGlobalFiles (void)
+	{
+	/* close file pointers */
+	if (doPrintSeparateReplicates == NO)
+		{
+		if (doPrintSNVgenotypes == YES)
+			fclose(fpSNVgenotypes);
+		if (doPrintFullGenotypes == YES)
+			fclose(fpFullGenotypes);
+		if (doPrintSNVhaplotypes == YES)
+			fclose(fpSNVhaplotypes);
+		if (doPrintFullHaplotypes == YES)
+			fclose(fpFullHaplotypes);
+		if (doPrintTrueHaplotypes == YES)
+			fclose(fpTrueHaplotypes);
+		if (doNGS == YES && doPrintVCF == YES)
+			CloseVCF (fpVCF);
+		if (doPrintCATG == YES)
+			fclose(fpCATG);
+		if (doPrintPILEUP == YES)
+			fclose(fpPILEUP);
+		if (doPrintBulk == YES)
+			fclose(fpBulk);
+		if (doPrintTree == YES)
+			fclose(fpTrees);
+		if (doPrintTimes == YES)
+			fclose(fpTimes);
+		}
+	
+	}
+
 int main (int argc, char **argv)
     {
     FILE 		*fp;
-    int			i, j;
-    int         dataSetNum;
+    int         i, dataSetNum;
     long int	seed;
-    double		a, a2;
     clock_t		start;
     double		secs, wallSecs = 0.0;
 		
@@ -1046,23 +1260,7 @@ int main (int argc, char **argv)
 	if (numOutgroup == 0)
 		healthyTipBranchLengthRatio = 0.0;
 
-    /* initialize a few variables */
-	numNodes = 2 * numCells + 1;
-	maxTreeRateSwitches = numCells;
-	a = 0;
-    a2 = 0;
-    for (i=1; i<numCells; i++) /* ignoring outgroup (healthy cell) */
-        {
-        a += 1.0/(double)i;
-        a2 += 1.0/(double)pow(i,2);
-        }
-    theta = 2.0 * N * mutationRate * 2.0 * numSites * ((1.0-propAltModelSites) + nonISMRelMutRate*propAltModelSites);
-    expNumMU = theta * a;
-    expVarNumMU =  theta * a + pow(theta,2) * a2;
-    expTMRCA = 2 * (1 - 1.0/numCells) /* 2.0 * N */;
-    expVarTMRCA = 0;
-	for (i=2; i<=numCells; i++)
-		expVarTMRCA += /* 4.0 * pow(N,2) */ 4.0 / (pow(i,2) * pow(i-1,2));
+	SetCoalescentExpectations ();
 
 	memset (&runStats, 0, sizeof(runStats));
 	zeroSNVs = 0;
@@ -1074,29 +1272,7 @@ int main (int argc, char **argv)
         exit (0);
         }
 	
-	if (doSimulateData == YES && alphabet == DNA)
-		{
-		/* initialize cumfreq */
-		cumfreq[0] = freq[0];
-		for (i=1; i<4; i++)
-			cumfreq[i] = cumfreq[i-1] + freq[i];
-	
-		/* initialize cumMij */
-		for (i=0; i<4; i++)
-			{
-			cumMij[i][0] = Mij[i][0];
-			for (j=1; j<4; j++)
-				cumMij[i][j] = cumMij[i][j-1] + Mij[i][j];
-			}
-
-		/* initialize cumEij */
-		for (i=0; i<4; i++)
-			{
-			cumEij[i][0] = Eij[i][0];
-			for (j=1; j<4; j++)
-				cumEij[i][j] = cumEij[i][j-1] + Eij[i][j];
-			}
-		}
+	InitCumulativeTables ();
 
 	if (doOthsukiInnanCoal == YES)
 		{
@@ -1144,67 +1320,8 @@ int main (int argc, char **argv)
 
      /* Check the distribution of the mutations */
 	
-	/* set names for taxa */
-	if (doTumorNames == YES)
-		{
-		strcpy(inCellName, "tumcell");
-		strcpy(outCellName, "healthycell");
-		strcpy(inRootCellName, "tumoralroot");
-		strcpy(outRootCellName, "healthyroot");
-		stringPrecision = 12;
-		}
-	else
-		{
-		strcpy(inCellName, "cell");
-		strcpy(outCellName, "outgcell");
-		strcpy(inRootCellName, "ingrroot");
-		strcpy(outRootCellName, "outgroot");
-		stringPrecision = 9;
-		}
-	
-	if (doPrintIUPAChaplotypes == YES)
-		stringPrecision += 1;
-	
-    /* set file dirs and names */
-	if (strlen(resultsDir) == 0)
-		strcpy(resultsDir, "Results");
-	// clean previous results directory
-	RemoveDir (resultsDir);
-	// create new results directory
-	MAKE_DIR (resultsDir);
+	SetNamesAndPaths ();
 
-   	strcpy(treeDir, "trees_dir");
-   	strcpy(timesDir, "times_dir");
-	strcpy(SNVgenotypesDir, "snv_genotypes_dir");
-    strcpy(SNVhaplotypesDir, "snv_haplotypes_dir");
-    strcpy(trueHaplotypesDir, "true_haplotypes_dir");
-    strcpy(fullHaplotypesDir, "full_haplotypes_dir");
-	strcpy(MLhaplotypesDir, "ML_haplotypes_dir");
-    strcpy(fullGenotypesDir, "full_genotypes_dir");
-    strcpy(CATGdir, "catg_dir");
-	strcpy(PILEUPdir, "pileup_dir");
-	strcpy(bulkDir, "bulk_dir");
-	strcpy(VCFdir, "vcf_dir");
-	
-	strcpy(SNVgenotypesFile, "snv_gen");
-    strcpy(SNVhaplotypesFile, "snv_hap");
-    strcpy(trueHaplotypesFile, "true_hap");
-    strcpy(fullHaplotypesFile, "full_hap");
-	strcpy(MLhaplotypesFile, "ML_hap");
-    strcpy(fullGenotypesFile, "full_gen");
-    strcpy(treeFile, "trees");
-    strcpy(timesFile, "times");
-	if (strlen(userTreeFile) == 0)
-		strcpy(userTreeFile, "usertree");
-	if (strlen(userGenomeFile) == 0)
-		strcpy(userGenomeFile, "usergenome");
-    strcpy(CATGfile, "catg");
-	strcpy(PILEUPfile, "pileup");
-	strcpy(bulkFile, "bulk");
-	strcpy(VCFfile, "vcf");
-    strcpy(logFile, "log");
-	strcpy(settingsFile, "log");
- 
 	if (doPrintSeparateReplicates == NO)
 		PrepareGlobalFiles();
 
@@ -1250,72 +1367,7 @@ int main (int argc, char **argv)
 		ReadUserGenome();
 		}
 
-	if (gainSd > 0.0 || gainLen > 0.0)
-		{
-		if (!(gainSd > 0.0 && gainLen > 0.0))
-			{
-			fprintf (stderr, "\nERROR: --gain-sd and --gain-len go together\n");
-			exit (-1);
-			}
-		if (doNGS == NO)
-			{
-			fprintf (stderr, "\nERROR: --gain-sd needs read counts (-C)\n");
-			exit (-1);
-			}
-		}
-
-	if (ampSignatureFile != NULL)
-		{
-		if (doNGS == NO || meanAmplificationError <= 0.0)
-			{
-			fprintf (stderr, "\nERROR: --amp-signature needs read counts (-C) and an amplification error (-A)\n");
-			exit (-1);
-			}
-		if (alphabet == BINARY)
-			{
-			fprintf (stderr, "\nERROR: --amp-signature needs the DNA alphabet\n");
-			exit (-1);
-			}
-		SetupAmpSignature (ampSignatureFile);
-		}
-
-	if (adoBlockLen > 0.0 && (doADOsite == YES || (fixedADOrate <= 0 && doADOcell == NO)))
-		{
-		fprintf (stderr, "\nERROR: --ado-block needs allelic dropout (-D or -P) and cannot be combined with ADO among sites (-Q)\n");
-		exit (-1);
-		}
-
-	/* read-level simulator: --bam, --fastq */
-	if (doBam || doFastq)
-		{
-		if (doNGS == NO || alphabet == BINARY || ploidy != 2)
-			{
-			fprintf (stderr, "\nERROR: --bam/--fastq need the mean coverage (-C) and diploid DNA\n");
-			exit (-1);
-			}
-		if (meanDoubletRate > 0.0)
-			{
-			fprintf (stderr, "\nERROR: --bam/--fastq cannot be combined with doublets\n");
-			exit (-1);
-			}
-		if ((fixedADOrate > 0 || doADOcell == YES || doADOsite == YES) && adoBlockLen <= 0.0)
-			{
-			fprintf (stderr, "\nERROR: in reads mode the allelic dropout has to come in segments (--ado-block L, e.g. 3000): with dropout independent at every site almost no fragment of %d bp survives\n", 2 * readLen);
-			exit (-1);
-			}
-		if (readLen < 20 || readLen > 400 || insertMean < readLen || insertSd < 0.0 || dupMean < 0.0)
-			{
-			fprintf (stderr, "\nERROR: bad --read-len/--insert-mean/--insert-sd/--dup-mean\n");
-			exit (-1);
-			}
-		if (qualSd < 0.0 || qualSd > 3.0 || qualSlope < -6.0 || qualSlope > 6.0 || strandBias < 0.0 || strandBias > 1.0)
-			{
-			fprintf (stderr, "\nERROR: bad --qual-sd (0 to 3), --qual-slope (-6 to 6) or --strand-bias (0 to 1)\n");
-			exit (-1);
-			}
-		/* the VCF of read counts and genotype likelihoods does not exist in this mode */
-		doPrintVCF = NO;
-		}
+	CheckReadOptions ();
 
 	/* --coverage: depth per cell of the non-variable sites, in <results>/coverage.tsv */
 	if (coverageWindow > 0)
@@ -1373,33 +1425,8 @@ int main (int argc, char **argv)
 
 	ComputeSummaryStatistics ();
 
-	/* close file pointers */
-	if (doPrintSeparateReplicates == NO)
-		{
-		if (doPrintSNVgenotypes == YES)
-			fclose(fpSNVgenotypes);
-		if (doPrintFullGenotypes == YES)
-			fclose(fpFullGenotypes);
-		if (doPrintSNVhaplotypes == YES)
-			fclose(fpSNVhaplotypes);
-		if (doPrintFullHaplotypes == YES)
-			fclose(fpFullHaplotypes);
-		if (doPrintTrueHaplotypes == YES)
-			fclose(fpTrueHaplotypes);
-		if (doNGS == YES && doPrintVCF == YES)
-			CloseVCF (fpVCF);
-		if (doPrintCATG == YES)
-			fclose(fpCATG);
-		if (doPrintPILEUP == YES)
-			fclose(fpPILEUP);
-		if (doPrintBulk == YES)
-			fclose(fpBulk);
-		if (doPrintTree == YES)
-			fclose(fpTrees);
-		if (doPrintTimes == YES)
-			fclose(fpTimes);
-		}
-	
+	CloseGlobalFiles ();
+
     if (noisy > 0)
         {
         /* if (noisy < 2)
