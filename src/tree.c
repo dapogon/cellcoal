@@ -11,6 +11,16 @@
 /************************* MakeCoalescenceTree  ************************/
 /*	Builds a genealogy  under the coalescent with exponential growth without recombination */
 
+/* the coalescent time is infinite when the growth rate is too negative */
+static void FatalInfiniteCoalescentTime (double t)
+	{
+	fprintf (stderr, "\nERROR: Coalescent time (%f) is infinite ", t);
+	fprintf (stderr, "\n       This might suggest that the exponential growth rate is too negative");
+	fprintf (stderr, "\n       and the coalescent time is therefore infinite.");
+	fprintf (stderr, "\n       Try a smaller value");
+	exit (-1);
+	}
+
 void MakeCoalescenceTree(int numCells, int N, long int *seed)
 	{
     int			i, *activeNodes, numActiveNodes,nextAvailableNode,
@@ -34,19 +44,9 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
         exit (-1);
         }
 	
-    /* set everything to null */
+    /* the nodes come zeroed (calloc): only the names need space */
     for (i=0; i<numNodes; i++)
         {
-        treeNodes[i].left = NULL;
-        treeNodes[i].right = NULL;
-        treeNodes[i].anc = NULL;
-        treeNodes[i].time = 0.0;
-        treeNodes[i].length = 0.0;
-        treeNodes[i].index = 0;
-        treeNodes[i].label = 0;
-        treeNodes[i].isHealthyRoot = NO;
-        treeNodes[i].isHealthyTip = NO;
-		treeNodes[i].rateSwitch = 0.0;
 		treeNodes[i].name = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the treeNodes[i].name structure\n");
 		}
 	
@@ -101,11 +101,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
                     }
                 else
                     {
-                    fprintf (stderr, "\nERROR: Coalescent time (%f) is infinite ", timeCA);
-                    fprintf (stderr, "\n       This might suggest that the exponential growth rate is too negative");
-                    fprintf (stderr, "\n       and the coalescent time is therefore infinite.");
-                    fprintf (stderr, "\n       Try a smaller value");
-                    exit (-1);
+                    FatalInfiniteCoalescentTime (timeCA);
                     }
                 }
             }
@@ -122,11 +118,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
                  */
                 if (isnan(timeCA) == YES)
                     {
-                    fprintf (stderr, "\nERROR: Coalescent time (%f) is infinite ", timeCA);
-                    fprintf (stderr, "\n       This might suggest that the exponential growth rate is too negative");
-                    fprintf (stderr, "\n       and the coalescent time is therefore infinite.");
-                    fprintf (stderr, "\n       Try a smaller value");
-                    exit (-1);
+                    FatalInfiniteCoalescentTime (timeCA);
                     }
                 }
 			else if (doOthsukiInnanCoal == YES)
@@ -140,11 +132,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
 				 */
 				if (isnan(timeCA) == YES)
 					{
-					fprintf (stderr, "\nERROR: Coalescent time (%f) is infinite ", timeCA);
-					fprintf (stderr, "\n       This might suggest that the exponential growth rate is too negative");
-					fprintf (stderr, "\n       and the coalescent time is therefore infinite.");
-					fprintf (stderr, "\n       Try a smaller value");
-					exit (-1);
+					FatalInfiniteCoalescentTime (timeCA);
 					}
 				}
 }

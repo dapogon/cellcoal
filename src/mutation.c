@@ -707,16 +707,6 @@ void SimulateISM (TreeNode *p, int genome, int doISMhaploid, long int *seed)
 			
         mutationsSoFar++;
 			
-        #ifdef MYDEBUG
-            fprintf (stderr, "\nmutations = %d   mutations so far = %d\n",numMutations, mutationsSoFar);
-            if (allSites[modelSites[i]].numMutations > 1)
-                {
-                fprintf (stderr, "\n\n ERROR: %d mutations in site %d",allSites[modelSites[i]].numMutations, modelSites[i]+1);
-                exit(-1);
-                }
-            for (i=0; i<numDefaultModelSites; i++)
-                fprintf (stderr, "%2d[%d] ",modelSites[i]+1, allSites[modelSites[i]].numMutations);
-        #endif
 			
         }
     }
@@ -1074,142 +1064,72 @@ trinucleotide changes are indistinguishable. For example:
 	5-CCT-3 => 5-CTT-3
 */
 
-int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
+/* Draws a signature, one of its 96 trinucleotide mutations and a strand; returns the index of the trinucleotide
+   class where the mutation takes place and the new state of its central base */
+static int DrawTrinucleotideClass (long int *seed, int *newState)
 	{
-	int	n1, n2, n3, r1, r2, r3, rest, index, trindex, trials;
-	int	chosenSignature, chosenTriMutation, chosenPosition;
-	int signID;
-	TriNucStr *triNucleotide;
-	
-	if (genome == MATERNAL)
-		triNucleotide = triNucleotideMaternal;
-	else
-		triNucleotide = triNucleotidePaternal;
+	int		n1, n2, n3, r1, r2, r3, rest, signID, chosenSignature, chosenTriMutation;
 
 	/* 1: Choose a mutation signature */
 	signID = ChooseUniformState(signatureWeight, seed);
 	chosenSignature = signatureID[signID];
-		
-	/* 2: Select a mutation out of the 96 possible ones for the choosen signature */
+
+	/* 2: Select a mutation out of the 96 possible ones for the chosen signature */
 	chosenTriMutation = ChooseUniformState(signatureProbs[chosenSignature-1], seed);
 
 	/* 3: Define in which of the 64 trinucleotide classes this mutation will take place */
 	r1 = chosenTriMutation/24;
 	rest = chosenTriMutation%24;
-	if (rest/4 < 3)
-		r2 = C;
-	else
-		r2 = T;
+	r2 = (rest/4 < 3) ? C : T;
 	r3 = rest%4;
 
-	if (RandomUniform(seed) > 0.5) //plus strand
+	if (RandomUniform(seed) > 0.5)	/* plus strand */
 		{
 		n1 = r1;
 		n2 = r2;
 		n3 = r3;
 		*newState = targetTriChange[rest/4];
-		//fprintf (stderr, "\n\nplus strand");
 		}
-	else // minus strand
+	else							/* minus strand */
 		{
 		n1 = complementBase[r3];
 		n2 = complementBase[r2];
 		n3 = complementBase[r1];
 		*newState = complementBase[targetTriChange[rest/4]];
-		//fprintf (stderr, "\n\ncomplement reverse");
 		}
-		
-	trindex = trinuc(n1,n2,n3);
+	return trinuc(n1,n2,n3);
+	}
 
-	#ifdef PRINT_TRIMUTATIONS
-	fprintf (stderr, "\n\nchosen triMutation (id %d) = %c%c%c",chosenTriMutation, WhichNuc(r1), WhichNuc(r2), WhichNuc(r3));
-	fprintf (stderr, "\n%c%c%c [%d] => ", WhichNuc(n1), WhichNuc(n2), WhichNuc(n3), triNucleotide[trindex].numAvailablePositions);
-	fprintf (stderr, "%c%c%c", WhichNuc(n1), WhichNuc(*newState), WhichNuc(n3));
-	fprintf (stderr, " (%c>%c)", WhichNuc(n2), WhichNuc(*newState));
-	#endif
+int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
+	{
+	int			index, trindex, trials = 0;
+	TriNucStr	*triNucleotide = (genome == MATERNAL) ? triNucleotideMaternal : triNucleotidePaternal;
 
-	trials = 0;
+	trindex = DrawTrinucleotideClass (seed, newState);
 	while (triNucleotide[trindex].numAvailablePositions == 0)
 		{
-		/* 1: Choose a mutation signature */
-		signID = ChooseUniformState(signatureWeight, seed);
-		chosenSignature = signatureID[signID];
-		//fprintf (stderr,"\nchosenSignature = %d", chosenSignature);
-		/* 2: Select a mutation out of the 96 possible ones for the choosen signature */
-		chosenTriMutation = ChooseUniformState(signatureProbs[chosenSignature-1], seed);
-
-		/* 3: Define the trinucleotide class where this mutation would take place */
-		r1 = chosenTriMutation/24;
-		rest = chosenTriMutation%24;
-		if (rest/4 < 3)
-			r2 = C;
-		else
-			r2 = T;
-		r3 = rest%4;
-
-		if (RandomUniform(seed) > 0.5) //plus strand
-			{
-			n1 = r1;
-			n2 = r2;
-			n3 = r3;
-			*newState = targetTriChange[rest/4];
-			//fprintf (stderr, "\nplus strand");
-			}
-		else // minus strand
-			{
-			n1 = complementBase[r3];
-			n2 = complementBase[r2];
-			n3 = complementBase[r1];
-			*newState = complementBase[targetTriChange[rest/4]];
-			//fprintf (stderr, "\ncomplement reverse");
-			}
-			
-		trindex = trinuc(n1,n2,n3);
-		
-		#ifdef PRINT_TRIMUTATIONS
-		fprintf (stderr, "\nnew chosen triMutation (id %d) = %c%c%c", chosenTriMutation, WhichNuc(r1), WhichNuc(r2), WhichNuc(r3));
-		fprintf (stderr, "\n%c%c%c [%d] => ", WhichNuc(n1), WhichNuc(n2), WhichNuc(n3), triNucleotide[trindex].numAvailablePositions);
-		fprintf (stderr, "%c%c%c", WhichNuc(n1), WhichNuc(*newState), WhichNuc(n3));
-		fprintf (stderr, " (%c>%c)", WhichNuc(n2), WhichNuc(*newState));
-		#endif
-
+		trindex = DrawTrinucleotideClass (seed, newState);
 		if (trials++ > 100*numSites)
 			{
-			fprintf (stderr, "\n\nERROR: after %d trials cannot find an non-mutated trinuc site, increase the number of sites simulated\n\n",100*numSites);
+			fprintf (stderr, "\n\nERROR: after %d trials cannot find an non-mutated trinuc site, increase the number of sites simulated\n\n", 100*numSites);
 			exit(-1);
 			}
 		}
 
-	#ifdef PRINT_TRIMUTATIONS
-		fprintf (stderr, "\nfinally chosen trimutation index = %d", chosenTriMutation);
-	#endif
-	
 	/* 3: Select the genomic position where this mutation will take place */
 	/* note we assume for convenience that the context is constant along the phylogeny */
 	if (triNucleotide[trindex].numAvailablePositions == 1)
 		index = 0;
-	else if (triNucleotide[trindex].numAvailablePositions > 1)
-		index = RandomUniformTo(triNucleotide[trindex].numAvailablePositions, seed);
 	else
-		{
-		fprintf (stderr, "\n\nWe have a problem, no available trinucleotides\n");
-		exit(-1);
-		}
+		index = RandomUniformTo(triNucleotide[trindex].numAvailablePositions, seed);
 
-	chosenPosition = triNucleotide[trindex].position[index] + 1; 
-	#ifdef PRINT_TRIMUTATIONS
-		fprintf (stderr, "\nposition selected = %d", chosenPosition+1);
-	#endif
-	
-	#ifdef PRINT_TRIMUTCOUNTER
-	if (allSites[chosenPosition].numMutations == 0)
-		triMutationsCounter[chosenTriMutation]++;
-	#endif
-	
 	/* 4: remove the chosen position from the available list */
-	RemoveTriNucObservation(&triNucleotide[trindex], index);
+	{
+	int chosenPosition = triNucleotide[trindex].position[index] + 1;
 
+	RemoveTriNucObservation(&triNucleotide[trindex], index);
 	return chosenPosition;
+	}
 	}
 
 
@@ -1609,16 +1529,6 @@ void EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed)
 			
         CNLOHsoFar++;
 			
-        #ifdef MYDEBUG
-            fprintf (stderr, "\nCNLOH = %d   nCNLOH so far = %d\n",numCNLOH, CNLOHsoFar);
-            if (allSites[i]].numDeletions > 1)
-                {
-                fprintf (stderr, "\n\n ERROR: %d CNLOH in site %d",allSites[i].numCNLOH, i+1);
-                exit(-1);
-                }
-            for (i=0; i<numSites; i++)
-                fprintf (stderr, "%2d[%d] ",i+1, allSites[i].numCNLOH);
-        #endif
 			
         }
 	}
@@ -1733,16 +1643,6 @@ void EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed)
 			
         deletionsSoFar++;
 			
-        #ifdef MYDEBUG
-            fprintf (stderr, "\deletions = %d   deletions so far = %d\n",numDeletions, deletionsSoFar);
-            if (allSites[i]].numDeletions > 1)
-                {
-                fprintf (stderr, "\n\n ERROR: %d deletions in site %d",allSites[i].numDeletions, i+1);
-                exit(-1);
-                }
-            for (i=0; i<numSites; i++)
-                fprintf (stderr, "%2d[%d] ",i+1, allSites[i].numDeletions);
-        #endif
 			
         }
 	}
