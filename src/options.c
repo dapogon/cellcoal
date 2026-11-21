@@ -975,5 +975,14 @@ void ReadParametersFromFile (void)
 		for (i=0; i<extra && k<nw; i++)
 			argv[argc++] = word[k++];
 		}
+	paramFileArgs = (char*) calloc (MAX_LINE, 1);
+	for (i=1; i<argc; i++)		/* the equivalent command line, for the log */
+		{
+		size_t used = strlen (paramFileArgs);
+
+		if (used + strlen (argv[i]) + 2 >= MAX_LINE)
+			break;
+		snprintf (paramFileArgs + used, MAX_LINE - used, " %s", argv[i]);
+		}
 	ReadParametersFromCommandLine (argc, argv);
 	}

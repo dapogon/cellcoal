@@ -2105,119 +2105,17 @@ void	PrintRunInformation (FILE *fp)
 	}
 
 /***************** PrintCommandLine **********************/
-/*	Prints the settings used in the simulations */
+/*	Prints the options of the run: the command line, or the equivalent command line of the parameter file */
 void PrintCommandLine (FILE *fp, int argc,char **argv)
-    {
-	int i;
-
+	{
 	if (readingParameterFile == NO)
-		fprintf (fp, "Command line arguments (some might not affect) = %s", CommandLine);
-	else
 		{
-		fprintf (fp, "Parameter file [\"%s\"] arguments (some might not affect) = ", parameterFile);
-
-		/* Coalescent */
-		fprintf (fp, " -n%d -s%d -l%d -e%d -g%2.1e -K%2.1e -L%2.1e -h%d", numDataSets, numCells, numSites, N, growthRate, birthRate, deathRate, numPeriods);
-		for (i=1; i<=numPeriods; i++)
-			fprintf (fp, " %d %d %d", Nbegin[i], Nend[i], cumDuration[i]-cumDuration[i-1]);
-
-		/* Post-coalescent */
-		fprintf (fp, " -k%2.1e", transformingBranchLengthRatio);
-		fprintf (fp, " -q%2.1e", healthyTipBranchLengthRatio);
-		fprintf (fp, " -i%6.4f", alphaBranches);
-		if (doTreeRateSwitches == YES)
-			{
-			fprintf (fp, " -N%d", numTreeRateSwitches);
-			for (i=0; i<numTreeRateSwitches; i++)
-				fprintf (fp, " %4.2f", treeRateSwitchMultiplier[i]);
-			}
-		
-		/* Mutation model */
-		fprintf (fp, " -b%d", alphabet);
-		fprintf (fp, " -c%2.1e", SNPrate);
-		fprintf (fp, " -u%2.1e", mutationRate);
-		fprintf (fp, " -d%2.1e", deletionRate);
-		fprintf (fp, " -H%2.1e", CNLOHrate);
-		fprintf (fp, " -j%d", numFixedMutations);
-		fprintf (fp, " -S%d", numUserSignatures);
-		for (i=0; i<numUserSignatures; i++)
-			fprintf (fp, " %d %4.2f", signatureID[i], signatureWeight[i]);
-		fprintf (fp, " -m%d", altModel);
-		fprintf (fp, " -p%6.4f", propAltModelSites);
-		fprintf (fp, " -w%6.4f", nonISMRelMutRate);
-		fprintf (fp, " -f%3.2f %3.2f %3.2f %3.2f", freq[0], freq[1], freq[2], freq[3]);
-		fprintf (fp, " -t%6.4f", titv);
-		fprintf (fp, " -a%6.4f", alphaSites);
-		fprintf (fp, " -r%3.2f %3.2f %3.2f %3.2f  %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Mij[0][0], Mij[0][1], Mij[0][2], Mij[0][3]
-		, Mij[1][0], Mij[1][1], Mij[1][2], Mij[1][3],  Mij[2][0], Mij[2][1], Mij[2][2], Mij[2][3],  Mij[3][0], Mij[3][1], Mij[3][2], Mij[3][3]);
-
-		/* scWGA */
-		fprintf (fp, " -D%2.1e", fixedADOrate);
-		fprintf (fp, " -P%2.1e %2.1e", meanADOcell, varADOcell);
-		fprintf (fp, " -Q%2.1e %2.1e", meanADOsite, varADOsite);
-		fprintf (fp, " -I%2.1e %2.1e", meanAllelicImbalance, varAllelicImbalance);
-		fprintf (fp, " -A%2.1e %2.1e %d", meanAmplificationError, varAmplificationError, simulateOnlyTwoTemplates);
-		fprintf (fp, " -B%2.1e %2.1e", meanDoubletRate, varDoubletRate);
-
-		/* GENOTYPING */
-		fprintf (fp, " -G%2.1e %2.1e", meanGenotypingError, varGenotypingError);
-
-		/* NGS */
-		fprintf (fp, " -C%3.2f", coverage);
-		fprintf (fp, " -V%6.4f", alphaCoverage);
-		if (alphaSiteCoverage > 0.0)
-			fprintf (fp, " -O%6.4f", alphaSiteCoverage);
-		if (alphaCellCoverage > 0.0)
-			fprintf (fp, " -J%6.4f", alphaCellCoverage);
-		fprintf (fp, " -R%2.1e", haploidCoverageReduction);
-		fprintf (fp, " -E%2.1e", sequencingError);
-		fprintf (fp, " -X%3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f %3.2f", Eij[0][0], Eij[0][1], Eij[0][2], Eij[0][3]
-		, Eij[1][0], Eij[1][1], Eij[1][2], Eij[1][3],  Eij[2][0], Eij[2][1], Eij[2][2], Eij[2][3],  Eij[3][0], Eij[3][1], Eij[3][2], Eij[3][3]);
-
-		/* Output */
-		if (doPrintSNVgenotypes == YES)
-			fprintf (fp, " -%d", 1);
-		if (doPrintSNVhaplotypes == YES)
-			fprintf (fp, " -%d", 2);
-		if (doPrintFullGenotypes == YES)
-			fprintf (fp, " -%d", 3);
-		if (doPrintFullHaplotypes == YES)
-			fprintf (fp, " -%d", 4);
-		if (doPrintAncestors == YES)
-			fprintf (fp, " -%d", 5);
-		if (doPrintTree == YES)
-			fprintf (fp, " -%d", 6);
-		if (doPrintTimes == YES)
-			fprintf (fp, " -%d", 7);
-		if (doPrintCATG == YES)
-			fprintf (fp, " -%d", 8);
-		if (doPrintPILEUP == YES)
-			fprintf (fp, " -%d", 9);
-		if (doPrintBulk == YES)
-			fprintf (fp, " -%d", 0);
-		if (doPrintVCF == NO)
-			fprintf (fp, " -%c", 'Z');
-		if (doZipVCF == YES)
-			fprintf (fp, " -%c", 'z');
-		if (minVAFvcf > 0.0)
-			fprintf (fp, " -M%g", minVAFvcf);
-		if (doPrintTrueHaplotypes == YES)
-			fprintf (fp, " -%c", 'Y');
-		if (doPrintSeparateReplicates == YES)
-			fprintf (fp, " -%c", 'v');
-		if (doPrintIUPAChaplotypes == YES)
-			fprintf (fp, " -%c", 'x');
-		fprintf (fp, " -o%s", resultsDir);
-		if (doUserTree == YES)
-			fprintf (fp, " -T%s", userTreeFile);
-		if (doUserGenome == YES)
-			fprintf (fp, " -U%s", userGenomeFile);
-
-		/* Other */
-		if (doTumorNames == YES)
-			fprintf (fp, " -%c", 'W');
-		fprintf (fp, " -y%d -#%ld", noisy, originalSeed);
+		fprintf (fp, "Command line arguments (some might not affect) = %s", CommandLine);
+		return;
 		}
+	fprintf (fp, "Parameter file [\"%s\"] arguments (some might not affect) = %s", parameterFile, paramFileArgs ? paramFileArgs : "");
+	if (paramFileArgs == NULL || strstr (paramFileArgs, " -#") == NULL)
+		fprintf (fp, " -#%ld", originalSeed);
 	}
 
 
