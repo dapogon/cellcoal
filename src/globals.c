@@ -38,7 +38,7 @@ double	doAllelicImbalance, meanAllelicImbalance, varAllelicImbalance;
 double	coverage, haploidCoverageReduction;
 double	meanAmplificationError, varAmplificationError, meanDoubletRate, varDoubletRate;
 double	TMRCA, expTMRCA, expVarTMRCA;
-double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], alphaSites, alphaBranches;
+double   titv, kappa, beta, freqR, freqY, freqAG, freqCT, freq[4], cumfreq[4], Mij[4][4], cumMij[4][4], Eij[4][4], cumEij[4][4], ampSubRow[4][4], alphaSites, alphaBranches;
 double	Cijk[256], Root[4];
 double	SNPrate, alphaCoverage, alphaSiteCoverage, alphaCellCoverage;
 int		OUTGROUP_ROOT, INGROUP_ROOT;

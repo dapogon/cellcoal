@@ -342,7 +342,7 @@ void SetupReadModel (double **ngsEij)
 			if (i == j)
 				ngsEij[i][j] = 1.0 - sequencingError;
 			else
-				ngsEij[i][j] = Eij[i][j]/cumEij[i][3] * sequencingError;
+				ngsEij[i][j] = ampSubRow[i][j] * sequencingError;
 			}
 	
 	
@@ -732,7 +732,7 @@ void SiteGL (CellSiteStr *c, int j, double *glOut)
 			if (k == l)
 				ngsRows[k][l] = 1.0 - sequencingError;
 			else
-				ngsRows[k][l] = Eij[k][l]/cumEij[k][3] * sequencingError;
+				ngsRows[k][l] = ampSubRow[k][l] * sequencingError;
 			}
 		}
 	BuildAmpMatrices (c, j, ampMP, ampPP);
