@@ -263,7 +263,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
 /********************************** ReadUserGenome ***********************************/
 /* Reads a FASTA with a diploid reference genome */
 
-void ReadUserGenome (FILE *fp)
+void ReadUserGenome (void)
 	{
 	char	*header, *newGenome;
 	
@@ -422,7 +422,7 @@ static void ReadToken (char *buf, int *i, const char *delims, const char *what)
 	(*i)--;
 	}
 
-void ReadUserTree (FILE *fp)
+void ReadUserTree (void)
 	{
 	int			nextAvailableNode, i;
 	char		*tempString;

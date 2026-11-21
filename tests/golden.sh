@@ -29,5 +29,8 @@ run g22 -n2 -l300 -u1e-6 -b1 -T/home/claude/cellcoal/examples/usertree.0001 -1 -
 run g23 -n2 -l300 -u1e-6 -b1 -T/home/claude/cellcoal/examples/usertree.0001 -C10 -E0.001 -1 -2 -3 -4 -Y -x
 run g24 -n2 -l300 -u1e-6 -b1 -T/home/claude/cellcoal/examples/usertree.0001 -C10 -E0.001 -1 -2 -3 -4 -Y
 run g25 -n2 -s6 -l300 -u1e-6 -e500 -b1 -C10 -E0.001 -D0.1 -1 -2 -3 -4 -Y -x
+run g26 -n2 -s8 -l400 -u1e-6 -e1000 -b1 -C10 -E0.002 -A0.05 0.0005 1 -D0.2 -1 -8 -9
+run g27 -n2 -s8 -l400 -u1e-6 -e1000 -b1 -C10 -E0.002 -A0.05 0.0005 1 -V0.5 -8 -9 -J0.3
+run g28 -n2 -s8 -l400 -u1e-6 -e1000 -b1 -C10 -E0.002 -A0.05 0.0005 0 -V0.5 -D0.2 -8 -9 -x
 } > $OUT 2>&1
 rm -rf $W

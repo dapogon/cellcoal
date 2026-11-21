@@ -50,9 +50,9 @@ void		KeepCellADO (const double *rate);
 int			ConvertVCFtoBCF (const char *vcfPath, const char *bcfPath);
 extern int	doBCF;	/* --bcf: write the VCF as BCF */
 extern int	adoReplicate;	/* replicate being simulated, for the ADO file */
-void		ReadUserGenome (FILE *fp);
+void		ReadUserGenome (void);
 int			CountUserTreeLeaves (const char *fileName);
-void		ReadUserTree (FILE *fp);
+void		ReadUserTree (void);
 void		FreeUserTree (void);
 void		CheckTree (char *treeString);
 void 	RelabelUserTree (TreeNode *p);
@@ -84,7 +84,7 @@ void 	CloseVCF (FILE *fp);
 void 	SiteReadCounts (CellSiteStr *cellstr, int cell, int site, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed);
 void 	GenotypeLikelihoods (CellSiteStr *cellstr, int site, double **ngsEij, double **ampEijmat, double **ampEijpat, double *glOut);
 void	BuildAmpMatrices (CellSiteStr *c, int j, double **ampMat, double **ampPat);
-void	SiteGL (CellSiteStr *c, int i, int j, double *glOut);
+void	SiteGL (CellSiteStr *c, int j, double *glOut);
 const double	*GetSiteGL (int i, int j, double *buf);
 void 	SetupDoublets (long int *seed, long windowSites);
 void 	SetupCellCoverage (long int *seed);

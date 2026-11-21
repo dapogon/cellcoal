@@ -478,6 +478,137 @@ void GenerateReadCounts (long int *seed)
 	free (ampEijpat);
 	}
 
+/* number of reads of one haplotype: Poisson, or Negative Binomial with overdispersed coverage */
+static int DrawReadCount (double fraction, int i, double gain, long int *seed)
+	{
+	double	mean = fraction*coverage*siteCovMult*cellCovMult[i]*gain;
+
+	if (rateVarCoverage == YES)
+		return RandomNegativeBinomial (mean, alphaCoverage, seed);
+	return RandomPoisson (mean, seed);
+	}
+
+/* Amplification error of the maternal and paternal haplotypes at this site: a proportion of alternative
+   templates, depending on whether the error occurred early or late in the amplification (Beta distributed) */
+static void DrawSiteAmpErrors (int i, int j, int maternalAllele, int paternalAllele, double *errM, double *errP, long int *seed)
+	{
+	*errM = *errP = 0;
+	if (meanAmplificationError <= 0)
+		return;
+	if (cellAmpMean == NULL && ampSigOn == 0)
+		{
+		*errM = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
+		*errP = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
+		}
+	else
+		{
+		/* --amp-cell-var: mean of this cell; --amp-signature: mean of the context of the site (rate relative to -A).
+		   The variance keeps the concentration of -A (var / (mean*(1-mean))) */
+		double base = (cellAmpMean == NULL) ? meanAmplificationError : cellAmpMean[i];
+		double mm = base * AmpSiteMult (j, maternalAllele), mp = base * AmpSiteMult (j, paternalAllele);
+		double vm, vp;
+
+		if (ampSigOn && mm > 0.95) mm = 0.95;
+		if (ampSigOn && mp > 0.95) mp = 0.95;
+		vm = varAmplificationError * mm * (1.0 - mm) / (meanAmplificationError * (1.0 - meanAmplificationError));
+		vp = varAmplificationError * mp * (1.0 - mp) / (meanAmplificationError * (1.0 - meanAmplificationError));
+		*errM = RandomBetaMeanVar(mm, vm, seed);
+		*errP = RandomBetaMeanVar(mp, vp, seed);
+		}
+	}
+
+/* amplification error matrix of a haplotype whose site error is err */
+static void FillAmpMatrix (double **mat, int j, double err)
+	{
+	int		k, l;
+
+	for (k=0; k<4; k++)
+		for (l=0; l<4; l++)
+			mat[k][l] = (k == l) ? 1.0 - err : AmpSub(j,k,l) * err;
+	}
+
+/* base of the wrong template of a haplotype (--two-templates); the allele itself when there is no error */
+static int ChooseWrongTemplate (int allele, int present, double err, int j, long int *seed)
+	{
+	int		m, wrong = allele;
+	double	uniform;
+
+	if (err > 0 && present == YES)
+		{
+		if (ampSigOn)
+			{
+			double cs = 0.0;
+
+			uniform = RandomUniform(seed);
+			for (m=0; m<4; m++)
+				{
+				cs += (m == allele) ? 0.0 : AmpSub (j, allele, m);
+				if (uniform <= cs)
+					{
+					wrong = m;
+					break;
+					}
+				}
+			}
+		else
+			{
+			uniform = RandomUniform(seed) * cumEij[allele][3];
+			for (m=0; m<4; m++)
+				if (uniform <= cumEij[allele][m])
+					{
+					wrong = m;
+					break;
+					}
+			}
+		}
+	return wrong;
+	}
+
+/* Assigns the reads of one haplotype to the four bases (multinomial), given the probability of
+   reading each base from a template with amplification error err, and adds them to readCount */
+static void AssignHaplotypeReads (int allele, int numHapReads, int wrongTemplate, double err, double noSeqError,
+								  double **ampMat, double **ngsEij, double *probs, int *readCount, long int *seed)
+	{
+	int		read, template, readsLeft, badReads;
+	double	cumProb = 0;
+
+	if (simulateOnlyTwoTemplates == YES)
+		{
+		/* assuming a chosen wrong template */
+		double badTemplateProb = err, goodTemplateProb = 1.0 - err;
+
+		for (read=0; read<4; read++)
+			{
+			if (read == allele)
+				probs[read] = goodTemplateProb * noSeqError + badTemplateProb * ngsEij[wrongTemplate][read];
+			else if (read == wrongTemplate)
+				probs[read] = goodTemplateProb * ngsEij[allele][read] + badTemplateProb * noSeqError;
+			else
+				probs[read] = goodTemplateProb * ngsEij[allele][read] + badTemplateProb * ngsEij[wrongTemplate][read];
+			}
+		}
+	else
+		{
+		/* integrating over all potential templates */
+		for (read=0; read<4; read++)
+			{
+			probs[read] = 0;
+			for (template=0; template<4; template++)
+				probs[read] += ampMat[allele][template] * ngsEij[template][read];
+			}
+		}
+	readsLeft = numHapReads;
+	for (read=0; read<4; read++)
+		if (read != allele)
+			{
+			badReads = RandomBinomial (probs[read] / (1 - cumProb), readsLeft, seed);
+			readsLeft -= badReads;
+			readCount[read] += badReads;
+			cumProb += probs[read];
+			}
+	readCount[allele] += readsLeft; /* good reads */
+	}
+
 /* ******************** SiteReadCounts  ************************/
 /*
  Generate read counts for a given genotype (cell and site)
@@ -485,43 +616,17 @@ void GenerateReadCounts (long int *seed)
  */
 void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed)
 	{
-	int		k, l, m;
-	int		read, template;
-	int		numMaternalReads, numPaternalReads;
-	int		numReads;
-	int		*readCount;
+	int		numMaternalReads = 0, numPaternalReads = 0, numReads;
+	int		*readCount = c->readCount;
 	int		maternalAllele, paternalAllele;
 	int		thereIsMaternalAllele, thereIsPaternalAllele;
-	double  maternalSiteAmplificationError, paternalSiteAmplificationError;
-	int		ampErrorMaternalAllele, ampErrorPaternalAllele, goodTemplate, badTemplate;
-	int		readsLeft, badReads;
-	double	cumProb;
-	double	uniform, goodTemplateProb, badTemplateProb, noSeqError;
-	double 	allelicImbalance, gM, gP;
-	
-	readCount = c->readCount;
-	
-	thereIsMaternalAllele = YES;
-	thereIsPaternalAllele = YES;
+	double  errM = 0, errP = 0;
+	double	allelicImbalance, gM, gP;
 	
 	maternalAllele = GetG(MATERNAL, i, j);
-	if (maternalAllele == ADO || maternalAllele == DELETION)
-		thereIsMaternalAllele = NO;
-	
+	thereIsMaternalAllele = (maternalAllele == ADO || maternalAllele == DELETION) ? NO : YES;
 	paternalAllele = GetG(PATERNAL, i, j);
-	if (paternalAllele == ADO || paternalAllele == DELETION)
-		thereIsPaternalAllele = NO;
-	
-	/* initialize some variables */
-	noSeqError = 0;
-	badTemplateProb = 0;
-	goodTemplateProb = 0;
-	ampErrorMaternalAllele = -9;
-	ampErrorPaternalAllele = -9;
-	badTemplate = -9;
-	goodTemplate = -9;
-	maternalSiteAmplificationError = 0;
-	paternalSiteAmplificationError = 0;
+	thereIsPaternalAllele = (paternalAllele == ADO || paternalAllele == DELETION) ? NO : YES;
 	
 	/* sample maternal allelic imbalance for this genotype */
 	if (doAllelicImbalance == YES)
@@ -533,284 +638,60 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	gM = (gainOn == YES) ? GainAt (i, MATERNAL, j) : 1.0;
 	gP = (gainOn == YES) ? GainAt (i, PATERNAL, j) : 1.0;
 
-	/* number of reads will follow a Poisson or a Negative Binomial distribution (overdispersed coverage) around mean coverage, and are randomly assigned to maternal/paternal chromosome */
-	numMaternalReads = 0;
-	numPaternalReads = 0;
-	
-	if (rateVarCoverage == YES) /* Negative Binomial */
+	/* number of reads of each haplotype around the mean coverage; a haplotype alone gets haploidCoverageReduction */
+	if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES)
 		{
-		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
-			{
-			numMaternalReads = RandomNegativeBinomial(allelicImbalance*coverage*siteCovMult*cellCovMult[i]*gM, alphaCoverage, seed);
-			numPaternalReads = RandomNegativeBinomial((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i]*gP, alphaCoverage, seed);
-			}
-		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
-			{
-			numMaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gM, alphaCoverage, seed);
-			numPaternalReads = 0;
-			}
-		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
-			{
-			numMaternalReads = 0;
-			numPaternalReads = RandomNegativeBinomial(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gP, alphaCoverage, seed);
-			}
-		else /* no allele is present (locus dropout/deletion) */
-			{
-			numMaternalReads = 0;
-			numPaternalReads = 0;
-			}
+		numMaternalReads = DrawReadCount (allelicImbalance, i, gM, seed);
+		numPaternalReads = DrawReadCount (1.0-allelicImbalance, i, gP, seed);
 		}
-	else /* Poisson distributed */
-		{
-		if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES) /* both alleles are present */
-			{
-			numMaternalReads = RandomPoisson(allelicImbalance*coverage*siteCovMult*cellCovMult[i]*gM, seed);
-			numPaternalReads = RandomPoisson((1.0-allelicImbalance)*coverage*siteCovMult*cellCovMult[i]*gP, seed);
-			}
-		else if (thereIsMaternalAllele == YES && thereIsPaternalAllele == NO)  /* only maternal allele */
-			{
-			numMaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gM, seed);
-			numPaternalReads = 0;
-			}
-		else if (thereIsMaternalAllele == NO && thereIsPaternalAllele == YES)  /* only paternal allele */
-			{
-			numMaternalReads = 0;
-			numPaternalReads = RandomPoisson(haploidCoverageReduction*coverage*siteCovMult*cellCovMult[i]*gP, seed);
-			}
-		else /* no allele is present (locus dropout/deletion) */
-			{
-			numMaternalReads = 0;
-			numPaternalReads = 0;
-			}
-		}
-	
+	else if (thereIsMaternalAllele == YES)
+		numMaternalReads = DrawReadCount (haploidCoverageReduction, i, gM, seed);
+	else if (thereIsPaternalAllele == YES)
+		numPaternalReads = DrawReadCount (haploidCoverageReduction, i, gP, seed);
 	numReads = numMaternalReads + numPaternalReads;
 	
-	/* read count simulation */
 	readCount[A] = readCount[C] = readCount[G] = readCount[T] = 0;
 
 	if (numReads > 0)
 		{
-		/* choose amplification error for this site. In this case we will have a proportion of alternative templates depending on whether the error occurred early or late in the amplification (we use a Beta distribution to modelize this proportion) */
-		if (meanAmplificationError > 0)
-			{
-			if (cellAmpMean == NULL && ampSigOn == 0)
-				{
-				maternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
-				paternalSiteAmplificationError = RandomBetaMeanVar(meanAmplificationError, varAmplificationError, seed);
-				}
-			else
-				{
-				/* --amp-cell-var: mean of this cell; --amp-signature: mean of the context of the site (rate relative to -A).
-				   The variance keeps the concentration of -A (var / (mean*(1-mean))) */
-				double base = (cellAmpMean == NULL) ? meanAmplificationError : cellAmpMean[i];
-				double mm = base * AmpSiteMult (j, maternalAllele), mp = base * AmpSiteMult (j, paternalAllele);
-				double vm, vp;
+		int		wrongM = -9, wrongP = -9;
+		double	noSeqError = 0;
 
-				if (ampSigOn && mm > 0.95) mm = 0.95;
-				if (ampSigOn && mp > 0.95) mp = 0.95;
-				vm = varAmplificationError * mm * (1.0 - mm) / (meanAmplificationError * (1.0 - meanAmplificationError));
-				vp = varAmplificationError * mp * (1.0 - mp) / (meanAmplificationError * (1.0 - meanAmplificationError));
-				maternalSiteAmplificationError = RandomBetaMeanVar(mm, vm, seed);
-				paternalSiteAmplificationError = RandomBetaMeanVar(mp, vp, seed);
-				}
-			}
-		
-		/* initialize ampEijmat */
-		for (k=0; k<4; k++)
-			for (l=0; l<4; l++)
-				{
-				if (k == l)
-					ampEijmat[k][l] = 1.0 - maternalSiteAmplificationError;
-				else
-					ampEijmat[k][l] = AmpSub(j,k,l) * maternalSiteAmplificationError;
-				}
-		
-		/* initialize ampEijpat */
-		for (k=0; k<4; k++)
-			for (l=0; l<4; l++)
-				{
-				if (k == l)
-					ampEijpat[k][l] = 1.0 - paternalSiteAmplificationError;
-				else
-					ampEijpat[k][l] = AmpSub(j,k,l) * paternalSiteAmplificationError;
-				}
+		DrawSiteAmpErrors (i, j, maternalAllele, paternalAllele, &errM, &errP, seed);
+		FillAmpMatrix (ampEijmat, j, errM);
+		FillAmpMatrix (ampEijpat, j, errP);
 		
 		if (simulateOnlyTwoTemplates == YES)
 			{
-			/* choose base for wrong maternal template */
-			ampErrorMaternalAllele = maternalAllele;
-			if (maternalSiteAmplificationError > 0 && thereIsMaternalAllele == YES )
-				{
-				if (ampSigOn)
-					{
-					double cs = 0.0;
-
-					uniform = RandomUniform(seed);
-					for (m=0; m<4; m++)
-						{
-						cs += (m == maternalAllele) ? 0.0 : AmpSub (j, maternalAllele, m);
-						if (uniform <= cs)
-							{
-							ampErrorMaternalAllele = m;
-							break;
-							}
-						}
-					}
-				else
-					{
-					uniform = RandomUniform(seed) * cumEij[maternalAllele][3];
-					for (m=0; m<4; m++)
-						if (uniform <= cumEij[maternalAllele][m])
-							{
-							ampErrorMaternalAllele = m;
-							break;
-							}
-					}
-				}
-			/* choose base for wrong paternal template */
-			ampErrorPaternalAllele = paternalAllele;
-			if (paternalSiteAmplificationError > 0 && thereIsPaternalAllele == YES )
-				{
-				if (ampSigOn)
-					{
-					double cs = 0.0;
-
-					uniform = RandomUniform(seed);
-					for (m=0; m<4; m++)
-						{
-						cs += (m == paternalAllele) ? 0.0 : AmpSub (j, paternalAllele, m);
-						if (uniform <= cs)
-							{
-							ampErrorPaternalAllele = m;
-							break;
-							}
-						}
-					}
-				else
-					{
-					uniform = RandomUniform(seed) * cumEij[paternalAllele][3];
-					for (m=0; m<4; m++)
-						if (uniform <= cumEij[paternalAllele][m])
-							{
-							ampErrorPaternalAllele = m;
-							break;
-							}
-					}
-				}
+			wrongM = ChooseWrongTemplate (maternalAllele, thereIsMaternalAllele, errM, j, seed);
+			wrongP = ChooseWrongTemplate (paternalAllele, thereIsPaternalAllele, errP, j, seed);
 			}
 		
-		/* probabilities for the different types of reads  */
-		if (sequencingError > 0 || maternalSiteAmplificationError > 0 || paternalSiteAmplificationError > 0)
+		if (sequencingError > 0 || errM > 0 || errP > 0)
 			{
+			/* (noSeqError is only set when there is a maternal allele, as always) */
 			if (thereIsMaternalAllele == YES)
 				{
-				if (simulateOnlyTwoTemplates == YES)
-					{
-					/* probabilities for maternal reads  (assuming a chosen template )*/
-					noSeqError = 1.0 - sequencingError;
-					badTemplateProb = maternalSiteAmplificationError;
-					goodTemplateProb = 1.0 - maternalSiteAmplificationError;
-					badTemplate = ampErrorMaternalAllele;
-					goodTemplate = maternalAllele;
-					for (read=0; read<4; read++)
-						{
-						if (read == maternalAllele)
-							probs[read] = goodTemplateProb * noSeqError + badTemplateProb * ngsEij[badTemplate][read];
-						else if (read == ampErrorMaternalAllele)
-							probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * noSeqError;
-						else
-							probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * ngsEij[badTemplate][read];
-						}
-					}
-				else
-					{
-					/* probabilities for maternal reads integrating over all potential templates) */
-					for (read=0; read<4; read++)
-						{
-						probs[read] = 0;
-						for (template=0; template<4; template++)
-							probs[read] += ampEijmat[maternalAllele][template] * ngsEij[template][read];
-						}
-					}
-				
-				cumProb = 0;
-				readsLeft = numMaternalReads;
-				/* multinomial assignment of reads */
-				for (read=0; read<4; read++)
-					{
-					if (read != maternalAllele)
-						{
-						badReads = RandomBinomial (probs[read] / (1 - cumProb), readsLeft, seed);
-						readsLeft -= badReads;
-						readCount[read] += badReads;
-						cumProb += probs[read];
-						}
-					}
-				readCount[maternalAllele] += readsLeft; /* good reads */
+				noSeqError = 1.0 - sequencingError;
+				AssignHaplotypeReads (maternalAllele, numMaternalReads, wrongM, errM, noSeqError, ampEijmat, ngsEij, probs, readCount, seed);
 				}
-			
 			if (thereIsPaternalAllele == YES)
-				{
-				if (simulateOnlyTwoTemplates == YES)
-					{
-					/* probabilities for paternal reads  (assuming a chosen template )*/
-					badTemplateProb = paternalSiteAmplificationError;
-					goodTemplateProb = 1.0 - paternalSiteAmplificationError;
-					badTemplate = ampErrorPaternalAllele;
-					goodTemplate = paternalAllele;
-					
-					for (read=0; read<4; read++)
-						{
-						if (read == paternalAllele)
-							probs[read] = goodTemplateProb * noSeqError + badTemplateProb * ngsEij[badTemplate][read];
-						else if (read == ampErrorPaternalAllele)
-							probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * noSeqError;
-						else
-							probs[read] = goodTemplateProb * ngsEij[goodTemplate][read] + badTemplateProb * ngsEij[badTemplate][read];
-						}
-					}
-				else
-					{
-					/* probabilities for paternal reads  (integrating over all potential templates) */
-					for (read=0; read<4; read++)
-						{
-						probs[read] = 0;
-						for (template=0; template<4; template++)
-							probs[read] += ampEijpat[paternalAllele][template] * ngsEij[template][read];
-						}
-					}
-				
-				cumProb = 0;
-				readsLeft = numPaternalReads;
-				/* multinomial assignment of reads */
-				for (read=0; read<4; read++)
-					{
-					if (read != paternalAllele)
-						{
-						badReads = RandomBinomial (probs[read] / (1 - cumProb), readsLeft, seed);
-						readsLeft -= badReads;
-						readCount[read] += badReads;
-						cumProb += probs[read];
-						}
-					}
-				readCount[paternalAllele] += readsLeft; // good reads
-				}
+				AssignHaplotypeReads (paternalAllele, numPaternalReads, wrongP, errP, noSeqError, ampEijpat, ngsEij, probs, readCount, seed);
 			}
 		else /* no sequencing or amplification error */
 			{
 			readCount[maternalAllele] += numMaternalReads;
 			readCount[paternalAllele] += numPaternalReads;
 			}
-		} // numReads > 0
+		}
 	
 	c->numReads = numReads;
 	c->maternalAllele = maternalAllele;
 	c->paternalAllele = paternalAllele;
 	c->thereIsMaternalAllele = thereIsMaternalAllele;
 	c->thereIsPaternalAllele = thereIsPaternalAllele;
-	c->maternalSiteAmplificationError = maternalSiteAmplificationError;
-	c->paternalSiteAmplificationError = paternalSiteAmplificationError;
+	c->maternalSiteAmplificationError = errM;
+	c->paternalSiteAmplificationError = errP;
 	}
 
 
@@ -837,7 +718,7 @@ void BuildAmpMatrices (CellSiteStr *c, int j, double **ampMat, double **ampPat)
 
 /* Recomputes the genotype likelihoods of a cell and site from its stored data (reads and amplification errors).
    It needs no random numbers, only reads shared data, and is safe to call from several threads. */
-void SiteGL (CellSiteStr *c, int i, int j, double *glOut)
+void SiteGL (CellSiteStr *c, int j, double *glOut)
 	{
 	double	ngsRows[4][4], ampMRows[4][4], ampPRows[4][4];
 	double	*ngsP[4], *ampMP[4], *ampPP[4];
@@ -865,7 +746,7 @@ const double *GetSiteGL (int i, int j, double *buf)
 	if (siteGL && siteGL[j])
 		return siteGL[j] + GL_NUM*(size_t)i;
 	if (CS(i,j).numReads > 0)
-		SiteGL (&CS(i,j), i, j, buf);
+		SiteGL (&CS(i,j), j, buf);
 	else
 		memset (buf, 0, GL_NUM*sizeof(double));
 	return buf;
