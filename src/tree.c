@@ -383,78 +383,78 @@ int CountUserTreeLeaves (const char *fileName)
 
 /********************************** ReadUserTree ***********************************/
 /* Reads a rooted phyogenetic tree with branch lengths in Newick format */
+/* Hangs q below p as its first free child */
+static void AttachChild (TreeNode *p, TreeNode *q)
+	{
+	if (p->left == NULL)
+		p->left = q;
+	else
+		p->right = q;
+	q->anc = p;
+	}
+
+/* Descendant counts and mean depth of an internal node whose children are complete */
+static void SummarizeDescendants (TreeNode *p)
+	{
+	p->numLeftDescendants  += p->left->numLeftDescendants  + p->left->numRightDescendants;
+	p->numRightDescendants += p->right->numLeftDescendants + p->right->numRightDescendants;
+	p->meanDepth = ((p->left->branchLength  + p->left->meanDepth)  * p->numLeftDescendants
+				  + (p->right->branchLength + p->right->meanDepth) * p->numRightDescendants)
+				  / (p->numLeftDescendants + p->numRightDescendants);
+	}
+
+/* Copies the characters of treeString from position *i up to (not including) a
+   delimiter into buf, leaving *i on the last character read */
+static void ReadToken (char *buf, int *i, const char *delims, const char *what)
+	{
+	int		j = 0;
+
+	memset (buf, 0, MAX_NAME);
+	while (strchr (delims, treeString[*i]) == NULL)
+		{
+		if (j >= MAX_NAME-1)
+			{
+			fprintf (stderr, "\nERROR: %s in the user tree is too long\n", what);
+			exit (-1);
+			}
+		buf[j++] = treeString[(*i)++];
+		}
+	(*i)--;
+	}
+
 void ReadUserTree (FILE *fp)
 	{
-	int			taxonNumber, numDigits;
-	int			nextAvailableNode;
-	int			i, j;
-	int			digit, digit1, digit2, digit3;
+	int			nextAvailableNode, i;
 	char		*tempString;
 	TreeNode	*p, *q;
 	
 	p = q = NULL;
 	
-	/* allocate space for reading the tree string */
 	treeString = (char*) Checked (calloc(MAX_LINE, sizeof(char)), "Could not allocate the treeString structure\n");
-
 	tempString = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the tempString structure\n");
-	
-	/* allocate space for tree */
-    treeNodes = (TreeNode *) calloc(numNodes, sizeof(TreeNode));
-    if (!treeNodes)
-        {
-        fprintf (stderr, "Could not allocate nodes (%zu)\n", numNodes * sizeof(TreeNode));
-        exit (-1);
-        }
-	
+	treeNodes  = (TreeNode *) Checked (calloc(numNodes, sizeof(TreeNode)), "Could not allocate the tree nodes\n");
+	cellNames  = (char **) Checked (calloc(numCells, sizeof(char *)), "Could not allocate cellNames\n");
 	userTreeAllocNodes = numNodes;
 	userTreeAllocCells = numCells;
-
-	/* allocate space for cellNames */
-    cellNames = (char **) calloc(numCells, sizeof(char *));
-    if (!cellNames)
-        {
-        fprintf (stderr, "Could not allocate cellNames (%zu)\n", numCells * sizeof(char *));
-        exit (-1);
-        }
-   for (i=0; i<numCells; i++)
-	   {
-	   cellNames[i] = (char *) calloc(MAX_NAME, sizeof(char));
-	   if (!cellNames[i])
-		   {
-		   fprintf (stderr, "Could not allocate cellNames[%d] (%zu)\n", i,  MAX_NAME * sizeof(char));
-		   exit (-1);
-		   }
-	   }
+	for (i=0; i<numCells; i++)
+		cellNames[i] = (char *) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate cellNames[i]\n");
 	
 	/* initialize tree nodes */
-    for (i=0; i<numNodes; i++)
-        {
-        treeNodes[i].left = NULL;
-        treeNodes[i].right = NULL;
-        treeNodes[i].anc = NULL;
-        treeNodes[i].time = 0.0;
-        treeNodes[i].length = 0.0;
-        treeNodes[i].index = -1;
-        treeNodes[i].label = -1;
-        treeNodes[i].isHealthyRoot = NO;
-        treeNodes[i].isHealthyTip = NO;
-		treeNodes[i].name = (char*) calloc (MAX_NAME, sizeof(char));
-		if (!treeNodes[i].name)
-			{
-			fprintf (stderr, "Could not allocate the treeNodes[i].name structure\n");
-			PrintUsage(stderr);
-			}
+	for (i=0; i<numNodes; i++)
+		{
+		treeNodes[i].index = -1;
+		treeNodes[i].label = -1;
+		treeNodes[i].isHealthyRoot = NO;
+		treeNodes[i].isHealthyTip = NO;
+		treeNodes[i].name = (char*) Checked (calloc (MAX_NAME, sizeof(char)), "Could not allocate the treeNodes[i].name structure\n");
 		}
 
-	/* open treefile */
+	/* read the tree string */
 	if ((fpUserTree = fopen(userTreeFile, "r")) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't open user treefile \"%s\"\n", userTreeFile);
 		PrintUsage(stderr);
 		}
-
-	/* read the tree string */
 	if (fgets (treeString, MAX_LINE, fpUserTree) == NULL)
 		{
 		fprintf (stderr, "\nERROR: Can't read tree string");
@@ -465,209 +465,101 @@ void ReadUserTree (FILE *fp)
 	CheckTree(treeString);
 
 	/* build the tree linked list */
-    numCells = 0;
-    nextAvailableNode = 0;
-    i = 0;
-    do
-        {
-        if (treeString[i] == '(')
-            {
-            if (nextAvailableNode == 0)
-                {
-				p = treeNodes + nextAvailableNode;
-                coalTreeMRCA = p;
-				p->index = nextAvailableNode;
-				nextAvailableNode++;
+	numCells = 0;
+	nextAvailableNode = 0;
+	i = 0;
+	do
+		{
+		if (treeString[i] == '(')
+			{
+			q = treeNodes + nextAvailableNode;
+			if (nextAvailableNode == 0)
+				coalTreeMRCA = q;
+			else
+				AttachChild (p, q);
+			p = q;
+			p->index = nextAvailableNode++;
+			}
+		else if (treeString[i] == ')' || treeString[i] == ',')
+			{
+			if (p == NULL || p->anc == NULL)
+				{
+				fprintf (stderr, "\nERROR: The user tree is not correctly formed (unbalanced parentheses or misplaced '%c')\n", treeString[i]);
+				exit (-1);
 				}
-            else
-                {
-				q = treeNodes + nextAvailableNode;
-				if (p->left == NULL)
-					{
-					p->left = q;
-					q->anc = p;
-					}
-				else
-					{
-					p->right = q;
-					q->anc = p;
-					}
-				p = q;
-				p->index = nextAvailableNode;
-                nextAvailableNode++;
-				}
-            }
-        else if (treeString[i] == ')' || treeString[i] == ',')
-            {
-            if (p == NULL || p->anc == NULL)
-                {
-                fprintf (stderr, "\nERROR: The user tree is not correctly formed (unbalanced parentheses or misplaced '%c')\n", treeString[i]);
-                exit (-1);
-                }
-            q = p->anc;
-            p = q;
-            }
+			p = p->anc;
+			}
 		else if (treeString[i] == ':')
-	        {
-	        i++;
-            memset (tempString, 0, MAX_NAME);
-            j = 0;
-	        while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':' && treeString[i] != ';' && treeString[i] != '(')
-	        	{
-	        	if (j >= MAX_NAME-1)
-	        		{
-	        		fprintf (stderr, "\nERROR: A branch length in the user tree is too long\n");
-	        		exit (-1);
-	        		}
-	        	tempString[j++] = treeString[i++];
-	        	}
-	        i--;
-	        sscanf (tempString, "%lf", &p->branchLength);
-			
+			{
+			i++;
+			ReadToken (tempString, &i, ",):;(", "A branch length");
+			sscanf (tempString, "%lf", &p->branchLength);
 			if (p->left == NULL)
 				p->numLeftDescendants = 1;
-			
-			if( p->right == NULL)
+			if (p->right == NULL)
 				p->numRightDescendants = 1;
-			
 			if (p->left != NULL && p->right != NULL)
-				{
-				p->numLeftDescendants += p->left->numLeftDescendants + p->left->numRightDescendants;
-				p->numRightDescendants += p->right->numLeftDescendants + p->right->numRightDescendants;
-				
-				p->meanDepth = ((p->left->branchLength +  p->left->meanDepth) * p->numLeftDescendants
-								+ (p->right->branchLength +  p->right->meanDepth) * p->numRightDescendants)
-								/ (p->numLeftDescendants + p->numRightDescendants);
-				}
+				SummarizeDescendants (p);
 			}
-        else
-        	/* now read taxon names*/
-        	{
-			if (/* DISABLES CODE */ (0)) /* let's read every name as a word */
-            /* if (isdigit(treeString[i]) == YES)*/ /* taxon names are numbers */
-            	{
-	            numDigits = 0;
-	            digit1 = digit2 = digit3 = 0;
-	            while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':')
-	                    {
-	                    if      (treeString[i] == '0') digit = 0;
-	                    else if (treeString[i] == '1') digit = 1;
-	                    else if (treeString[i] == '2') digit = 2;
-	                    else if (treeString[i] == '3') digit = 3;
-	                    else if (treeString[i] == '4') digit = 4;
-	                    else if (treeString[i] == '5') digit = 5;
-	                    else if (treeString[i] == '6') digit = 6;
-	                    else if (treeString[i] == '7') digit = 7;
-	                    else if (treeString[i] == '8') digit = 8;
-	                    else if (treeString[i] == '9') digit = 9;
-	                    if      (numDigits == 0) digit1 = digit;
-	                    else if (numDigits == 1) digit2 = digit;
-	                    else if (numDigits == 2) digit3 = digit;
-	                    numDigits++;
-	                    i++;
-	                    }
-	            i--;
-	            if (numDigits == 1)
-	            	taxonNumber = digit1;
-	            else if (numDigits == 2)
-					taxonNumber = 10*digit1 + digit2;
-	            else if (numDigits == 3)
-	            	taxonNumber = 100*digit1 + 10*digit2 + digit3;
-				(void) taxonNumber;	/* numeric taxon labels are only parsed (and skipped) */
-				}
-			else /* taxon names are letters */
-	            {
-				taxonName = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the taxonName structure\n");
-	           	taxonNamesAreChars = YES;
-	            j = 0;
-	            while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':')
-	            	{
-					if (j >= MAX_NAME-1)
-						{
-						fprintf (stderr, "\nERROR: A taxon name in the user tree is too long (maximum %d characters)\n", MAX_NAME-1);
-						exit (-1);
-						}
-					taxonName[j++] = treeString[i++];
-					}
-	            i--;
-				}
-            q = treeNodes + nextAvailableNode;
-			if (p->left == NULL)
-				{
-				p->left = q;
-				q->anc = p;
-				}
-			else
-				{
-				p->right = q;
-				q->anc = p;
-				}
-			strcpy(q->name,taxonName);
-			strcpy(cellNames[numCells],taxonName);
-            p = q;
-			p->index = nextAvailableNode;
-           	nextAvailableNode++;
-            numCells++;
- 			free (taxonName);
-           }
-        i++;
-        } while (treeString[i] != ';');
+		else
+			{
+			/* a taxon name: every name is read as a word */
+			ReadToken (tempString, &i, ",):", "A taxon name");
+			taxonNamesAreChars = YES;
+			q = treeNodes + nextAvailableNode;
+			AttachChild (p, q);
+			strcpy (q->name, tempString);
+			strcpy (cellNames[numCells], tempString);
+			p = q;
+			p->index = nextAvailableNode++;
+			numCells++;
+			}
+		i++;
+		} while (treeString[i] != ';');
 	
 	/* Connect the coalescent cell MRCA node with the outgroup ancestral cell */
 	p = coalTreeMRCA;
 	if (p->left != NULL && p->right != NULL)
-		{
-		p->numLeftDescendants += p->left->numLeftDescendants + p->left->numRightDescendants;
-		p->numRightDescendants += p->right->numLeftDescendants + p->right->numRightDescendants;
-		
-		p->meanDepth = ((p->left->branchLength +  p->left->meanDepth) * p->numLeftDescendants
-						 + (p->right->branchLength +  p->right->meanDepth) * p->numRightDescendants)
-		/ (p->numLeftDescendants + p->numRightDescendants);
-		}
+		SummarizeDescendants (p);
 	
-    if (noisy > 2)
-        fprintf (stderr, "\n>> Adding healthy root to user tree... ");
-    healthyRoot = treeNodes + nextAvailableNode;
+	if (noisy > 2)
+		fprintf (stderr, "\n>> Adding healthy root to user tree... ");
+	healthyRoot = treeNodes + nextAvailableNode;
 	healthyRoot->index = nextAvailableNode;
-   	healthyRoot->left = coalTreeMRCA;
+	healthyRoot->left = coalTreeMRCA;
 	healthyRoot->length = 0;
 	healthyRoot->isHealthyRoot = YES;
 	strcpy (healthyRoot->name, "healthyroot");
 	coalTreeMRCA->anc = healthyRoot;
 	coalTreeMRCA->branchLength = coalTreeMRCA->meanDepth * transformingBranchLengthRatio;
-    if (noisy > 2)
-        fprintf (stderr, "DONE");
-
-    nextAvailableNode++;
+	if (noisy > 2)
+		fprintf (stderr, "DONE");
+	nextAvailableNode++;
 	
-    /* Connect the healthy ancestral cell with the tip healthy cell*/
-    if (noisy > 2)
-        fprintf (stderr, "\n>> Adding healthy tip to user tree... ");
-    healthyTip = treeNodes + nextAvailableNode;
-    healthyTip->left = NULL;
-    healthyTip->right = NULL;
-    healthyTip->anc = healthyRoot;
-    healthyRoot->right = healthyTip;
-    healthyTip->time = 0;
-    healthyTip->branchLength = (coalTreeMRCA->meanDepth + coalTreeMRCA->branchLength) * healthyTipBranchLengthRatio;
-    healthyTip->isHealthyTip = YES;
+	/* Connect the healthy ancestral cell with the tip healthy cell*/
+	if (noisy > 2)
+		fprintf (stderr, "\n>> Adding healthy tip to user tree... ");
+	healthyTip = treeNodes + nextAvailableNode;
+	healthyTip->anc = healthyRoot;
+	healthyRoot->right = healthyTip;
+	healthyTip->time = 0;
+	healthyTip->branchLength = (coalTreeMRCA->meanDepth + coalTreeMRCA->branchLength) * healthyTipBranchLengthRatio;
+	healthyTip->isHealthyTip = YES;
 	strcpy (healthyTip->name, "healthy");
 	healthyTip->index = nextAvailableNode;
-   if (noisy > 2)
-        fprintf (stderr, "DONE");
+	if (noisy > 2)
+		fprintf (stderr, "DONE");
 
-    /* Relabel nodes on tree (label tips with consecutive indexes) */
-    if (noisy > 2)
-        fprintf (stderr, "\n>> Relabeling nodes on tree ... ");
-
-    TipNodeNum = 0;
+	/* Relabel nodes on tree (label tips with consecutive indexes) */
+	if (noisy > 2)
+		fprintf (stderr, "\n>> Relabeling nodes on tree ... ");
+	TipNodeNum = 0;
 	IntNodeNum = numCells+1;
 	RelabelUserTree (healthyRoot);
+	if (noisy > 2)
+		fprintf (stderr, "DONE");
 
-    if (noisy > 2)
-        fprintf (stderr, "DONE");
-
-    numNodes = nextAvailableNode+1;
+	numNodes = nextAvailableNode+1;
 
 	/* Note: treeNodes is NOT shrunk here. The tree nodes point to each other (and healthyRoot
 	   points into this array), so a realloc that moved the block would leave all of them
