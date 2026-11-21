@@ -1239,7 +1239,7 @@ int main (int argc, char **argv)
 		{
 		if (noisy > 2)
 			fprintf (stderr, "\n>> Reading user tree ...");
-		ReadUserTree(fpUserTree);
+		ReadUserTree();
 		}
 
 	/* Read user genomefile  */
@@ -1247,7 +1247,7 @@ int main (int argc, char **argv)
 		{
 		if (noisy > 2)
 			fprintf (stderr, "\n>> Reading user genome ...");
-		ReadUserGenome(fpUserGenome);
+		ReadUserGenome();
 		}
 
 	if (gainSd > 0.0 || gainLen > 0.0)
