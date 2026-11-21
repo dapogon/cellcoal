@@ -867,7 +867,8 @@ void ReadParametersFromCommandLine (int argc,char **argv)
                     }
                 break;
 			case '?':
-                PrintUsage(stderr);
+                PrintHelp (stdout);
+                exit (0);
                 break;
             default :
                 fprintf (stderr, "\n!!! PARAMETER ERROR: Incorrect parameter: %c\n\n", flag);

@@ -1,0 +1,12 @@
+# Mode 1, genotypes (no coverage): bin/cellcoal-x.y.z --config examples/config.genotypes.yaml
+# Genotypes of 20 cells with allelic dropout and genotyping error. Options after --config override the file.
+replicates: 5
+cells: 20
+sites: 2000
+population_size: 10000
+mutation_rate: 1e-6
+ado: 0.1
+genotyping_error: [0.02, 0.0001]
+print_snv_genotypes: true
+print_snv_haplotypes: true
+seed: 1
