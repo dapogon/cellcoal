@@ -950,7 +950,7 @@ The keys are the option letters (`"s": 20`, `"A": [0.05, 0.01, 0]`, `"1": true`)
 
 `Results/run.json` has an `options` object with the options of that run, including the seed that was used, and it can be given directly to `--config`: `bin/cellcoal-x.y.z --config Results/run.json` repeats the run (same program version and number of cells and sites, any number of threads).
 
-**Few options on the command line.** `--help` (or `-?`) lists only the options of every day: `-n`, `-s`, `-l`, `-e`, `-u`, `-C`, `--bam`, `--fastq`, `-o`, `-#`, `--config` and `--check`. Everything else (dropout, errors, coverage, signatures, outputs, reads) is better kept in a configuration file; `--help-all` lists every parameter by sections and, at the end, the key of the configuration file of each one. The option letters keep working on the command line, so older commands and scripts are not affected. Examples for the three modes: `examples/config.genotypes.yaml`, `examples/config.readcounts.yaml` and `examples/config.reads.yaml`.
+`--help` lists every option by sections and, at the end, the key of the configuration file of each one (e.g. `amplification_error` for `-A`). Examples for the three modes: `examples/config.genotypes.yaml`, `examples/config.readcounts.yaml` and `examples/config.reads.yaml`.
 
 Errors in the file are reported with the line and column and the text of the line, and a misspelled key suggests the closest option name:
 
