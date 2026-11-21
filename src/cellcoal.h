@@ -147,9 +147,6 @@ void		AllocateCellStructure (void);
 int		CompareGenotypes (int a1, int a2, int b1, int b2);
 #define NUM_TRUTH_METRICS	12
 int		TruthMetrics (double *m);	/* m[NUM_TRUTH_METRICS]: called_fraction, genotype_error, snv_precision, snv_recall, het_error, hom_error, het_to_hom, doublet_error, singlet_error, ado_simulated */
-#ifdef COUNT_ML_GENOTYPE_ERRORS
-	void		CountMLGenotypingErrors (void);
-#endif
 
 extern int 		EigenREV (double Root[], double Cijk[]);
 extern void		PrepareGeneticSignatures(void);
@@ -334,10 +331,6 @@ static inline Geno GetTrueG (int genome, int node, int site)
 	return data[genome][node][site];
 	}
 
-#ifdef CHECK_MUT_DISTRIBUTION
-extern int		*MutCount, *SiteMut, dataSetsWithSNVs;
-extern double	sumPos, meansumPos;
-#endif
 
 /* File pointers */
 extern FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplotypes, *fpFullHaplotypes, *fpMLhaplotypes, *fpTrees, *fpTimes, *fpCATG, *fpVCF, *fpPILEUP, *fpBulk, *fpLog, *fpUserTree, *fpUserGenome, *fpSims;

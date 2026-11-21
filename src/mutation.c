@@ -92,12 +92,7 @@ void SimulateTriNucFreqGenome (int cell, long int *seed)
 	double 		*prob4, sum;
 	
 	/* memory allocations */
-	prob4 = (double *) calloc (4, sizeof(double));
-	if (!prob4)
-		{
-		fprintf (stderr, "Could not allocate the prob4 vector\n");
-		exit (-1);
-		}
+	prob4 = (double *) Checked (calloc(4, sizeof(double)), "Could not allocate the prob4 vector\n");
 		
 	/* choose first trinucleotide */
 	chosenTriNucleotide = ChooseUniformState(triNucFreq, seed);
@@ -906,12 +901,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	FreeTriNucleotides ();
 	
 	/* allocate memory to store the trinucleotide frequencies */
-	triNucleotideMaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
-	if (!triNucleotideMaternal)
-		{
-		fprintf (stderr, "Could not allocate the triNucleotideMaternal vector\n");
-		exit (-1);
-		}
+	triNucleotideMaternal = (TriNucStr *) Checked (calloc(64, sizeof(TriNucStr)), "Could not allocate the triNucleotideMaternal vector\n");
 	for (i=0; i<64; i++)
 		{
 		triNucleotideMaternal[i].tempLength = 100;
@@ -919,12 +909,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 		triNucleotideMaternal[i].position = (int *) calloc(100,sizeof(int));
 		}
 
-	triNucleotidePaternal = (TriNucStr *) calloc (64, sizeof(TriNucStr));
-	if (!triNucleotidePaternal)
-		{
-		fprintf (stderr, "Could not allocate the triNucleotidePaternal vector\n");
-		exit (-1);
-		}
+	triNucleotidePaternal = (TriNucStr *) Checked (calloc(64, sizeof(TriNucStr)), "Could not allocate the triNucleotidePaternal vector\n");
 	for (i=0; i<64; i++)
 		{
 		triNucleotidePaternal[i].tempLength = 100;
@@ -963,12 +948,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	#ifdef PRINT_TRIMUTCOUNTER
 	if (genome == MATERNAL)
 		{
-		triMutationsCounter = (int *) calloc (96, sizeof(int));
-		if (!triMutationsCounter)
-			{
-			fprintf (stderr, "Could not allocate the triMutationsCounter vector\n");
-			exit (-1);
-			}
+		triMutationsCounter = (int *) Checked (calloc(96, sizeof(int)), "Could not allocate the triMutationsCounter vector\n");
 		}
 	#endif
 

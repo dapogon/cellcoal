@@ -251,19 +251,9 @@ void PrepareGeneticSignatures (void)
 	char	*header, *token;
 
 	/*  alloc memory */
-	header = (char*) calloc (MAX_LINE, sizeof(char));
-	if (!header)
-		{
-		fprintf (stderr, "Could not allocate the header string\n");
-		exit (-1);
-		}
+	header = (char*) Checked (calloc(MAX_LINE, sizeof(char)), "Could not allocate the header string\n");
 
-	token = (char*) calloc (MAX_NAME, sizeof(char));
-	if (!token)
-		{
-		fprintf (stderr, "Could not allocate the token string\n");
-		exit (-1);
-		}
+	token = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the token string\n");
 
 	/* --signature-file: the number of profiles is the number of columns of the table */
 	if (signatureFile != NULL)
@@ -276,12 +266,7 @@ void PrepareGeneticSignatures (void)
 			}
 
 	/* allocate memory for signatures */
-	geneticSignature = (double****) calloc (numSignatureProfiles, sizeof(double***));
-	if (!geneticSignature)
-		{
-		fprintf (stderr, "Could not allocate the geneticSignature array\n");
-		exit (-1);
-		}
+	geneticSignature = (double****) Checked (calloc(numSignatureProfiles, sizeof(double***)), "Could not allocate the geneticSignature array\n");
 	for (l=0; l<numSignatureProfiles; l++)
 		{
 		geneticSignature[l] = (double***) calloc (4, sizeof(double**));
@@ -311,12 +296,7 @@ void PrepareGeneticSignatures (void)
 		}
 
 	/* allocate matrix to store the signatures in 2D */
-	signatureProbs = (double**) calloc (numSignatureProfiles, sizeof(double));
-	if (!signatureProbs)
-		{
-		fprintf (stderr, "Could not allocate the signatureProbs array\n");
-		exit (-1);
-		}
+	signatureProbs = (double**) Checked (calloc(numSignatureProfiles, sizeof(double)), "Could not allocate the signatureProbs array\n");
 	for (i=0; i<numSignatureProfiles; i++)
 		{
 		signatureProbs[i] = (double*) calloc (96, sizeof(double));
@@ -329,12 +309,7 @@ void PrepareGeneticSignatures (void)
 	
 	
 	/*
-	selectedSignature = (double***) calloc (4, sizeof(double**));
-	if (!selectedSignature)
-		{
-		fprintf (stderr, "Could not allocate the selectedSignature array\n");
-		exit (-1);
-		}
+	selectedSignature = (double***) Checked (calloc(4, sizeof(double**)), "Could not allocate the selectedSignature array\n");
 	for (i=0; i<4; i++)
 		{
 		selectedSignature[i] = (double**) calloc (6, sizeof(double*));
@@ -520,12 +495,7 @@ write.csv(freq, file = "trinuc.freqs.hg19-GRCh37.csv")
 void LoadTrinucleotideFrequencies(void)
 	{
 	
-	triNucFreq = (double *) calloc (64, sizeof(double));
-	if (!triNucFreq)
-		{
-		fprintf (stderr, "Could not allocate the triNucFreq array\n");
-		exit (-1);
-		}
+	triNucFreq = (double *) Checked (calloc(64, sizeof(double)), "Could not allocate the triNucFreq array\n");
 
 	/* fill trinucleotide frequencies */
 	triNucFreq[trinuc(A,A,A)] = 0.03835604;

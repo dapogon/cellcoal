@@ -30,12 +30,7 @@ void AllocateCellStructure(void)
 	siteGL = NULL;
 	if (doNGS == YES)
 		{
-		siteGL = (double**) calloc (numSites, sizeof(double*));
-		if (!siteGL)
-			{
-			fprintf (stderr, "Could not allocate the siteGL structure\n");
-			exit (-1);
-			}
+		siteGL = (double**) Checked (calloc(numSites, sizeof(double*)), "Could not allocate the siteGL structure\n");
 		}
 
 	cell = (CellStr*) calloc(numCells+1, sizeof(CellStr));
@@ -411,61 +406,26 @@ void GenerateReadCounts (long int *seed)
 	int			i, j;
 	double		*probs, **ngsEij, **ampEijmat, **ampEijpat;
 
-	probs = (double*) calloc (4, sizeof(double));
-	if (!probs)
-		{
-		fprintf (stderr, "Could not allocate the probs structure\n");
-		exit (-1);
-		}
+	probs = (double*) Checked (calloc(4, sizeof(double)), "Could not allocate the probs structure\n");
 	
 	/* allocate error probabilities for NGS */
-	ngsEij = (double**) calloc (4, sizeof(double*));
-	if (!ngsEij)
-		{
-		fprintf (stderr, "Could not allocate the ngsEij structure\n");
-		exit (-1);
-		}
+	ngsEij = (double**) Checked (calloc(4, sizeof(double*)), "Could not allocate the ngsEij structure\n");
 	for (i=0; i<4; i++)
 		{
-		ngsEij[i] = (double*) calloc (4, sizeof(double));
-		if (!ngsEij[i])
-			{
-			fprintf (stderr, "Could not allocate the ngsEij[i] structure\n");
-			exit (-1);
-			}
+		ngsEij[i] = (double*) Checked (calloc(4, sizeof(double)), "Could not allocate the ngsEij[i] structure\n");
 		}
 
 	/* allocate error probabilities for amplification */
-	ampEijmat = (double**) calloc (4, sizeof(double*));
-	if (!ampEijmat)
-		{
-		fprintf (stderr, "Could not allocate the ampEijmat structure\n");
-		exit (-1);
-		}
+	ampEijmat = (double**) Checked (calloc(4, sizeof(double*)), "Could not allocate the ampEijmat structure\n");
 	for (i=0; i<4; i++)
 		{
-		ampEijmat[i] = (double*) calloc (4, sizeof(double));
-		if (!ampEijmat[i])
-			{
-			fprintf (stderr, "Could not allocate the ampEijmat[i] structure\n");
-			exit (-1);
-			}
+		ampEijmat[i] = (double*) Checked (calloc(4, sizeof(double)), "Could not allocate the ampEijmat[i] structure\n");
 		}
 
-	ampEijpat = (double**) calloc (4, sizeof(double*));
-	if (!ampEijpat)
-		{
-		fprintf (stderr, "Could not allocate the ampEijpat structure\n");
-		exit (-1);
-		}
+	ampEijpat = (double**) Checked (calloc(4, sizeof(double*)), "Could not allocate the ampEijpat structure\n");
 	for (i=0; i<4; i++)
 		{
-		ampEijpat[i] = (double*) calloc (4, sizeof(double));
-		if (!ampEijpat[i])
-			{
-			fprintf (stderr, "Could not allocate the ampEijpat[i] structure\n");
-			exit (-1);
-			}
+		ampEijpat[i] = (double*) Checked (calloc(4, sizeof(double)), "Could not allocate the ampEijpat[i] structure\n");
 		}
 
 	SetupReadModel (ngsEij);

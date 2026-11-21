@@ -74,12 +74,7 @@ void BuildAdoBlocks (long int *seed)
 		base = (uint64_t) adoSeedOpt;
 	else
 		base = ((uint64_t)(RandomUniform (seed) * 4294967296.0) << 32) | (uint64_t)(RandomUniform (seed) * 4294967296.0);
-	adoIv = (AdoIv*) calloc (2 * (numCells + 1), sizeof(AdoIv));
-	if (!adoIv)
-		{
-		fprintf (stderr, "Could not allocate the ADO segments\n");
-		exit (-1);
-		}
+	adoIv = (AdoIv*) Checked (calloc(2 * (numCells + 1), sizeof(AdoIv)), "Could not allocate the ADO segments\n");
 	x = base ^ 0xA5A5A5A55A5A5A5AULL;
 	cseed = 1 + (long int)(SplitMix64 (&x) % 2147483646ULL);	/* for the Beta draws of the cells, the same in every piece */
 	double *cellRate = NULL;
@@ -187,12 +182,7 @@ void BuildGain (long int *seed)
 		base = (uint64_t) adoSeedOpt ^ 0x1234567887654321ULL;
 	else
 		base = ((uint64_t)(RandomUniform (seed) * 4294967296.0) << 32) | (uint64_t)(RandomUniform (seed) * 4294967296.0);
-	gainIv = (GainIv*) calloc (2 * (numCells + 1), sizeof(GainIv));
-	if (!gainIv)
-		{
-		fprintf (stderr, "Could not allocate the gain segments\n");
-		exit (-1);
-		}
+	gainIv = (GainIv*) Checked (calloc(2 * (numCells + 1), sizeof(GainIv)), "Could not allocate the gain segments\n");
 	end = adoOrigin + numSites;
 	for (i=0; i<numCells+1; i++)
 		for (g=0; g<2; g++)
@@ -354,20 +344,10 @@ void AllelicDropoutGamma (long int *seed)
 	alleleADOrateMean = 1.0 - sqrt (1.0 -  ADOrate);
 
 	// allocate space for the ADO rates
-	alleleADOrate = (double**) calloc (numCells+1, sizeof(double*));
-	if (!alleleADOrate)
-		{
-		fprintf (stderr, "Could not allocate the alleleADOrate structure\n");
-		exit (-1);
-		}
+	alleleADOrate = (double**) Checked (calloc(numCells+1, sizeof(double*)), "Could not allocate the alleleADOrate structure\n");
 	for (i=0; i<numCells+1; i++)
 		{
-		alleleADOrate[i] = (double*) calloc (numSites, sizeof(double));
-		if (!alleleADOrate[i])
-			{
-			fprintf (stderr, "Could not allocate the alleleADOrate[i] structure\n");
-			exit (-1);
-			}
+		alleleADOrate[i] = (double*) Checked (calloc(numSites, sizeof(double)), "Could not allocate the alleleADOrate[i] structure\n");
 		}
 
 	// sample rate modifiers
@@ -540,12 +520,7 @@ int CountTrueVariants (void)
         }
 
     /* cell-major traversal (genomes are stored contiguously per cell) */
-    isVar = (char *) calloc (numSites, sizeof(char));
-    if (!isVar)
-        {
-        fprintf (stderr, "Could not allocate the isVar vector\n");
-        exit (-1);
-        }
+    isVar = (char *) Checked (calloc(numSites, sizeof(char)), "Could not allocate the isVar vector\n");
     matRoot = data[MATERNAL][OUTGROUP_ROOT];
     patRoot = data[PATERNAL][OUTGROUP_ROOT];
     for (cell=0; cell<numCells+1; cell++)
@@ -593,12 +568,7 @@ int CountAllelesInObservedGenotypes (void)
 	slot[A+9] = 0; slot[C+9] = 1; slot[G+9] = 2; slot[T+9] = 3; slot[ADO+9] = 4; slot[DELETION+9] = 5;
 	for (k=0; k<7; k++)
 		{
-		cnt[k] = (int *) calloc (BLK, sizeof(int));
-		if (!cnt[k])
-			{
-			fprintf (stderr, "Could not allocate the allele counts vector\n");
-			exit (-1);
-			}
+		cnt[k] = (int *) Checked (calloc(BLK, sizeof(int)), "Could not allocate the allele counts vector\n");
 		}
 
 	for (s0=0; s0<numSites; s0+=BLK)
@@ -712,62 +682,6 @@ int CountAllelesInObservedGenotypes (void)
 	}
 
 
-#ifdef COUNT_ML_GENOTYPE_ERRORS
-
-/************************* CountMLGenotypingErrors  ************************/
-/*
- Counts how many SNV genotypes are called wrongly
-*/
-void CountMLGenotypingErrors()
-	{
-	int			i, j, equalGenotypes, countCalledGenotypes, countMLgenotypeErrors;
-	int			trueMaternalAllele, truePaternalAllele, MLmatAllele, MLpatAllele;
-	
-	CellSiteStr *c;
-
-	countMLgenotypeErrors = 0;
-	countCalledGenotypes = 0;
-	for (i=0; i<NUM_TAXA; i++)
-		{
-	//	for (snv=0; snv<numSNVs; snv++) // otherwise, with low coverage, increasing amplification error increases accuracy, as it results in many SNVS where most cells do not contain errors...
-			//{
-			//j = SNVsites[snv];*/
-		for (j=0; j<numSites; j++)
-			{
-			c = &CS(i,j);
-			trueMaternalAllele = c->trueMaternalAllele;
-			truePaternalAllele = c->truePaternalAllele;
-			if (cell[i].hasDoublet == NO)
-				{
-				MLmatAllele = c->MLmatAllele;
-				MLpatAllele = c->MLpatAllele;
-				}
-			else
-				{
-				MLmatAllele = CD(i,j).MLmatAlleleDoublet;
-				MLpatAllele = CD(i,j).MLpatAlleleDoublet;
-				}
-			
-			if (MLmatAllele == MISSING) // no reads for this genotype
-				equalGenotypes = YES;
-			else
-				{
-				countCalledGenotypes++;
-				equalGenotypes = CompareGenotypes (trueMaternalAllele, truePaternalAllele, MLmatAllele, MLpatAllele);
-				}
-			
-			if (equalGenotypes == NO)
-				countMLgenotypeErrors++;
-			}
-		}
-
-	fprintf(fpSims, "%d, %10.8f, %d, %10.8f, %d\n", countCalledGenotypes, countCalledGenotypes / ((NUM_TAXA) * (double)numSites), countMLgenotypeErrors, countMLgenotypeErrors/(double)countCalledGenotypes, numSNVs);
-	AccumAdd (&runStats.called, countCalledGenotypes / ((NUM_TAXA) * (double)numSites));
-	AccumAdd (&runStats.mlErr, countMLgenotypeErrors/(double)countCalledGenotypes);
-	}
-
-
-#endif
 
 
 /********************* CellAltCall  ************************/

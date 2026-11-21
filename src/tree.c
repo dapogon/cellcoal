@@ -47,12 +47,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
         treeNodes[i].isHealthyRoot = NO;
         treeNodes[i].isHealthyTip = NO;
 		treeNodes[i].rateSwitch = 0.0;
-		treeNodes[i].name = (char*) calloc (MAX_NAME, sizeof(char));
-		if (!treeNodes[i].name)
-			{
-			fprintf (stderr, "Could not allocate the treeNodes[i].name structure\n");
-			exit (-1);
-			}
+		treeNodes[i].name = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the treeNodes[i].name structure\n");
 		}
 	
     /* set up initial nodes */
@@ -274,26 +269,11 @@ void ReadUserGenome (FILE *fp)
 	
 
 	/* allocate space for reading */
-	header = (char*) calloc (MAX_LINE, sizeof(char));
-	if (!header)
-		{
-		fprintf (stderr, "Could not allocate the header string\n");
-		exit (-1);
-		}
+	header = (char*) Checked (calloc(MAX_LINE, sizeof(char)), "Could not allocate the header string\n");
 
-	maternalUserGenome = (char*) calloc (MAX_GENOME, sizeof(char));
-	if (!maternalUserGenome)
-		{
-		fprintf (stderr, "Could not allocate the maternalUserGenome structure\n");
-		exit (-1);
-		}
+	maternalUserGenome = (char*) Checked (calloc(MAX_GENOME, sizeof(char)), "Could not allocate the maternalUserGenome structure\n");
 
-	paternalUserGenome = (char*) calloc (MAX_GENOME, sizeof(char));
-	if (!paternalUserGenome)
-		{
-		fprintf (stderr, "Could not allocate the paternalUserGenome structure\n");
-		exit (-1);
-		}
+	paternalUserGenome = (char*) Checked (calloc(MAX_GENOME, sizeof(char)), "Could not allocate the paternalUserGenome structure\n");
 	
 	/* open user genome */
 	if ((fpUserGenome = fopen(userGenomeFile, "r")) == NULL)
@@ -415,19 +395,9 @@ void ReadUserTree (FILE *fp)
 	p = q = NULL;
 	
 	/* allocate space for reading the tree string */
-	treeString = (char*) calloc (MAX_LINE, sizeof(char));
-	if (!treeString)
-		{
-		fprintf (stderr, "Could not allocate the treeString structure\n");
-		exit (-1);
-		}
+	treeString = (char*) Checked (calloc(MAX_LINE, sizeof(char)), "Could not allocate the treeString structure\n");
 
-	tempString = (char*) calloc (MAX_NAME, sizeof(char));
-        if (!tempString)
-            {
-            fprintf (stderr, "Could not allocate the tempString structure\n");
-            exit (-1);
-            }
+	tempString = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the tempString structure\n");
 	
 	/* allocate space for tree */
     treeNodes = (TreeNode *) calloc(numNodes, sizeof(TreeNode));
@@ -607,12 +577,7 @@ void ReadUserTree (FILE *fp)
 				}
 			else /* taxon names are letters */
 	            {
-				taxonName = (char*) calloc (MAX_NAME, sizeof(char));
-				if (!taxonName)
-					{
-					fprintf (stderr, "Could not allocate the taxonName structure\n");
-					exit (-1);
-					}
+				taxonName = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the taxonName structure\n");
 	           	taxonNamesAreChars = YES;
 	            j = 0;
 	            while (treeString[i] != ',' && treeString[i] != ')' && treeString[i] != ':')
