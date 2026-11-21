@@ -168,7 +168,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
                     doExponential = YES;
                     if (doDemographics == YES || doOthsukiInnanCoal == YES)
                         {
-                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (-g) and other demographics (-h, -K, -L)\n\n");
+                        fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both exponential (--tree growth) and other demographics (--tree periods, --tree birth, --tree death)\n\n");
                         exit (-1);
                         }
                     }
@@ -185,7 +185,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 					doOthsukiInnanCoal = YES;
 					if (doDemographics == YES || doExponential == YES)
 						{
-						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both birth rate (-K) and exponential (-g) or demographics (-h)\n\n");
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both birth rate (--tree birth) and exponential (--tree growth) or demographics (--tree periods)\n\n");
 						exit (-1);
 						}
 					}
@@ -207,7 +207,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 					doOthsukiInnanCoal = YES;
 					if (doDemographics == YES || doExponential == YES)
 						{
-						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both death rate (-L) and exponential (-g) or demographics (-h)\n\n");
+						fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both death rate (--tree death) and exponential (--tree growth) or demographics (--tree periods)\n\n");
 						exit (-1);
 						}
 					}
@@ -219,7 +219,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 					doDemographics = YES;
                 if (doExponential == YES || doOthsukiInnanCoal == YES)
                     {
-                    fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both demographics periods (-h) and other types of growth (-g, -K, -L)\n\n");
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Cannot have both demographics periods (--tree periods) and other types of growth (--tree growth, --tree birth, --tree death)\n\n");
                     exit (-1);
                     }
                 if (numPeriods <= 0)
@@ -281,7 +281,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 
 				if (rateVarAmongLineages == YES)
 					{
-					fprintf (stderr, "\n!!! PARAMETER ERROR: Tree rate switches (-N) cannot be simulated together with gamma rate variation among lineages (-i)");
+					fprintf (stderr, "\n!!! PARAMETER ERROR: Tree rate switches (--tree rate-switches) cannot be simulated together with gamma rate variation among lineages (--tree lineage-shape)");
 					PrintUsage(stderr);
 					}
 

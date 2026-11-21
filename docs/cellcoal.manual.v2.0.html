@@ -1967,6 +1967,20 @@ the key of the configuration file of each one
 for the three modes: <code>examples/config.genotypes.yaml</code>,
 <code>examples/config.readcounts.yaml</code> and
 <code>examples/config.reads.yaml</code>.</p>
+<p>Related options can also be given as one grouped option,
+<code>--GROUP key=value,key,...</code>, where <code>:</code> separates
+several numbers. The groups are <code>--tree</code>,
+<code>--mutation</code>, <code>--substitution</code>,
+<code>--ado</code>, <code>--errors</code>, <code>--amplification</code>,
+<code>--depth</code>, <code>--cell-corr</code>,
+<code>--call-filter</code>, <code>--reads</code>,
+<code>--chromosome</code> and <code>--output</code>. For example,
+<code>--ado cells=0.1:0.001,sites=0.2:0.01 --depth mean=20,cells=0.3 --output snv-genotypes,vcf-gz</code>
+is the same as <code>-P0.1 0.001 -Q0.2 0.01 -C20 -J0.3 -1 -z</code>. The
+single-letter options keep working and give identical results;
+<code>--help</code> lists every group, its keys, and the single-letter
+equivalent of each key. The group names can be used as keys in
+configuration files.</p>
 <p>Errors in the file are reported with the line and column and the text
 of the line, and a misspelled key suggests the closest option name:</p>
 <pre><code>!!! CONFIG ERROR in run.json, line 3, column 3: unknown option: cell  (did you mean &#39;cells&#39;?)

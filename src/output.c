@@ -1296,122 +1296,51 @@ void PrintCommandLine (FILE *fp)
 
 /***************************** PrintUsage *******************************/
 /* Prints a short description of program usage  */
-/* every option, by sections (--help-all) */
+/* every option (--help, -?): the basic ones, the groups of related parameters, the run options and the older single options */
 void PrintUsageAll (FILE *fp)
 {
 	PrintHeader(fp);
     fprintf (fp, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
-	fprintf (fp,"\n");
-
-	fprintf (fp,"\n\nThree modes (the options of each are in the sections below):");
-	fprintf (fp,"\n  genotypes    no -C: genotypes with allelic dropout and genotyping error (-G); no reads.");
-	fprintf (fp,"\n  read counts  -C: read counts per base, cell and site (CellCoal does not simulate individual reads); VCF with genotype likelihoods.");
-	fprintf (fp,"\n  reads        -C with --bam and/or --fastq: paired-end reads (BAM, FASTQ) of the amplified cells, with truth.vcf.");
+	fprintf (fp, "\n\nUsage: %s [-n# -s# -l# -e# -u# -C# -#SEED] [--GROUP KEY=VALUE,KEY,...] [--config FILE] [--check]", PROGRAM_NAME);
+	fprintf (fp,"\n\nThree modes:");
+	fprintf (fp,"\n  genotypes    no coverage (-C): genotypes with allelic dropout and genotyping error; no reads.");
+	fprintf (fp,"\n  read counts  coverage (-C): read counts per base, cell and site (CellCoal does not simulate individual reads); VCF with genotype likelihoods.");
+	fprintf (fp,"\n  reads        coverage with --reads bam,fastq: paired-end reads (BAM, FASTQ) of the amplified cells, with truth.vcf.");
 	fprintf (fp,"\nAn option that the mode does not use is an error (reads) or a note (genotypes). --check shows the mode.");
-	fprintf (fp,"\n\n*** TREE AND POPULATION ***");
-	fprintf (fp,"\n-n: number of replicates (e.g. -n1000)");
-    fprintf (fp,"\n-s: sample size (# cells) (e.g. -s8)");
-    fprintf (fp,"\n-l: number of sites (e.g. -l500)");
-    fprintf (fp,"\n-e: effective population size (e.g. -e1000)");
-	fprintf (fp,"\n-g: exponential growth rate (e.g. -g1e-5)");
-	fprintf (fp,"\n-K: cell birth rate (e.g. -K1)");
-	fprintf (fp,"\n-L: cell death rate (e.g. -L0.001)");
-   	fprintf (fp,"\n-h: number of demographic periods followed by effective population size at the beginning and at the end of the period, ");
-    fprintf (fp, "\n    and the duration of the period in generations. (e.g. -h1 100 200 30000) (e.g. -h2 100 100 40000 1000 2000 20000)");
-	fprintf (fp,"\n-k: transforming branch length (e.g. -k1e-2)");
-    fprintf (fp,"\n-q: healthy tip branch length (e.g. -q1e-6)");
-    fprintf (fp,"\n-i: shape of the gamma distribution for rate variation among lineages (e.g. -i0.5)");
-	fprintf (fp,"\n-N: number of tree rate switches followed by the rate multipliers  (e.g. -N2 10 0.2)");
-	fprintf (fp,"\n-T: user-tree file (e.g. -Tusertree)");
-	fprintf (fp,"\n\n*** MUTATION AND REFERENCE ***");
-	fprintf (fp,"\n-b: alphabet [0:binary 1:DNA] (e.g. -b0)");
-	fprintf (fp,"\n-c: germline SNP rate (e.g. -c1e-5)");
-	fprintf (fp,"\n-u: somatic mutation rate (e.g. -u1e-6)");
-	fprintf (fp,"\n-d: deletion rate (e.g. -d1e-5)");
-	fprintf (fp,"\n-H: CNLOH rate (e.g. -H1e-5)");
-    fprintf (fp,"\n-j: fixed number of mutations (e.g. -j100)");
-    fprintf (fp,"\n-S: trinucleotide genetic signatures (e.g. -S2 3 0.8 13 0.2)");
-	fprintf (fp,"\n--signature-file FILE: 96-context signature profiles (COSMIC format, one column per signature) used by -S instead of the 30 built-in ones, e.g. data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt");
-    fprintf (fp,"\n-m: alternative mutation model [0:ISMhap 1:Mk2 2:finiteDNA] [default mutation model is ISM diploid] (e.g. -m2)");
-    fprintf (fp,"\n-p: proportion of alternative model sites (e.g. -p0.1)");
-    fprintf (fp,"\n-w: alternative/default model relative mutation rate (e.g. -w1)");
-	fprintf (fp,"\n-f: nucleotide base frequencies (e.g. -f0.4 0.3 0.2 0.1)");
-	fprintf (fp,"\n-t: transition/transversion ratio (e.g. -t2)");
-    fprintf (fp,"\n-a: shape of the gamma distribution for rate variation among sites (e.g. -a0.2)");
-	fprintf (fp,"\n-r: mutation matrix ACGT x ACGT (e.g. -r0 1 2 3 1 0 4 5 2 4 0 1 3 5 1 0)");
-	fprintf (fp,"\n-U: user diploid genome in FASTA (older: for a real reference use --fasta, --region and --germline-vcf) (e.g. -Uusergenome)");
-	fprintf (fp,"\n--blocks B (with -l = sites per block): a chromosome of B blocks on one tree, one VCF with the positions of the chromosome, one summary row per block and a TOTAL; --fasta FILE[.gz] [--region chr:start-end] [--germline-vcf FILE]: real reference (sites that are not ACGT are left out), -l is the block size, --blocks limits the blocks; germline sites are flagged GERMLINE; see tools/chrom.py");
-	fprintf (fp,"\n\n*** ALLELIC DROPOUT (all modes) ***");
-	fprintf (fp,"\n-D: allelic dropout (e.g. -D0.1)");
-	fprintf (fp,"\n-P: allelic dropout variation among cells (e.g. -P1)");
-	fprintf (fp,"\n-Q: allelic dropout variation among sites (e.g. -Q1)");
-	fprintf (fp,"\n--ado-block L: allelic dropout in contiguous segments of mean length L sites (a Markov chain along each allele, with the ADO rate of -D/-P); --ado-origin O: position of the first site on the chromosome; --ado-seed S: seed of the segments");
-	fprintf (fp,"\n\n*** GENOTYPES MODE (no -C): genotypes with errors, no reads ***");
-	fprintf (fp,"\n-G: genotyping error [no read counts]: mean and variance (e.g. -G0.01 0.001)");
-	fprintf (fp,"\n\n*** AMPLIFICATION AND SEQUENCING (read counts and reads modes; need -C) ***");
-	fprintf (fp,"\n-C: sequencing coverage [read counts, not individual reads] (e.g. -C60)");
-	fprintf (fp,"\n-J: coverage overdispersion between cells, shared by all sites (e.g. -J10)");
-	fprintf (fp,"\n-A: amplification error (e.g. -A0.1 0.01 0)");
-	fprintf (fp,"\n-E: sequencing error (e.g. -E0.001)");
-	fprintf (fp,"\n-X: error matrix ACGT x ACGT (e.g. -X0 1 1 1 1 0 1 1 1 1 0 1 1 1 1 0)");
-	fprintf (fp,"\n--gain-sd S --gain-len L: amplification gain of every haplotype of every cell that changes along the genome (lognormal with log-sd S, constant over segments of mean length L sites; mean 1) and multiplies the read depth of the allele: autocorrelated coverage, allelic imbalance and (with -D) dropout from the same mechanism; needs -C");
-	fprintf (fp,"\n--amp-signature FILE: the amplification error (-A) depends on the trinucleotide context and its substitutions follow the 96-context profile in FILE (first column), e.g. data/signatures/PTA_artifact_SCAN2.txt; needs -A and read counts");
-	fprintf (fp,"\n--cov-ado-corr RHO: correlation (-1..1) between the coverage (-J) and the ADO rate (-P) of the cells (e.g. --cov-ado-corr -0.5)");
-	fprintf (fp,"\n\n*** READ COUNTS MODE only (-C without --bam/--fastq) ***");
-	fprintf (fp,"\n-V: sequencing coverage overdispersion (e.g. -V5)");
-	fprintf (fp,"\n-O: coverage overdispersion between sites, shared by all cells (e.g. -O10)");
-	fprintf (fp,"\n-R: ADO/deletion haploid coverage reduction (e.g. -R0.5)");
-	fprintf (fp,"\n-I: maternal allelic imbalance (e.g. -I0.5)");
-	fprintf (fp,"\n-B: doublet rate per cell (e.g. -B0.1)");
-	fprintf (fp,"\n--amp-cell-var V: the mean amplification error (-A) varies among cells, beta with the mean of -A and variance V (e.g. -A0.05 0.002 0 --amp-cell-var 0.0007)");
-	fprintf (fp,"\n--cov-doublet-corr RHO: correlation (-1..1) between the coverage (-J) and being a doublet (-B)");
-	fprintf (fp,"\n--ado-doublet-corr RHO: correlation (-1..1) between the ADO rate (-P) and being a doublet (-B)");
-	fprintf (fp,"\n--min-alt-reads N: a site is written (VCF, catg, pileup) only if a cell has a non-reference call with at least N reads of that allele (e.g. --min-alt-reads 2)");
-	fprintf (fp,"\n--min-alt-vaf F: ... and at least a fraction F of the reads of that cell (e.g. --min-alt-vaf 0.3)");
-	fprintf (fp,"\n--coverage W: mean read depth of every cell over the sites that are not variable sites, in windows of W sites (coverage.tsv; needs -C)");
-	fprintf (fp,"\n--fast: faster read simulation (same distributions, different random numbers; see the manual)");
 
-	fprintf (fp,"\n\n*** READS MODE (-C and --bam/--fastq): paired-end reads of the amplified cells ***");
-	fprintf (fp,"\n--bam, --fastq: simulate paired-end reads of every cell (needs -C, diploid DNA): <results>/reads_<n>/cellNNNN.bam(.bai), .R1/.R2.fastq.gz, ref.fa. Molecules with PCR duplicates (flag 1024; --dup-mean M extra copies, default 0.3) share the errors of the amplification (-A); sequencing errors (-E) are independent; gain (--gain-sd) and ADO blocks shape the coverage. --read-len (150), --insert-mean (400), --insert-sd (60), --bulk-depth D (BAM of the healthy genome), --contig NAME. --qual-sd S, --qual-slope B: variable base qualities (the error probability of a base is -E times a lognormal multiplier of log-sd S and a factor that rises along the read with log-slope B; the quality written is that probability, Q = -10 log10 p; default 0 0 = constant quality). --strand-bias P: a fraction P of the amplification errors is strand specific (only the reads of one strand carry it; default 0)");	fprintf (fp,"\n\n*** OUTPUT ***");
-	fprintf (fp,"\n-o: results folder name (e.g. -oresultsFolder)");
-    fprintf (fp,"\n-1: print SNV genotypes to a file (e.g. -1)");
-    fprintf (fp,"\n-2: print SNV haplotypes to a file (e.g. -2)");
-    fprintf (fp,"\n-3: print full genotypes to a file (e.g. -3)");
-    fprintf (fp,"\n-4: print full haplotypes to a file (e.g. -4)");
-    fprintf (fp,"\n-5: print ancestral genotypes (e.g. -5)");
-    fprintf (fp,"\n-6: print trees to a file (e.g. -6)");
-    fprintf (fp,"\n-7: print times to a file (e.g. -7)");
-    fprintf (fp,"\n-8: print read counts in CATG format (e.g. -8)");
-	fprintf (fp,"\n-9: print read counts in PILEUP format (e.g. -9)");
-	fprintf (fp,"\n-0: print pooled (bulk) read counts and VAF per site (e.g. -0)");
-	fprintf (fp,"\n-Z: do not print the VCF file (needs -8, -9 or -0) (e.g. -Z)");
-	fprintf (fp,"\n-z: write the VCF compressed with gzip, as vcf.gz (e.g. -z)");
-	fprintf (fp,"\n--bcf: write the genotype likelihoods as a BCF file (vcf.bcf) instead of a VCF file");
-	fprintf (fp,"\n-M: minimum pooled VAF in the read counts of the sites listed in the VCF (e.g. -M0.02)");
-    fprintf (fp,"\n-Y: print true SNV haplotypes to a file (e.g. -Y)");
-	fprintf (fp,"\n-v: print replicates in individual folders (e.g. -v)");
-	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes (e.g. -x)");
-	fprintf (fp,"\n--summary: write summary.tsv, one row of metrics per replicate");
-	fprintf (fp,"\n--no-outgroup: simulate the tumor only: no healthy outgroup cell in the outputs (the reference is still the healthy root genome)");
-	fprintf (fp,"\n-W: use tumor nomenclature for cells (e.g. -W)");
+	fprintf (fp,"\n\n*** BASIC OPTIONS ***");
+	fprintf (fp,"\n-n: number of replicates (e.g. -n1000)");
+	fprintf (fp,"\n-s: sample size (# cells) (e.g. -s8)");
+	fprintf (fp,"\n-l: number of sites (e.g. -l500)");
+	fprintf (fp,"\n-e: effective population size (e.g. -e1000)");
+	fprintf (fp,"\n-u: somatic mutation rate (e.g. -u1e-6)  [also --mutation rate=]");
+	fprintf (fp,"\n-C: mean sequencing coverage; without it no reads are simulated (e.g. -C60)  [also --depth mean=]");
+	fprintf (fp,"\n-#: seed (e.g. -#37864287)");
+
+	fprintf (fp,"\n\n*** GROUPS OF PARAMETERS ***");
+	fprintf (fp,"\nThe parameters that belong together are given in one option, as a list of keys separated by commas; a key has a value (key=value;");
+	fprintf (fp,"\nseveral numbers are separated by ':') or is a switch. Example:");
+	fprintf (fp,"\n  %s -n10 -s20 -l1000 -u1e-6 -C10 --ado mean=0.1,block=3000 --amplification error=0.05:0.01:0 --reads bam,fastq --output snv-genotypes,vcf-gz", PROGRAM_NAME);
+	PrintGroupHelp (fp);
+
 	fprintf (fp,"\n\n*** RUN ***");
-	fprintf (fp,"\n--config FILE: read the options from a JSON or YAML file");
+	fprintf (fp,"\n--config FILE: read the options from a JSON or YAML file (the keys are the option names, e.g. cells: 20, or a group as a string, e.g. ado: mean=0.1,block=3000)");
 	fprintf (fp,"\n--check: check the options and show what would run, without simulating");
-	fprintf (fp,"\n--sweep \"KEY=V1,V2 ...\": run the grid of values (e.g. --sweep \"C=2,5,10 E=0.001,0.01\") and write sweep.tsv with mean and standard error of the metrics; --sweep-keep keeps the runs");
+	fprintf (fp,"\n--fast: faster read simulation (same distributions, different random numbers; see the manual)");
+	fprintf (fp,"\n--sweep \"KEY=V1,V2 ...\": run the grid of values (e.g. --sweep \"C=2,5,10 E=0.001,0.01\") and write sweep.tsv with mean and standard error of the metrics; --sweep-keep keeps the runs; --sweep-jobs N runs N at a time; --sweep-resume skips the finished runs");
+	fprintf (fp,"\n-F: user-defined parameter file (older: --config) (e.g. -Fmyparameters)");
 	fprintf (fp,"\n--version: print the version and exit");
-	fprintf (fp,"\n-F: user-defined parameter file (older: --config reads the options from a JSON or YAML file) (e.g. -Fmyparameters)");
-	fprintf (fp,"\n-y: noisy (e.g. -y1)");
-    fprintf (fp,"\n      = 0: does not print anything");
-    fprintf (fp,"\n      = 1:  + simulation summary");
-    fprintf (fp,"\n      = 2:  + replicate information");
-    fprintf (fp,"\n      = 3: + calculation status and event information");
-    fprintf (fp,"\n-#: seed (e.g. -#37864287)");
-    fprintf (fp,"\n-?: Print help");
-    PrintConfigKeys (fp);
-    fprintf (fp,"\n\nDefaults: ");
-    PrintDefaults (fp);
-	fprintf (fp, "\n--------------------------------------------------------------------------------------------------------\n");
-	fprintf (fp,"\n...now exiting to system...\n\n");
+	fprintf (fp,"\n-?, --help: print this help");
+
+	fprintf (fp,"\n\n*** SINGLE OPTIONS (older commands) ***");
+	fprintf (fp,"\nEvery key of a group is also an option of its own; this is the table of equivalences (group key = option):");
+	PrintGroupEquivalents (fp);
+
+	PrintConfigKeys (fp);
+	fprintf (fp,"\n\nDefaults: ");
+	PrintDefaults (fp);
+	fprintf (fp, "\n-------------------------------------------------------------------------------------------------------");
+	fprintf (fp,"\n");
 }
 
 /* the whole list of options (--help, -?) */
