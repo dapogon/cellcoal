@@ -7,6 +7,8 @@
 //
 
 #ifndef macros_h
+#include <stdio.h>
+#include <stdlib.h>
 #define macros_h
 
 #define PROGRAM_NAME            "CellCoal"
@@ -56,8 +58,6 @@ typedef signed char Geno;
 #define trinuc(i,j,k)   (i*16 + j*4 + k)
 #define trimut(i,j,k)   (i*24 + j*4 + k)
 
-#define CHECK_MUT_DISTRIBUTION
-#undef CHECK_MUT_DISTRIBUTION
 
 #define MYDEBUG
 #undef MYDEBUG
@@ -168,5 +168,16 @@ typedef struct
 	int				hasDoublet;
 	}
     CellStr;
+
+/* returns p, or stops the program with msg when an allocation failed */
+static inline void *Checked (void *p, const char *msg)
+	{
+	if (p == NULL)
+		{
+		fputs (msg, stderr);
+		exit (-1);
+		}
+	return p;
+	}
 
 #endif /* macros_h */

@@ -62,12 +62,7 @@ int JoinSplitDecimalArgs (int argc, char **argv)
 			&& strchr (argv[n-1], '.') == NULL
 			&& isdigit ((unsigned char) argv[n-1][strlen (argv[n-1]) - 1]))
 			{
-			joined = (char *) malloc (strlen (argv[n-1]) + strlen (argv[i]) + 1);
-			if (!joined)
-				{
-				fprintf (stderr, "Could not allocate the command line arguments\n");
-				exit (-1);
-				}
+			joined = (char *) Checked (malloc(strlen (argv[n-1]) + strlen (argv[i]) + 1), "Could not allocate the command line arguments\n");
 			strcpy (joined, argv[n-1]);
 			strcat (joined, argv[i]);
 			argv[n-1] = joined;	/* kept until the end of the run, like argv */
@@ -92,12 +87,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 	
 	if (argc > 0 && CommandLine == NULL)	/* a parameter file is read by this same function: keep the first command line */
 		{
-		CommandLine = (char *) calloc(MAX_LINE, sizeof(char));
-		if (!CommandLine)
-			{
-			fprintf (stderr, "Could not allocate the command line string\n");
-			exit (-1);
-			}
+		CommandLine = (char *) Checked (calloc(MAX_LINE, sizeof(char)), "Could not allocate the command line string\n");
 		/* bounded copy: a long command line must not overflow the buffer */
 		for (i=0; i<argc; i++)
 			{
@@ -297,12 +287,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 
 				numTreeRateSwitches = (int) argument;
 				doTreeRateSwitches = YES;
-				treeRateSwitchMultiplier = (double*) calloc (numTreeRateSwitches, sizeof(double));
-				if (!treeRateSwitchMultiplier)
-					{
-					fprintf (stderr, "Could not allocate the treeRateSwitchMultiplier array\n");
-					exit (-1);
-					}
+				treeRateSwitchMultiplier = (double*) Checked (calloc(numTreeRateSwitches, sizeof(double)), "Could not allocate the treeRateSwitchMultiplier array\n");
 
 				for (j=0; j<numTreeRateSwitches; j++)
 					{
@@ -379,19 +364,9 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 					PrintUsage(stderr);
 					}
 
-				signatureWeight = (double*) calloc (numUserSignatures, sizeof(double));
-				if (!signatureWeight)
-					{
-					fprintf (stderr, "Could not allocate the signatureWeight array\n");
-					exit (-1);
-					}
+				signatureWeight = (double*) Checked (calloc(numUserSignatures, sizeof(double)), "Could not allocate the signatureWeight array\n");
 
-				signatureID = (int*) calloc (numUserSignatures, sizeof(int));
-				if (!signatureID)
-					{
-					fprintf (stderr, "Could not allocate the signatureID array\n");
-					exit (-1);
-					}
+				signatureID = (int*) Checked (calloc(numUserSignatures, sizeof(int)), "Could not allocate the signatureID array\n");
 				sum = 0;
 				for (j=0; j<numUserSignatures; j++)
 					{

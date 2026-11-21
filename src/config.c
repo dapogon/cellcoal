@@ -780,12 +780,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			found = YES;
 	if (found == NO)
 		return argv;
-	out = (char**) calloc (CFG_MAX_TOKENS + *argc + 1, sizeof(char*));
-	if (!out)
-		{
-		fprintf (stderr, "Could not allocate the expanded arguments\n");
-		exit (-1);
-		}
+	out = (char**) Checked (calloc(CFG_MAX_TOKENS + *argc + 1, sizeof(char*)), "Could not allocate the expanded arguments\n");
 	out[n++] = argv[0];
 	for (i=1; i<*argc; i++)
 		{

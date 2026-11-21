@@ -763,12 +763,7 @@ void KeepCellADO (const double *rate)
 	if (covAdoCorr == 0.0 && adoDoubletCorr == 0.0)
 		return;
 	free (cellAdoRate);
-	cellAdoRate = (double*) malloc ((numCells+1) * sizeof(double));
-	if (!cellAdoRate)
-		{
-		fprintf (stderr, "Could not allocate the cell ADO rates\n");
-		exit (-1);
-		}
+	cellAdoRate = (double*) Checked (malloc((numCells+1) * sizeof(double)), "Could not allocate the cell ADO rates\n");
 	memcpy (cellAdoRate, rate, (numCells+1) * sizeof(double));
 	}
 
@@ -1006,12 +1001,7 @@ void SetupCellCoverage (long int *seed)
 		return;		/* a chromosome in blocks: the parameters of a cell are the same in every block */
 
 	free (cellCovMult);
-	cellCovMult = (double*) malloc ((numCells+1) * sizeof(double));
-	if (!cellCovMult)
-		{
-		fprintf (stderr, "Could not allocate the cell coverage multipliers\n");
-		exit (-1);
-		}
+	cellCovMult = (double*) Checked (malloc((numCells+1) * sizeof(double)), "Could not allocate the cell coverage multipliers\n");
 	for (i=0; i<numCells+1; i++)
 		cellCovMult[i] = (alphaCellCoverage > 0.0) ? RandomGamma (alphaCellCoverage, seed) / alphaCellCoverage : 1.0;
 	if (covAdoCorr != 0.0 && cellAdoRate != NULL && numCells > 1)
@@ -1022,12 +1012,7 @@ void SetupCellCoverage (long int *seed)
 	cellAmpMean = NULL;
 	if (ampCellVar > 0.0 && meanAmplificationError > 0.0)
 		{
-		cellAmpMean = (double*) malloc ((numCells+1) * sizeof(double));
-		if (!cellAmpMean)
-			{
-			fprintf (stderr, "Could not allocate the cell amplification errors\n");
-			exit (-1);
-			}
+		cellAmpMean = (double*) Checked (malloc((numCells+1) * sizeof(double)), "Could not allocate the cell amplification errors\n");
 		for (i=0; i<numCells+1; i++)
 			cellAmpMean[i] = RandomBetaMeanVar (meanAmplificationError, ampCellVar, seed);
 		}
