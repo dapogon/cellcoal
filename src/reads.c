@@ -279,7 +279,7 @@ void SimulateSiteReads (int jj, uint64_t streamBase, double **ngsEij, ReadScratc
 			{
 			/* rebuild the amplification error matrices of this site exactly as SiteReadCounts did */
 			BuildAmpMatrices (&CS(ii,jj), jj, ampMat, ampPat);
-			GenotypeLikelihoods (&CS(ii,jj), ii, jj, probsT, ngsEij, ampMat, ampPat, &dummySeed, g);
+			GenotypeLikelihoods (&CS(ii,jj), jj, ngsEij, ampMat, ampPat, g);
 			}
 		else
 			memset (g, 0, GL_NUM*sizeof(double));
@@ -840,7 +840,7 @@ void BuildAmpMatrices (CellSiteStr *c, int j, double **ampMat, double **ampPat)
 void SiteGL (CellSiteStr *c, int i, int j, double *glOut)
 	{
 	double	ngsRows[4][4], ampMRows[4][4], ampPRows[4][4];
-	double	*ngsP[4], *ampMP[4], *ampPP[4], probs[4];
+	double	*ngsP[4], *ampMP[4], *ampPP[4];
 	int		k, l;
 
 	for (k=0; k<4; k++)
@@ -855,7 +855,7 @@ void SiteGL (CellSiteStr *c, int i, int j, double *glOut)
 			}
 		}
 	BuildAmpMatrices (c, j, ampMP, ampPP);
-	GenotypeLikelihoods (c, i, j, probs, ngsP, ampMP, ampPP, NULL, glOut);
+	GenotypeLikelihoods (c, j, ngsP, ampMP, ampPP, glOut);
 	}
 
 /* Returns the genotype likelihoods of cell i at site j: the stored ones when kept for this site, otherwise recomputed
@@ -987,7 +987,7 @@ static inline double Log10Memo (double x, double *keys, double *vals, int *n)
 	}
 
 
-void GenotypeLikelihoods (CellSiteStr *c, int i, int j, double *probs, double **ngsEij, double **ampEijmat, double **ampEijpat, long int *seed, double *glOut)
+void GenotypeLikelihoods (CellSiteStr *c, int j, double **ngsEij, double **ampEijmat, double **ampEijpat, double *glOut)
 	{
 	int		k, a1, a2;
 	int		read;
@@ -1435,7 +1435,7 @@ static void DoubletAtSite (int c1, int c2, int j, const double *gl1, double *pro
 			fprintf (stderr,"\n\n-- New celldoublet reads and likelihoods");
 		SiteReadCounts (&donor, c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed);
 		if (readsOnly == NO)
-			GenotypeLikelihoods (&donor, c2, j, probs, ngsEij, ampEijmat, ampEijpat, seed, donorGL);
+			GenotypeLikelihoods (&donor, j, ngsEij, ampEijmat, ampEijpat, donorGL);
 
 		if (debug_DL == YES)
 			{

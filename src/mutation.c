@@ -1091,7 +1091,6 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 	chosenSignature = signatureID[signID];
 		
 	/* 2: Select a mutation out of the 96 possible ones for the choosen signature */
-	//chosenTriMutation = ChooseTrinucMutation(geneticSignature[chosenSignature], seed);
 	chosenTriMutation = ChooseUniformState(signatureProbs[chosenSignature-1], seed);
 
 	/* 3: Define in which of the 64 trinucleotide classes this mutation will take place */

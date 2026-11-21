@@ -1139,7 +1139,7 @@ int main (int argc, char **argv)
 
     if (noisy > 0)
 		{
-		PrintCommandLine (stderr, argc, argv);
+		PrintCommandLine (stderr);
 		}
 
      /* Check the distribution of the mutations */
@@ -1206,7 +1206,7 @@ int main (int argc, char **argv)
 	strcpy(settingsFile, "log");
  
 	if (doPrintSeparateReplicates == NO)
-		PrepareGlobalFiles(argc, argv);
+		PrepareGlobalFiles();
 
 	/* Start printing info to log */
 	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
@@ -1219,7 +1219,7 @@ int main (int argc, char **argv)
 	PrintHeader(fpLog);
 	PrintDate(fpLog);
 	snprintf (File, sizeof(File),"%s/%s", resultsDir, settingsFile);
-	PrintCommandLine (fpLog, argc, argv);
+	PrintCommandLine (fpLog);
  
 	
 	/* --summary: one line of metrics per replicate in <results>/summary.tsv */

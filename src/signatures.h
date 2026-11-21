@@ -24,4 +24,7 @@ double		****geneticSignature; 	// [signature][5prime][change][3prime]
 double 		**signatureProbs;
 double 		*triNucFreq;
 
+void SetupAmpSignature (const char *path);
+void AmpSignatureComposition (const signed char *root, long n);
+
 #endif /* signatures_h */
