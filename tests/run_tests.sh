@@ -1078,5 +1078,13 @@ P
 "$BIN" -n1 -s4 -l5000 -C10 -D0.1 --bam -oE >e.txt 2>&1; grep -aq "has to come in segments" e.txt && ok "reads mode asks for --ado-block when there is dropout" || bad "reads mode ADO without --ado-block"
 cd "$ROOT"
 
+echo "2g43. a parameter file and the same command line give the same result"
+mkdir -p "$TMP/pf" && rm -rf "$TMP/pf"/* && cd "$TMP/pf"
+printf '[a comment] n2 s6 l300 e1000 b1 u1e-6 h2 1000 100 40000 200 30000 20000 m2 p0.5 w2\n f0.3 0.2 0.2 0.3 t1.7 [x] N2 4 0.2 S2 11 0.3 22 0.7 G0.1 0.01 1 3 oA #7\n' > par
+"$BIN" -Fpar >/dev/null 2>&1
+"$BIN" -n2 -s6 -l300 -e1000 -b1 -u1e-6 -h2 1000 100 40000 200 30000 20000 -m2 -p0.5 -w2 -f0.3 0.2 0.2 0.3 -t1.7 -N2 4 0.2 -S2 11 0.3 22 0.7 -G0.1 0.01 -1 -3 -oB -#7 >/dev/null 2>&1
+[ -s A/snv_gen ] && [ "$(cat A/snv_gen A/full_gen | md5sum)" = "$(cat B/snv_gen B/full_gen | md5sum)" ] && ok "parameter file = command line" || bad "parameter file = command line"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

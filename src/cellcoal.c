@@ -1147,22 +1147,19 @@ int main (int argc, char **argv)
 	argc = JoinSplitDecimalArgs (argc, argv);	/* -E0.001 split by PowerShell */
 	argv = ExpandConfigArgs (&argc, argv);	/* --config file.json|yaml */
 	ReadParametersFromCommandLine (argc, argv);
+	readingParameterFile = (argc < 2 || doSpecificParameterFile == YES) ? YES : NO;
+	if (readingParameterFile == YES)
+		{
+		if ((fp = freopen (parameterFile, "r", stdin)) == NULL)
+			{
+			fprintf (stderr, "\nERROR: Could not open parameter file: %s\n", parameterFile);
+			PrintUsage (stderr);
+			exit (-1);
+			}
+		ReadParametersFromFile ();
+		}
 	CheckOptionCombinations ();
 	CheckModeOptions ();
-	if (argc < 2 || doSpecificParameterFile == YES)
-        {
-		readingParameterFile = YES;
-        if ((fp = freopen(parameterFile, "r", stdin)) != NULL)
-            ReadParametersFromFile();
-        else
-            {
-			fprintf (stderr, "\nERROR: Could not open parameter file: %s\n", parameterFile);
-            PrintUsage(stderr);
-            exit(-1);
-            }
-        }
-	else
-		readingParameterFile = NO;
    
    start = clock();
    clock_gettime (CLOCK_MONOTONIC, &wallStart);
