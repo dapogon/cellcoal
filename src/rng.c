@@ -26,29 +26,6 @@ int Label (TreeNode *p)
     }
 
 
-/************************************* ChooseTrinucMutation **********************************************/
-/* Chooses uniformy a random trinucleotide mutation (out of 96) for a given signature 3D matrix with 96 types */
-
-int ChooseTrinucMutation (double ***prob, long int *seed)
-	{
-	int		i, j = 0, k = 0;
-	double	ran, cumProb;
-	
-	cumProb = 0;
-	ran = RandomUniform(seed);
-	for (i=0; i<4; i++)
-		for (j=0; j<6; j++)
-			for (k=0; k<4; k++)
-				{
-				cumProb += prob[i][j][k];
-				if (ran <= cumProb)
-					break;
-				}
-	return trimut(i,j,k);
-	}
-
-
-
 /************************************* ChooseUniformState **********************************************/
 /* Chooses uniformy a random state according to a vector of state probabilities */
 

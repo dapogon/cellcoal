@@ -8,367 +8,84 @@
 #endif
 #include "definitions.h"
 
-/********************* PrepareGlobalFiles **********************/
-/* Open global files to output results */
-void PrepareGlobalFiles(int argc, char **argv)
-    {
-    char File[4*MAX_NAME];
-		
-    /* contains the simulated tree in Newick format */
-    if (doPrintTree == YES)
-        {
-		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeFile);
-        if ((fpTrees = fopen(File, "w")) == NULL)
-            {
-            fprintf (stderr, "Can't open \"%s\"\n", File);
-            exit(-1);
-            }
-        }
-		
-    /* contains a list of times and branch lenghts for all nodes in the simulated trees */
-    if (doPrintTimes == YES)
-        {
-		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesFile);
-        if ((fpTimes = fopen(File, "w")) == NULL)
-            {
-            fprintf (stderr, "Can't open \"%s\"\n", File);
-            exit(-1);
-            }
-        }
-		
-    if (doSimulateData == YES)
-        {
-        /* contains SNV genotypes for every cell */
-        if (doPrintSNVgenotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesFile);
-             if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
-                {
-				fprintf (stderr, "Can't open \"%s\"\n", File);
-				exit(-1);
-                }
-            }
-			
-        /* contains haplotypes for variable sites for every cell */
-        if (doPrintSNVhaplotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesFile);
-            if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
+/* The files of the results: a file is written when its flag is on (and `and`, if there is one, too). The first column of the
+   file is the number of replicates (header = 1); the VCF is opened by OpenVCF. */
+typedef struct
+	{
+	const int	*on, *and;
+	FILE		**fp;
+	const char	*dir, *file;
+	int			header, vcf;
+	} OutputFile;
 
-        /* contains error-free haplotypes for variable sites for every cell */
-        if (doPrintTrueHaplotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesFile);
-            if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
+static const OutputFile OUTPUT_FILES[] =
+	{
+	{&doPrintTree,			NULL,		&fpTrees,			treeDir,			treeFile,			0, 0},
+	{&doPrintTimes,			NULL,		&fpTimes,			timesDir,			timesFile,			0, 0},
+	{&doPrintSNVgenotypes,	NULL,		&fpSNVgenotypes,	SNVgenotypesDir,	SNVgenotypesFile,	1, 0},
+	{&doPrintSNVhaplotypes,	NULL,		&fpSNVhaplotypes,	SNVhaplotypesDir,	SNVhaplotypesFile,	1, 0},
+	{&doPrintTrueHaplotypes,NULL,		&fpTrueHaplotypes,	trueHaplotypesDir,	trueHaplotypesFile,	1, 0},
+	{&doPrintFullGenotypes,	NULL,		&fpFullGenotypes,	fullGenotypesDir,	fullGenotypesFile,	1, 0},
+	{&doPrintFullHaplotypes,NULL,		&fpFullHaplotypes,	fullHaplotypesDir,	fullHaplotypesFile,	1, 0},
+	{&doPrintVCF,			&doNGS,		&fpVCF,				VCFdir,				VCFfile,			1, 1},
+	{&doPrintCATG,			NULL,		&fpCATG,			CATGdir,			CATGfile,			1, 0},
+	{&doPrintPILEUP,		NULL,		&fpPILEUP,			PILEUPdir,			PILEUPfile,			1, 0},
+	{&doPrintBulk,			NULL,		&fpBulk,			bulkDir,			bulkFile,			1, 0},
+	{NULL, NULL, NULL, NULL, NULL, 0, 0}
+	};
 
-        /* contains all genotypes (variable or invariable) for every cell */
-        if (doPrintFullGenotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesFile);
-            if ((fpFullGenotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
+static int OutputWanted (const OutputFile *o)
+	{
+	return *o->on == YES && (o->and == NULL || *o->and == YES);
+	}
 
-        /* contains haplotypes for all sites for every cell */
-        if (doPrintFullHaplotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesFile);
-            if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
+/* opens the files of the results: all the replicates in one file (replicate < 0) or the file of one replicate in its folder */
+static void OpenOutputFiles (int replicate)
+	{
+	const OutputFile	*o;
+	char				path[4*MAX_NAME];
 
-        /* contains reads counts and genotype likelihoods for every SNV and cell */
-        if (doNGS == YES && doPrintVCF == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFfile);
-            if ((fpVCF = OpenVCF (File)) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-  
-         /* contains reads counts for every SNV and cell */
-        if (doPrintCATG == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGfile);
-            if ((fpCATG = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-
-		if (doPrintPILEUP == YES)
+	for (o=OUTPUT_FILES; o->on != NULL; o++)
+		{
+		if (!OutputWanted (o))
+			continue;
+		if (replicate < 0)
+			snprintf (path, sizeof(path), "%s/%s", resultsDir, o->file);
+		else
 			{
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPfile);
-			if ((fpPILEUP = fopen(File, "w")) == NULL)
-				{
-				fprintf (stderr, "Can't open \"%s\"\n", File);
-				exit(-1);
-				}
+			snprintf (path, sizeof(path), "%s/%s", resultsDir, o->dir);
+			MAKE_DIR (path);
+			snprintf (path, sizeof(path), "%s/%s/%s.%04d", resultsDir, o->dir, o->file, replicate + 1);
 			}
-
-		if (doPrintBulk == YES)
+		if ((*o->fp = o->vcf ? OpenVCF (path) : fopen (path, "w")) == NULL)
 			{
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, bulkFile);
-			if ((fpBulk = fopen(File, "w")) == NULL)
-				{
-				fprintf (stderr, "Can't open \"%s\"\n", File);
-				exit(-1);
-				}
+			fprintf (stderr, "Can't open \"%s\"\n", path);
+			exit (-1);
 			}
-
-       }
-
-   if (doPrintSNVgenotypes == YES)
-        {
-       /*fprintf (fpSNVgenotypes, "%s - ",PROGRAM_NAME);
-        PrintDate (fpSNVgenotypes);
-        fprintf (fpSNVgenotypes, "SNV genotypes\n");
-        PrintCommandLine (fpSNVgenotypes, argc, argv);*/
-        fprintf (fpSNVgenotypes,"%d\n", numDataSets);
-        }
-
-    if (doPrintSNVhaplotypes == YES)
-        {
-        /*fprintf (fpSNVhaplotypes, "%s - ",PROGRAM_NAME);
-        PrintDate (fpSNVhaplotypes);
-        fprintf (fpSNVhaplotypes, "SNV haplotypes\n");
-        PrintCommandLine (fpSNVhaplotypes, argc, argv);*/
-        fprintf (fpSNVhaplotypes,"%d\n", numDataSets);
-        }
-
-   if (doPrintFullGenotypes == YES)
-        {
-        /*fprintf (fpFullGenotypes, "%s - ",PROGRAM_NAME);
-        PrintDate (fpFullGenotypes);
-        fprintf (fpFullGenotypes, "Full genotypes\n");
-        PrintCommandLine (fpFullGenotypes, argc, argv);*/
-        fprintf (fpFullGenotypes,"%d\n", numDataSets);
-        }
-
-    if (doPrintFullHaplotypes == YES)
-        {
-        /*fprintf (fpFullHaplotypes, "%s - ",PROGRAM_NAME);
-        PrintDate (fpFullHaplotypes);
-        fprintf (fpFullHaplotypes, "Full haplotypes\n");
-        PrintCommandLine (fpFullHaplotypes, argc, argv);*/
-        fprintf (fpFullHaplotypes,"%d\n", numDataSets);
-        }
-
-	if (doPrintTrueHaplotypes == YES)
-		{
-		/*fprintf (fpTrueHaplotypes, "%s - ",PROGRAM_NAME);
-		 PrintDate (fpTrueHaplotypes);
-		 fprintf (fpTrueHaplotypes, "True haplotypes\n");
-		 PrintCommandLine (fpTrueHaplotypes, argc, argv);*/
-		fprintf (fpTrueHaplotypes,"%d\n", numDataSets);
-		}
-	
-	if (doNGS == YES && doPrintVCF == YES)
-        {
-        /*fprintf (fpVCF, "%s - ",PROGRAM_NAME);
-        PrintDate (fpVCF);
-        fprintf (fpVCF, "Read counts and genotype likelihoods\n");
-        PrintCommandLine (fpVCF, argc, argv);*/
-        if (blocksOn == 0)
-            fprintf (fpVCF,"%d\n", numDataSets);	/* a chromosome in blocks is one data set: a plain VCF */
-        }
-
-	if (doPrintCATG == YES)
-        {
-        /*fprintf (fpCATG, "%s - ",PROGRAM_NAME);
-        PrintDate (fpCATG);
-        fprintf (fpCATG, "Read counts\n");
-        PrintCommandLine (fpCATG, argc, argv);*/
-        fprintf (fpCATG,"%d\n", numDataSets);
-        }
-
-	if (doPrintPILEUP == YES)
-		{
-		/*fprintf (fpPILEUP, "%s - ",PROGRAM_NAME);
-		PrintDate (fpPILEUP);
-		fprintf (fpPILEUP, "Read counts\n");
-		PrintCommandLine (fpPILEUP, argc, argv);*/
-		fprintf (fpPILEUP,"%d\n", numDataSets);
-		}
-
-	if (doPrintBulk == YES)
-		{
-		fprintf (fpBulk,"%d\n", numDataSets);
-		fprintf (fpBulk,"site\tref\treadsA\treadsC\treadsG\treadsT\tdepth\talt_reads\tbulk_vaf\ttrue_alt_alleles\ttrue_vaf\n");
 		}
 	}
 
+/********************* PrepareGlobalFiles **********************/
+/* Open global files to output results */
+void PrepareGlobalFiles (void)
+	{
+	const OutputFile	*o;
 
+	OpenOutputFiles (-1);
+	for (o=OUTPUT_FILES; o->on != NULL; o++)
+		if (OutputWanted (o) && o->header && !(o->vcf && blocksOn))	/* a chromosome in blocks is one data set: a plain VCF */
+			fprintf (*o->fp, "%d\n", numDataSets);
+	if (doPrintBulk == YES)
+		fprintf (fpBulk, "site\tref\treadsA\treadsC\treadsG\treadsT\tdepth\talt_reads\tbulk_vaf\ttrue_alt_alleles\ttrue_vaf\n");
+	}
 
 /********************* PrepareSeparateFiles **********************/
 /* Open individual files to output results */
-
-void PrepareSeparateFiles(int replicate)
-    {
-	/* contains the simulated tree in Newick format */
-    if (doPrintTree == YES)
-        {
-		snprintf (File, sizeof(File),"%s/%s", resultsDir, treeDir);
-		MAKE_DIR (File);
-		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, treeDir, treeFile, replicate+1);
-		if ((fpTrees = fopen(File, "w")) == NULL)
-            {
-            fprintf (stderr, "Can't open \"%s\"\n", File);
-            exit(-1);
-            }
-        }
-		
-	if (doPrintTimes == YES)
-        {
-		snprintf (File, sizeof(File),"%s/%s", resultsDir, timesDir);
-		MAKE_DIR (File);
-		snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, timesDir, timesFile, replicate+1);
-		if ((fpTimes = fopen(File, "w")) == NULL)
-            {
-            fprintf (stderr, "Can't open \"%s\"\n", File);
-            exit(-1);
-            }
-        }
-		
-    if (doSimulateData == YES)
-        {
-        /* contains SNV genotypes for every cell */
-        if (doPrintSNVgenotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVgenotypesDir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVgenotypesDir, SNVgenotypesFile, replicate+1);
-            if ((fpSNVgenotypes = fopen(File, "w")) == NULL)
-                {
-				fprintf (stderr, "Can't open \"%s\"\n", File);
-				exit(-1);
-                }
-            }
-			
-        /* contains haplotypes for variable sites for every cell */
-        if (doPrintSNVhaplotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, SNVhaplotypesDir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, SNVhaplotypesDir, SNVhaplotypesFile, replicate+1);
-            if ((fpSNVhaplotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-
-        /* contains reference haplotypes (before errors)  for every cell */
-        if (doPrintTrueHaplotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, trueHaplotypesDir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, trueHaplotypesDir, trueHaplotypesFile, replicate+1);
-            if ((fpTrueHaplotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-
-        /* contains all genotypes (variable or invariable) for every cell */
-        if (doPrintFullGenotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullGenotypesDir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullGenotypesDir, fullGenotypesFile, replicate+1);
-            if ((fpFullGenotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-
-        /* contains haplotypes for all sites for every cell */
-        if (doPrintFullHaplotypes == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, fullHaplotypesDir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, fullHaplotypesDir, fullHaplotypesFile, replicate+1);
-            if ((fpFullHaplotypes = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-
-        /* contains reads counts and log10 normalized genotype likelihoods for every SNV and cell */
-        if (doNGS == YES && doPrintVCF == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, VCFdir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, VCFdir, VCFfile, replicate+1);
-            if ((fpVCF = OpenVCF (File)) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-
-        /* contains reads counts for every SNV and cell */
-        if (doPrintCATG == YES)
-            {
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, CATGdir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, CATGdir, CATGfile, replicate+1);
-            if ((fpCATG = fopen(File, "w")) == NULL)
-                {
-                fprintf (stderr, "Can't open \"%s\"\n", File);
-                exit(-1);
-                }
-            }
-
-		/* contains reads counts for every SNV and cell */
-		if (doPrintPILEUP == YES)
-			{
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, PILEUPdir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, PILEUPdir, PILEUPfile, replicate+1);
-			if ((fpPILEUP = fopen(File, "w")) == NULL)
-				{
-				fprintf (stderr, "Can't open \"%s\"\n", File);
-				exit(-1);
-				}
-			}
-
-		/* pooled (bulk) read counts and VAF for every site */
-		if (doPrintBulk == YES)
-			{
-			snprintf (File, sizeof(File),"%s/%s", resultsDir, bulkDir);
-			MAKE_DIR (File);
-			snprintf (File, sizeof(File),"%s/%s/%s.%04d", resultsDir, bulkDir, bulkFile, replicate+1);
-			if ((fpBulk = fopen(File, "w")) == NULL)
-				{
-				fprintf (stderr, "Can't open \"%s\"\n", File);
-				exit(-1);
-				}
-			fprintf (fpBulk,"site\tref\treadsA\treadsC\treadsG\treadsT\tdepth\talt_reads\tbulk_vaf\ttrue_alt_alleles\ttrue_vaf\n");
-			}
-        }
+void PrepareSeparateFiles (int replicate)
+	{
+	OpenOutputFiles (replicate);
+	if (doPrintBulk == YES)
+		fprintf (fpBulk, "site\tref\treadsA\treadsC\treadsG\treadsT\tdepth\talt_reads\tbulk_vaf\ttrue_alt_alleles\ttrue_vaf\n");
 	}
 
 
@@ -488,6 +205,29 @@ void ListTimes (int position, FILE *fp)
 
 
 
+/* the label of the row of a cell (haplotype 'm' or 'p'): the name of the cell and the spaces that follow it; LABEL_TIGHT does not
+   put a space after the name of a cell of a user tree */
+enum { LABEL_TIGHT = 0, LABEL_SPACED = 1 };
+
+static void PrintRowLabel (FILE *fp, int i, int kind)
+	{
+	if (kind == 'm' || kind == 'p')
+		{
+		if (i == numCells)
+			fprintf (fp, "%s%c  ", outCellName, kind);
+		else if (doUserTree == NO)
+			fprintf (fp, "%s%04d%c  ", inCellName, i+1, kind);
+		else
+			fprintf (fp, "%c%-*s ", kind, stringPrecision, cellNames[i]);
+		}
+	else if (i == numCells)
+		fprintf (fp, "%s ", outCellName);
+	else if (doUserTree == NO)
+		fprintf (fp, "%s%04d ", inCellName, i+1);
+	else
+		fprintf (fp, kind == LABEL_SPACED ? "%-*s " : "%-*s", stringPrecision, cellNames[i]);
+	}
+
 /************************ PrintSiteInfo ***********************/
 /* Prints info for the site struct */
 
@@ -599,13 +339,7 @@ void PrintSNVGenotypes (FILE *fp)
                     }
                 for (i=i0; i<i1; i++)
                     {
-                    if (i == numCells)
-                        fprintf (fp,"%s ", outCellName);
-                    else if (doUserTree == NO)
-                        fprintf (fp,"%s%04d ", inCellName,i+1);
-                    else
-                        fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
-                    fwrite (buf + (long long)(i-i0) * rowLen, 1, (size_t) rowLen, fp);
+                    PrintRowLabel (fp, i, LABEL_TIGHT);fwrite (buf + (long long)(i-i0) * rowLen, 1, (size_t) rowLen, fp);
                     fprintf (fp,"\n");
                     }
                 }
@@ -614,15 +348,7 @@ void PrintSNVGenotypes (FILE *fp)
         else
         for (i=0; i<NUM_TAXA; i++)
             {
-            if (i == numCells)
-				fprintf (fp,"%s ", outCellName);
-			else
-				{
-				if (doUserTree == NO)
-					fprintf (fp,"%s%04d ", inCellName,i+1);
-				else
-					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
-				}
+            PrintRowLabel (fp, i, LABEL_TIGHT);
 			for (j=0; j<numSNVs; j++)
 				{
 				int	mm, pp;
@@ -653,15 +379,7 @@ void PrintSNVGenotypes (FILE *fp)
         {
         for (i=0; i<NUM_TAXA; i++)
             {
-			if (i == numCells)
-				fprintf (fp,"%s ", outCellName);
-			else
-				{
-				if (doUserTree == NO)
-					fprintf (fp,"%s%04d ", inCellName,i+1);
-				else
-					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
-				}
+			PrintRowLabel (fp, i, LABEL_TIGHT);
 			for (j=0; j<numSNVs; j++)
 				fprintf (fp, " %c%c", WhichMut(GetG(MATERNAL, i, SNVsites[j])),WhichMut(GetG(PATERNAL, i, SNVsites[j])));
 			fprintf (fp,"\n");
@@ -721,15 +439,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print haplotype */
-				if (i == numCells)
-					fprintf (fp,"%s ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04d ", inCellName,i+1);
-					else
-						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, LABEL_SPACED);
 				for (j=0; j<numSNVs; j++)
 					{
 					if (doNGS == NO)
@@ -760,15 +470,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sm  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dm  ", inCellName, i+1);
-					else
-						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'm');
 				for (j=0; j<numSNVs; j++)
 					{
 					if (doNGS == NO)
@@ -783,15 +485,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 				fprintf (fp,"\n");
 				
 				/* print paternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sp  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dp  ", inCellName, i+1);
-					else
-						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'p');
 				for (j=0; j<numSNVs; j++)
 					{
 					if (doNGS == NO)
@@ -830,15 +524,7 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			{
 			for (i=0; i<NUM_TAXA; i++)
 				{
-				if (i == numCells)
-					fprintf (fp,"%s ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04d ", inCellName,i+1);
-					else
-						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, LABEL_SPACED);
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, sites[j]),GetG(PATERNAL, i, sites[j])));
 				fprintf (fp,"\n");
@@ -860,29 +546,13 @@ void PrintSNVHaplotypes (FILE *fp, int PrintTrueVariants)
 			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sm  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dm  ", inCellName, i+1);
-					else
-						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'm');
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, sites[j])));
 				fprintf (fp,"\n");
 					
 				/* print paternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sp  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dp  ", inCellName, i+1);
-					else
-						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'p');
 				for (j=0; j<numSNVs; j++)
 					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, sites[j])));
 				fprintf (fp,"\n");
@@ -926,15 +596,7 @@ void PrintFullGenotypes (FILE *fp)
         for (i=0; i<NUM_TAXA; i++)
             {
 	LoadFullRow (i);
-            if (i == numCells)
-                fprintf (fp,"%s ", outCellName);
-			else
-				{
-				if (doUserTree == NO)
-					fprintf (fp,"%s%04d ", inCellName,i+1);
-				else
-					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
-				}
+            PrintRowLabel (fp, i, LABEL_TIGHT);
 			for (j=0; j<numSites; j++)
 				{
 				if (doNGS == NO)
@@ -965,15 +627,7 @@ void PrintFullGenotypes (FILE *fp)
         {
         for (i=0; i<NUM_TAXA; i++)
             {
-            if (i == numCells)
-                fprintf (fp,"%s ", outCellName);
- 			else
-				{
-				if (doUserTree == NO)
-					fprintf (fp,"%s%04d ", inCellName,i+1);
-				else
-					fprintf (fp,"%-*s", stringPrecision, cellNames[i]);
-				}
+            PrintRowLabel (fp, i, LABEL_TIGHT);
 			for (j=0; j<numSites; j++)
                 fprintf (fp, " %c%c", WhichMut(GetG(0, i, j)),WhichMut(GetG(1, i, j)));
             fprintf (fp,"\n");
@@ -1022,16 +676,7 @@ void PrintFullHaplotypes (FILE *fp)
 				{
 	LoadFullRow (i);
 				/* print IUPAC haplotype */
-				if (i == numCells)
-					fprintf (fp,"%s ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04d ", inCellName,i+1);
-
-					else
-						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, LABEL_SPACED);
 				for (j=0; j<numSites; j++)
 					{
 					if (doNGS == NO)
@@ -1062,16 +707,7 @@ void PrintFullHaplotypes (FILE *fp)
 				{
 	LoadFullRow (i);
 				/* print maternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sm  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dm  ", inCellName, i+1);
-
-					else
-						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'm');
 	
 				for (j=0; j<numSites; j++)
 					{
@@ -1086,15 +722,7 @@ void PrintFullHaplotypes (FILE *fp)
 				fprintf (fp,"\n");
 				
 				/* print paternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sp  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dp  ", inCellName, i+1);
-					else
-						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'p');
 
 				for (j=0; j<numSites; j++)
 					{
@@ -1133,15 +761,7 @@ void PrintFullHaplotypes (FILE *fp)
 			{
 			for (i=0; i<NUM_TAXA; i++)
 				{
-				if (i == numCells)
-					fprintf (fp,"%s ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04d ", inCellName,i+1);
-					else
-						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, LABEL_SPACED);
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
@@ -1163,29 +783,13 @@ void PrintFullHaplotypes (FILE *fp)
 			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sm  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dm  ", inCellName, i+1);
-					else
-						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'm');
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, j)));
 				fprintf (fp,"\n");
 					
 				/* print paternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sp  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dp  ", inCellName, i+1);
-					else
-						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'p');
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
@@ -1240,15 +844,7 @@ void PrintTrueFullHaplotypes (FILE *fp)
 			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print IUPAC haplotype */
-				if (i == numCells)
-					fprintf (fp,"%s ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04d ", inCellName,i+1);
-					else
-						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, LABEL_SPACED);
 				for (j=0; j<numSites; j++)
 					{
 					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
@@ -1272,15 +868,7 @@ void PrintTrueFullHaplotypes (FILE *fp)
 			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sm  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dm  ", inCellName, i+1);
-					else
-						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'm');
 				for (j=0; j<numSites; j++)
 					{
 					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, j)));
@@ -1288,15 +876,7 @@ void PrintTrueFullHaplotypes (FILE *fp)
 				fprintf (fp,"\n");
 				
 				/* print paternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sp  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dp  ", inCellName, i+1);
-					else
-						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'p');
 				for (j=0; j<numSites; j++)
 					{
 					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, j)));
@@ -1328,15 +908,7 @@ void PrintTrueFullHaplotypes (FILE *fp)
 			{
 			for (i=0; i<NUM_TAXA; i++)
 				{
-				if (i == numCells)
-					fprintf (fp,"%s ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04d ", inCellName,i+1);
-					else
-						fprintf (fp,"%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, LABEL_SPACED);
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
@@ -1358,29 +930,13 @@ void PrintTrueFullHaplotypes (FILE *fp)
 			for (i=0; i<NUM_TAXA; i++)
 				{
 				/* print maternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sm  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dm  ", inCellName, i+1);
-					else
-						fprintf (fp,"m%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'm');
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, j)));
 				fprintf (fp,"\n");
 				
 				/* print paternal haplotype */
-				if (i == numCells)
-					fprintf (fp,"%sp  ", outCellName);
-				else
-					{
-					if (doUserTree == NO)
-						fprintf (fp,"%s%04dp  ", inCellName, i+1);
-					else
-						fprintf (fp,"p%-*s ", stringPrecision, cellNames[i]);
-					}
+				PrintRowLabel (fp, i, 'p');
 				for (j=0; j<numSites; j++)
 					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, j)));
 				fprintf (fp,"\n");
@@ -2106,7 +1662,7 @@ void	PrintRunInformation (FILE *fp)
 
 /***************** PrintCommandLine **********************/
 /*	Prints the options of the run: the command line, or the equivalent command line of the parameter file */
-void PrintCommandLine (FILE *fp, int argc,char **argv)
+void PrintCommandLine (FILE *fp)
 	{
 	if (readingParameterFile == NO)
 		{

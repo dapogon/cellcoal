@@ -21,5 +21,13 @@ run g14 -n2 -s6 -l300 -u1e-6 -e500 -b1 -C5 -E0.001 --fast -8 -9
 run g15 -n2 -s6 -l300 -u1e-6 -e500 -b1 -1 -3 -4 -6 -7 -v -y0
 run g16 -n2 -s8 -l500 -u1e-6 -e1000 -b1 -H5e-5 -d1e-5 -C10 -E0.001 -2 -3 -9
 run g17 -n2 -s8 -l500 -u1e-6 -e1000 -b1 -i1 -D0.1 -C10 -E0.001 -1 -4 -y2
+run g18 -n2 -s6 -l300 -u1e-6 -e500 -b1 -C10 -E0.001 -0 -8 -9 -v -2 -5 -7
+run g19 -n2 -s6 -l300 -u1e-6 -e500 -b1 -C10 -E0.001 -0 -8 -9 -2 -5 -7
+run g20 -n2 -s6 -l300 -u1e-6 -e500 -b0 -1 -2 -3 -4 -5 -Y
+run g21 -n2 -s6 -l300 -u1e-6 -e500 -b1 -x -1 -2 -3 -4 -5 -Y
+run g22 -n2 -l300 -u1e-6 -b1 -T/home/claude/cellcoal/examples/usertree.0001 -1 -2 -3 -4 -5 -Y -x
+run g23 -n2 -l300 -u1e-6 -b1 -T/home/claude/cellcoal/examples/usertree.0001 -C10 -E0.001 -1 -2 -3 -4 -Y -x
+run g24 -n2 -l300 -u1e-6 -b1 -T/home/claude/cellcoal/examples/usertree.0001 -C10 -E0.001 -1 -2 -3 -4 -Y
+run g25 -n2 -s6 -l300 -u1e-6 -e500 -b1 -C10 -E0.001 -D0.1 -1 -2 -3 -4 -Y -x
 } > $OUT 2>&1
 rm -rf $W
