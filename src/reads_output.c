@@ -596,6 +596,46 @@ static void PrintVCFHeader (FILE *fp)
 		}
 	}
 
+/* Builds the lines of the given sites in memory (in parallel when there are several threads) and writes them to out in order */
+typedef void (*SiteLineFn) (FILE *, int);
+
+static void WriteSiteLines (FILE *out, SiteLineFn lineFn, const int *sites, int n, const char *what)
+	{
+	int		chunk = 1, i, q, m;
+	char	**lineBuf;
+	size_t	*lineLen;
+
+#ifdef _OPENMP
+	chunk = 4 * omp_get_max_threads();
+#endif
+	lineBuf = (char**) Checked (calloc (chunk, sizeof(char*)), "Could not allocate the line buffers\n");
+	lineLen = (size_t*) Checked (calloc (chunk, sizeof(size_t)), "Could not allocate the line buffers\n");
+	for (i=0; i<n; i+=chunk)
+		{
+		m = (n - i < chunk) ? n - i : chunk;
+		#pragma omp parallel for schedule(dynamic,1)
+		for (q=0; q<m; q++)
+			{
+			FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
+
+			if (!ms)
+				{
+				fprintf (stderr, "Could not open a memory stream for the %s line\n", what);
+				exit (-1);
+				}
+			lineFn (ms, sites[i+q]);
+			MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
+			}
+		for (q=0; q<m; q++)
+			{
+			fwrite (lineBuf[q], 1, lineLen[q], out);
+			free (lineBuf[q]);
+			}
+		}
+	free (lineBuf);
+	free (lineLen);
+	}
+
 void PrintVCF (FILE *fp)
 	{
 	int		snv;
@@ -606,38 +646,7 @@ void PrintVCF (FILE *fp)
 #ifdef _OPENMP
 	if (omp_get_max_threads() > 1 && numSNVs > 1)
 		{
-		/* build the lines of a chunk of sites in memory in parallel, then write them in order */
-		int		chunk = 4 * omp_get_max_threads(), q, nq;
-		char	**lineBuf = (char**) calloc (chunk, sizeof(char*));
-		size_t	*lineLen = (size_t*) calloc (chunk, sizeof(size_t));
-		if (!lineBuf || !lineLen)
-			{
-			fprintf (stderr, "Could not allocate the VCF line buffers\n");
-			exit (-1);
-			}
-		for (snv=0; snv<numSNVs; snv+=chunk)
-			{
-			nq = (numSNVs - snv < chunk) ? numSNVs - snv : chunk;
-			#pragma omp parallel for schedule(dynamic,1)
-			for (q=0; q<nq; q++)
-				{
-				FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
-				if (!ms)
-					{
-					fprintf (stderr, "Could not open a memory stream for the VCF line\n");
-					exit (-1);
-					}
-				VCFSiteLine (ms, SNVsites[snv+q]);
-				MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
-				}
-			for (q=0; q<nq; q++)
-				{
-				fwrite (lineBuf[q], 1, lineLen[q], fp);
-				free (lineBuf[q]);
-				}
-			}
-		free (lineBuf);
-		free (lineLen);
+		WriteSiteLines (fp, VCFSiteLine, SNVsites, numSNVs, "VCF");
 		}
 	else
 #endif
@@ -1030,9 +1039,6 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 	double		**ngsEij;
 	uint64_t	streamBase;
 	long int	s1, s2;
-	char		**lineBuf = NULL;
-	size_t		*lineLen = NULL;
-	int			chunk = 1;
 
 	ngsEij = (double**) calloc (4, sizeof(double*));
 	for (i=0; i<4; i++)
@@ -1050,12 +1056,6 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 
 	if (fpVCFout)
 		PrintVCFHeader (fpVCFout);
-#ifdef _OPENMP
-	chunk = 4 * omp_get_max_threads();
-#endif
-	lineBuf = (char**) calloc (chunk, sizeof(char*));
-	lineLen = (size_t*) calloc (chunk, sizeof(size_t));
-
 	for (j0=0; j0<numSites; j0+=streamBlock)
 		{
 		int		*blockSNVs;
@@ -1111,55 +1111,11 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 		if (doPrintFullGenotypes == YES || doPrintFullHaplotypes == YES)
 			StoreFullBlock (j0, nb);
 
-		/* CATG lines of the block, built in parallel and written in order to the temporary body file */
+		/* CATG and VCF lines of the block, built in parallel and written in order */
 		if (fpCATGbody)
-			for (i=0; i<nq; i+=chunk)
-				{
-				int		m = (nq - i < chunk) ? nq - i : chunk;
-
-				#pragma omp parallel for schedule(dynamic,1)
-				for (q=0; q<m; q++)
-					{
-					FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
-					if (!ms)
-						{
-						fprintf (stderr, "Could not open a memory stream for the CATG line\n");
-						exit (-1);
-						}
-					CATGSiteLine (ms, blockSNVs[i+q]);
-					MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
-					}
-				for (q=0; q<m; q++)
-					{
-					fwrite (lineBuf[q], 1, lineLen[q], fpCATGbody);
-					free (lineBuf[q]);
-					}
-				}
-
-		/* VCF lines of the block, built in parallel and written in order */
+			WriteSiteLines (fpCATGbody, CATGSiteLine, blockSNVs, nq, "CATG");
 		if (fpVCFout)
-			for (i=0; i<nq; i+=chunk)
-				{
-				int		m = (nq - i < chunk) ? nq - i : chunk;
-
-				#pragma omp parallel for schedule(dynamic,1)
-				for (q=0; q<m; q++)
-					{
-					FILE *ms = MemStreamOpen (&lineBuf[q], &lineLen[q]);
-					if (!ms)
-						{
-						fprintf (stderr, "Could not open a memory stream for the VCF line\n");
-						exit (-1);
-						}
-					VCFSiteLine (ms, blockSNVs[i+q]);
-					MemStreamClose (ms, &lineBuf[q], &lineLen[q]);
-					}
-				for (q=0; q<m; q++)
-					{
-					fwrite (lineBuf[q], 1, lineLen[q], fpVCFout);
-					free (lineBuf[q]);
-					}
-				}
+			WriteSiteLines (fpVCFout, VCFSiteLine, blockSNVs, nq, "VCF");
 		if (fpPILEUPout)
 			for (q=0; q<nq; q++)
 				PileupSite (fpPILEUPout, blockSNVs[q]);
@@ -1179,8 +1135,6 @@ void StreamReads (long int *seed, FILE *fpVCFout, FILE *fpPILEUPout, FILE *fpBul
 
 	siteOff = 0;
 	numSNVs = nSNVs;
-	free (lineBuf);
-	free (lineLen);
 	free (doubletDonor);
 	doubletDonor = NULL;
 	for (i=0; i<4; i++)
