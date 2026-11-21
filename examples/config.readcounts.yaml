@@ -1,0 +1,13 @@
+# Mode 2, read counts (-C): bin/cellcoal-x.y.z --config examples/config.readcounts.yaml
+# Read counts per base, cell and site, and a VCF with genotype likelihoods.
+replicates: 2
+cells: 20
+sites: 5000
+population_size: 10000
+mutation_rate: 1e-6
+coverage: 10
+sequencing_error: 0.001
+amplification_error: [0.05, 0.01, 0]
+ado: 0.1
+coverage_dispersion_cells: 6
+seed: 1

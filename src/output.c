@@ -1296,11 +1296,11 @@ void PrintCommandLine (FILE *fp)
 
 /***************************** PrintUsage *******************************/
 /* Prints a short description of program usage  */
-void PrintUsage(FILE *fp)
+/* every option, by sections (--help-all) */
+void PrintUsageAll (FILE *fp)
 {
 	PrintHeader(fp);
     fprintf (fp, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
-	fprintf (fp, "\n\nUsage: %s [-FTXT -n# -s# -l# -e# -g# -h# (# # #) -k# -q# -i# -b# -c# -u# -d# -H# -j# -S# (# #) -m# -p# -w# -f# # # # -t# -a# -r# # # # # # # # # # # # # # # # -G# -C# -V# -I# -D# -P# -Q# -R# -A# # # -E# -B# -X# # # # # # # # # # # # # # # # -1 -2 -3 -4 -5 -6 -7 -8 -9 -Y -v -x -oTXT -TTXT -UTXT -W# -y# -## -?]", PROGRAM_NAME_LOWERCASE);
 	fprintf (fp,"\n");
 
 	fprintf (fp,"\n\nThree modes (the options of each are in the sections below):");
@@ -1407,11 +1407,47 @@ void PrintUsage(FILE *fp)
     fprintf (fp,"\n      = 3: + calculation status and event information");
     fprintf (fp,"\n-#: seed (e.g. -#37864287)");
     fprintf (fp,"\n-?: Print help");
+    PrintConfigKeys (fp);
     fprintf (fp,"\n\nDefaults: ");
     PrintDefaults (fp);
 	fprintf (fp, "\n--------------------------------------------------------------------------------------------------------\n");
 	fprintf (fp,"\n...now exiting to system...\n\n");
-    exit(-1);
+}
+
+/* the options of every day (--help, or when an option is wrong); the rest are in a configuration file (--help-all lists them all) */
+void PrintHelp (FILE *fp)
+{
+	PrintHeader(fp);
+    fprintf (fp, "\n%s generates a coalescent tree and simulates a sample of diploid genomes from somatic cells (no recombination), together with a (healthy) cell as outgroup.", PROGRAM_NAME);
+	fprintf (fp, "\n\nUsage: %s [-n# -s# -l# -e# -u# -C# -oDIR -#SEED] [--bam] [--fastq] [--config FILE] [--check]", PROGRAM_NAME);
+	fprintf (fp,"\n\nThree modes:");
+	fprintf (fp,"\n  genotypes    no -C: genotypes with allelic dropout and genotyping error; no reads.");
+	fprintf (fp,"\n  read counts  -C: read counts per base, cell and site; VCF with genotype likelihoods.");
+	fprintf (fp,"\n  reads        -C with --bam and/or --fastq: paired-end reads (BAM, FASTQ) of the amplified cells, with truth.vcf.");
+	fprintf (fp,"\n\nOptions of the command line:");
+	fprintf (fp,"\n-n: number of replicates (e.g. -n1000)");
+	fprintf (fp,"\n-s: sample size (# cells) (e.g. -s8)");
+	fprintf (fp,"\n-l: number of sites (e.g. -l500)");
+	fprintf (fp,"\n-e: effective population size (e.g. -e1000)");
+	fprintf (fp,"\n-u: somatic mutation rate (e.g. -u1e-6)");
+	fprintf (fp,"\n-C: sequencing coverage [read counts, not individual reads] (e.g. -C60)");
+	fprintf (fp,"\n--bam, --fastq: simulate the reads and write them as BAM and/or FASTQ (needs -C)");
+	fprintf (fp,"\n-o: results folder (e.g. -oResults)");
+	fprintf (fp,"\n-#: seed (e.g. -#37864287)");
+	fprintf (fp,"\n--config: read the rest of the parameters from a JSON or YAML file (e.g. --config run.yaml); options after it override the file");
+	fprintf (fp,"\n--check: show the mode and the parameters of the run without simulating");
+	fprintf (fp,"\n--help-all: list every parameter, by sections; each one can be given in the configuration file by its letter or by its long name");
+	fprintf (fp,"\n--version");
+	fprintf (fp,"\n\nExample: %s -n10 -s20 -l1000 -u1e-6 --config sequencing.yaml", PROGRAM_NAME);
+	fprintf (fp,"\n\n");
+}
+
+/* a wrong option: the help and exit */
+void PrintUsage (FILE *fp)
+{
+	PrintHelp (fp);
+	fprintf (fp, "(--help-all shows every option)\n\n...now exiting to system...\n\n");
+	exit(-1);
 }
 
 
@@ -1492,7 +1528,7 @@ void PrintDefaults (FILE *fp)
 	fprintf (fp,"\n-Z: print the VCF file =  %d", doPrintVCF);
 	fprintf (fp,"\n-z: compress the VCF file with gzip =  %d", doZipVCF);
 	fprintf (fp,"\n-M: minimum pooled VAF of the sites in the VCF =  %g", minVAFvcf);
-	fprintf (fp,"\n-Y: print true haplotypes to a file =  %c", doPrintTrueHaplotypes);
+	fprintf (fp,"\n-Y: print true haplotypes to a file =  %d", doPrintTrueHaplotypes);
 	fprintf (fp,"\n-v: print replicates in individual folders =  %d", doPrintSeparateReplicates);
 	fprintf (fp,"\n-x: print consensus/IUPAC haplotypes =  %d", doPrintIUPAChaplotypes);
 	if (strlen(userTreeFile) == 0)

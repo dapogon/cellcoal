@@ -1086,5 +1086,15 @@ printf '[a comment] n2 s6 l300 e1000 b1 u1e-6 h2 1000 100 40000 200 30000 20000 
 [ -s A/snv_gen ] && [ "$(cat A/snv_gen A/full_gen | md5sum)" = "$(cat B/snv_gen B/full_gen | md5sum)" ] && ok "parameter file = command line" || bad "parameter file = command line"
 cd "$ROOT"
 
+echo "2g44. short --help, --help-all and the example configuration files"
+h=$("$BIN" --help 2>&1); ha=$("$BIN" --help-all 2>&1)
+echo "$h" | grep -q -- "--config" && ! echo "$h" | grep -q "^-A:" && echo "$ha" | grep -q "^-A:" && echo "$ha" | grep -q "amplification_error" && ok "--help is short, --help-all lists every option and key" || bad "--help / --help-all"
+"$BIN" -? >/dev/null 2>&1 && ok "-? exits with 0" || bad "-? exit status"
+for f in genotypes readcounts reads; do
+  mkdir -p "$TMP/ex_$f" && rm -rf "$TMP/ex_$f"/* && cd "$TMP/ex_$f"
+  "$BIN" --config "$ROOT/examples/config.$f.yaml" -n1 -l1500 >/dev/null 2>&1 && [ -s Results/run.json ] && ok "examples/config.$f.yaml runs" || bad "examples/config.$f.yaml"
+  cd "$ROOT"
+done
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

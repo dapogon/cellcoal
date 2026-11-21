@@ -589,6 +589,33 @@ static const char *LongValueOption (int flag)
 	return NULL;
 	}
 
+/* the keys of the configuration file with the option each one stands for (end of --help-all) */
+void PrintConfigKeys (FILE *fp)
+	{
+	int		i, e, col = 0;
+	char	what[64];
+
+	fprintf (fp, "\n\n*** KEYS OF THE CONFIGURATION FILE (--config) ***");
+	fprintf (fp, "\nEvery option can be written in the file by its letter or by its name; e.g. in YAML:  cells: 20   ado: 0.1   amplification_error: [0.05, 0.01, 0]");
+	for (i=0; optionNames[i].name; i++)
+		{
+		if (optionNames[i].flag >= 33 && optionNames[i].flag < 127)
+			snprintf (what, sizeof(what), "-%c", optionNames[i].flag);
+		else if (LongValueOption (optionNames[i].flag) != NULL)
+			snprintf (what, sizeof(what), "%s", LongValueOption (optionNames[i].flag));
+		else
+			snprintf (what, sizeof(what), "--%s", optionNames[i].name);
+		fprintf (fp, "%s%-34s %-18s", (col % 2 == 0) ? "\n" : "  ", optionNames[i].name, what);
+		col++;
+		}
+	for (e=0; extraOpts[e].key; e++)
+		{
+		fprintf (fp, "%s%-34s %-18s", (col % 2 == 0) ? "\n" : "  ", extraOpts[e].key, extraOpts[e].opt);
+		col++;
+		}
+	fprintf (fp, "\n");
+	}
+
 static void ItemsToArgs (CfgList *l, const char *path, char **out, int *n, int onlyKnown)
 	{
 	int k, v;
@@ -768,7 +795,12 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			}
 		if (strcmp (argv[i], "--help") == 0)
 			{
-			PrintUsage (stdout);
+			PrintHelp (stdout);
+			exit (0);
+			}
+		if (strcmp (argv[i], "--help-all") == 0)
+			{
+			PrintUsageAll (stdout);
 			exit (0);
 			}
 		}

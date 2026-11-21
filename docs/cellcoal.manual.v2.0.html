@@ -1961,6 +1961,20 @@ given directly to <code>--config</code>:
 <code>bin/cellcoal-x.y.z --config Results/run.json</code> repeats the
 run (same program version and number of cells and sites, any number of
 threads).</p>
+<p><strong>Few options on the command line.</strong> <code>--help</code>
+(or <code>-?</code>) lists only the options of every day:
+<code>-n</code>, <code>-s</code>, <code>-l</code>, <code>-e</code>,
+<code>-u</code>, <code>-C</code>, <code>--bam</code>,
+<code>--fastq</code>, <code>-o</code>, <code>-#</code>,
+<code>--config</code> and <code>--check</code>. Everything else
+(dropout, errors, coverage, signatures, outputs, reads) is better kept
+in a configuration file; <code>--help-all</code> lists every parameter
+by sections and, at the end, the key of the configuration file of each
+one. The option letters keep working on the command line, so older
+commands and scripts are not affected. Examples for the three modes:
+<code>examples/config.genotypes.yaml</code>,
+<code>examples/config.readcounts.yaml</code> and
+<code>examples/config.reads.yaml</code>.</p>
 <p>Errors in the file are reported with the line and column and the text
 of the line, and a misspelled key suggests the closest option name:</p>
 <pre><code>!!! CONFIG ERROR in run.json, line 3, column 3: unknown option: cell  (did you mean &#39;cells&#39;?)

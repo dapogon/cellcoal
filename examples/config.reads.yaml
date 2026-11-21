@@ -1,0 +1,15 @@
+# Mode 3, reads (-C with bam/fastq): bin/cellcoal-x.y.z --config examples/config.reads.yaml
+# Paired-end reads of 20 amplified cells as BAM and FASTQ, with truth.vcf (to benchmark variant callers).
+replicates: 1
+cells: 20
+sites: 20000
+population_size: 10000
+mutation_rate: 1e-7
+coverage: 10
+sequencing_error: 0.001
+amplification_error: [0.05, 0.01, 0]
+ado: 0.15
+ado_block: 3000                   # dropout comes in segments (needed in reads mode)
+bam: true
+fastq: true
+seed: 1
