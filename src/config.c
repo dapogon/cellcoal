@@ -798,9 +798,9 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			PrintHelp (stdout);
 			exit (0);
 			}
-		if (strcmp (argv[i], "--help-all") == 0)
+		if (strcmp (argv[i], "--help-all") == 0)	/* the same as --help */
 			{
-			PrintUsageAll (stdout);
+			PrintHelp (stdout);
 			exit (0);
 			}
 		}
