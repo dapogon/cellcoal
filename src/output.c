@@ -646,320 +646,103 @@ void PrintFullGenotypes (FILE *fp)
 		}
      }
 
-/***************************** PrintFullHaplotypes *******************************/
-/* Prints observed/ML haplotypes for all sites (variable + invariable) to a file */
+/* what a haplotype row shows at each site */
+enum {ROW_IUPAC, ROW_MAT, ROW_PAT, ROW_BIN_CONSENSUS, ROW_BIN_MAT, ROW_BIN_PAT};
 
-void PrintFullHaplotypes (FILE *fp)
-    {
-    int		 i, j, ml1 = MISSING, ml2 = MISSING;
-		
-	if (doPrintIUPAChaplotypes == NO)
-		{
-		if (doPrintAncestors == YES && doNGS == NO)
-			fprintf (fp,"%d %d\n",2*(NUM_TAXA+2), numSites);
-		else
-			fprintf (fp,"%d %d\n",2*(NUM_TAXA), numSites);
-		}
+/* character shown at site j of a row; ml is the pair of maximum-likelihood
+   alleles of the cell when haplotypes are inferred from read counts */
+static char HaplotypeChar (int row, int j, int kind, int useML)
+	{
+	int		ml1 = MISSING, ml2 = MISSING;
+
+	if (useML)
+		FullMLPair (row, j, &ml1, &ml2);
 	else
 		{
-		if (doPrintAncestors == YES && doNGS == NO)
-			fprintf (fp,"%d %d\n", NUM_TAXA+2, numSites);
+		ml1 = GetG(MATERNAL, row, j);
+		ml2 = GetG(PATERNAL, row, j);
+		}
+	switch (kind)
+		{
+		case ROW_IUPAC:         return WhichIUPAC (ml1, ml2);
+		case ROW_MAT:           return WhichNuc (ml1);
+		case ROW_PAT:           return WhichNuc (ml2);
+		case ROW_BIN_CONSENSUS: return WhichConsensusBinary (ml1, ml2);
+		case ROW_BIN_MAT:       return WhichMut (ml1);
+		default:                return WhichMut (ml2);
+		}
+	}
+
+static void PrintHaplotypeRow (FILE *fp, int row, int kind, int useML)
+	{
+	int		j;
+
+	for (j=0; j<numSites; j++)
+		fputc (HaplotypeChar (row, j, kind, useML), fp);
+	fputc ('\n', fp);
+	}
+
+/* Prints the haplotypes of all sites (variable + invariable): the true ones, or those
+   inferred from the read counts when fromReads is YES (then the root rows are not printed) */
+static void PrintAllSiteHaplotypes (FILE *fp, int fromReads, int loadRows)
+	{
+	int		i, consensus = doPrintIUPAChaplotypes, ancestors = (doPrintAncestors == YES && fromReads == NO);
+	int		isDNA = (alphabet == DNA), useML = (fromReads && isDNA);
+	int		kindM = isDNA ? ROW_MAT : ROW_BIN_MAT, kindP = isDNA ? ROW_PAT : ROW_BIN_PAT;
+	int		kindC = isDNA ? ROW_IUPAC : ROW_BIN_CONSENSUS;
+	int		roots[2] = {OUTGROUP_ROOT, INGROUP_ROOT};
+	const char	*rootNames[2] = {outRootCellName, inRootCellName};
+
+	fprintf (fp, "%d %d\n", (consensus == YES ? 1 : 2) * (NUM_TAXA + (ancestors ? 2 : 0)), numSites);
+
+	for (i=0; i<NUM_TAXA; i++)
+		{
+		if (loadRows && isDNA)
+			LoadFullRow (i);
+		if (consensus == YES)
+			{
+			PrintRowLabel (fp, i, LABEL_SPACED);
+			PrintHaplotypeRow (fp, i, kindC, useML);
+			}
 		else
-			fprintf (fp,"%d %d\n", NUM_TAXA, numSites);
-		}
-		
-    if (alphabet == DNA)
-        {
-		if (doPrintIUPAChaplotypes == YES)
 			{
-			for (i=0; i<NUM_TAXA; i++)
-				{
-	LoadFullRow (i);
-				/* print IUPAC haplotype */
-				PrintRowLabel (fp, i, LABEL_SPACED);
-				for (j=0; j<numSites; j++)
-					{
-					if (doNGS == NO)
-						fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
-					else
-						{
-						FullMLPair (i, j, &ml1, &ml2);
-						fprintf (fp, "%c", WhichIUPAC(ml1, ml2));
-						}
-					}
-				fprintf (fp,"\n");
-				}
-
-			if (doPrintAncestors == YES && doNGS == NO)
-				{
-				fprintf (fp,"%s ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%s ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
-				}
-			}
-		else // print maternal and paternal DNA haplotypes
-			{
-			for (i=0; i<NUM_TAXA; i++)
-				{
-	LoadFullRow (i);
-				/* print maternal haplotype */
-				PrintRowLabel (fp, i, 'm');
-	
-				for (j=0; j<numSites; j++)
-					{
-					if (doNGS == NO)
-						fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, j)));
-					else
-						{
-						FullMLPair (i, j, &ml1, &ml2);
-						fprintf (fp, "%c", WhichNuc(ml1));
-						}
-					}
-				fprintf (fp,"\n");
-				
-				/* print paternal haplotype */
-				PrintRowLabel (fp, i, 'p');
-
-				for (j=0; j<numSites; j++)
-					{
-					if (doNGS == NO)
-						fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, j)));
-					else
-						{
-						FullMLPair (i, j, &ml1, &ml2);
-						fprintf (fp, "%c", WhichNuc(ml2));
-						}
-					}
-				fprintf (fp,"\n");
-				}
-
-			if (doPrintAncestors == YES && doNGS == NO)
-				{
-				fprintf (fp,"%sm  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sm  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
-				}
+			PrintRowLabel (fp, i, 'm');
+			PrintHaplotypeRow (fp, i, kindM, useML);
+			PrintRowLabel (fp, i, 'p');
+			PrintHaplotypeRow (fp, i, kindP, useML);
 			}
 		}
-	else  //print binary haplotypes
-        {
-		if (doPrintIUPAChaplotypes == YES) // print binary consensus haplotypes
+
+	if (ancestors)
+		for (i=0; i<2; i++)
 			{
-			for (i=0; i<NUM_TAXA; i++)
+			if (consensus == YES)
 				{
-				PrintRowLabel (fp, i, LABEL_SPACED);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
-				fprintf (fp,"\n");
+				fprintf (fp, "%s ", rootNames[i]);
+				PrintHaplotypeRow (fp, roots[i], kindC, NO);
 				}
-			
-			if (doPrintAncestors == YES)
+			else
 				{
-				fprintf (fp,"%s ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%s ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
+				fprintf (fp, "%sm  ", rootNames[i]);
+				PrintHaplotypeRow (fp, roots[i], kindM, NO);
+				fprintf (fp, "%sp  ", rootNames[i]);
+				PrintHaplotypeRow (fp, roots[i], kindP, NO);
 				}
 			}
-		else // print maternal and paternal binary haplotypes
-			{
-			for (i=0; i<NUM_TAXA; i++)
-				{
-				/* print maternal haplotype */
-				PrintRowLabel (fp, i, 'm');
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, j)));
-				fprintf (fp,"\n");
-					
-				/* print paternal haplotype */
-				PrintRowLabel (fp, i, 'p');
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, j)));
-				fprintf (fp,"\n");
-				}
-			
-			if (doPrintAncestors == YES)
-				{
-				fprintf (fp,"%sm  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sm  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
-				}
-			}
-        }
-    }
+	}
+
+/***************************** PrintFullHaplotypes *******************************/
+/* Prints the haplotypes for all sites (variable + invariable) inferred from the read counts */
+void PrintFullHaplotypes (FILE *fp)
+	{
+	PrintAllSiteHaplotypes (fp, doNGS, YES);
+	}
 
 /***************************** PrintTrueFullHaplotypes *******************************/
 /* Prints true haplotypes for all sites (variable + invariable) to a file */
-
 void PrintTrueFullHaplotypes (FILE *fp)
 	{
-	int		 i, j;
-	
-	if (doPrintIUPAChaplotypes == NO)
-		{
-		if (doPrintAncestors == YES)
-			fprintf (fp,"%d %d\n",2*(NUM_TAXA+2), numSites);
-		else
-			fprintf (fp,"%d %d\n",2*(NUM_TAXA), numSites);
-		}
-	else
-		{
-		if (doPrintAncestors == YES)
-			fprintf (fp,"%d %d\n", NUM_TAXA+2, numSites);
-		else
-			fprintf (fp,"%d %d\n", NUM_TAXA, numSites);
-		}
-	
-	if (alphabet == DNA)
-		{
-		if (doPrintIUPAChaplotypes == YES)
-			{
-			for (i=0; i<NUM_TAXA; i++)
-				{
-				/* print IUPAC haplotype */
-				PrintRowLabel (fp, i, LABEL_SPACED);
-				for (j=0; j<numSites; j++)
-					{
-					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
-					}
-				fprintf (fp,"\n");
-				}
-			
-			if (doPrintAncestors == YES)
-				{
-				fprintf (fp,"%s ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%s ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichIUPAC(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
-				}
-			}
-		else // print maternal and paternal DNA haplotypes
-			{
-			for (i=0; i<NUM_TAXA; i++)
-				{
-				/* print maternal haplotype */
-				PrintRowLabel (fp, i, 'm');
-				for (j=0; j<numSites; j++)
-					{
-					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, i, j)));
-					}
-				fprintf (fp,"\n");
-				
-				/* print paternal haplotype */
-				PrintRowLabel (fp, i, 'p');
-				for (j=0; j<numSites; j++)
-					{
-					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, i, j)));
-					}
-				fprintf (fp,"\n");
-				}
-			
-			if (doPrintAncestors == YES)
-				{
-				fprintf (fp,"%sm  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sm  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(MATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichNuc(GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
-				}
-			}
-		}
-	else  //print binary haplotypes
-		{
-		if (doPrintIUPAChaplotypes == YES) // print binary consensus haplotypes
-			{
-			for (i=0; i<NUM_TAXA; i++)
-				{
-				PrintRowLabel (fp, i, LABEL_SPACED);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, i, j),GetG(PATERNAL, i, j)));
-				fprintf (fp,"\n");
-				}
-
-			if (doPrintAncestors == YES)
-				{
-				fprintf (fp,"%s ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, OUTGROUP_ROOT, j),GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%s ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichConsensusBinary(GetG(MATERNAL, INGROUP_ROOT, j),GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
-				}
-			}
-		else // print maternal and paternal binary haplotypes
-			{
-			for (i=0; i<NUM_TAXA; i++)
-				{
-				/* print maternal haplotype */
-				PrintRowLabel (fp, i, 'm');
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, i, j)));
-				fprintf (fp,"\n");
-				
-				/* print paternal haplotype */
-				PrintRowLabel (fp, i, 'p');
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, i, j)));
-				fprintf (fp,"\n");
-				}
-			
-			if (doPrintAncestors == YES)
-				{
-				fprintf (fp,"%sm  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", outRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, OUTGROUP_ROOT, j)));
-				fprintf (fp,"\n%sm  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(MATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n%sp  ", inRootCellName);
-				for (j=0; j<numSites; j++)
-					fprintf (fp, "%c", WhichMut(GetG(PATERNAL, INGROUP_ROOT, j)));
-				fprintf (fp,"\n");
-				}
-			}
-		}
+	PrintAllSiteHaplotypes (fp, NO, NO);
 	}
 
 
