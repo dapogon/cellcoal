@@ -491,6 +491,103 @@ static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int 
 	BgzfWrite (z, "\n", 1);
 	}
 
+/* the two templates of a fragment (first and last L bases): 1 when a site is lost (deletion or ADO), else 0 */
+static int LoadTemplates (int hap, int cellIdx, long s, long ins, int L, char *ta, char *tb)
+	{
+	int		j, a, b;
+
+	for (j=0; j<L; j++)
+		{
+		a = Allele (hap, cellIdx, s + j);
+		b = Allele (hap, cellIdx, s + ins - L + j);
+		if (a < 0 || a > 3 || b < 0 || b > 3)
+			return 1;
+		ta[j] = BASES[a];
+		tb[j] = BASES[b];
+		}
+	return 0;
+	}
+
+/* Errors of the amplification carried by a molecule (shared by its PCR duplicates): each event within reach of the
+   reads of the fragment [s, s+ins) is inherited with probability f, on the strand it happened on */
+static void ApplyAmpErrors (const AmpEvent *ev, long nev, long s, long ins, int L, char *ta, char *tb, long int *seed)
+	{
+	long	lo = 0, hi = nev, mid, k, e;
+	long	errSite[16];
+	int		errAlt[16], errStr[16], nerr = 0;
+
+	while (lo < hi)
+		{
+		mid = (lo + hi) / 2;
+		if (ev[mid].site < s)
+			lo = mid + 1;
+		else
+			hi = mid;
+		}
+	for (k=lo; k<nev && ev[k].site < s + ins && nerr < 16; k++)
+		{
+		e = ev[k].site;
+		if (e < s + L || e >= s + ins - L)
+			if (RandomUniform (seed) < ev[k].f)
+				{
+				errSite[nerr] = e; errAlt[nerr] = ev[k].alt; errStr[nerr] = ev[k].strand; nerr++;
+				}
+		}
+	for (k=0; k<nerr; k++)
+		{
+		if (errSite[k] < s + L && errStr[k] != 1)
+			ta[errSite[k] - s] = BASES[errAlt[k]];
+		if (errSite[k] >= s + ins - L && errStr[k] != 0)
+			tb[errSite[k] - (s + ins - L)] = BASES[errAlt[k]];
+		}
+	}
+
+/* number of copies of a molecule after PCR duplication (geometric, mean 1 + dupMean) */
+static int DuplicateCopies (long int *seed)
+	{
+	int		copies = 1;
+	double	qd = dupMean / (1.0 + dupMean);
+
+	if (dupMean > 0.0)
+		while (RandomUniform (seed) < qd && copies < 50)
+			copies++;
+	return copies;
+	}
+
+/* writes one read pair (copy c of a molecule) to the BAM records and/or the FASTQ files; ra and rb are the first and last reads of the fragment */
+static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, int c, long s, long ins, const char *ra, const char *rb, int q,
+					  const unsigned char *qa, const unsigned char *qb, const char *rg, int hap, long molecule)
+	{
+	int		L = readLen, fa, fb;
+	char	rc[512];
+
+	if (fwdFrag)
+		{ fa = 99; fb = 147; }
+	else
+		{ fa = 163; fb = 83; }
+	if (c > 0)
+		{ fa |= 1024; fb |= 1024; }
+	if (doBam)
+		{
+		AddRecord (rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, qa, rg, hap + 1, (int) molecule);
+		AddRecord (rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, qb, rg, hap + 1, (int) molecule);
+		}
+	if (doFastq)
+		{
+		RevComp (rb, rc, L);
+		if (fwdFrag)
+			{
+			FastqPut (&fq->r1, name, 1, ra, L, q, qa, 0);
+			FastqPut (&fq->r2, name, 2, rc, L, q, qb, 1);
+			}
+		else
+			{
+			FastqPut (&fq->r1, name, 1, rc, L, q, qb, 1);
+			FastqPut (&fq->r2, name, 2, ra, L, q, qa, 0);
+			}
+		}
+	}
+
 /* Reads of one cell (cellIdx >= 0) or of the healthy genome (cellIdx = -1). Returns the number of read pairs. */
 static long SimulateGenome (int cellIdx, double depth, int amplified, const char *rg, long int *seed, ReadOut *ro)
 	{
@@ -510,7 +607,6 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	q = (int) (-10.0 * log10 (qerr) + 0.5);
 	if (q > 41) q = 41;
 	if (q < 2) q = 2;
-	q += 0;	/* BAM stores the raw Phred value */
 	if (qualOn)
 		QualSetup (L, seed);
 	ta = (char*) malloc (4 * (size_t) (L + 2));
@@ -537,10 +633,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 			nfrag = RandomPoisson (lambda, seed);
 			for (f=0; f<nfrag; f++)
 				{
-				long	s = pos + (long) (RandomUniform (seed) * W), ins, j, e, k;
-				int		lost = 0, copies, c, fwdFrag, nerr = 0;
-				long	errSite[16];
-				int		errAlt[16], errStr[16];
+				long	s = pos + (long) (RandomUniform (seed) * W), ins;
+				int		copies, c, fwdFrag;
 
 				ins = (long) (insertMean + insertSd * Normal (seed) + 0.5);
 				if (ins < L)
@@ -549,65 +643,15 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 					continue;
 				if (posMap != NULL && CP (s + ins - 1) - CP (s) != ins - 1)
 					continue;	/* the fragment would span masked sites (N) */
-				for (j=0; j<L && !lost; j++)
-					{
-					int a = Allele (hap, cellIdx, s + j), b = Allele (hap, cellIdx, s + ins - L + j);
-
-					if (a < 0 || a > 3 || b < 0 || b > 3)
-						lost = 1;
-					else
-						{
-						ta[j] = BASES[a];
-						tb[j] = BASES[b];
-						}
-					}
-				if (lost)
+				if (LoadTemplates (hap, cellIdx, s, ins, L, ta, tb))
 					continue;
-				/* errors of the amplification carried by this molecule (shared by its PCR duplicates) */
 				if (nev[hap] > 0)
-					{
-					long lo = 0, hi = nev[hap];
-
-					while (lo < hi)
-						{
-						long mid = (lo + hi) / 2;
-
-						if (ev[hap][mid].site < s)
-							lo = mid + 1;
-						else
-							hi = mid;
-						}
-					for (k=lo; k<nev[hap] && ev[hap][k].site < s + ins && nerr < 16; k++)
-						{
-						e = ev[hap][k].site;
-						if (e < s + L || e >= s + ins - L)
-							if (RandomUniform (seed) < ev[hap][k].f)
-								{
-								errSite[nerr] = e; errAlt[nerr] = ev[hap][k].alt; errStr[nerr] = ev[hap][k].strand; nerr++;
-								}
-						}
-					for (k=0; k<nerr; k++)
-						{
-						if (errSite[k] < s + L && errStr[k] != 1)
-							ta[errSite[k] - s] = BASES[errAlt[k]];
-						if (errSite[k] >= s + ins - L && errStr[k] != 0)
-							tb[errSite[k] - (s + ins - L)] = BASES[errAlt[k]];
-						}
-					}
-				copies = 1;
-				if (dupMean > 0.0)
-					{
-					double qd = dupMean / (1.0 + dupMean);
-
-					while (RandomUniform (seed) < qd && copies < 50)
-						copies++;
-					}
+					ApplyAmpErrors (ev[hap], nev[hap], s, ins, L, ta, tb, seed);
+				copies = DuplicateCopies (seed);
 				fwdFrag = (RandomUniform (seed) < 0.5);
 				molecule++;
 				for (c=0; c<copies; c++)
 					{
-					int fa, fb;
-
 					memcpy (ra, ta, L); memcpy (rb, tb, L);
 					if (qualOn)
 						{
@@ -620,34 +664,7 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 						SeqErrors (rb, L, seed);
 						}
 					snprintf (name, sizeof(name), "%s:%ld", rg, molecule);
-					if (fwdFrag)
-						{ fa = 99; fb = 147; }
-					else
-						{ fa = 163; fb = 83; }
-					if (c > 0)
-						{ fa |= 1024; fb |= 1024; }
-					if (doBam)
-						{
-						AddRecord (&rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, qualOn ? qa : NULL, rg, hap + 1, (int) molecule);
-						AddRecord (&rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, qualOn ? qb : NULL, rg, hap + 1, (int) molecule);
-						}
-					if (doFastq)
-						{
-						char rc[512];
-
-						if (fwdFrag)
-							{
-							RevComp (rb, rc, L);
-							FastqPut (&fq->r1, name, 1, ra, L, q, qualOn ? qa : NULL, 0);
-							FastqPut (&fq->r2, name, 2, rc, L, q, qualOn ? qb : NULL, 1);
-							}
-						else
-							{
-							RevComp (rb, rc, L);
-							FastqPut (&fq->r1, name, 1, rc, L, q, qualOn ? qb : NULL, 1);
-							FastqPut (&fq->r2, name, 2, ra, L, q, qualOn ? qa : NULL, 0);
-							}
-						}
+					EmitPair (&rs, fq, name, fwdFrag, c, s, ins, ra, rb, q, qualOn ? qa : NULL, qualOn ? qb : NULL, rg, hap, molecule);
 					pairs++;
 					}
 				}
