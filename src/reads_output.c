@@ -305,14 +305,34 @@ static inline char *VCF_PutLL (char *p, double x)
 
 #define VCF_ROOM(fp,buf,p)	do { if ((p) - (buf) > 3000) { fwrite ((buf), 1, (size_t)((p) - (buf)), (fp)); (p) = (buf); } } while (0)
 
+/* GT index of an allele: . missing, 0 reference, or its position among the alternate alleles of the site */
+static char *VCF_PutGTAllele (char *p, int allele, int referenceAllele, const SiteStr *st)
+	{
+	int		l;
+
+	if (allele == MISSING)
+		*p++ = '.';
+	else if (allele == referenceAllele)
+		*p++ = '0';
+	else
+		for (l=0; l<st->numAltAlleles; l++)
+			if (st->alternateAlleles[l] == allele)
+				{
+				p = VCF_PutInt (p, l+1);
+				break;
+				}
+	return p;
+	}
+
 /* writes the tab-started genotype fields (GT ... TG) of one cell at one SNV site */
 static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, DoubletSiteStr *ds, int hasDoublet, SiteStr *st, int referenceAllele, int npairs, const int *pa1, const int *pa2)
 	{
 	char	buf[4096], *p = buf;
 	double	(*LG)[4], (*NLG)[4], LGs[4][4], NLGs[4][4];
-	char	txt[4][4][400], txtN[4][4][400];	/* text of the G10 / G10N values (a %.2f of a huge double can be long) */
-	int		txtLen[4][4], txtNLen[4][4];
-	int		*rc, numReads, MLm, MLp, l, k, a1, a2;
+	double	(*L[2])[4];			/* the likelihoods and the normalized likelihoods */
+	char	txt[2][4][4][400];	/* text of the G10 / G10N values (a %.2f of a huge double can be long) */
+	int		txtLen[2][4][4];
+	int		*rc, numReads, MLm, MLp, l, k, a1, a2, v;
 	int		MLmatAllele = cs->MLmatAllele, MLpatAllele = cs->MLpatAllele;
 
 	for (k=0; k<4; k++)
@@ -332,31 +352,13 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 		MLm = ds->MLmatAlleleDoublet;  MLp = ds->MLpatAlleleDoublet;
 		}
 
+	L[0] = LG;  L[1] = NLG;
+
 	/* GT */
 	*p++ = '\t';
-	if (MLmatAllele == MISSING)
-		*p++ = '.';
-	else if (MLmatAllele == referenceAllele)
-		*p++ = '0';
-	else
-		for (l=0; l<st->numAltAlleles; l++)
-			if (st->alternateAlleles[l] == MLmatAllele)
-				{
-				p = VCF_PutInt (p, l+1);
-				break;
-				}
+	p = VCF_PutGTAllele (p, MLmatAllele, referenceAllele, st);
 	*p++ = '|';
-	if (MLpatAllele == MISSING)
-		*p++ = '.';
-	else if (MLpatAllele == referenceAllele)
-		*p++ = '0';
-	else
-		for (l=0; l<st->numAltAlleles; l++)
-			if (st->alternateAlleles[l] == MLpatAllele)
-				{
-				p = VCF_PutInt (p, l+1);
-				break;
-				}
+	p = VCF_PutGTAllele (p, MLpatAllele, referenceAllele, st);
 
 	/* DP, RC */
 	*p++ = ':';
@@ -367,85 +369,54 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 	p = VCF_PutInt (p, rc[G]);  *p++ = ',';
 	p = VCF_PutInt (p, rc[T]);
 
-	/* G10: the text of each of the 10 values is kept, because GL repeats a subset of them */
-	*p++ = ':';
-	for (k=0; k<4; k++)
-		for (l=k; l<4; l++)
+	/* G10 and G10N (plain and normalized): the text of each of the 10 values is kept, because GL and GLN repeat a subset of them */
+	for (v=0; v<2; v++)
+		{
+		*p++ = ':';
+		for (k=0; k<4; k++)
+			for (l=k; l<4; l++)
+				{
+				if (!(k == 0 && l == 0))
+					*p++ = ',';
+				txtLen[v][k][l] = (int)(VCF_PutLL (txt[v][k][l], L[v][k][l]) - txt[v][k][l]);
+				memcpy (p, txt[v][k][l], (size_t)txtLen[v][k][l]);
+				p += txtLen[v][k][l];
+				VCF_ROOM (fp, buf, p);
+				}
+		}
+	/* GL and GLN */
+	for (v=0; v<2; v++)
+		{
+		*p++ = ':';
+		for (k=0; k<npairs; k++)
 			{
-			if (!(k == 0 && l == 0))
+			if (k > 0)
 				*p++ = ',';
-			txtLen[k][l] = (int)(VCF_PutLL (txt[k][l], LG[k][l]) - txt[k][l]);
-			memcpy (p, txt[k][l], (size_t)txtLen[k][l]);
-			p += txtLen[k][l];
+			if (pa1[k] <= pa2[k])
+				{
+				memcpy (p, txt[v][pa1[k]][pa2[k]], (size_t)txtLen[v][pa1[k]][pa2[k]]);
+				p += txtLen[v][pa1[k]][pa2[k]];
+				}
+			else
+				p = VCF_PutLL (p, L[v][pa1[k]][pa2[k]]);
 			VCF_ROOM (fp, buf, p);
 			}
-	/* G10N */
-	*p++ = ':';
-	for (k=0; k<4; k++)
-		for (l=k; l<4; l++)
+		}
+	/* PL and PLN  (the non-doublet logGL is tested for infinity in both cases, as in the original) */
+	for (v=0; v<2; v++)
+		{
+		*p++ = ':';
+		for (k=0; k<npairs; k++)
 			{
-			if (!(k == 0 && l == 0))
+			a1 = pa1[k];  a2 = pa2[k];
+			if (k > 0)
 				*p++ = ',';
-			txtNLen[k][l] = (int)(VCF_PutLL (txtN[k][l], NLG[k][l]) - txtN[k][l]);
-			memcpy (p, txtN[k][l], (size_t)txtNLen[k][l]);
-			p += txtNLen[k][l];
+			if (!isfinite (LGs[a1][a2]) || !isfinite (L[v][a1][a2]))
+				*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
+			else
+				p = VCF_PutInt (p, (int)round (-10 * L[v][a1][a2]));
 			VCF_ROOM (fp, buf, p);
 			}
-	/* GL */
-	*p++ = ':';
-	for (k=0; k<npairs; k++)
-		{
-		if (k > 0)
-			*p++ = ',';
-		if (pa1[k] <= pa2[k])
-			{
-			memcpy (p, txt[pa1[k]][pa2[k]], (size_t)txtLen[pa1[k]][pa2[k]]);
-			p += txtLen[pa1[k]][pa2[k]];
-			}
-		else
-			p = VCF_PutLL (p, LG[pa1[k]][pa2[k]]);
-		VCF_ROOM (fp, buf, p);
-		}
-	/* GLN */
-	*p++ = ':';
-	for (k=0; k<npairs; k++)
-		{
-		if (k > 0)
-			*p++ = ',';
-		if (pa1[k] <= pa2[k])
-			{
-			memcpy (p, txtN[pa1[k]][pa2[k]], (size_t)txtNLen[pa1[k]][pa2[k]]);
-			p += txtNLen[pa1[k]][pa2[k]];
-			}
-		else
-			p = VCF_PutLL (p, NLG[pa1[k]][pa2[k]]);
-		VCF_ROOM (fp, buf, p);
-		}
-	/* PL  (the non-doublet logGL is tested for infinity in both cases, as in the original) */
-	*p++ = ':';
-	for (k=0; k<npairs; k++)
-		{
-		a1 = pa1[k];  a2 = pa2[k];
-		if (k > 0)
-			*p++ = ',';
-		if (!isfinite (LGs[a1][a2]) || !isfinite (LG[a1][a2]))
-			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
-		else
-			p = VCF_PutInt (p, (int)round (-10 * LG[a1][a2]));
-		VCF_ROOM (fp, buf, p);
-		}
-	/* PLN */
-	*p++ = ':';
-	for (k=0; k<npairs; k++)
-		{
-		a1 = pa1[k];  a2 = pa2[k];
-		if (k > 0)
-			*p++ = ',';
-		if (!isfinite (LGs[a1][a2]) || !isfinite (NLG[a1][a2]))
-			*p++ = '.';	/* infinite likelihood: PL cannot be represented as an integer, so use the VCF missing value */
-		else
-			p = VCF_PutInt (p, (int)round (-10 * NLG[a1][a2]));
-		VCF_ROOM (fp, buf, p);
 		}
 	/* ML */
 	*p++ = ':';
