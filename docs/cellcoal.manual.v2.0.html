@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.2.7)</p>
+<p class="date">November, 2026 (CellCoal 2.4.1)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -145,33 +145,31 @@ Version 2.2.5: quickstart, more truth metrics, Windows binary</a></li>
 2.2.6: –version, –check, Intel Mac binary</a></li>
 <li><a href="#version-2.2.7-amplification-error-among-cells" id="toc-version-2.2.7-amplification-error-among-cells">8.21 Version
 2.2.7: amplification error among cells</a></li>
-<li><a href="#tumor-only---no-outgroup-unreleased" id="toc-tumor-only---no-outgroup-unreleased">8.22 Tumor only:
-<code>--no-outgroup</code> (unreleased)</a></li>
-<li><a href="#fewer-false-variable-sites---min-alt-reads-unreleased" id="toc-fewer-false-variable-sites---min-alt-reads-unreleased">8.23
-Fewer false variable sites: <code>--min-alt-reads</code>
-(unreleased)</a></li>
-<li><a href="#allelic-dropout-in-contiguous-segments---ado-block-unreleased" id="toc-allelic-dropout-in-contiguous-segments---ado-block-unreleased">8.24
+<li><a href="#tumor-only---no-outgroup-2.3.0" id="toc-tumor-only---no-outgroup-2.3.0">8.22 Tumor only:
+<code>--no-outgroup</code> (2.3.0)</a></li>
+<li><a href="#fewer-false-variable-sites---min-alt-reads-2.3.0" id="toc-fewer-false-variable-sites---min-alt-reads-2.3.0">8.23 Fewer
+false variable sites: <code>--min-alt-reads</code> (2.3.0)</a></li>
+<li><a href="#allelic-dropout-in-contiguous-segments---ado-block-2.4.0" id="toc-allelic-dropout-in-contiguous-segments---ado-block-2.4.0">8.24
 Allelic dropout in contiguous segments: <code>--ado-block</code>
-(unreleased)</a></li>
-<li><a href="#signature-profiles-from-a-file---signature-file-unreleased" id="toc-signature-profiles-from-a-file---signature-file-unreleased">8.25
+(2.4.0)</a></li>
+<li><a href="#signature-profiles-from-a-file---signature-file-2.4.0" id="toc-signature-profiles-from-a-file---signature-file-2.4.0">8.25
 Signature profiles from a file: <code>--signature-file</code>
-(unreleased)</a></li>
-<li><a href="#amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased" id="toc-amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased">8.26
+(2.4.0)</a></li>
+<li><a href="#amplification-errors-with-a-trinucleotide-profile---amp-signature-2.4.0" id="toc-amplification-errors-with-a-trinucleotide-profile---amp-signature-2.4.0">8.26
 Amplification errors with a trinucleotide profile:
-<code>--amp-signature</code> (unreleased)</a></li>
-<li><a href="#amplification-gain-along-the-genome---gain-sd---gain-len-unreleased" id="toc-amplification-gain-along-the-genome---gain-sd---gain-len-unreleased">8.27
+<code>--amp-signature</code> (2.4.0)</a></li>
+<li><a href="#amplification-gain-along-the-genome---gain-sd---gain-len-2.4.0" id="toc-amplification-gain-along-the-genome---gain-sd---gain-len-2.4.0">8.27
 Amplification gain along the genome: <code>--gain-sd</code>,
-<code>--gain-len</code> (unreleased)</a></li>
-<li><a href="#reads-of-single-cell-genomes---bam---fastq-unreleased" id="toc-reads-of-single-cell-genomes---bam---fastq-unreleased">8.28
-Reads of single-cell genomes: <code>--bam</code>, <code>--fastq</code>
-(unreleased)</a></li>
-<li><a href="#a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased" id="toc-a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased">8.29
+<code>--gain-len</code> (2.4.0)</a></li>
+<li><a href="#reads-of-single-cell-genomes---bam---fastq-2.4.0" id="toc-reads-of-single-cell-genomes---bam---fastq-2.4.0">8.28 Reads of
+single-cell genomes: <code>--bam</code>, <code>--fastq</code>
+(2.4.0)</a></li>
+<li><a href="#a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-2.4.0" id="toc-a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-2.4.0">8.29
 A chromosome in blocks: <code>--blocks</code>, <code>--fasta</code>,
-<code>--region</code>, <code>--germline-vcf</code> (unreleased)</a></li>
-<li><a href="#base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-unreleased" id="toc-base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-unreleased">8.30
+<code>--region</code>, <code>--germline-vcf</code> (2.4.0)</a></li>
+<li><a href="#base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-2.4.1" id="toc-base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-2.4.1">8.30
 Base qualities and strand bias in the reads (<code>--qual-sd</code>,
-<code>--qual-slope</code>, <code>--strand-bias</code>,
-unreleased)</a></li>
+<code>--qual-slope</code>, <code>--strand-bias</code>, 2.4.1)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2496,8 +2494,8 @@ not record the long options (<code>--fast</code>,
 manual (section 1.1), <code>CITATION.cff</code> and the source header
 state that CellCoal 2 was developed together with Claude (Anthropic).
 Without the new option the output is identical to 2.2.6.</p>
-<h2 id="tumor-only---no-outgroup-unreleased">8.22 Tumor only:
-<code>--no-outgroup</code> (unreleased)</h2>
+<h2 id="tumor-only---no-outgroup-2.3.0">8.22 Tumor only:
+<code>--no-outgroup</code> (2.3.0)</h2>
 <p>By default the simulation includes one healthy outgroup cell
 (<code>outgcell</code>) that hangs from the healthy root. With
 <code>--no-outgroup</code> only the tumor cells are reported:</p>
@@ -2513,9 +2511,8 @@ which is the format <code>-T</code> expects, so it can be read back
 without editing;</li>
 <li>the simulation of the tumor cells is not changed.</li>
 </ul>
-<h2 id="fewer-false-variable-sites---min-alt-reads-unreleased">8.23
-Fewer false variable sites: <code>--min-alt-reads</code>
-(unreleased)</h2>
+<h2 id="fewer-false-variable-sites---min-alt-reads-2.3.0">8.23 Fewer
+false variable sites: <code>--min-alt-reads</code> (2.3.0)</h2>
 <p>A site is written to the VCF when some cell has a non-reference
 maximum-likelihood genotype. With many cells this is almost always true,
 because a small genotype error per cell adds up (100 cells, 10X, error
@@ -2585,9 +2582,9 @@ lost, and the singleton recall of the summary shows it.</p>
 <p>The summary table has <code>singleton_sites</code> and
 <code>singleton_recall</code>, so that the loss of singletons can be
 checked for any setting.</p>
-<h2 id="allelic-dropout-in-contiguous-segments---ado-block-unreleased">8.24
+<h2 id="allelic-dropout-in-contiguous-segments---ado-block-2.4.0">8.24
 Allelic dropout in contiguous segments: <code>--ado-block</code>
-(unreleased)</h2>
+(2.4.0)</h2>
 <p>By default allelic dropout (ADO, <code>-D</code>, <code>-P</code>) is
 drawn independently at every site. In real data whole segments of one
 allele are lost (a region of a chromosome that was not amplified). With
@@ -2613,9 +2610,9 @@ so consecutive pieces see one continuous process.
 models of the genotype caller still assume the mean ADO rate
 (<code>-D</code>), as before. Sparse and dense genomes give the same
 data.</p>
-<h2 id="signature-profiles-from-a-file---signature-file-unreleased">8.25
+<h2 id="signature-profiles-from-a-file---signature-file-2.4.0">8.25
 Signature profiles from a file: <code>--signature-file</code>
-(unreleased)</h2>
+(2.4.0)</h2>
 <p><code>-S</code> uses the 30 COSMIC v2 signatures built into the
 program. With <code>--signature-file FILE</code> the profiles come from
 a table in COSMIC format instead: a header line (<code>Type</code>, name
@@ -2637,9 +2634,9 @@ v2 and have exactly the values of
 many CpG contexts the sequence has (a human sequence has few),
 e.g. about 59% in 200 kb of hg38. For the 96-context profiles of COSMIC
 v3.x use <code>--signature-file</code>.</p>
-<h2 id="amplification-errors-with-a-trinucleotide-profile---amp-signature-unreleased">8.26
+<h2 id="amplification-errors-with-a-trinucleotide-profile---amp-signature-2.4.0">8.26
 Amplification errors with a trinucleotide profile:
-<code>--amp-signature</code> (unreleased)</h2>
+<code>--amp-signature</code> (2.4.0)</h2>
 <p>The amplification error (<code>-A</code>, section 5.3.4) is by
 default the same at every site and its substitutions follow the error
 matrix (<code>-X</code>). With <code>--amp-signature FILE</code>,
@@ -2667,9 +2664,9 @@ and last sites of the genome have no context and use the matrix
 the errors reproduces the 96-context signature (correlation 1.0 with 10
 cells at 30X, <code>-A0.02 0.0002 0</code>). Without
 <code>--amp-signature</code> the data are unchanged.</p>
-<h2 id="amplification-gain-along-the-genome---gain-sd---gain-len-unreleased">8.27
+<h2 id="amplification-gain-along-the-genome---gain-sd---gain-len-2.4.0">8.27
 Amplification gain along the genome: <code>--gain-sd</code>,
-<code>--gain-len</code> (unreleased)</h2>
+<code>--gain-len</code> (2.4.0)</h2>
 <p>Single-cell whole-genome amplification (MDA, PTA…) does not cover the
 genome evenly: the depth of a cell changes smoothly over regions of
 kilobases to megabases, and the two haplotypes are amplified
@@ -2702,9 +2699,9 @@ values PTA; these parameters have to be taken from real data (for
 example from the per-cell coverage profile that <code>--coverage</code>
 writes). Needs read counts (<code>-C</code>). Without these options the
 data are unchanged.</p>
-<h2 id="reads-of-single-cell-genomes---bam---fastq-unreleased">8.28
-Reads of single-cell genomes: <code>--bam</code>, <code>--fastq</code>
-(unreleased)</h2>
+<h2 id="reads-of-single-cell-genomes---bam---fastq-2.4.0">8.28 Reads of
+single-cell genomes: <code>--bam</code>, <code>--fastq</code>
+(2.4.0)</h2>
 <p>With <code>--bam</code> and/or <code>--fastq</code> (and
 <code>-C</code>, diploid DNA) CellCoal does not simulate read counts but
 paired-end reads of the amplified genome of every cell, for benchmarking
@@ -2745,9 +2742,9 @@ naive pileup baseline with and without the PCR duplicates.</p>
 quality is constant (Phred from <code>-E</code>).
 <code>tools/bamcheck.py ref.fa x.bam</code> is a dependency-free BAM
 checker.</p>
-<h2 id="a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-unreleased">8.29
+<h2 id="a-chromosome-in-blocks---blocks---fasta---region---germline-vcf-2.4.0">8.29
 A chromosome in blocks: <code>--blocks</code>, <code>--fasta</code>,
-<code>--region</code>, <code>--germline-vcf</code> (unreleased)</h2>
+<code>--region</code>, <code>--germline-vcf</code> (2.4.0)</h2>
 <p><code>--blocks B</code> simulates a chromosome of B blocks of
 <code>-l</code> sites on <strong>one</strong> coalescent tree (made in
 the first block and reused in the others). With no recombination the
@@ -2798,9 +2795,9 @@ the files of earlier versions (<code>chrom.vcf</code>,
 BED per cell) and uses <code>--min-alt-reads 2 --min-alt-vaf 0.3</code>
 by default. Not combined with <code>--bam</code>/<code>--fastq</code> or
 <code>-U</code>.</p>
-<h2 id="base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-unreleased">8.30
+<h2 id="base-qualities-and-strand-bias-in-the-reads---qual-sd---qual-slope---strand-bias-2.4.1">8.30
 Base qualities and strand bias in the reads (<code>--qual-sd</code>,
-<code>--qual-slope</code>, <code>--strand-bias</code>, unreleased)</h2>
+<code>--qual-slope</code>, <code>--strand-bias</code>, 2.4.1)</h2>
 <p>By default every base of the reads has the same quality, Q = -10
 log10(E). <strong><code>--qual-sd S</code></strong> and
 <strong><code>--qual-slope B</code></strong> make it variable: the

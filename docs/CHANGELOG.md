@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.4.1
+`--amp-cell-var` and chromosome blocks in reads mode, variable base qualities and strand bias in the reads. See [CHANGES-2.4.1.md](CHANGES-2.4.1.md).
+
 ## 2.4.0
 Allelic dropout in contiguous segments (`--ado-block`), signature files (`--signature-file`), signature-shaped amplification errors (`--amp-signature`), autocorrelated coverage (`--gain-sd`), the read-level simulator (`--bam`, `--fastq`, `truth.vcf`) and a chromosome in blocks inside the program (`--blocks`, `--fasta`, `--region`, `--germline-vcf`) and explicit modes (genotypes, read counts, reads) with option checks. See [CHANGES-2.4.0.md](CHANGES-2.4.0.md).
 
