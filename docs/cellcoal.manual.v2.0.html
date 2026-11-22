@@ -34,7 +34,7 @@ img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1p
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.2.7)</p>
+<p class="date">November, 2026 (CellCoal 2.3.0)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -143,11 +143,10 @@ Version 2.2.5: quickstart, more truth metrics, Windows binary</a></li>
 2.2.6: –version, –check, Intel Mac binary</a></li>
 <li><a href="#version-2.2.7-amplification-error-among-cells" id="toc-version-2.2.7-amplification-error-among-cells">8.21 Version
 2.2.7: amplification error among cells</a></li>
-<li><a href="#tumor-only---no-outgroup-unreleased" id="toc-tumor-only---no-outgroup-unreleased">8.22 Tumor only:
-<code>--no-outgroup</code> (unreleased)</a></li>
-<li><a href="#fewer-false-variable-sites---min-alt-reads-unreleased" id="toc-fewer-false-variable-sites---min-alt-reads-unreleased">8.23
-Fewer false variable sites: <code>--min-alt-reads</code>
-(unreleased)</a></li>
+<li><a href="#tumor-only---no-outgroup-2.3.0" id="toc-tumor-only---no-outgroup-2.3.0">8.22 Tumor only:
+<code>--no-outgroup</code> (2.3.0)</a></li>
+<li><a href="#fewer-false-variable-sites---min-alt-reads-2.3.0" id="toc-fewer-false-variable-sites---min-alt-reads-2.3.0">8.23 Fewer
+false variable sites: <code>--min-alt-reads</code> (2.3.0)</a></li>
 <li><a href="#j-windows-experimental" id="toc-j-windows-experimental">6.10j Windows (experimental)</a></li>
 <li><a href="#version-2.1.1-streamed-read-counts" id="toc-version-2.1.1-streamed-read-counts">8.8 Version 2.1.1: streamed
 read counts</a></li>
@@ -2335,8 +2334,8 @@ not record the long options (<code>--fast</code>,
 manual (section 1.1), <code>CITATION.cff</code> and the source header
 state that CellCoal 2 was developed together with Claude (Anthropic).
 Without the new option the output is identical to 2.2.6.</p>
-<h2 id="tumor-only---no-outgroup-unreleased">8.22 Tumor only:
-<code>--no-outgroup</code> (unreleased)</h2>
+<h2 id="tumor-only---no-outgroup-2.3.0">8.22 Tumor only:
+<code>--no-outgroup</code> (2.3.0)</h2>
 <p>By default the simulation includes one healthy outgroup cell
 (<code>outgcell</code>) that hangs from the healthy root. With
 <code>--no-outgroup</code> only the tumor cells are reported:</p>
@@ -2352,9 +2351,8 @@ which is the format <code>-T</code> expects, so it can be read back
 without editing;</li>
 <li>the simulation of the tumor cells is not changed.</li>
 </ul>
-<h2 id="fewer-false-variable-sites---min-alt-reads-unreleased">8.23
-Fewer false variable sites: <code>--min-alt-reads</code>
-(unreleased)</h2>
+<h2 id="fewer-false-variable-sites---min-alt-reads-2.3.0">8.23 Fewer
+false variable sites: <code>--min-alt-reads</code> (2.3.0)</h2>
 <p>A site is written to the VCF when some cell has a non-reference
 maximum-likelihood genotype. With many cells this is almost always true,
 because a small genotype error per cell adds up (100 cells, 10X, error

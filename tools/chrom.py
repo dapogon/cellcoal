@@ -6,11 +6,11 @@ sites are independent given the tree).  For each block only the variable sites g
 summarized by the number of sites for each genotype of the healthy root (inv_AA ... inv_TT in the summary table).
 
 Usage (random sequence):
-  python3 tools/chrom.py --exe bin/cellcoal-2.2.7 --blocks 50 --block-size 200000 --out chr1 [--jobs 4] [--seed 7]
+  python3 tools/chrom.py --exe bin/cellcoal-2.3.0 --blocks 50 --block-size 200000 --out chr1 [--jobs 4] [--seed 7]
                          [--keep] [--gzip] -- <CellCoal options: -s -u -e -g -C -D -E --min-alt-reads ...>
 
 Usage (real reference sequence):
-  python3 tools/chrom.py --exe bin/cellcoal-2.2.7 --fasta hg38.fa --region chr1:10000001-20000000 --out chr1 -- <options>
+  python3 tools/chrom.py --exe bin/cellcoal-2.3.0 --fasta hg38.fa --region chr1:10000001-20000000 --out chr1 -- <options>
 
   --fasta FILE      reference in standard FASTA (several lines per sequence, upper or lower case; an index FILE.fai is
                     used when it exists).  Sites that are not A, C, G or T (N...) are left out of the simulation: they

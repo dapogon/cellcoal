@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.2.7)"
+date: "November, 2026 (CellCoal 2.3.0)"
 ---
 
 # 1. About CellCoal
@@ -1091,7 +1091,7 @@ New chapter 3 (quickstart). `--summary` adds `het_error`, `hom_error`, `het_to_h
 
 New option `--amp-cell-var` (section 6.10c2): the mean amplification error varies among cells. Fix: `run.json` did not record the long options (`--fast`, `--summary`, `--cov-ado-corr`, ...) and now does, so `--config Results/run.json` repeats any run. The README, the manual (section 1.1), `CITATION.cff` and the source header state that CellCoal 2 was developed together with Claude (Anthropic). Without the new option the output is identical to 2.2.6.
 
-## 8.22 Tumor only: `--no-outgroup` (unreleased)
+## 8.22 Tumor only: `--no-outgroup` (2.3.0)
 
 By default the simulation includes one healthy outgroup cell (`outgcell`) that hangs from the healthy root. With `--no-outgroup` only the tumor cells are reported:
 
@@ -1100,7 +1100,7 @@ By default the simulation includes one healthy outgroup cell (`outgcell`) that h
 - the tree written with `-6` contains the ingroup only, which is the format `-T` expects, so it can be read back without editing;
 - the simulation of the tumor cells is not changed.
 
-## 8.23 Fewer false variable sites: `--min-alt-reads` (unreleased)
+## 8.23 Fewer false variable sites: `--min-alt-reads` (2.3.0)
 
 A site is written to the VCF when some cell has a non-reference maximum-likelihood genotype. With many cells this is almost always true, because a small genotype error per cell adds up (100 cells, 10X, error 0.001, ADO 0.25: about 85,000 of 200,000 sites). `--min-alt-reads M` asks for at least M reads of the alternative allele in a cell that is called non-reference. It does not count cells, so singletons (a mutation in one cell only) are kept.
 
