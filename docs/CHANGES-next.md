@@ -1,1 +1,1 @@
-# Unreleased (after 2.4.1)
+# Unreleased (after 2.4.2)

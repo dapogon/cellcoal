@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.4.2
+One command-line parser, grouped options (`--ado`, `--depth`, `--output`, ...), a reorganized `--help`, and about 2,300 lines less code. Output identical to 2.4.1. See [CHANGES-2.4.2.md](CHANGES-2.4.2.md).
+
 ## 2.4.1
 `--amp-cell-var` and chromosome blocks in reads mode, variable base qualities and strand bias in the reads. See [CHANGES-2.4.1.md](CHANGES-2.4.1.md).
 
