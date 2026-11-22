@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.5.1
+Fix: the Windows build works again (2.4.0 to 2.5.0 have no Windows zip). Output identical to 2.5.0. See [CHANGES-2.5.1.md](CHANGES-2.5.1.md).
+
 ## 2.5.0
 Copy number: segment losses and gains interleaved with the SNVs, deletions and cnLOH, branch by branch, over copies with known phase; `--phase`, haplotypes per copy and `cnv_segments`; every substitution model. See [CHANGES-2.5.0.md](CHANGES-2.5.0.md).
 

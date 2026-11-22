@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.5.0)"
+date: "November, 2026 (CellCoal 2.5.1)"
 ---
 
 # 1. About CellCoal
