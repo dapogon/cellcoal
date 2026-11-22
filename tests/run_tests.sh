@@ -1255,5 +1255,20 @@ else echo "  skip (python3 not installed)"; fi
 "$BIN" -n1 -s8 -l500 -u1e-6 -e1000 -d0 -#7 -m2 -p0.5 -w3 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 --seg-len 100 -1 --phase >E.txt 2>&1 && grep -q "|" Results/snv_gen && ok "finite sites with losses and gains run and show the phase" || bad "finite sites run"
 cd "$ROOT"
 
+echo "2g51. Long options accept the values that their range allows (0, negative slope)"
+cd "$TMP"
+okopt=1
+for o in "--qual-slope -1" "--qual-slope 0" "--qual-sd 0" "--strand-bias 0" "--dup-mean 0" "--seg-loss-rate 0" "--seg-gain-rate 0"; do
+  "$BIN" -n1 -s4 -l1000 -u1e-7 -e10000 -C5 -E0.001 -D0.1 --ado-block 300 --bam $o -#1 -oZeroOpts >Z.txt 2>&1 || { okopt=0; echo "    rejected: $o"; }
+  rm -rf ZeroOpts
+done
+[ $okopt = 1 ] && ok "0 and a negative slope are accepted" || bad "long options reject valid values"
+for o in "--qual-slope 9" "--strand-bias -1" "--read-len 0"; do
+  "$BIN" -n1 -s4 -l1000 -u1e-7 -e10000 -C5 -E0.001 -D0.1 --ado-block 300 --bam $o -#1 -oZeroOpts >Z.txt 2>&1 && { okopt=0; echo "    accepted: $o"; }
+  rm -rf ZeroOpts
+done
+[ $okopt = 1 ] && ok "values out of range are still rejected" || bad "out of range values accepted"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

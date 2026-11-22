@@ -21,7 +21,10 @@ cfg_text = open(os.path.join(root, "examples", "config.example.yaml")).read()
 usage = subprocess.run([binary, "-?"], capture_output=True, text=True, timeout=20).stdout + \
         subprocess.run([binary, "-?"], capture_output=True, text=True, timeout=20).stderr
 letters = sorted(set(re.findall(r"-([A-Za-z0-9#])[#\s]", usage.split("Usage:")[-1].split("\n")[0]))) or list("nslegCVEDA")
-long_opts = ["--fast", "--bcf", "--cov-ado-corr", "--config"]
+long_opts = ["--fast", "--bcf", "--cov-ado-corr", "--config", "--phase", "--no-outgroup", "--seg-loss-rate", "--seg-gain-rate", "--seg-len",
+             "--seg-max-copies", "--seg-loss-len", "--seg-gain-len", "--ado-block", "--gain-sd", "--gain-len", "--amp-cell-var", "--min-alt-reads",
+             "--min-alt-vaf", "--cov-doublet-corr", "--ado-doublet-corr", "--qual-sd", "--qual-slope", "--strand-bias", "--dup-mean"]
+long_flags = ("--fast", "--bcf", "--phase", "--no-outgroup")
 
 NASTY = ["", "0", "-1", "1", "0.5", "1e-6", "1e308", "-1e308", "nan", "inf", "99999999999", "-99999999999", "abc", "1e", ".", "--", "%s%n", "0x10", "1,2", "ÿ"]
 BASE = ["-n1", "-s8", "-l200", "-u1e-6", "-e1000", "-b1", "-C5", "-V1", "-E0.001"]
@@ -38,7 +41,7 @@ def random_cmd():
         r = rng.random()
         if r < 0.12:
             o = rng.choice(long_opts)
-            cmd += [o] + ([value()] if o in ("--cov-ado-corr",) else [])
+            cmd += [o] + ([] if o in long_flags or o == "--config" else [value()])
         else:
             cmd.append("-" + rng.choice(letters) + value())
             if rng.random() < 0.3: cmd.append(value())

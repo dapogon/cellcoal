@@ -54,6 +54,25 @@ static int ExtraBoolFlag (int flag)
 	}
 
 /* parses the option out[*i] if it is one of the table; returns 1 when it was */
+/* options of the table whose value may be 0 (the range is checked later), and the one that may be negative */
+static int ExtraZeroAllowed (const char *opt)
+	{
+	static const char *zero[] = {"--bulk-depth", "--seg-loss-rate", "--seg-gain-rate", "--qual-sd", "--strand-bias", "--dup-mean", NULL};
+	int	k;
+
+	for (k=0; zero[k]; k++)
+		if (strcmp (opt, zero[k]) == 0)
+			return 1;
+	return 0;
+	}
+
+static int ExtraValueAllowed (const char *opt, double v)
+	{
+	if (strcmp (opt, "--qual-slope") == 0)
+		return 1;					/* negative: the quality improves along the read (range checked later) */
+	return ExtraZeroAllowed (opt) ? (v >= 0.0) : (v > 0.0);
+	}
+
 static int ParseExtra (char **out, int *i, int n)
 	{
 	int e;
@@ -82,9 +101,9 @@ static int ParseExtra (char **out, int *i, int n)
 					*(double*) o->ptr = atof (out[*i]);
 				else
 					*(char**) o->ptr = out[*i];
-				if ((o->kind == 1 || o->kind == 2) && !(atof (out[*i]) > 0.0 || (o->kind == 2 && strcmp (o->opt, "--bulk-depth") == 0 && atof (out[*i]) >= 0.0)))
+				if ((o->kind == 1 || o->kind == 2) && !ExtraValueAllowed (o->opt, atof (out[*i])))
 					{
-					snprintf (msg, sizeof(msg), "%s has to be > 0", o->opt);
+					snprintf (msg, sizeof(msg), "%s has to be %s", o->opt, ExtraZeroAllowed (o->opt) ? ">= 0" : "> 0");
 					CfgError ("the command line", msg, out[*i]);
 					}
 				}
@@ -610,6 +629,15 @@ void PrintConfigKeys (FILE *fp)
 		}
 	for (e=0; extraOpts[e].key; e++)
 		{
+		int dup = 0;
+		for (i=0; optionNames[i].name; i++)		/* already listed with the options (the long options are in both tables) */
+			if (strcmp (optionNames[i].name, extraOpts[e].key) == 0)
+				{ dup = 1; break; }
+		for (i=0; i<e && !dup; i++)
+			if (strcmp (extraOpts[i].key, extraOpts[e].key) == 0)
+				dup = 1;
+		if (dup)
+			continue;
 		fprintf (fp, "%s%-34s %-18s", (col % 2 == 0) ? "\n" : "  ", extraOpts[e].key, extraOpts[e].opt);
 		col++;
 		}
