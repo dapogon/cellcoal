@@ -686,6 +686,33 @@ int ExtraCopies (int node, int genome, long site, Geno *out)
 	return n;
 	}
 
+/* the largest number of extra copies that the haplotype of a node has at some site */
+int MaxExtraCopies (int node, int genome)
+	{
+	const SegList	*l;
+	int				mx = 0, j, k, n, s0, e0;
+
+	if (lin == NULL || copyGainOn == NO || node >= cnNodes)
+		return 0;
+	l = &lin[2 * node + genome];
+	for (k=0; k<l->n; k++)
+		{
+		s0 = l->v[k].s;
+		e0 = l->v[k].e;
+		for (j=s0; j<e0; j++)		/* the copies are counted site by site: segments of different copies overlap */
+			{
+			int		c = 0;
+
+			for (n=0; n<l->n; n++)
+				if (j >= l->v[n].s && j < l->v[n].e)
+					c++;
+			if (c > mx)
+				mx = c;
+			}
+		}
+	return mx;
+	}
+
 /* sites where an extra copy has an allele that differs from the root: they are variable even if the first copies are not */
 void MarkExtraCopyVariants (char *isVar)
 	{
@@ -736,6 +763,64 @@ void SimulateCopyNumberGenomes (TreeNode *root, long int *seed)
 	}
 
 /************************************* truth file *************************************/
+/* the true number of copies of every cell, by segments of sites with the same copies of both haplotypes */
+void WriteCnvSegments (int replicate)
+	{
+	char	file[4*MAX_NAME], name[4*MAX_NAME];
+	FILE	*fp;
+	int		i, j, m, p, pm = -1, pp = -1, start = 0;
+	Geno	ex[MAX_COPIES];
+
+	if (doPrintSeparateReplicates == YES)
+		{
+		snprintf (file, sizeof(file), "%s/cnv_segments_dir", resultsDir);
+		MAKE_DIR (file);
+		snprintf (file, sizeof(file), "%s/cnv_segments_dir/cnv_segments.%04d", resultsDir, replicate+1);
+		fp = fopen (file, "w");
+		}
+	else
+		{
+		snprintf (file, sizeof(file), "%s/cnv_segments", resultsDir);
+		fp = fopen (file, replicate == 0 ? "w" : "a");
+		}
+	if (!fp)
+		{
+		fprintf (stderr, "Can't open \"%s\"\n", file);
+		exit (-1);
+		}
+	if (doPrintSeparateReplicates == NO)
+		fprintf (fp, "[#%d]\n", replicate+1);
+	fprintf (fp, "cell\tstart\tend\tmaternal_copies\tpaternal_copies\ttotal_copies\n");
+	for (i=0; i<numCells; i++)
+		{
+		if (doUserTree == NO)
+			snprintf (name, sizeof (name), "%s%04d", inCellName, i + 1);
+		else
+			snprintf (name, sizeof (name), "%s", cellNames[i]);
+		pm = pp = -1;
+		start = 0;
+		for (j=0; j<=numSites; j++)
+			{
+			if (j < numSites)
+				{
+				m = (GetG (MATERNAL, i, j) != DELETION) ? 1 + ExtraCopies (i, MATERNAL, j, ex) : 0;
+				p = (GetG (PATERNAL, i, j) != DELETION) ? 1 + ExtraCopies (i, PATERNAL, j, ex) : 0;
+				}
+			else
+				m = p = -2;
+			if (m != pm || p != pp)
+				{
+				if (pm >= 0)
+					fprintf (fp, "%s\t%d\t%d\t%d\t%d\t%d\n", name, start + 1, j, pm, pp, pm + pp);
+				start = j;
+				pm = m;
+				pp = p;
+				}
+			}
+		}
+	fclose (fp);
+	}
+
 static void LeafNames (TreeNode *p, char *buf, size_t cap, int *count)
 	{
 	char	name[4*MAX_NAME];

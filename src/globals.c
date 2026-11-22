@@ -93,6 +93,7 @@ double				insertMean = 400.0, insertSd = 60.0, bulkDepth = 0.0, dupMean = 0.3, q
 char				*contigName = "chr1";
 double				gainSd = 0.0;	/* --gain-sd: standard deviation of the log amplification gain of a haplotype (0 = off) */
 double				lossRate = 0.0, gainRate = 0.0, segLen = 1000.0, segLossLen = 0.0, segGainLen = 0.0;	/* --seg-loss-rate, --seg-len: copy-number losses of segments (rate per genome and generation, mean length in sites) */
+int					doPhase = 0;
 int					numSegLoss = 0, numSegGain = 0, snvsLostBySegments = 0;
 double				gainLen = 0.0;	/* --gain-len: mean length (sites) of the segments of constant gain */
 int					gainOn = 0;

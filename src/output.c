@@ -239,7 +239,7 @@ static void PrintCopyGenotype (FILE *fp, int i, int site, int binary)
 
 	for (h=0; h<2; h++)
 		{
-		if (h == 1 && CN_EVENTS)
+		if (h == 1 && CN_EVENTS && doPhase)
 			fputc ('|', fp);
 		fputc (binary ? WhichMut (a[h]) : WhichNuc (a[h]), fp);
 		if (copyGainOn == YES && a[h] != DELETION)
@@ -552,6 +552,33 @@ static void PrintHaplotypeRow (FILE *fp, int row, const int *sites, int n, int k
 	fputc ('\n', fp);
 	}
 
+/* label of the row of the rank-th copy (rank >= 2) of a haplotype of a cell: cell0001m2, cell0001p3 */
+static void PrintCopyLabel (FILE *fp, int i, char kind, int rank)
+	{
+	if (doUserTree == NO)
+		fprintf (fp, "%s%04d%c%d ", inCellName, i+1, kind, rank);
+	else
+		fprintf (fp, "%c%d%-*s ", kind, rank, stringPrecision, cellNames[i]);
+	}
+
+/* row of the rank-th copy (rank >= 2) of a haplotype: the allele of the copy at each site, or a gap where the cell has fewer copies */
+static void PrintCopyRow (FILE *fp, int row, const int *sites, int n, int h, int rank)
+	{
+	Geno	ex[MAX_COPIES];
+	int		j, site, k;
+
+	for (j=0; j<n; j++)
+		{
+		site = (sites == NULL) ? j : sites[j];
+		k = ExtraCopies (row, h, site, ex);
+		if (GetG (h, row, site) == DELETION || k < rank - 1)
+			fputc ('-', fp);
+		else
+			fputc (alphabet == DNA ? WhichNuc (ex[rank - 2]) : WhichMut (ex[rank - 2]), fp);
+		}
+	fputc ('\n', fp);
+	}
+
 /* Prints the haplotypes of a list of sites (all of them when sites is NULL): the true ones, or those
    inferred from the read counts when fromReads is YES (then the root rows are not printed) */
 static void PrintSiteHaplotypes (FILE *fp, const int *sites, int n, int fromReads, int loadRows)
@@ -563,7 +590,21 @@ static void PrintSiteHaplotypes (FILE *fp, const int *sites, int n, int fromRead
 	int		roots[2] = {OUTGROUP_ROOT, INGROUP_ROOT};
 	const char	*rootNames[2] = {outRootCellName, inRootCellName};
 
-	fprintf (fp, "%d %d\n", (consensus == YES ? 1 : 2) * (NUM_TAXA + (ancestors ? 2 : 0)), n);
+	int		extraRows = 0, *extraM = NULL, *extraP = NULL, r;
+
+	if (CN_EVENTS && fromReads == NO && consensus == NO && copyGainOn == YES)		/* one row for every copy of every haplotype */
+		{
+		extraM = (int *) Checked (calloc (NUM_TAXA, sizeof (int)), "Could not allocate the copy rows\n");
+		extraP = (int *) Checked (calloc (NUM_TAXA, sizeof (int)), "Could not allocate the copy rows\n");
+		for (i=0; i<NUM_TAXA; i++)
+			if (i < numCells)
+				{
+				extraM[i] = MaxExtraCopies (i, MATERNAL);
+				extraP[i] = MaxExtraCopies (i, PATERNAL);
+				extraRows += extraM[i] + extraP[i];
+				}
+		}
+	fprintf (fp, "%d %d\n", (consensus == YES ? 1 : 2) * (NUM_TAXA + (ancestors ? 2 : 0)) + extraRows, n);
 
 	if (sites != NULL)		/* positions of the sites */
 		{
@@ -586,8 +627,20 @@ static void PrintSiteHaplotypes (FILE *fp, const int *sites, int n, int fromRead
 			{
 			PrintRowLabel (fp, i, 'm');
 			PrintHaplotypeRow (fp, i, sites, n, kindM, useML);
+			if (extraM != NULL && i < numCells)
+				for (r=0; r<extraM[i]; r++)
+					{
+					PrintCopyLabel (fp, i, 'm', r + 2);
+					PrintCopyRow (fp, i, sites, n, MATERNAL, r + 2);
+					}
 			PrintRowLabel (fp, i, 'p');
 			PrintHaplotypeRow (fp, i, sites, n, kindP, useML);
+			if (extraP != NULL && i < numCells)
+				for (r=0; r<extraP[i]; r++)
+					{
+					PrintCopyLabel (fp, i, 'p', r + 2);
+					PrintCopyRow (fp, i, sites, n, PATERNAL, r + 2);
+					}
 			}
 		}
 
@@ -607,6 +660,8 @@ static void PrintSiteHaplotypes (FILE *fp, const int *sites, int n, int fromRead
 				PrintHaplotypeRow (fp, roots[i], sites, n, kindP, NO);
 				}
 			}
+	free (extraM);
+	free (extraP);
 	}
 
 /***************************** PrintSNVHaplotypes *******************************/
