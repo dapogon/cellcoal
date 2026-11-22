@@ -1282,5 +1282,15 @@ if [ "$(h CL6/reads_1/cell0001.R1.fastq.gz)" = "$(h CL1/reads_1/cell0001.R1.fast
 rm -rf CL6 CL1 CL9 CL0
 cd "$ROOT"
 
+echo "2g53. The reads mode is parallel by cells and gives the same files for any number of threads"
+cd "$TMP"
+A="-n1 -s6 -l20000 -u1e-7 -e10000 -C10 -E0.001 -D0.1 --ado-block 2000 --gain-sd 0.4 --gain-len 3000 -A0.01 0.0002 0 --qual-sd 0.5 --strand-bias 0.5 --fastq --bam --bulk-depth 5 -#4"
+OMP_NUM_THREADS=1 "$BIN" $A -oTH1 >/dev/null 2>&1; OMP_NUM_THREADS=3 "$BIN" $A -oTH3 >/dev/null 2>&1
+same=1
+for f in cell0001.bam cell0006.bam normal.bam cell0002.R1.fastq.gz cell0005.R2.fastq.gz truth.vcf; do cmp -s TH1/reads_1/$f TH3/reads_1/$f || { same=0; echo "    differs: $f"; }; done
+[ $same = 1 ] && ok "1 and 3 threads give identical BAM, FASTQ and truth files" || bad "reads mode depends on the number of threads"
+rm -rf TH1 TH3
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

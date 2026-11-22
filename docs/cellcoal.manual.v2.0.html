@@ -575,7 +575,9 @@ taken from the clock and is written in <code>log</code> and
 <code>run.json</code>.</li>
 <li><strong>Threads.</strong>
 <code>OMP_NUM_THREADS=4 cellcoal ...</code> chooses the number of
-threads for the read counts and the VCF; by default all the cores are
+threads for the read counts, the VCF and the reads (one cell per thread
+in the reads mode; the memory grows with the threads, because every cell
+is built in memory before it is written); by default all the cores are
 used.</li>
 <li><strong>Size.</strong> The VCF is by far the largest file (for
 example, 770 MB for 2 replicates of 100 cells with 30,000 sites). For
@@ -636,10 +638,10 @@ parameters can be obtained with the argument -?:</p>
 <p><code>bin/cellcoal-x.y.z -?</code></p>
 <h2 id="parallel-execution-and-reproducibility">4.1 Parallel execution
 and reproducibility</h2>
-<p>Since version 2.0.0 CellCoal uses OpenMP to generate read counts and
-to print the VCF file in parallel. The number of threads is controlled
-with the environment variable <code>OMP_NUM_THREADS</code>, for
-example:</p>
+<p>CellCoal uses OpenMP to generate read counts, to print the VCF file
+and to simulate the reads (cell by cell) in parallel. The number of
+threads is controlled with the environment variable
+<code>OMP_NUM_THREADS</code>, for example:</p>
 <pre><code>OMP_NUM_THREADS=4 bin/cellcoal-2.0.1 -Fexamples/parameters.GTR.reads</code></pre>
 <p>If the variable is not set, OpenMP uses all the available cores. Use
 <code>OMP_NUM_THREADS=1</code> to run on a single core.</p>

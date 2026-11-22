@@ -175,7 +175,7 @@ You can sweep any option of the simulation (the sequencing error `E`, the dropou
 ## 3.5 Good to know
 
 - **Reproducibility.** The same seed (`-#`) and options give identical results in every run and independent of the number of threads (section 4.1). Without `-#`, the seed is taken from the clock and is written in `log` and `run.json`.
-- **Threads.** `OMP_NUM_THREADS=4 cellcoal ...` chooses the number of threads for the read counts and the VCF; by default all the cores are used.
+- **Threads.** `OMP_NUM_THREADS=4 cellcoal ...` chooses the number of threads for the read counts, the VCF and the reads (one cell per thread in the reads mode; the memory grows with the threads, because every cell is built in memory before it is written); by default all the cores are used.
 - **Size.** The VCF is by far the largest file (for example, 770 MB for 2 replicates of 100 cells with 30,000 sites). For many cells or sites use `-z` (compressed), `--bcf`, or write only what you need with `-Z` and `-0`, `-8` or `-9`. Runs with many sites keep the genotypes in a compact (sparse) form and, when the read counts would not fit in memory, they are generated and written site by site (section 5.4).
 - **The help.** `cellcoal -?` (or `--help`) lists every option with its default value; `cellcoal --version` prints the version.
 - **Check before running.** `cellcoal --check` followed by your options (or alone, to check the `parameters` file) validates them and shows what the run would do: replicates, cells, sites, expected number of mutations and tree depth, outputs, and whether the results folder exists (a run deletes it). Nothing is simulated; invalid options give a non-zero exit code.
@@ -207,7 +207,7 @@ A brief usage guide plus the current default values for the different parameters
 
 ## 4.1 Parallel execution and reproducibility
 
-Since version 2.0.0 CellCoal uses OpenMP to generate read counts and to print the VCF file in parallel. The number of threads is controlled with the environment variable `OMP_NUM_THREADS`, for example:
+CellCoal uses OpenMP to generate read counts, to print the VCF file and to simulate the reads (cell by cell) in parallel. The number of threads is controlled with the environment variable `OMP_NUM_THREADS`, for example:
 
     OMP_NUM_THREADS=4 bin/cellcoal-2.0.1 -Fexamples/parameters.GTR.reads
 

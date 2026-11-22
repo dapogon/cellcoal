@@ -831,15 +831,37 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 		RefPut (c);
 		}
 
-	for (i=0; i<numCells; i++)
+	/* every cell (and the healthy bulk) has its own random stream, taken from the main stream, so the cells are simulated in parallel and
+	   the files are the same for any number of threads */
+	{
+	uint64_t	base;
+	long		s1, s2;
+
+	if (qualSd > 0.0 || qualSlope != 0.0)
+		QualSetup (readLen, seed);		/* the multipliers of the bases are shared by all the cells: drawn once, before the threads start */
+	RandomUniform (seed);
+	s1 = *seed;
+	RandomUniform (seed);
+	s2 = *seed;
+	base = ((uint64_t) s1 << 32) ^ (uint64_t) s2;
+
+	#pragma omp parallel for schedule(dynamic,1) reduction(+:total)
+	for (i=0; i<nrouts; i++)
 		{
-		snprintf (rg, sizeof(rg), "cell%04d", i + 1);
-		total += SimulateGenome (i, coverage, 1, rg, seed, &routs[i]);
-		if (noisy > 0)
-			fprintf (stderr, "\rreads: cell %d/%d", i + 1, numCells);
+		char	rgi[64];
+
+		if (i < numCells)
+			snprintf (rgi, sizeof(rgi), "cell%04d", i + 1);
+		else
+			snprintf (rgi, sizeof(rgi), "normal");
+		StartStream (base, (uint64_t) i + 1);
+		if (i < numCells)
+			total += SimulateGenome (i, coverage, 1, rgi, seed, &routs[i]);
+		else
+			SimulateGenome (-1, bulkDepth, 0, rgi, seed, &routs[i]);
+		streamActive = 0;
 		}
-	if (bulkDepth > 0.0)
-		SimulateGenome (-1, bulkDepth, 0, "normal", seed, &routs[numCells]);
+	}
 	if (noisy > 0)
 		fprintf (stderr, "\rreads: %ld pairs in %d cells -> %s\n", total, numCells, readDir);
 	if (blocksOn == 0)
