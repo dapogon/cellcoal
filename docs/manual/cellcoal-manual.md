@@ -345,29 +345,34 @@ The first three are the original events of CellCoal; copy-number losses and gain
 
 **Two ways of adding the events.** When no loss or gain of segments is requested, SNVs, cnLOH and point deletions are added one kind after another, as in the earlier versions of CellCoal. When the loss or the gain rate is above zero, all the kinds of events are planned together and applied branch by branch in random order (section 5.2.8), because the order matters when the copy number changes.
 
-### 5.2.1 Reference and ancestral genomes: simulated or from a real chromosome
+### 5.2.1 The starting genome: simulated or a real chromosome
 
-The first step to generate the cell genotypes is to have a **reference genome**, and then an **ancestral genome** at the sample/outgroup MRCA of the genealogy (the genome of the healthy cell), from which the somatic events start. CellCoal can make both **from scratch** or **start from a real chromosome**:
+Before any mutation, CellCoal needs the genome that the cells inherit: the **ancestral genome**, which is the genome of the healthy cell and of the common ancestor of all the cells. The somatic events (SNVs, deletions, cnLOH, copy-number losses and gains) are then added to it along the tree. The ancestral genome is the **reference genome** (the sequence that the REF column of the VCF shows) plus, optionally, **germline variation** (the differences between the individual and the reference).
 
-| Starting point | How | What you get |
+There are two ways to get the reference, and then you can add germline variation to it.
+
+**1. A simulated reference (default).** Nothing to give.
+
+- Binary alphabet (`-b0`): all the sites are 0.
+- DNA (`-b1`): a random sequence with the nucleotide frequencies of `-f`. If genetic signatures are used (`-S`), the sequence is drawn with the trinucleotide frequencies of the human genome (GRCh37), so that the signatures find the contexts they need.
+
+**2. A real reference, such as a human chromosome.** You give a FASTA file and the cells start from that real sequence. There are two ways, depending on the length:
+
+| Option | Use it for | How it works |
 |---|---|---|
-| **Simulated reference** (default) | nothing to give | binary alphabet: all 0s. DNA: random sequence with the nucleotide frequencies of `-f`; with genetic signatures (`-S`) the sequence follows the trinucleotide frequencies of the human genome (GRCh37) |
-| **A real genome of up to 10^6^ sites** | `-U FILE` (DNA) | the diploid genome of the FASTA file (a maternal and a paternal sequence) is the ancestral genome, so it can already be heterozygous |
-| **A real chromosome or region of any length** | `--fasta FILE` (plain or `.gz`), with `--region chrom:start-end` for a region | the real sequence is the reference; it is simulated in blocks of `-l` sites on one tree, so the memory is that of one block (section 5.3). The positions in the VCF are the real ones and the reference base is the REF of the VCF |
-| **Real germline variation** | `--germline-vcf FILE` | the germline SNVs (GT 0\|1, 1\|0, 1\|1) of a real individual are put into the healthy genome, which becomes the ancestral genome; those sites are flagged `GERMLINE` in the VCF |
-| **Simulated germline variation** | `-c RATE` | SNPs at that rate per site are added to the reference to make the ancestral genome (with rate 0 both are identical). Not with `--germline-vcf` |
+| `--fasta FILE` (plain or `.gz`), with `--region chrom:start-end` | a whole chromosome or any region, of any length (the normal way) | the sequence is simulated in blocks of `-l` sites on one tree, so the memory is that of one block (section 5.3). The VCF has the real positions, and REF is the base of the FASTA |
+| `-U FILE` | a short genome, up to 10^6^ sites | the file has two sequences, maternal and paternal, each on one line and of the same length; they are used as the ancestral genome, so it can already be heterozygous |
 
-With a real chromosome the mutation models, the signatures (`-S`) and the copy-number events work as with a simulated one; the trinucleotide context of every site is the real one, so a signature such as SBS1 concentrates on the CpG sites that the sequence really has (section 5.2.3). Sites that are not A, C, G or T are left out. The reads mode (`--bam`, `--fastq`) writes the reads of the whole chromosome in its real coordinates (section 5.5).
+**3. Germline variation (optional).** The ancestral genome is the reference with its germline SNPs:
 
-**Which human genome?** CellCoal does not include a human reference: you give it the FASTA file of the assembly that you want, and the program does not need to know which one it is. Any version works (for example GRCh38/hg38, `hg38.fa.gz` from UCSC or the primary assembly from Ensembl or NCBI, or GRCh37/hg19); use the same assembly as the data that you want to mimic or compare with, and the one that the real germline VCF, the annotations or the callers use. Three details:
+- `-c RATE` adds SNPs at random, at that rate per site (with rate 0 the ancestral genome is the reference);
+- `--germline-vcf FILE` puts the real germline SNVs of an individual (GT `0|1`, `1|0`, `1|1`) into the healthy genome; those sites are flagged `GERMLINE` instead of `SOMATIC` in the VCF. It is used with `--fasta`, and not together with `-c`.
 
-- **Names and coordinates.** `--region` uses the names of the sequences of your FASTA (`chr21` in UCSC files, `21` in Ensembl) and its coordinates (1-based, inclusive); a `--germline-vcf` has to be of the same assembly and use the same chromosome names.
-- **Gaps and masking.** The `N` bases (telomeres, centromeres, gaps; large in some chromosomes) are left out of the simulation and the VCF, and lower case (soft-masked repeats) is read as upper case, so the whole sequence is simulated.
-- **Signatures.** The mutational signatures are defined by the trinucleotide context and do not depend on the assembly. The 30 built-in signatures and the trinucleotide frequencies used when the reference is *simulated* with `-S` are those of GRCh37 (COSMIC v2); with a real FASTA the frequencies are those of your sequence.
+**Which human genome?** CellCoal does not include a human reference: you give it the FASTA of the assembly that you prefer, and the program does not need to know which one it is. Any version works (GRCh38/hg38 from UCSC, Ensembl or NCBI, or GRCh37/hg19); use the one of the data that you want to mimic or compare with. The germline VCF has to be of the same assembly, and `--region` uses the sequence names of your FASTA (`chr21` in UCSC files, `21` in Ensembl) and its 1-based coordinates. The `N` bases (telomeres, centromeres, gaps) are left out of the simulation and the VCF, and lower case (soft-masked repeats) is read as upper case. With a real FASTA the mutation models, the signatures and the copy-number events work as with a simulated reference, and a signature uses the real trinucleotide contexts of the sequence, which does not depend on the assembly. The reads mode (`--bam`, `--fastq`) writes the reads of the whole chromosome in its real coordinates (section 5.5).
 
-> To start from a human chromosome region: `cellcoal -s20 -u2e-8 -l1000000 --fasta hg38.fa.gz --region chr21:20000000-30000000 --blocks 10 -C10 -E0.001 -P0.2 0.02 -oChr21` simulates 10 blocks of 1 Mb of that region of GRCh38 on one tree, with the real positions in the VCF.
+> Example, 20 cells from 10 Mb of human chromosome 21: `cellcoal -s20 -u2e-8 -l1000000 --fasta hg38.fa.gz --region chr21:20000000-30000000 --blocks 10 -C10 -E0.001 -P0.2 0.02 -oChr21` (10 blocks of 1 Mb of GRCh38 on one tree, with the real positions in the VCF).
 
-Once the ancestral genome is in place, mutations are introduced according to the specified mutation model.
+Once the ancestral genome is in place, the mutations are introduced according to the mutation model.
 
 ### 5.2.2 Infinite-site SNV models
 
