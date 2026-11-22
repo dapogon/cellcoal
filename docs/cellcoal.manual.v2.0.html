@@ -978,35 +978,52 @@ alterations are limited to point deletions (<code>-d</code>), cnLOH
 <code>--seg-len</code>, see below).</p>
 </blockquote>
 <p><strong>Losses and gains of segments (<code>--seg-loss-rate</code>,
-<code>--seg-gain-rate</code>, <code>--seg-len</code>; group
-<code>--mutation loss-rate=...,gain-rate=...,segment-length=...</code>).</strong>
+<code>--seg-gain-rate</code>, <code>--seg-len</code>,
+<code>--seg-loss-len</code>, <code>--seg-gain-len</code>; group
+<code>--mutation loss-rate=...,gain-rate=...,segment-length=...,loss-length=...,gain-length=...</code>).</strong>
 Each haplotype suffers a Poisson number of losses (mean the total tree
 length in generations times <code>--seg-loss-rate</code>, per haplotype
 and generation) and of gains (<code>--seg-gain-rate</code>). Each event
-falls on a branch chosen according to its length, starts at a uniform
-site and covers a geometric number of sites with mean
-<code>--seg-len</code> (default 1000), clipped at the end of the genome.
-Every cell below the branch carries the event in that haplotype.
-<strong>A loss</strong> turns the alleles of the segment into deletions,
-so the genotypes, read counts and VCF treat them like point deletions.
-The SNVs that were inside a lost segment disappear in the cells that
-lost it (they remain as hemizygous alleles if the SNV is in the other
-haplotype), so with <code>-j</code> the number of mutations is the
-number placed, not the number that survive. <strong>A gain</strong> is
-one extra copy of the haplotype (a haplotype has at most two copies, so
-no high amplifications): the genotype does not change, but the haplotype
-gets twice the reads, so the allele fractions of a gained segment are
-2:1 or 1:2 and the depth is 1.5 times the normal one. Gains need read
-counts (<code>-C</code>) or reads
-(<code>--bam</code>/<code>--fastq</code>); without them they are
-ignored. The log and the summary (<code>segment_losses</code>,
+falls on a branch chosen according to its length, at a uniform position
+along it, starts at a uniform site and covers a geometric number of
+sites, clipped at the end of the genome. The mean length is
+<code>--seg-len</code> (default 1000) for both, or
+<code>--seg-loss-len</code> and <code>--seg-gain-len</code> to give a
+different one to the losses and the gains. Every cell below the branch
+carries the event in that haplotype.</p>
+<p>The events are applied in the order of the tree, from the root to the
+tips and, inside a branch, by their position, on genomes that already
+have the SNVs, cnLOH and point deletions. The order matters for the
+gains: <strong>a gain</strong> is one extra copy of the haplotype (at
+most one: a haplotype has one or two copies, so no high amplifications)
+and the extra copy keeps the alleles that the haplotype had at the
+moment of the gain. The SNVs of the ancestral branches, and those of the
+branch itself that happened before the gain, are in both copies, and the
+SNVs that happen later are in one copy only. In the reads, the haplotype
+of a gained segment gets twice the reads (1.5 times the normal depth),
+so the allele fractions are 2/3 for an SNV that was already there at the
+gain and 1/3 for a later one, instead of 1/2. The two copies are
+interchangeable, so the genome of the haplotype (the genotype files)
+keeps the copy that has the later SNVs; the phase of the SNVs between
+the two copies is not simulated. Gains need read counts
+(<code>-C</code>) or reads (<code>--bam</code>/<code>--fastq</code>);
+without them they are ignored. <strong>A loss</strong> turns the alleles
+of the segment into deletions, so the genotypes, read counts and VCF
+treat them like point deletions, and the SNVs that were inside disappear
+in the cells that lost it (they remain as hemizygous alleles if the SNV
+is in the other haplotype), so with <code>-j</code> the number of
+mutations is the number placed, not the number that survive. A mutation
+cannot hit DNA that is already gone, so a loss does not need to be
+ordered with the SNVs. A loss over a segment with two copies removes the
+extra copy. A haplotype that is already gone is not duplicated.</p>
+<p>The log and the summary (<code>segment_losses</code>,
 <code>snv_lost_segments</code> and <code>segment_gains</code> columns,
 only when the option is used) report the number of events and the
-variable sites lost, and the file <code>cnv_events</code>
+variable sites lost. The file <code>cnv_events</code>
 (<code>cnv_events_dir/</code> with <code>-v</code>) is the truth for the
-benchmarking of copy-number callers: one row per event with the type,
-the haplotype, the start and end of the segment (1-based, inclusive) and
-the cells that carry it.</p>
+benchmarking of copy-number callers: one row per event, in the order in
+which they were applied, with the type, the haplotype, the start and end
+of the segment (1-based, inclusive) and the cells that carry it.</p>
 <h3 id="generation-of-reference-and-ancestral-genomes">5.2.1 Generation
 of reference and ancestral genomes</h3>
 <p>The first step to generate the cell genotypes is the generation of a

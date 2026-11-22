@@ -39,5 +39,5 @@
 
 ## Losses and gains of segments
 
-- New `--seg-gain-rate`: copy-number gains of segments (one extra copy of a haplotype, at most; the haplotype gets twice the reads, in read counts and reads modes). `--seg-len` is the mean length of the lost and gained segments. The file `cnv_events` lists every loss and gain with its segment and the cells that carry it.
+- New `--seg-gain-rate`: copy-number gains of segments (one extra copy of a haplotype, at most; the haplotype gets twice the reads, in read counts and reads modes). The extra copy keeps the alleles of the haplotype at the moment of the gain: the events are applied in the order of the tree, so the SNVs before the gain are in both copies (allele fraction 2/3) and the later ones in one (1/3). `--seg-len` is the mean length of the lost and gained segments; `--seg-loss-len` and `--seg-gain-len` give a different one to each. The file `cnv_events` lists every loss and gain with its segment and the cells that carry it.
 - New `--seg-loss-rate` and `--seg-len` (group `--mutation loss-rate=...,gain-rate=...,segment-length=...`): copy-number losses of segments of a haplotype, inherited along the tree; the lost sites are deletions in the cells below the branch. Without `--seg-loss-rate` nothing changes. The log and `summary.tsv` report the losses and the variable sites lost in them.

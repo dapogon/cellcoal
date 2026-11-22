@@ -1711,167 +1711,317 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 
 
 /********************************** Segments: copy-number losses and gains ***********************************/
-/*	Copy-number losses (--seg-loss-rate) and gains (--seg-gain-rate) of segments, simulated after the SNVs, cnLOH and point deletions.
-	The number of events of a haplotype is a Poisson with mean (total tree length in generations) * rate; each event falls on a branch
-	chosen according to its length, starts at a uniform site and covers a geometric number of sites (mean --seg-len, clipped at the end
-	of the genome). Every cell below the branch carries the event in that haplotype.
-	Loss: the sites become DELETION (genotypes, read counts and VCF treat them like point deletions).
-	Gain: one extra copy of the haplotype (at most one: a haplotype has 1 or 2 copies, so the genotype of a gained segment is a
-	dose 2:1 or 1:2); the genotype is the same, and the read depth of that haplotype is doubled (see CopyGainAt). */
-typedef struct { int type, genome, start, len; TreeNode *branch; } CnvEvent;
-typedef struct { int *s, *e, n, cap; } SegList;
+/*	Copy-number losses (--seg-loss-rate) and gains (--seg-gain-rate) of segments of one haplotype.
+	The number of events of each kind and haplotype is a Poisson with mean (total tree length in generations) * rate; each event falls on a
+	branch chosen according to its length, at a uniform position u along it, starts at a uniform site and covers a geometric number of sites
+	(mean --seg-loss-len or --seg-gain-len, --seg-len by default), clipped at the end of the genome. Every cell below the branch carries it.
+
+	The events are applied in the order of the tree (the branches from the root to the tips, and by u inside a branch), on the genomes that
+	already have the SNVs, cnLOH and point deletions. A loss never needs the SNVs to be simulated after it: a mutation cannot hit DNA that is
+	gone, and a mutation that was already there is lost with the segment. A gain does need the order, because the copy keeps the alleles that
+	the haplotype had when the gain happened:
+	 - gain: the cells below the branch get an extra copy of the segment of the haplotype (at most one: a haplotype has 1 or 2 copies, no high
+	   amplifications). The alleles of the extra copy are a snapshot of the haplotype at the moment of the gain: the SNVs of the ancestral
+	   branches, and those of the branch itself that happened before u, are in both copies; the SNVs that happen later are in one copy only. As
+	   the two copies are interchangeable, the genome of the haplotype (data) keeps the copy that has the later SNVs and the extra copy keeps
+	   the snapshot. A haplotype that is already gone (a deletion or a loss) is not duplicated.
+	 - loss: a segment with one copy becomes DELETION in the cells below the branch. A segment with two copies goes back to one copy (the
+	   extra copy is the one that is lost). */
+typedef struct { int s, e; Geno *snap; } Seg;				/* sites [s,e) of the extra copy; snap[0] is the allele of site s */
+typedef struct { Seg *v; int n, cap; } SegList;
+typedef struct { int type, genome, start, len, seq; double u; TreeNode *branch; } CnvEvent;
 static CnvEvent	*cnvEv = NULL;
 static int		numCnvEv = 0, capCnvEv = 0;
-static SegList	*gainSeg = NULL;
-static int		gainSegNodes = 0;
+static SegList	*copySeg = NULL;							/* extra copies, by 2 * node + haplotype */
+static int		copySegNodes = 0;
+static Geno		**snapBlocks = NULL;
+static int		numSnap = 0, capSnap = 0;
 int				copyGainOn = 0;
 
 void ResetSegments (void)
 	{
 	int		k;
 
-	if (gainSeg != NULL)
+	if (copySeg != NULL)
 		{
-		for (k=0; k<2*gainSegNodes; k++)
-			{
-			free (gainSeg[k].s);
-			free (gainSeg[k].e);
-			}
-		free (gainSeg);
-		gainSeg = NULL;
+		for (k=0; k<2*copySegNodes; k++)
+			free (copySeg[k].v);
+		free (copySeg);
+		copySeg = NULL;
 		}
-	gainSegNodes = 0;
+	for (k=0; k<numSnap; k++)
+		free (snapBlocks[k]);
+	numSnap = 0;
+	copySegNodes = 0;
 	copyGainOn = NO;
 	numCnvEv = 0;
 	numSegLoss = numSegGain = 0;
 	}
 
-/* 2 inside a gained segment of the haplotype (two copies: twice the reads), 1 elsewhere */
-double CopyGainAt (int node, int genome, long site)
+/* allele of the extra copy of the haplotype at the site, or -1 when the segment has only one copy */
+int ExtraCopy (int node, int genome, long site)
 	{
-	SegList	*v;
-	int		k;
+	const SegList	*l;
+	int				k;
 
-	if (gainSeg == NULL || node >= gainSegNodes)
-		return 1.0;
-	v = &gainSeg[2 * node + genome];
-	for (k=0; k<v->n; k++)
-		if (site >= v->s[k] && site < v->e[k])
-			return 2.0;
-	return 1.0;
+	if (copySeg == NULL || node >= copySegNodes)
+		return -1;
+	l = &copySeg[2 * node + genome];
+	for (k=0; k<l->n; k++)
+		if (site >= l->v[k].s && site < l->v[k].e)
+			return l->v[k].snap[site - l->v[k].s];
+	return -1;
 	}
 
-static void SegCollectNodes (TreeNode *p, TreeNode **list, int *n)
+/* 2 where the haplotype has an extra copy (twice the reads), 1 elsewhere */
+double CopyGainAt (int node, int genome, long site)
+	{
+	return ExtraCopy (node, genome, site) >= 0 ? 2.0 : 1.0;
+	}
+
+static void SegPreorder (TreeNode *p, TreeNode **list, int *n)
 	{
 	if (p == NULL)
 		return;
 	if (p->isHealthyRoot != YES && p->isHealthyTip != YES)	/* the branch of the healthy cell carries no tumour cell */
 		list[(*n)++] = p;
-	SegCollectNodes (p->left, list, n);
-	SegCollectNodes (p->right, list, n);
+	SegPreorder (p->left, list, n);
+	SegPreorder (p->right, list, n);
 	}
 
-static void SegLoseBelow (TreeNode *p, int genome, int from, int to)
+static void SegSubtree (TreeNode *p, TreeNode **list, int *n)
 	{
-	int		j;
-
 	if (p == NULL)
 		return;
-	for (j=from; j<to; j++)
-		SetG (genome, p->label, j, DELETION);
-	SegLoseBelow (p->left, genome, from, to);
-	SegLoseBelow (p->right, genome, from, to);
+	list[(*n)++] = p;
+	SegSubtree (p->left, list, n);
+	SegSubtree (p->right, list, n);
 	}
 
-static void SegGainBelow (TreeNode *p, int genome, int from, int to)
+static void SegAdd (SegList *l, int s, int e, Geno *snap)
 	{
-	SegList	*v;
-
-	if (p == NULL)
-		return;
-	v = &gainSeg[2 * p->label + genome];
-	if (v->n == v->cap)
+	if (l->n == l->cap)
 		{
-		v->cap = v->cap ? 2 * v->cap : 4;
-		v->s = (int *) realloc (v->s, v->cap * sizeof (int));
-		v->e = (int *) realloc (v->e, v->cap * sizeof (int));
-		if (!v->s || !v->e)
-			{
-			fprintf (stderr, "Could not allocate the gained segments\n");
-			exit (-1);
-			}
+		l->cap = l->cap ? 2 * l->cap : 4;
+		l->v = (Seg *) Checked (realloc (l->v, l->cap * sizeof (Seg)), "Could not allocate the extra copies of the segments\n");
 		}
-	v->s[v->n] = from;
-	v->e[v->n++] = to;
-	SegGainBelow (p->left, genome, from, to);
-	SegGainBelow (p->right, genome, from, to);
+	l->v[l->n].s = s;
+	l->v[l->n].e = e;
+	l->v[l->n++].snap = snap;
 	}
 
-static void EvolveSegments (TreeNode *p, int genome, long int *seed, int type, double rate)
+/* removes the sites [a,b) from the extra copies of a list */
+static void SegClip (SegList *l, int a, int b)
 	{
-	TreeNode	**list;
-	int			n = 0, e, numEvents, k, start, len;
-	double		total = 0.0, u, cum;
+	int		k, n = l->n;
 
-	list = (TreeNode **) Checked (calloc (numNodes + 1, sizeof (TreeNode *)), "Could not allocate the list of branches of the segment events\n");
-	SegCollectNodes (p, list, &n);
 	for (k=0; k<n; k++)
-		total += list[k]->branchLength;
-	if (type == 1 && gainSeg == NULL)
 		{
-		gainSegNodes = numNodes + 1;
-		gainSeg = (SegList *) Checked (calloc (2 * gainSegNodes, sizeof (SegList)), "Could not allocate the gained segments\n");
-		copyGainOn = YES;
-		}
-	numEvents = RandomPoisson (total / mutationRate * rate, seed);
-	for (e=0; e<numEvents; e++)
-		{
-		u = RandomUniform (seed) * total;
-		cum = 0.0;
-		for (k=0; k<n-1; k++)
+		Seg	sg = l->v[k];
+
+		if (sg.e <= a || sg.s >= b)
+			continue;
+		if (sg.s < a && sg.e > b)		/* a piece on each side */
 			{
-			cum += list[k]->branchLength;
-			if (u < cum)
-				break;
+			l->v[k].e = a;
+			SegAdd (l, b, sg.e, sg.snap + (b - sg.s));
 			}
-		start = RandomUniformTo (numSites, seed);
-		len = 1 + (int) (log (1.0 - RandomUniform (seed)) / log (1.0 - 1.0 / segLen));
-		if (segLen <= 1.0)
-			len = 1;
-		if (start + len > numSites)
-			len = numSites - start;
-		if (type == 0)
+		else if (sg.s < a)
+			l->v[k].e = a;
+		else if (sg.e > b)
 			{
-			SegLoseBelow (list[k], genome, start, start + len);
-			numSegLoss++;
+			l->v[k].snap += (b - sg.s);
+			l->v[k].s = b;
 			}
 		else
 			{
-			SegGainBelow (list[k], genome, start, start + len);
-			numSegGain++;
+			l->v[k] = l->v[l->n-1];		/* it is all inside [a,b) */
+			l->n--;
+			k--;
+			n--;
 			}
-		if (numCnvEv == capCnvEv)
-			{
-			capCnvEv = capCnvEv ? 2 * capCnvEv : 16;
-			cnvEv = (CnvEvent *) Checked (realloc (cnvEv, capCnvEv * sizeof (CnvEvent)), "Could not allocate the segment events\n");
-			}
-		cnvEv[numCnvEv].type = type;
-		cnvEv[numCnvEv].genome = genome;
-		cnvEv[numCnvEv].start = start;
-		cnvEv[numCnvEv].len = len;
-		cnvEv[numCnvEv++].branch = list[k];
 		}
+	}
+
+/* the parts of [s,e) that the list does not cover; pieces[2*k], pieces[2*k+1]; returns the number of pieces */
+static int SegUncovered (const SegList *l, int s, int e, int *pieces, int maxPieces)
+	{
+	int		np = 1, k, p, newN;
+	int		tmp[2*64];
+
+	pieces[0] = s;
+	pieces[1] = e;
+	for (k=0; k<l->n; k++)
+		{
+		newN = 0;
+		for (p=0; p<np; p++)
+			{
+			int ps = pieces[2*p], pe = pieces[2*p+1], cs = l->v[k].s, ce = l->v[k].e;
+
+			if (ce <= ps || cs >= pe)
+				{
+				tmp[2*newN] = ps; tmp[2*newN+1] = pe; newN++;
+				continue;
+				}
+			if (cs > ps && newN < maxPieces)
+				{
+				tmp[2*newN] = ps; tmp[2*newN+1] = cs; newN++;
+				}
+			if (ce < pe && newN < maxPieces)
+				{
+				tmp[2*newN] = ce; tmp[2*newN+1] = pe; newN++;
+				}
+			}
+		np = newN;
+		memcpy (pieces, tmp, 2 * np * sizeof (int));
+		}
+	return np;
+	}
+
+static void SegApplyLoss (const CnvEvent *ev, TreeNode **below, int nb)
+	{
+	int		pieces[2*64], np, p, k, j;
+	int		h = ev->genome, s = ev->start, e = ev->start + ev->len;
+
+	np = SegUncovered (&copySeg[2 * ev->branch->label + h], s, e, pieces, 64);
+	for (p=0; p<np; p++)
+		for (k=0; k<nb; k++)
+			for (j=pieces[2*p]; j<pieces[2*p+1]; j++)
+				SetG (h, below[k]->label, j, DELETION);
+	for (k=0; k<nb; k++)
+		SegClip (&copySeg[2 * below[k]->label + h], s, e);		/* the extra copy is the one that is lost */
+	}
+
+static void SegApplyGain (const CnvEvent *ev, TreeNode **below, int nb, long int *seed)
+	{
+	int		pieces[2*64], np, p, j, a, b, k;
+	int		h = ev->genome, s = ev->start, e = ev->start + ev->len;
+	int		bl = ev->branch->label, anc = ev->branch->anc->label;
+
+	copyGainOn = YES;
+	np = SegUncovered (&copySeg[2 * bl + h], s, e, pieces, 64);
+	for (p=0; p<np; p++)
+		{
+		j = pieces[2*p];
+		while (j < pieces[2*p+1])
+			{
+			Geno	*snap;
+
+			while (j < pieces[2*p+1] && GetG (h, bl, j) == DELETION)	/* a haplotype that is gone is not duplicated */
+				j++;
+			a = j;
+			while (j < pieces[2*p+1] && GetG (h, bl, j) != DELETION)
+				j++;
+			b = j;
+			if (b <= a)
+				continue;
+			snap = (Geno *) Checked (malloc (b - a), "Could not allocate the extra copy of a segment\n");
+			if (numSnap == capSnap)
+				{
+				capSnap = capSnap ? 2 * capSnap : 16;
+				snapBlocks = (Geno **) Checked (realloc (snapBlocks, capSnap * sizeof (Geno *)), "Could not allocate the extra copies\n");
+				}
+			snapBlocks[numSnap++] = snap;
+			for (k=a; k<b; k++)
+				{
+				Geno	v = GetG (h, bl, k), va = GetG (h, anc, k);
+
+				if (v != va && RandomUniform (seed) >= ev->u)	/* the mutation of this branch happened after the gain */
+					v = va;
+				snap[k - a] = v;
+				}
+			for (k=0; k<nb; k++)
+				SegAdd (&copySeg[2 * below[k]->label + h], a, b, snap);
+			}
+		}
+	}
+
+/* Generates and applies the copy-number events of a replicate (all the haplotypes, losses and gains), in the order of the tree */
+void SimulateSegmentEvents (TreeNode *root, long int *seed)
+	{
+	TreeNode	**list, **below;
+	int			n = 0, e, k, genome, type, numEvents, nb, start, len, *rank;
+	double		total = 0.0, u, cum, rate, mean;
+
+	ResetSegments ();
+	list = (TreeNode **) Checked (calloc (numNodes + 1, sizeof (TreeNode *)), "Could not allocate the list of branches of the segment events\n");
+	below = (TreeNode **) Checked (calloc (numNodes + 1, sizeof (TreeNode *)), "Could not allocate the list of branches of the segment events\n");
+	rank = (int *) Checked (calloc (numNodes + 1, sizeof (int)), "Could not allocate the order of the branches\n");
+	SegPreorder (root, list, &n);
+	for (k=0; k<n; k++)
+		{
+		total += list[k]->branchLength;
+		rank[list[k]->label] = k;
+		}
+	copySegNodes = numNodes + 1;
+	copySeg = (SegList *) Checked (calloc (2 * copySegNodes, sizeof (SegList)), "Could not allocate the extra copies of the segments\n");
+
+	for (genome=MATERNAL; genome<=PATERNAL; genome++)
+		for (type=0; type<2; type++)
+			{
+			rate = (type == 0) ? lossRate : gainRate;
+			mean = (type == 0) ? (segLossLen > 0 ? segLossLen : segLen) : (segGainLen > 0 ? segGainLen : segLen);
+			if (rate <= 0 || n == 0)
+				continue;
+			numEvents = RandomPoisson (total / mutationRate * rate, seed);
+			for (e=0; e<numEvents; e++)
+				{
+				u = RandomUniform (seed) * total;
+				cum = 0.0;
+				for (k=0; k<n-1; k++)
+					{
+					cum += list[k]->branchLength;
+					if (u < cum)
+						break;
+					}
+				start = RandomUniformTo (numSites, seed);
+				len = (mean <= 1.0) ? 1 : 1 + (int) (log (1.0 - RandomUniform (seed)) / log (1.0 - 1.0 / mean));
+				if (start + len > numSites)
+					len = numSites - start;
+				if (numCnvEv == capCnvEv)
+					{
+					capCnvEv = capCnvEv ? 2 * capCnvEv : 16;
+					cnvEv = (CnvEvent *) Checked (realloc (cnvEv, capCnvEv * sizeof (CnvEvent)), "Could not allocate the segment events\n");
+					}
+				cnvEv[numCnvEv].type = type;
+				cnvEv[numCnvEv].genome = genome;
+				cnvEv[numCnvEv].start = start;
+				cnvEv[numCnvEv].len = len;
+				cnvEv[numCnvEv].seq = numCnvEv;
+				cnvEv[numCnvEv].u = RandomUniform (seed);
+				cnvEv[numCnvEv++].branch = list[k];
+				if (type == 0)
+					numSegLoss++;
+				else
+					numSegGain++;
+				}
+			}
+	/* order of the tree: the branches from the root to the tips, and the position along the branch */
+	for (k=1; k<numCnvEv; k++)		/* insertion sort: there are few events and it is stable */
+		{
+		CnvEvent	x = cnvEv[k];
+		int			p = k - 1;
+
+		while (p >= 0 && (rank[cnvEv[p].branch->label] > rank[x.branch->label] ||
+						  (rank[cnvEv[p].branch->label] == rank[x.branch->label] && cnvEv[p].u > x.u)))
+			{
+			cnvEv[p+1] = cnvEv[p];
+			p--;
+			}
+		cnvEv[p+1] = x;
+		}
+	for (k=0; k<numCnvEv; k++)
+		{
+		nb = 0;
+		SegSubtree (cnvEv[k].branch, below, &nb);
+		if (cnvEv[k].type == 0)
+			SegApplyLoss (&cnvEv[k], below, nb);
+		else
+			SegApplyGain (&cnvEv[k], below, nb, seed);
+		}
+	free (rank);
+	free (below);
 	free (list);
-	}
-
-void EvolveSegmentLossesOnTree (TreeNode *p, int genome, long int *seed)
-	{
-	EvolveSegments (p, genome, seed, 0, lossRate);
-	}
-
-void EvolveSegmentGainsOnTree (TreeNode *p, int genome, long int *seed)
-	{
-	EvolveSegments (p, genome, seed, 1, gainRate);
 	}
 
 static void SegLeafNames (TreeNode *p, char *buf, size_t cap, int *count)
@@ -1899,7 +2049,7 @@ static void SegLeafNames (TreeNode *p, char *buf, size_t cap, int *count)
 	}
 
 /* Truth of the segment losses and gains of a replicate: file cnv_events (or cnv_events_dir/cnv_events.NNNN with -v), one row per
-   event with the type, the haplotype, the segment (1-based, inclusive) and the cells that carry it. */
+   event, in the order in which they were applied, with the type, the haplotype, the segment (1-based, inclusive) and the cells that carry it. */
 void WriteCnvEvents (int replicate)
 	{
 	char	file[4*MAX_NAME], *buf;

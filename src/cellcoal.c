@@ -752,17 +752,14 @@ static void SimulateGenomes (int dataSetNum, long int *seed)
 		}
 	snvsLostBySegments = 0;
 	ResetSegments ();
-	if (lossRate > 0)
+	if (lossRate > 0 || gainRate > 0)
 		{
 		int		before = CountTrueVariants ();
 
-		EvolveBothGenomes ("segment losses", EvolveSegmentLossesOnTree, seed);
+		SimulateSegmentEvents (healthyRoot, seed);	/* copy-number losses and gains, in the order of the tree */
 		snvsLostBySegments = before - CountTrueVariants ();	/* variable sites that disappeared inside lost segments */
-		}
-	if (gainRate > 0)
-		EvolveBothGenomes ("segment gains", EvolveSegmentGainsOnTree, seed);
-	if (lossRate > 0 || gainRate > 0)
 		WriteCnvEvents (dataSetNum);
+		}
 
 	/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 	numSNVs = CountTrueVariants ();

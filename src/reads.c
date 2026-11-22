@@ -622,6 +622,7 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	int		thereIsMaternalAllele, thereIsPaternalAllele;
 	double  errM = 0, errP = 0;
 	double	allelicImbalance, gM, gP;
+	int		extraM = -1, extraP = -1, numExtraM = 0, numExtraP = 0;	/* alleles of the extra copies and their reads (--seg-gain-rate) */
 	
 	maternalAllele = GetG(MATERNAL, i, j);
 	thereIsMaternalAllele = (maternalAllele == ADO || maternalAllele == DELETION) ? NO : YES;
@@ -639,8 +640,10 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	gP = (gainOn == YES) ? GainAt (i, PATERNAL, j) : 1.0;
 	if (copyGainOn == YES)		/* extra copy of a segment (--seg-gain-rate): twice the reads of that haplotype */
 		{
-		gM *= CopyGainAt (i, MATERNAL, j);
-		gP *= CopyGainAt (i, PATERNAL, j);
+		if (thereIsMaternalAllele == YES && (extraM = ExtraCopy (i, MATERNAL, j)) >= 0)
+			gM *= 2.0;
+		if (thereIsPaternalAllele == YES && (extraP = ExtraCopy (i, PATERNAL, j)) >= 0)
+			gP *= 2.0;
 		}
 
 	/* number of reads of each haplotype around the mean coverage; a haplotype alone gets haploidCoverageReduction */
@@ -653,13 +656,24 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 		numMaternalReads = DrawReadCount (haploidCoverageReduction, i, gM, seed);
 	else if (thereIsPaternalAllele == YES)
 		numPaternalReads = DrawReadCount (haploidCoverageReduction, i, gP, seed);
-	numReads = numMaternalReads + numPaternalReads;
+	/* an extra copy with another allele takes half of the reads of its haplotype */
+	if (extraM >= 0 && extraM != maternalAllele && numMaternalReads > 0)
+		{
+		numExtraM = RandomBinomial (0.5, numMaternalReads, seed);
+		numMaternalReads -= numExtraM;
+		}
+	if (extraP >= 0 && extraP != paternalAllele && numPaternalReads > 0)
+		{
+		numExtraP = RandomBinomial (0.5, numPaternalReads, seed);
+		numPaternalReads -= numExtraP;
+		}
+	numReads = numMaternalReads + numPaternalReads + numExtraM + numExtraP;
 	
 	readCount[A] = readCount[C] = readCount[G] = readCount[T] = 0;
 
 	if (numReads > 0)
 		{
-		int		wrongM = -9, wrongP = -9;
+		int		wrongM = -9, wrongP = -9, wrongXM = -9, wrongXP = -9;
 		double	noSeqError = 0;
 
 		DrawSiteAmpErrors (i, j, maternalAllele, paternalAllele, &errM, &errP, seed);
@@ -670,6 +684,10 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 			{
 			wrongM = ChooseWrongTemplate (maternalAllele, thereIsMaternalAllele, errM, j, seed);
 			wrongP = ChooseWrongTemplate (paternalAllele, thereIsPaternalAllele, errP, j, seed);
+			if (numExtraM > 0)
+				wrongXM = ChooseWrongTemplate (extraM, YES, errM, j, seed);
+			if (numExtraP > 0)
+				wrongXP = ChooseWrongTemplate (extraP, YES, errP, j, seed);
 			}
 		
 		if (sequencingError > 0 || errM > 0 || errP > 0)
@@ -682,11 +700,19 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 				}
 			if (thereIsPaternalAllele == YES)
 				AssignHaplotypeReads (paternalAllele, numPaternalReads, wrongP, errP, noSeqError, ampEijpat, ngsEij, probs, readCount, seed);
+			if (numExtraM > 0)
+				AssignHaplotypeReads (extraM, numExtraM, wrongXM, errM, noSeqError, ampEijmat, ngsEij, probs, readCount, seed);
+			if (numExtraP > 0)
+				AssignHaplotypeReads (extraP, numExtraP, wrongXP, errP, noSeqError, ampEijpat, ngsEij, probs, readCount, seed);
 			}
 		else /* no sequencing or amplification error */
 			{
 			readCount[maternalAllele] += numMaternalReads;
 			readCount[paternalAllele] += numPaternalReads;
+			if (numExtraM > 0)
+				readCount[extraM] += numExtraM;
+			if (numExtraP > 0)
+				readCount[extraP] += numExtraP;
 			}
 		}
 	
