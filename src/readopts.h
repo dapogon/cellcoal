@@ -20,5 +20,7 @@
 	X(strand_bias,    "--strand-bias",    '\220', 2, strandBias, 0)    \
 	X(seg_loss_rate,  "--seg-loss-rate",      '\221', 2, lossRate,   0)      \
 	X(seg_len,        "--seg-len",       '\222', 2, segLen,    1000)  \
-	X(seg_gain_rate,  "--seg-gain-rate",  '\223', 2, gainRate,   0)
+	X(seg_gain_rate,  "--seg-gain-rate",  '\223', 2, gainRate,   0)    \
+	X(seg_loss_len,   "--seg-loss-len",   '\224', 2, segLossLen, 0)    \
+	X(seg_gain_len,   "--seg-gain-len",   '\225', 2, segGainLen, 0)
 #endif

@@ -1098,8 +1098,8 @@ done
 
 echo "2g45. Grouped options (--ado, --depth, --output, ...) are equivalent to the single-letter options"
 mkdir -p "$TMP/grp" && cd "$TMP/grp" && rm -rf ./*
-"$BIN" -n2 -s7 -l800 -u1e-6 -e1000 -b1 -C20 -P0.1 0.001 -J0.3 -Q0.2 0.01 -1 -3 -oL >/dev/null 2>&1
-"$BIN" -n2 -s7 -l800 -u1e-6 -e1000 -b1 --depth mean=20,cells=0.3 --ado cells=0.1:0.001,sites=0.2:0.01 --output snv-genotypes,full-genotypes,dir=G >/dev/null 2>&1
+"$BIN" -n2 -s7 -l800 -u1e-6 -e1000 -b1 -C20 -P0.1 0.001 -J0.3 -Q0.2 0.01 -1 -3 -#5 -oL >/dev/null 2>&1
+"$BIN" -n2 -s7 -l800 -u1e-6 -e1000 -b1 --depth mean=20,cells=0.3 --ado cells=0.1:0.001,sites=0.2:0.01 --output snv-genotypes,full-genotypes,dir=G -#5 >/dev/null 2>&1
 [ -s L/snv_gen ] && [ "$(cat L/snv_gen L/full_gen | md5sum)" = "$(cat G/snv_gen G/full_gen | md5sum)" ] && ok "group options = legacy letters" || bad "group options = legacy letters"
 "$BIN" -n1 -s7 -l800 --ado nokey=1 >E.txt 2>&1; grep -aqi "unknown" E.txt && ok "unknown group key is rejected" || bad "unknown group key"
 printf 'cells: 2\nsites: 800\nseed: 7\nmutation: rate=1e-6\n' > c.yaml
@@ -1138,6 +1138,40 @@ grep -q "^gain" B/cnv_events && ok "cnv_events lists the gains" || bad "cnv_even
 "$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -C100 -9 -#5 --mutation gain-rate=1e-3,segment-length=1500 -oG >/dev/null 2>&1
 cmp -s B/pileup G/pileup && ok "group gain-rate,segment-length = --seg-gain-rate/--seg-len" || bad "group gain-rate"
 "$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 --seg-gain-rate 1e-3 2>&1 | grep -aq "ignored without -C" && ok "--seg-gain-rate without -C is reported as ignored" || bad "gain without -C"
+cd "$ROOT"
+
+echo "2g48. A gain keeps the alleles of its moment: SNVs before it are in both copies (VAF 2/3), SNVs after it in one (VAF 1/3)"
+mkdir -p "$TMP/gainvaf" && cd "$TMP/gainvaf" && rm -rf ./*
+cat > vaf.py <<'PY'
+import collections
+ev = [l.rstrip('\n').split('\t') for l in open('Results/cnv_events') if l[:4] == 'gain']
+cs = [(int(s), int(e), set(c.split(','))) for t, h, s, e, n, c in ev]
+idx = {'A': 0, 'C': 1, 'G': 2, 'T': 3}
+names = None; hin = collections.Counter(); hout = collections.Counter()
+for l in open('Results/vcf'):
+    if l[0] in '[1' and '\t' not in l: continue
+    p = l.rstrip('\n').split('\t')
+    if l.startswith('#CHROM'): names = p[9:]; continue
+    if names is None: continue
+    pos = int(p[1]); fmt = p[8].split(':'); alt = idx[p[4]]
+    for k, c in enumerate(names):
+        rc = [int(x) for x in dict(zip(fmt, p[9 + k].split(':')))['RC'].split(',')]
+        if sum(rc) < 300: continue
+        v = rc[alt] / sum(rc)
+        if not 0.1 < v < 0.9: continue
+        n = [1 for s, e, cc in cs if s <= pos <= e and c in cc]
+        if len(n) == 1: hin[round(v * 6) / 6] += 1
+        elif not n: hout[round(v * 6) / 6] += 1
+a, b, o = hin.get(1/3, 0), hin.get(2/3, 0), hout.get(0.5, 0)
+print(1 if a > 100 and b > 100 and hin.get(0.5, 0) == 0 and o > 100 else 0)
+PY
+if command -v python3 >/dev/null; then
+  "$BIN" -n1 -s10 -l20000 -u3e-5 -e1000 -b1 -C1000 --seg-gain-rate 4e-4 --seg-gain-len 5000 -#7 >/dev/null 2>&1
+  [ "$(python3 vaf.py)" = 1 ] && ok "gained segments show VAF 1/3 and 2/3, the others 1/2" || bad "gain VAF modes"
+else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -j50 --seg-loss-rate 2e-3 --seg-loss-len 100 --summary -#5 >/dev/null 2>&1; l1=$(cut -f6 Results/summary.tsv | tail -1)
+"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -j50 --seg-loss-rate 2e-3 --seg-loss-len 2000 --summary -#5 >/dev/null 2>&1; l2=$(cut -f6 Results/summary.tsv | tail -1)
+[ "$l2" -lt "$l1" ] && ok "--seg-loss-len sets the length of the losses (longer losses lose more SNVs)" || bad "--seg-loss-len ($l1 $l2)"
 cd "$ROOT"
 
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
