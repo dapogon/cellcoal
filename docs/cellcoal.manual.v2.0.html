@@ -828,7 +828,9 @@ is not counted). 10,000 cells x 1,000,000 sites runs in about 7 s and
 full-sequence outputs (<code>-4</code>, <code>-5</code>,
 <code>-Y</code>) stop with an error on data sets above the dense limit
 unless the read counts are streamed. The copy-number engine (section
-5.2.8) keeps the genomes dense.</p>
+5.2.8) works with sparse genomes too: 10,000 cells x 1,000,000 sites
+with losses and gains take about 0.7 s and 260 MB for the genotype
+outputs.</p>
 <p><strong>Streamed read counts.</strong> When the per-cell, per-site
 read data would exceed 2048 MB (environment variable
 <code>CELLCOAL_STREAM_MB</code>), read counts and genotype likelihoods
@@ -1343,11 +1345,11 @@ variation among sites (<code>-a</code>). Every copy of a segment mutates
 at the rate and with the model of its site. The finite sites models are
 simulated exactly as a Markov chain: the jumps of the chain are events,
 so they are ordered with the losses and gains.</p>
-<p><strong>Limits.</strong> The program keeps the genomes of this engine
-dense (there is no sparse storage when copy-number events are on), and
-its memory and time grow with the number of copies. The observed
-genotypes (maximum likelihood, <code>NG</code>) stay diploid (section
-5.2.9). Complex structural variants are not simulated.</p>
+<p><strong>Limits.</strong> The time and memory grow with the number of
+copies and with the events (a segment with several copies is stored for
+every cell that carries it). The observed genotypes (maximum likelihood,
+<code>NG</code>) stay diploid (section 5.2.9). Complex structural
+variants are not simulated.</p>
 <h3 id="genotypes-with-several-copies-phase-and-the-true-copy-number">5.2.9
 Genotypes with several copies, phase and the true copy number</h3>
 <p>The text genotypes (SNV and full genotypes) list the alleles of all

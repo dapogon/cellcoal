@@ -1029,11 +1029,16 @@ void SimulateCopyNumberGenomes (TreeNode *root, long int *seed)
 
 /************************************* truth file *************************************/
 /* the true number of copies of every cell, by segments of sites with the same copies of both haplotypes */
+static int CmpInt (const void *a, const void *b)
+	{
+	return *(const int*) a - *(const int*) b;
+	}
+
 void WriteCnvSegments (int replicate)
 	{
 	char	file[4*MAX_NAME], name[4*MAX_NAME];
 	FILE	*fp;
-	int		i, j, m, p, pm = -1, pp = -1, start = 0;
+	int		i, j, m, p, pm = -1, pp = -1, start = 0, nbase = 0, *base = NULL, *cand = NULL;
 	Geno	ex[MAX_COPIES];
 
 	if (doPrintSeparateReplicates == YES)
@@ -1056,16 +1061,62 @@ void WriteCnvSegments (int replicate)
 	if (doPrintSeparateReplicates == NO)
 		fprintf (fp, "[#%d]\n", replicate+1);
 	fprintf (fp, "cell\tstart\tend\tmaternal_copies\tpaternal_copies\ttotal_copies\n");
+	/* With sparse genomes only the varying sites (and the ends of the extra-copy segments) can change the number of copies, so only those
+	   positions are looked at: the cost is cells x varying sites and not cells x sites. Otherwise every site is. */
+	if (sparseMode)
+		{
+		base = (int*) malloc ((2 * (size_t) numSites + 2) * sizeof(int));
+		for (j=0; j<numSites; j++)
+			if (sparseCols[j] != NULL)
+				{
+				if (nbase == 0 || base[nbase-1] != j)
+					base[nbase++] = j;
+				base[nbase++] = j + 1;
+				}
+		}
 	for (i=0; i<numCells; i++)
 		{
+		int		g, k, ncand = 0, nseg = 0, nb = 0, ci;
+
 		if (doUserTree == NO)
 			snprintf (name, sizeof (name), "%s%04d", inCellName, i + 1);
 		else
 			snprintf (name, sizeof (name), "%s", cellNames[i]);
 		pm = pp = -1;
 		start = 0;
-		for (j=0; j<=numSites; j++)
+		if (sparseMode)
 			{
+			int *segPts, t;
+			size_t need = 4;
+
+			for (g=0; g<2; g++)
+				if (lin != NULL && i < cnNodes)
+					need += 2 * (size_t) lin[2*i+g].n;
+			segPts = (int*) malloc (need * sizeof(int));
+			cand = (int*) realloc (cand, (need + (size_t) nbase + 4) * sizeof(int));
+			for (g=0; g<2; g++)
+				for (k=0; lin != NULL && i < cnNodes && k < lin[2*i+g].n; k++)
+					{
+					segPts[nseg++] = lin[2*i+g].v[k].s;
+					segPts[nseg++] = lin[2*i+g].v[k].e;
+					}
+			qsort (segPts, nseg, sizeof(int), CmpInt);
+			cand[ncand++] = 0;
+			for (t=0, nb=0; t<nseg || nb<nbase; )		/* merge the two sorted lists, without repeats */
+				{
+				int v = (nb >= nbase || (t < nseg && segPts[t] <= base[nb])) ? segPts[t++] : base[nb++];
+
+				if (v > 0 && v < numSites && v != cand[ncand-1])
+					cand[ncand++] = v;
+				}
+			cand[ncand++] = numSites;
+			free (segPts);
+			}
+		for (ci=0; ; ci++)
+			{
+			j = sparseMode ? cand[ci] : ci;
+			if (j > numSites)
+				break;
 			if (j < numSites)
 				{
 				m = (GetG (MATERNAL, i, j) != DELETION) ? 1 + ExtraCopies (i, MATERNAL, j, ex) : 0;
@@ -1081,8 +1132,12 @@ void WriteCnvSegments (int replicate)
 				pm = m;
 				pp = p;
 				}
+			if (j == numSites)
+				break;
 			}
 		}
+	free (base);
+	free (cand);
 	fclose (fp);
 	}
 
