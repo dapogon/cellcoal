@@ -1137,7 +1137,7 @@ else echo "  skip (python3 not installed)"; fi
 grep -q "^gain" B/cnv_events && ok "cnv_events lists the gains" || bad "cnv_events"
 "$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -C100 -9 -#5 --mutation gain-rate=1e-3,segment-length=1500 -oG >/dev/null 2>&1
 cmp -s B/pileup G/pileup && ok "group gain-rate,segment-length = --seg-gain-rate/--seg-len" || bad "group gain-rate"
-"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 --seg-gain-rate 1e-3 2>&1 | grep -aq "ignored without -C" && ok "--seg-gain-rate without -C is reported as ignored" || bad "gain without -C"
+"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -d0 --seg-gain-rate 1e-3 -1 --phase >/dev/null 2>&1 && grep -q "|" Results/snv_gen && ok "--seg-gain-rate works without -C (genotypes with copies)" || bad "gain without -C"
 cd "$ROOT"
 
 echo "2g48. A gain keeps the alleles of its moment: SNVs before it are in both copies (VAF 2/3), SNVs after it in one (VAF 1/3)"
@@ -1224,6 +1224,35 @@ PY
 [ "$(python3 truth.py)" = 1 ] && ok "cnv_segments, genotypes and haplotype rows (one per copy) agree" || bad "cnv_segments / haplotype rows"
 "$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 -1 -2 --phase >A.txt 2>&1
 cmp -s Results/snv_gen a.gen && ok "copy-number runs are reproducible with the same seed" || bad "copy-number reproducibility"
+cd "$ROOT"
+
+echo "2g50. Copy-number events work with every substitution model (finite sites, genetic signatures, mixtures)"
+mkdir -p "$TMP/cnm" && cd "$TMP/cnm" && rm -rf ./*
+cat > models.py <<'PY'
+# the number of mutations and of variable sites with a negligible copy-number rate (the new engine) must agree with the usual simulation
+import subprocess, os, shutil, statistics as st, sys
+B = sys.argv[1]
+def run(tag, extra, cn, seed):
+    d = tag; shutil.rmtree(d, ignore_errors=True); os.makedirs(d)
+    a = [B, '-n300', '-s6', '-l400', '-e1000', '-d0', '-#%d' % seed, '--summary'] + extra
+    if cn: a += ['--seg-loss-rate', '1e-13']
+    subprocess.run(a, cwd=d, stdout=subprocess.DEVNULL, stderr=subprocess.PIPE)
+    rows = [l.split('\t') for l in open(d + '/Results/summary.tsv').read().split('\n')[1:] if l and l[0].isdigit()]
+    return [int(r[2]) for r in rows], [int(r[5]) for r in rows]
+cases = {'JC': ['-u2e-6', '-m2', '-p1'], 'HKY': ['-u2e-6', '-m2', '-p1', '-t1.7', '-f0.3', '0.2', '0.2', '0.3'], 'Mk2': ['-u2e-6', '-b0', '-m1', '-p1'],
+         'mixed': ['-u2e-6', '-m2', '-p0.5', '-w4'], 'gamma': ['-u2e-6', '-m2', '-p1', '-a0.5'], 'signatures': ['-u2e-7', '-S2', '11', '0.3', '22', '0.7']}
+bad = 0
+for k, e in cases.items():
+    a = run(k + 'L', e, False, 11); b = run(k + 'C', e, True, 12)
+    for i in (0, 1):
+        se = ((st.pvariance(a[i]) + st.pvariance(b[i])) / len(a[i])) ** 0.5
+        if len(a[i]) < 250 or len(b[i]) < 250 or abs(st.mean(a[i]) - st.mean(b[i])) > 4 * se: bad += 1
+print(bad)
+PY
+if command -v python3 >/dev/null; then
+  [ "$(python3 models.py "$BIN")" = 0 ] && ok "mutations and variable sites agree with the usual simulation (JC, HKY, Mk2, mixed, gamma, signatures)" || bad "copy-number models"
+else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s8 -l500 -u1e-6 -e1000 -d0 -#7 -m2 -p0.5 -w3 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 --seg-len 100 -1 --phase >E.txt 2>&1 && grep -q "|" Results/snv_gen && ok "finite sites with losses and gains run and show the phase" || bad "finite sites run"
 cd "$ROOT"
 
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"

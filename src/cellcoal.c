@@ -368,7 +368,6 @@ static void CheckModeOptions (void)
 		{"-E (sequencing error)", sequencingError > 0.0},
 		{"-X (error matrix)", thereIsEij == YES},
 		{"--gain-sd/--gain-len", gainSd > 0.0 || gainLen > 0.0},
-		{"--seg-gain-rate", gainRate > 0.0},
 		{"--amp-signature", ampSignatureFile != NULL},
 		{NULL, 0}
 		};

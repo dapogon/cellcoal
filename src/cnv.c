@@ -5,8 +5,9 @@
  *  copy-number changes). All the events happen on the branches of the tree and are applied in the order of the tree (from the root to the tips,
  *  and by their position along the branch), so a gain can come before or after an SNV, a loss can remove an SNV that was already there, etc.
  *
- *  Events (all of them are ISM events: a site mutates once in the tree):
- *    SNV     a substitution in one copy of a haplotype of one site.
+ *  Events:
+ *    SNV     a substitution in one copy of a haplotype of one site (infinite sites models, genetic signatures).
+ *    SUB     a substitution of a finite sites model (Mk2, JC, HKY, GTR): the jumps of the Markov chain are the events (uniformization).
  *    DEL     a point deletion (-d): one copy of a haplotype of one site is lost.
  *    CNLOH   a point cnLOH (-H): the copies of a haplotype take the allele of a copy of the other haplotype (the copy number does not change).
  *    LOSS    a segment loss (--seg-loss-rate): one copy of a haplotype of a segment is lost.
@@ -15,7 +16,7 @@
  *  DNA copies. Each haplotype of a cell starts with one copy, the "original" molecule, stored in data[] as always (lineage 0; DELETION when
  *  it is lost). The copies that come from a gain are stored in lists (lineages 1, 2, ...): each one has its sites, its alleles (shared
  *  between the nodes until a mutation changes them) and a lineage number, so the phase of every SNV is known. Every copy mutates at the same
- *  rate: the SNVs of the original molecules are generated at the start, those of a new copy when it is made. The other events (deletions, cnLOH,
+ *  rate, with the model of its site: the substitutions of the original molecules are generated at the start, those of a new copy when it is made. The other events (deletions, cnLOH,
  *  losses and gains) have a rate per haplotype and they hit one of its copies at random.
  *
  *  Once the events are applied, the copies of every node are put in the order that the output uses: the first copy that is still there is
@@ -28,7 +29,7 @@
 typedef struct { int s, e, id; Geno *snap; } Seg;		/* extra copy id on the sites [s,e); snap[0] is the allele of site s */
 typedef struct { Seg *v; int n, cap; } SegList;
 int numPlannedSNV;		/* SNV events planned on the lineages of the two haplotypes */
-enum { EV_SNV, EV_DEL, EV_CNLOH, EV_LOSS, EV_GAIN };
+enum { EV_SNV, EV_DEL, EV_CNLOH, EV_LOSS, EV_GAIN, EV_SUB };	/* EV_SUB: a substitution of a finite sites model (a jump of the Markov chain) */
 typedef struct { int type, hap, lineage, site, len; double u; char done; } Ev;
 typedef struct { Ev *v; int n, cap; } EvList;
 typedef struct { int type, hap, start, len; TreeNode *branch; } Applied;	/* events with an effect, for the truth file */
@@ -47,6 +48,9 @@ static TreeNode	**order = NULL, **below = NULL;	/* non-root nodes of the tree in
 static int		numOrder = 0;
 static double	orderTotal = 0.0;
 static long int	*rseed = NULL;				/* random number seed of the replicate */
+static char		*siteAlt = NULL;			/* 1 for the sites of the alternative model (--alt-model) */
+static int		sigMode = 0, finiteMode = 0;	/* genetic signatures; finite sites model (Mk2 or DNA) on the alternative sites */
+static double	Qm[4][4], lambdaMax = 1.0, maxMult = 1.0, altTotal = 0.0, *altCum = NULL;
 
 /************************************* memory *************************************/
 void ResetSegments (void)
@@ -300,29 +304,128 @@ static int BuildRuns (int node, int h, int s, int e, Run **out)
 	}
 
 /************************************* events *************************************/
-/* the SNVs that a new copy will get: a Poisson on every branch below the gain, at the same rate as any other copy */
+/* the length of a branch for the finite sites model of the alternative sites */
+static double AltLen (const TreeNode *p)
+	{
+	return (doUserTree == YES) ? p->branchLength : altModelMutationRate * p->length;
+	}
+
+/* the branch that a uniform number x in [0,1) falls on, with the lengths of the finite sites model */
+static TreeNode *PickBranchAlt (double x)
+	{
+	double	target = x * altTotal;
+	int		lo = 0, hi = numOrder - 1, mid;
+
+	while (lo < hi)
+		{
+		mid = (lo + hi) / 2;
+		if (altCum[mid] >= target)
+			hi = mid;
+		else
+			lo = mid + 1;
+		}
+	return order[lo];
+	}
+
+/* how many entries of the sorted list are in [a,b), and the index of the first one */
+static int CountInRange (const int *list, int n, int a, int b, int *first)
+	{
+	int		lo = 0, hi = n, mid, f;
+
+	while (lo < hi)
+		{
+		mid = (lo + hi) / 2;
+		if (list[mid] < a)
+			lo = mid + 1;
+		else
+			hi = mid;
+		}
+	f = lo;
+	hi = n;
+	while (lo < hi)
+		{
+		mid = (lo + hi) / 2;
+		if (list[mid] < b)
+			lo = mid + 1;
+		else
+			hi = mid;
+		}
+	*first = f;
+	return lo - f;
+	}
+
+/* the substitutions that a new copy will get: a Poisson on every branch below the gain, at the same rate as any other copy, for every model of
+   the sites (infinite sites, signatures, finite sites) */
 static void NewCopyMutations (TreeNode *x, double u0, int h, int id, int a, int b, long int *seed)
 	{
-	int		k, nb = 0, m, i, y;
-	double	eff, u;
+	int		k, nb = 0, m, i, y, cnt, lo, st;
+	double	eff, frac, u;
 
 	Subtree (x, &nb);
 	for (k=0; k<nb; k++)
 		{
 		y = below[k]->label;
-		eff = below[k]->branchLength * (below[k] == x ? 1.0 - u0 : 1.0);
-		m = RandomPoisson (eff * (double) (b - a), seed);
-		for (i=0; i<m; i++)
+		frac = (below[k] == x) ? 1.0 - u0 : 1.0;
+		eff = below[k]->branchLength * frac;
+		#define EVENT_TIME()	((below[k] == x) ? u0 + (1.0 - u0) * RandomUniform (seed) : RandomUniform (seed))
+		if (sigMode)
 			{
-			u = (below[k] == x) ? u0 + (1.0 - u0) * RandomUniform (seed) : RandomUniform (seed);
-			AddEvent (y, EV_SNV, h, id, a + RandomUniformTo (b - a, seed), 1, u);
+			m = RandomPoisson (eff * (double) (b - a), seed);
+			for (i=0; i<m; i++)
+				{
+				int site = ChooseSignatureSiteInRange (seed, &st, h, a, b);
+
+				u = EVENT_TIME ();
+				if (site >= 0)
+					AddEvent (y, EV_SNV, h, id, site, 1 + st, u);
+				}
+			continue;
 			}
+		if (numDefaultModelSites > 0)
+			{
+			cnt = CountInRange (DefaultModelSites, numDefaultModelSites, a, b, &lo);
+			m = (cnt > 0) ? RandomPoisson (eff * (double) cnt, seed) : 0;
+			for (i=0; i<m; i++)
+				{
+				u = EVENT_TIME ();
+				AddEvent (y, EV_SNV, h, id, DefaultModelSites[lo + RandomUniformTo (cnt, seed)], 0, u);
+				}
+			}
+		if (numAltModelSites > 0)
+			{
+			cnt = CountInRange (AltModelSites, numAltModelSites, a, b, &lo);
+			if (cnt == 0)
+				continue;
+			if (finiteMode)
+				{
+				m = RandomPoisson (lambdaMax * AltLen (below[k]) * frac * (double) cnt * maxMult, seed);
+				for (i=0; i<m; i++)
+					{
+					int site = AltModelSites[lo + RandomUniformTo (cnt, seed)];
+
+					u = EVENT_TIME ();
+					if (rateVarAmongSites == YES && RandomUniform (seed) * maxMult > allSites[site].rateMultiplier)
+						continue;
+					AddEvent (y, EV_SUB, h, id, site, 0, u);
+					}
+				}
+			else			/* haploid ISM */
+				{
+				m = RandomPoisson (eff * (double) cnt, seed);
+				for (i=0; i<m; i++)
+					{
+					u = EVENT_TIME ();
+					AddEvent (y, EV_SNV, h, id, AltModelSites[lo + RandomUniformTo (cnt, seed)], 0, u);
+					}
+				}
+			}
+		#undef EVENT_TIME
 		}
 	}
 
-static int ApplySNV (TreeNode *x, const Ev *ev, int nb, int ismHap)
+static int ApplySNV (TreeNode *x, const Ev *ev, int nb)
 	{
-	int		ids[MAXC], n, k, j, h = ev->hap, site = ev->site;
+	int		ids[MAXC], n, k, j, h = ev->hap, site = ev->site, hapSite;
 	Geno	als[MAXC], a, v;
 	double	ran;
 
@@ -331,11 +434,14 @@ static int ApplySNV (TreeNode *x, const Ev *ev, int nb, int ismHap)
 		;
 	if (k == n)
 		return 0;									/* the copy is not there any more */
-	if ((ismHap == NO && allSites[site].numMutations > 0) ||
-		(ismHap == YES && ((h == MATERNAL && allSites[site].numMutationsMaternal > 0) || (h == PATERNAL && allSites[site].numMutationsPaternal > 0))))
+	hapSite = (siteAlt != NULL && siteAlt[site] && altModel == ISMhap) ? YES : NO;
+	if ((hapSite == NO && allSites[site].numMutations > 0) ||
+		(hapSite == YES && ((h == MATERNAL && allSites[site].numMutationsMaternal > 0) || (h == PATERNAL && allSites[site].numMutationsPaternal > 0))))
 		return 0;									/* the site has already mutated (ISM) */
 	a = als[k];
-	if (alphabet == DNA)
+	if (ev->len > 0)								/* the new allele was drawn with the event (genetic signatures) */
+		v = ev->len - 1;
+	else if (alphabet == DNA)
 		{
 		ran = RandomUniform (rseed) * cumMij[a][3];
 		v = a;
@@ -351,6 +457,48 @@ static int ApplySNV (TreeNode *x, const Ev *ev, int nb, int ismHap)
 	else if (a == 1 && allSites[site].isSNP == YES)	/* germline SNP: the mutation goes back to the reference */
 		v = 0;
 	else
+		return 0;
+	SetCopyAllele (nb, h, ev->lineage, site, v);
+	if (h == MATERNAL)
+		allSites[site].numMutationsMaternal++;
+	else
+		allSites[site].numMutationsPaternal++;
+	allSites[site].numMutations++;
+	numMU++;
+	return 1;
+	}
+
+/* a substitution of a finite sites model on one copy: the chain jumps at rate lambdaMax and a jump leaves the state with the probability
+   (rate of leaving)/lambdaMax (uniformization), so the process is exactly the Markov chain of the model */
+static int ApplySub (TreeNode *x, const Ev *ev, int nb)
+	{
+	int		ids[MAXC], n, k, j, h = ev->hap, site = ev->site;
+	Geno	als[MAXC], a, v;
+	double	ran, cum = 0.0;
+
+	n = Present (x->label, h, site, ids, als);
+	for (k=0; k<n && ids[k] != ev->lineage; k++)
+		;
+	if (k == n)
+		return 0;
+	a = als[k];
+	if (altModel == Mk2)
+		v = (a == 0) ? 1 : 0;
+	else
+		{
+		ran = RandomUniform (rseed) * lambdaMax;
+		v = a;
+		for (j=0; j<4; j++)
+			{
+			cum += Qm[a][j];
+			if (j != a && ran < cum)
+				{
+				v = j;
+				break;
+				}
+			}
+		}
+	if (v == a)
 		return 0;
 	SetCopyAllele (nb, h, ev->lineage, site, v);
 	if (h == MATERNAL)
@@ -441,9 +589,91 @@ static int ApplyCNLOH (TreeNode *x, int h, int site, int nb)
 	}
 
 /************************************* events of the replicate *************************************/
-static void GenerateEvents (int ismHap)
+/* the number of mutations of the infinite sites models: a Poisson (or a fixed number, -j) */
+static int NumISMMutations (int h, int numModelSites)
 	{
-	int		h, i, m, site, trials, len, numMutations;
+	if (doSimulateFixedNumMutations == YES)
+		{
+		if (h == MATERNAL)
+			return numSNVmaternal = RandomBinomial (0.5, numFixedMutations, rseed);
+		return numFixedMutations - numSNVmaternal;
+		}
+	return RandomPoisson (totalTreeLength * numModelSites, rseed);
+	}
+
+static void ISMViolation (int numMutations, int available, const char *what)
+	{
+	fprintf (stderr, "\n\nERROR: the %s infinite sites model (ISM) has been violated. There will be more mutations (%d existing + %d proposed)", what, numISMmutations, numMutations);
+	fprintf (stderr, "\nthan available sites under this model (%d).", available);
+	fprintf (stderr, "\nTry using a smaller mutation rate or effective population size (i.e. smaller theta).\n");
+	exit (-1);
+	}
+
+/* SNVs of the original copy of a haplotype under an infinite sites model (diploid: a site mutates once in the two haplotypes; haploid: once in each),
+   or with genetic signatures: a Poisson (or a fixed number) of mutations, each one on a branch chosen according to its length and on a site that
+   has not mutated */
+static void PlanISM (int h, const int *sites, int ns, int hapMode, char *usedSnv[2])
+	{
+	int		m, numMutations, site, trials = 0, i, st = -1;
+
+	if (ns == 0 && sigMode == 0)
+		return;
+	numMutations = NumISMMutations (h, sigMode ? numSites : ns);
+	if (hapMode == NO && numISMmutations + numMutations > (sigMode ? numSites : ns))
+		ISMViolation (numMutations, sigMode ? numSites : ns, "diploid");
+	if (hapMode == YES && numISMmutations + numMutations > 2 * ns)
+		ISMViolation (numMutations, 2 * ns, "haploid");
+	numISMmutations += numMutations;
+	for (m=0; m<numMutations; m++)
+		{
+		for (;;)
+			{
+			if (sigMode)
+				site = ChooseTrinucleotideSite (rseed, &st, h);
+			else
+				{
+				i = RandomUniformTo (ns, rseed);
+				site = sites[i];
+				}
+			if (!((hapMode == NO && (usedSnv[MATERNAL][site] || usedSnv[PATERNAL][site])) || (hapMode == YES && usedSnv[h][site])))
+				break;
+			if (trials++ > 100 * numSites)
+				{
+				fprintf (stderr, "\n\nERROR: after %d trials cannot find an unmuted site\n", 100 * numSites);
+				exit (-1);
+				}
+			}
+		usedSnv[h][site] = 1;
+		AddEvent (PickBranch (RandomUniform (rseed))->label, EV_SNV, h, 0, site, sigMode ? 1 + st : 0, RandomUniform (rseed));
+		numPlannedSNV++;
+		}
+	}
+
+/* substitutions of the original copy of a haplotype under a finite sites model (Mk2, JC, HKY, GTR): jumps of the chain, at rate lambdaMax per site and
+   unit of branch length, on the alternative sites; a jump may not change the state (see ApplySub) */
+static void PlanFinite (int h)
+	{
+	int		m, site;
+	double	mean;
+
+	if (numAltModelSites == 0)
+		return;
+	mean = lambdaMax * altTotal * (double) numAltModelSites * maxMult;
+	m = RandomPoisson (mean, rseed);
+	while (m-- > 0)
+		{
+		TreeNode	*br = PickBranchAlt (RandomUniform (rseed));
+
+		site = AltModelSites[RandomUniformTo (numAltModelSites, rseed)];
+		if (rateVarAmongSites == YES && RandomUniform (rseed) * maxMult > allSites[site].rateMultiplier)
+			continue;
+		AddEvent (br->label, EV_SUB, h, 0, site, 0, RandomUniform (rseed));
+		}
+	}
+
+static void GenerateEvents (void)
+	{
+	int		h, i, m, site, trials, len;
 	double	gens = totalTreeLength / mutationRate, meanLoss, meanGain;
 	char	*usedSnv[2], *usedDel[2], *usedLoh[2];
 
@@ -457,40 +687,15 @@ static void GenerateEvents (int ismHap)
 	meanGain = segGainLen > 0 ? segGainLen : segLen;
 	for (h=MATERNAL; h<=PATERNAL; h++)
 		{
-		/* SNVs of the original copy, as in the infinite sites model: a Poisson (or a fixed number) of mutations, each one on a branch chosen
-		   according to its length and on a site that has not mutated */
-		if (doSimulateFixedNumMutations == YES)
-			{
-			if (h == MATERNAL)
-				numMutations = numSNVmaternal = RandomBinomial (0.5, numFixedMutations, rseed);
-			else
-				numMutations = numFixedMutations - numSNVmaternal;
-			}
+		if (sigMode)
+			PlanISM (h, NULL, numSites, NO, usedSnv);
 		else
-			numMutations = RandomPoisson (totalTreeLength * numSites, rseed);
-		if ((ismHap == NO && numISMmutations + numMutations > numSites) || (ismHap == YES && numISMmutations + numMutations > 2 * numSites))
 			{
-			fprintf (stderr, "\n\nERROR: the infinite sites model (ISM) has been violated. There will be more mutations (%d existing + %d proposed)", numISMmutations, numMutations);
-			fprintf (stderr, "\nthan available sites under this model (%d).", ismHap == NO ? numSites : 2 * numSites);
-			fprintf (stderr, "\nTry using a smaller mutation rate or effective population size (i.e. smaller theta).\n");
-			exit (-1);
-			}
-		numISMmutations += numMutations;
-		trials = 0;
-		for (m=0; m<numMutations; m++)
-			{
-			site = RandomUniformTo (numSites, rseed);
-			while ((ismHap == NO && (usedSnv[MATERNAL][site] || usedSnv[PATERNAL][site])) || (ismHap == YES && usedSnv[h][site]))
-				{
-				site = RandomUniformTo (numSites, rseed);
-				if (trials++ > 100 * numSites)
-					{
-					fprintf (stderr, "\n\nERROR: after %d trials cannot find an unmuted site\n", 100 * numSites);
-					exit (-1);
-					}
-				}
-			usedSnv[h][site] = 1;
-			{ AddEvent (PickBranch (RandomUniform (rseed))->label, EV_SNV, h, 0, site, 1, RandomUniform (rseed)); numPlannedSNV++; }
+			PlanISM (h, DefaultModelSites, numDefaultModelSites, NO, usedSnv);
+			if (finiteMode)
+				PlanFinite (h);
+			else
+				PlanISM (h, AltModelSites, numAltModelSites, YES, usedSnv);
 			}
 		/* point cnLOH and deletions */
 		for (i=0; i<2; i++)
@@ -556,7 +761,7 @@ static void GenerateEvents (int ismHap)
 	}
 
 /* applies the events node by node (from the root to the tips) and, inside a node, by position along the branch */
-static void ApplyEvents (int ismHap)
+static void ApplyEvents (void)
 	{
 	int		k, i, best, nb, effect;
 	TreeNode *x;
@@ -583,7 +788,10 @@ static void ApplyEvents (int ismHap)
 			switch (ev.type)
 				{
 				case EV_SNV:
-					ApplySNV (x, &ev, nb, ismHap);
+					ApplySNV (x, &ev, nb);
+					break;
+				case EV_SUB:
+					ApplySub (x, &ev, nb);
 					break;
 				case EV_DEL:
 					if (ApplyLoss (x, ev.hap, ev.site, ev.site + 1, nb))
@@ -735,15 +943,13 @@ void MarkExtraCopyVariants (char *isVar)
 /* the whole genome of the replicate: SNVs, point cnLOH and deletions, segment losses and gains, branch by branch */
 void SimulateCopyNumberGenomes (TreeNode *root, long int *seed)
 	{
-	int		ismHap, k;
+	int		k, i;
 
-	if (doGeneticSignatures == YES || (propAltModelSites > 0 && !(propAltModelSites == 1.0 && altModel == ISMhap)))
+	if (propAltModelSites > 0 && doGeneticSignatures == NO && altModel != ISMhap && altModel != Mk2 && altModel != finiteDNA)
 		{
-		fprintf (stderr, "\n\nERROR: the copy-number events (--seg-loss-rate, --seg-gain-rate) are simulated with the infinite sites models (diploid or haploid ISM) only\n");
-		fprintf (stderr, "       They cannot be used with genetic signatures, Mk2 or finite sites models.\n");
+		fprintf (stderr, "\n\nERROR: the model of the alternative sites is not known to the copy-number simulation\n");
 		exit (-1);
 		}
-	ismHap = (propAltModelSites == 1.0 && altModel == ISMhap) ? YES : NO;
 	ResetSegments ();
 	rseed = seed;
 	cnNodes = numNodes + 1;
@@ -757,8 +963,67 @@ void SimulateCopyNumberGenomes (TreeNode *root, long int *seed)
 	for (k=0; k<numOrder; k++)
 		orderTotal += order[k]->branchLength;
 	nextLineage = 0;
-	GenerateEvents (ismHap);
-	ApplyEvents (ismHap);
+
+	/* the models of the sites: signatures (they replace every other model), infinite sites for the default sites and, for the alternative
+	   sites, haploid infinite sites or a finite sites model */
+	sigMode = (doGeneticSignatures == YES) ? 1 : 0;
+	finiteMode = (!sigMode && propAltModelSites > 0 && altModel != ISMhap) ? 1 : 0;
+	free (siteAlt);
+	siteAlt = NULL;
+	if (rateVarAmongSites == YES)
+		for (i=0; i<numSites; i++)
+			allSites[i].rateMultiplier = RandomGamma (alphaSites, seed) / alphaSites;
+	numDefaultModelSites = numAltModelSites = 0;
+	if (sigMode || propAltModelSites == 0)
+		for (i=0; i<numSites; i++)
+			DefaultModelSites[numDefaultModelSites++] = i;
+	else if (propAltModelSites == 1.0)
+		for (i=0; i<numSites; i++)
+			AltModelSites[numAltModelSites++] = i;
+	else
+		for (i=0; i<numSites; i++)
+			{
+			if (RandomUniform (seed) < propAltModelSites)
+				AltModelSites[numAltModelSites++] = i;
+			else
+				DefaultModelSites[numDefaultModelSites++] = i;
+			}
+	if (numAltModelSites > 0)
+		{
+		siteAlt = (char *) Checked (calloc (numSites, 1), "Could not allocate the model of the sites\n");
+		for (i=0; i<numAltModelSites; i++)
+			siteAlt[AltModelSites[i]] = 1;
+		}
+	if (sigMode)
+		{
+		InitTriNucleotides ();
+		CountTriNucFrequencies (data[MATERNAL][OUTGROUP_ROOT], MATERNAL);
+		CountTriNucFrequencies (data[PATERNAL][OUTGROUP_ROOT], PATERNAL);
+		}
+	if (finiteMode)
+		{
+		lambdaMax = 1.0;
+		if (altModel == finiteDNA)
+			{
+			PrepareFiniteDNA ();
+			lambdaMax = FiniteDNAGenerator (Qm);
+			}
+		maxMult = 1.0;
+		if (rateVarAmongSites == YES)
+			for (i=0; i<numAltModelSites; i++)
+				if (allSites[AltModelSites[i]].rateMultiplier > maxMult)
+					maxMult = allSites[AltModelSites[i]].rateMultiplier;
+		free (altCum);
+		altCum = (double *) Checked (calloc (numOrder, sizeof (double)), "Could not allocate the lengths of the branches\n");
+		altTotal = 0.0;
+		for (k=0; k<numOrder; k++)
+			{
+			altTotal += AltLen (order[k]);
+			altCum[k] = altTotal;
+			}
+		}
+	GenerateEvents ();
+	ApplyEvents ();
 	Normalize ();
 	}
 

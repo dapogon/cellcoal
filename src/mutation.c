@@ -880,32 +880,34 @@ void FreeTriNucleotides (void)
 		}
 	}
 
-void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
-    {
-    int		i, numMutations, mutationsSoFar;
-    double	totalBranchSum;
-	int		newState, chosenSite;
-	
-	newState = -9;
+/* allocates the lists of positions of the 64 trinucleotide classes of the two haplotypes (they are filled by CountTriNucFrequencies) */
+void InitTriNucleotides (void)
+	{
+	int i;
 
 	FreeTriNucleotides ();
-	
-	/* allocate memory to store the trinucleotide frequencies */
 	triNucleotideMaternal = (TriNucStr *) Checked (calloc(64, sizeof(TriNucStr)), "Could not allocate the triNucleotideMaternal vector\n");
+	triNucleotidePaternal = (TriNucStr *) Checked (calloc(64, sizeof(TriNucStr)), "Could not allocate the triNucleotidePaternal vector\n");
 	for (i=0; i<64; i++)
 		{
 		triNucleotideMaternal[i].tempLength = 100;
 		triNucleotideMaternal[i].numAvailablePositions = 0;
 		triNucleotideMaternal[i].position = (int *) calloc(100,sizeof(int));
-		}
-
-	triNucleotidePaternal = (TriNucStr *) Checked (calloc(64, sizeof(TriNucStr)), "Could not allocate the triNucleotidePaternal vector\n");
-	for (i=0; i<64; i++)
-		{
 		triNucleotidePaternal[i].tempLength = 100;
 		triNucleotidePaternal[i].numAvailablePositions = 0;
 		triNucleotidePaternal[i].position = (int *) calloc(100,sizeof(int));
 		}
+	}
+
+void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
+    {
+    int		numMutations, mutationsSoFar;
+    double	totalBranchSum;
+	int		newState, chosenSite;
+	
+	newState = -9;
+
+	InitTriNucleotides ();
 
 	/* count trinucleotide frequencies in the healthy root genome */
 	CountTriNucFrequencies (data[genome][OUTGROUP_ROOT], genome);
@@ -961,7 +963,7 @@ void SimulateSignatureISM (TreeNode *p, int genome, long int *seed)
 	//fprintf (stderr, "\n\nnumISMmutations = %d  numMutations = %d   mutationsSoFar = %d (genome = %d)",numISMmutations, numMutations, mutationsSoFar, genome);
 	
 	#ifdef PRINT_TRIMUTCOUNTER
-	int j, k;
+	int i, j, k;
 	int doDeconstructSigs = YES;
 	FILE *fpCounts, *fpRefGenome;
 
@@ -1133,6 +1135,27 @@ int ChooseTrinucleotideSite (long int *seed, int *newState, int genome)
 	}
 
 
+/* A site in [a,b) for a mutation of a new copy of a segment, with its signature: a trinucleotide class is drawn as for any other mutation, and then
+   a position of that class inside the segment (the positions are those of the root genome of the haplotype; the ones used by the original copy
+   have already been removed, and they cannot mutate again). Returns -1 if no site is found. */
+int ChooseSignatureSiteInRange (long int *seed, int *newState, int genome, int a, int b)
+	{
+	TriNucStr	*triNucleotide = (genome == MATERNAL) ? triNucleotideMaternal : triNucleotidePaternal;
+	int			trindex, k, pos, trials;
+
+	for (trials=0; trials<200000; trials++)
+		{
+		trindex = DrawTrinucleotideClass (seed, newState);
+		if (triNucleotide[trindex].numAvailablePositions == 0)
+			continue;
+		k = RandomUniformTo (triNucleotide[trindex].numAvailablePositions, seed);
+		pos = triNucleotide[trindex].position[k] + 1;		/* the central base of the trinucleotide */
+		if (pos >= a && pos < b)
+			return pos;
+		}
+	return -1;
+	}
+
 /********************************** SimulateSignatureISMforSite ***********************************/
 /*	Simulates genetic signatures under an infinite sites model (ISM) for a given site. The branch
 	where this mutation is placed is chosen according to its length.
@@ -1286,10 +1309,11 @@ void SimulateMk2forSite (TreeNode *p, int genome, int site, long int *seed)
 /* Note that beta is set such that mean substitution rate will be 1.
  	E.g., for J-C model, beta=4/3, where 12(1/4)(1/4)(4/3) = 1.      */
 
-void SimulateFiniteDNA (TreeNode *p, int genome, long int *seed)
+/* sets the parameters of the finite sites DNA model (beta, kappa, the eigen decomposition of GTR) */
+void PrepareFiniteDNA (void)
     {
     int     i, j;
-		
+
 	if (doJC == YES)
 		{
 		beta = 4./3;
@@ -1318,6 +1342,44 @@ void SimulateFiniteDNA (TreeNode *p, int genome, long int *seed)
 		EigenREV(Root, Cijk);
 		}
 		
+	}
+
+/* the rates (per unit of branch length) of the finite sites DNA model: Q[i][j] for i != j; returns the largest rate of leaving a state */
+double FiniteDNAGenerator (double Q[4][4])
+	{
+	int		i, j, k;
+	double	exitRate, maxExit = 0.0;
+
+	for (i=0; i<4; i++)
+		for (j=0; j<4; j++)
+			{
+			Q[i][j] = 0.0;
+			if (i == j)
+				continue;
+			if (doJC == YES)
+				Q[i][j] = beta / 4.0;
+			else if (doHKY == YES)
+				Q[i][j] = beta * freq[j] * (((i==A && j==G) || (i==G && j==A) || (i==C && j==T) || (i==T && j==C)) ? kappa : 1.0);
+			else
+				for (k=1; k<4; k++)		/* Q = dP/dt at t = 0 */
+					Q[i][j] += Cijk[i*16+j*4+k] * Root[k];
+			}
+	for (i=0; i<4; i++)
+		{
+		exitRate = 0.0;
+		for (j=0; j<4; j++)
+			exitRate += Q[i][j];
+		if (exitRate > maxExit)
+			maxExit = exitRate;
+		}
+	return maxExit;
+	}
+
+void SimulateFiniteDNA (TreeNode *p, int genome, long int *seed)
+    {
+    int     i;
+
+	PrepareFiniteDNA ();
     for (i=0; i<numAltModelSites; i++)
         SimulateFiniteDNAforSite (p, genome, AltModelSites[i], seed);
 	}
