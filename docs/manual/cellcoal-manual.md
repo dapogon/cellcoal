@@ -359,7 +359,13 @@ The first step to generate the cell genotypes is to have a **reference genome**,
 
 With a real chromosome the mutation models, the signatures (`-S`) and the copy-number events work as with a simulated one; the trinucleotide context of every site is the real one, so a signature such as SBS1 concentrates on the CpG sites that the sequence really has (section 5.2.3). Sites that are not A, C, G or T are left out. The reads mode (`--bam`, `--fastq`) writes the reads of the whole chromosome in its real coordinates (section 5.5).
 
-> To start from a real chromosome: `cellcoal -s20 -u2e-8 -l1000000 --fasta chr21.fa --region chr21:20000000-30000000 --blocks 10 -C10 -E0.001 -P0.2 0.02 -oChr21` simulates 10 blocks of 1 Mb of that region on one tree.
+**Which human genome?** CellCoal does not include a human reference: you give it the FASTA file of the assembly that you want, and the program does not need to know which one it is. Any version works (for example GRCh38/hg38, `hg38.fa.gz` from UCSC or the primary assembly from Ensembl or NCBI, or GRCh37/hg19); use the same assembly as the data that you want to mimic or compare with, and the one that the real germline VCF, the annotations or the callers use. Three details:
+
+- **Names and coordinates.** `--region` uses the names of the sequences of your FASTA (`chr21` in UCSC files, `21` in Ensembl) and its coordinates (1-based, inclusive); a `--germline-vcf` has to be of the same assembly and use the same chromosome names.
+- **Gaps and masking.** The `N` bases (telomeres, centromeres, gaps; large in some chromosomes) are left out of the simulation and the VCF, and lower case (soft-masked repeats) is read as upper case, so the whole sequence is simulated.
+- **Signatures.** The mutational signatures are defined by the trinucleotide context and do not depend on the assembly. The 30 built-in signatures and the trinucleotide frequencies used when the reference is *simulated* with `-S` are those of GRCh37 (COSMIC v2); with a real FASTA the frequencies are those of your sequence.
+
+> To start from a human chromosome region: `cellcoal -s20 -u2e-8 -l1000000 --fasta hg38.fa.gz --region chr21:20000000-30000000 --blocks 10 -C10 -E0.001 -P0.2 0.02 -oChr21` simulates 10 blocks of 1 Mb of that region of GRCh38 on one tree, with the real positions in the VCF.
 
 Once the ancestral genome is in place, mutations are introduced according to the specified mutation model.
 

@@ -1153,10 +1153,36 @@ really has (section 5.2.3). Sites that are not A, C, G or T are left
 out. The reads mode (<code>--bam</code>, <code>--fastq</code>) writes
 the reads of the whole chromosome in its real coordinates (section
 5.5).</p>
+<p><strong>Which human genome?</strong> CellCoal does not include a
+human reference: you give it the FASTA file of the assembly that you
+want, and the program does not need to know which one it is. Any version
+works (for example GRCh38/hg38, <code>hg38.fa.gz</code> from UCSC or the
+primary assembly from Ensembl or NCBI, or GRCh37/hg19); use the same
+assembly as the data that you want to mimic or compare with, and the one
+that the real germline VCF, the annotations or the callers use. Three
+details:</p>
+<ul>
+<li><strong>Names and coordinates.</strong> <code>--region</code> uses
+the names of the sequences of your FASTA (<code>chr21</code> in UCSC
+files, <code>21</code> in Ensembl) and its coordinates (1-based,
+inclusive); a <code>--germline-vcf</code> has to be of the same assembly
+and use the same chromosome names.</li>
+<li><strong>Gaps and masking.</strong> The <code>N</code> bases
+(telomeres, centromeres, gaps; large in some chromosomes) are left out
+of the simulation and the VCF, and lower case (soft-masked repeats) is
+read as upper case, so the whole sequence is simulated.</li>
+<li><strong>Signatures.</strong> The mutational signatures are defined
+by the trinucleotide context and do not depend on the assembly. The 30
+built-in signatures and the trinucleotide frequencies used when the
+reference is <em>simulated</em> with <code>-S</code> are those of GRCh37
+(COSMIC v2); with a real FASTA the frequencies are those of your
+sequence.</li>
+</ul>
 <blockquote>
-<p>To start from a real chromosome:
-<code>cellcoal -s20 -u2e-8 -l1000000 --fasta chr21.fa --region chr21:20000000-30000000 --blocks 10 -C10 -E0.001 -P0.2 0.02 -oChr21</code>
-simulates 10 blocks of 1 Mb of that region on one tree.</p>
+<p>To start from a human chromosome region:
+<code>cellcoal -s20 -u2e-8 -l1000000 --fasta hg38.fa.gz --region chr21:20000000-30000000 --blocks 10 -C10 -E0.001 -P0.2 0.02 -oChr21</code>
+simulates 10 blocks of 1 Mb of that region of GRCh38 on one tree, with
+the real positions in the VCF.</p>
 </blockquote>
 <p>Once the ancestral genome is in place, mutations are introduced
 according to the specified mutation model.</p>
