@@ -6,7 +6,7 @@ date: "November, 2026 (CellCoal 2.5.1)"
 
 # 1. About CellCoal
 
-CellCoal simulates the somatic evolution of single-cells including genotypes resulting from single-cell DNA sequencing. CellCoal generates a coalescent tree and can simulate a sample of diploid genomes from somatic cells –no recombination– from a growing population, together with another genome as outgroup. A typical example would be a sample of single-cell genotypes from a growing tumor population together with a healthy cell used as outgroup. CellCoal implements multiple mutation models for single-nucleotide variants (0/1, DNA, infinite and finite site models, point deletions, copy-neutral LOH, cancer mutational signatures) and is able to generate a .VCF file with NGS read counts and genotype likelihoods considering technical artifacts like allelic imbalance, allelic dropout, sequencing error, amplification error, plus doublet cells. CellCoal does not simulate individual reads (there are no sequences, no FASTQ and no BAM files): it simulates the number of reads of each nucleotide in each cell and site (read counts).
+CellCoal simulates the somatic evolution of single-cells including genotypes resulting from single-cell DNA sequencing. CellCoal generates a coalescent tree and can simulate a sample of diploid genomes from somatic cells –no recombination– from a growing population, together with another genome as outgroup. A typical example would be a sample of single-cell genotypes from a growing tumor population together with a healthy cell used as outgroup. CellCoal implements multiple mutation models for single-nucleotide variants (0/1, DNA, infinite and finite site models, point deletions, copy-neutral LOH, cancer mutational signatures) and is able to generate a .VCF file with NGS read counts and genotype likelihoods considering technical artifacts like allelic imbalance, allelic dropout, sequencing error, amplification error, plus doublet cells. It also simulates copy-number losses and gains of chromosome segments on the tree, and it works at three levels of detail (section 4.2): genotypes, read counts (the number of reads of each nucleotide in each cell and site) and, optionally, paired-end reads (BAM and FASTQ files) of the amplified cells. A chromosome can be simulated in blocks, from a real reference.
 
 ## 1.1 Development of CellCoal 2
 
@@ -86,7 +86,7 @@ The healthy cell does not carry the somatic mutations, so the cells with a genot
 
 ## 3.3 Examples
 
-**Read counts, genotype likelihoods and a VCF file.** Most users simulate the sequencing of the cells. CellCoal does not simulate individual reads (there are no sequences, no FASTQ and no BAM files): it simulates the number of reads of each nucleotide in each cell and site (read counts). With a sequencing coverage (`-C`) the program simulates the read counts of every cell at every site and writes a VCF file with the read counts and the genotype likelihoods:
+**Read counts, genotype likelihoods and a VCF file.** Most users simulate the sequencing of the cells. In this mode CellCoal simulates the number of reads of each nucleotide in each cell and site (read counts); individual reads, as BAM and FASTQ files, are the third mode (4.2). With a sequencing coverage (`-C`) the program simulates the read counts of every cell at every site and writes a VCF file with the read counts and the genotype likelihoods:
 
     cellcoal -n1 -s20 -l5000 -u1e-6 -e10000 -C10 -V5 -E0.001 -P0.2 0.02 -#1 -oReads
 
@@ -356,7 +356,7 @@ Both ISM and FSM for SNVs can be incorporated by setting up a **proportion of si
 
 CellCoal can simulate the technical artifacts resulting from single-cell genomics, like allelic dropout (ADO), allelic imbalance, sequencing error, amplification error, plus doublet cells. For this, CellCoal implements two different strategies:
 
-**What is simulated.** CellCoal does not simulate individual reads: there are no sequences, base qualities, FASTQ or BAM files. It simulates *read counts*: for each cell and site, how many reads support each of the four nucleotides, and the genotype likelihoods that follow from those counts. When this manual says "reads" it means those counts (the depth of a site is the total number of reads in it, and an "error read" is one of the counted reads that carries a wrong base).
+**What is simulated.** In the read-counts mode CellCoal does not simulate individual reads (no sequences, base qualities, FASTQ or BAM files; those are the reads mode, 8.28). It simulates *read counts*: for each cell and site, how many reads support each of the four nucleotides, and the genotype likelihoods that follow from those counts. When this manual says "reads" it means those counts (the depth of a site is the total number of reads in it, and an "error read" is one of the counted reads that carries a wrong base).
 
 1.  **No read counts are generated**; instead ADO and genotyping errors are directly imposed on the evolved genotypes at the tip of the genealogy.
 
@@ -752,7 +752,7 @@ If this option is active, no read counts are simulated. In fact, it is not allow
 
 **C#: sequencing coverage: integer \[1-inf)**
 
-CellCoal does not simulate individual reads (there are no sequences, no FASTQ and no BAM files): it simulates the number of reads of each nucleotide in each cell and site (read counts). Expected number of reads per site and cell. It is the mean of a *Poisson* distribution if there is no dispersion (option -V). In the case of dispersed coverage (option -V \> 0), this is the mean of a *Negative Binomial distribution*. If there is no allelic imbalance (option -I = 0.5), then the reads are randomly assigned to the maternal/paternal chromosomes.
+In the read-counts mode CellCoal simulates the number of reads of each nucleotide in each cell and site (read counts). Expected number of reads per site and cell. It is the mean of a *Poisson* distribution if there is no dispersion (option -V). In the case of dispersed coverage (option -V \> 0), this is the mean of a *Negative Binomial distribution*. If there is no allelic imbalance (option -I = 0.5), then the reads are randomly assigned to the maternal/paternal chromosomes.
 
 **V#: coverage dispersion: double (0-inf)**
 
@@ -1012,7 +1012,7 @@ The distributions are the same as in the default mode, but the random numbers ar
 
 ## 6.11 The VCF file
 
-CellCoal does not simulate individual reads (there are no sequences, no FASTQ and no BAM files): it simulates the number of reads of each nucleotide in each cell and site (read counts). The fields of the VCF (`DP`, `RC`, `PL`/`GL`) are computed from those counts.
+In the read-counts mode CellCoal simulates the number of reads of each nucleotide in each cell and site (read counts). The fields of the VCF (`DP`, `RC`, `PL`/`GL`) are computed from those counts.
 
 When read counts are simulated (option -C), CellCoal writes a *vcf* file (VCF v4.3) with one line per SNV site and one column per cell (plus the outgroup cell). If the option -v is active, each replicate is written to a separate file inside the *vcf_dir* subfolder. The INFO fields are `AA` (ancestral allele), `NS` (number of samples with data), `AF` (true alternate allele frequency, ignoring doublets) and `SOMATIC`. Sites for which fewer than half of the samples have data are flagged with the filter `s50`. For each cell, the FORMAT fields are:
 

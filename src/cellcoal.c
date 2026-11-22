@@ -43,7 +43,7 @@
 - added rate variation among lineages
 - added DNA ISM model
 - added rate matrix
-- produce read counts (CellCoal does not simulate individual reads, only the number of reads of each nucleotide per cell and site)
+- produce read counts (the number of reads of each nucleotide per cell and site) or paired-end reads (BAM, FASTQ)
 - output format CTAG
 - added errors to the NGS reads
 - calculate genotype likelihoods (checked to work fine with ANGSD)

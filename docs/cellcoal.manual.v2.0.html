@@ -216,9 +216,12 @@ site models, point deletions, copy-neutral LOH, cancer mutational
 signatures) and is able to generate a .VCF file with NGS read counts and
 genotype likelihoods considering technical artifacts like allelic
 imbalance, allelic dropout, sequencing error, amplification error, plus
-doublet cells. CellCoal does not simulate individual reads (there are no
-sequences, no FASTQ and no BAM files): it simulates the number of reads
-of each nucleotide in each cell and site (read counts).</p>
+doublet cells. It also simulates copy-number losses and gains of
+chromosome segments on the tree, and it works at three levels of detail
+(section 4.2): genotypes, read counts (the number of reads of each
+nucleotide in each cell and site) and, optionally, paired-end reads (BAM
+and FASTQ files) of the amplified cells. A chromosome can be simulated
+in blocks, from a real reference.</p>
 <h2 id="development-of-cellcoal-2">1.1 Development of CellCoal 2</h2>
 <p><strong>CellCoal 2 was developed together with Claude.</strong> The
 CellCoal 2 series (versions 2.0.0 onwards) was developed by Claude, an
@@ -411,12 +414,12 @@ mutations than sites: lower <code>-u</code> (or <code>-e</code>), or
 increase <code>-l</code>.</p>
 <h2 id="examples">3.3 Examples</h2>
 <p><strong>Read counts, genotype likelihoods and a VCF file.</strong>
-Most users simulate the sequencing of the cells. CellCoal does not
-simulate individual reads (there are no sequences, no FASTQ and no BAM
-files): it simulates the number of reads of each nucleotide in each cell
-and site (read counts). With a sequencing coverage (<code>-C</code>) the
-program simulates the read counts of every cell at every site and writes
-a VCF file with the read counts and the genotype likelihoods:</p>
+Most users simulate the sequencing of the cells. In this mode CellCoal
+simulates the number of reads of each nucleotide in each cell and site
+(read counts); individual reads, as BAM and FASTQ files, are the third
+mode (4.2). With a sequencing coverage (<code>-C</code>) the program
+simulates the read counts of every cell at every site and writes a VCF
+file with the read counts and the genotype likelihoods:</p>
 <pre><code>cellcoal -n1 -s20 -l5000 -u1e-6 -e10000 -C10 -V5 -E0.001 -P0.2 0.02 -#1 -oReads</code></pre>
 <p><code>-C10</code> is the mean sequencing depth, <code>-V5</code> the
 overdispersion of the depth (the coverage of single cells is very
@@ -1184,14 +1187,14 @@ alternative model</p>
 single-cell genomics, like allelic dropout (ADO), allelic imbalance,
 sequencing error, amplification error, plus doublet cells. For this,
 CellCoal implements two different strategies:</p>
-<p><strong>What is simulated.</strong> CellCoal does not simulate
-individual reads: there are no sequences, base qualities, FASTQ or BAM
-files. It simulates <em>read counts</em>: for each cell and site, how
-many reads support each of the four nucleotides, and the genotype
-likelihoods that follow from those counts. When this manual says “reads”
-it means those counts (the depth of a site is the total number of reads
-in it, and an “error read” is one of the counted reads that carries a
-wrong base).</p>
+<p><strong>What is simulated.</strong> In the read-counts mode CellCoal
+does not simulate individual reads (no sequences, base qualities, FASTQ
+or BAM files; those are the reads mode, 8.28). It simulates <em>read
+counts</em>: for each cell and site, how many reads support each of the
+four nucleotides, and the genotype likelihoods that follow from those
+counts. When this manual says “reads” it means those counts (the depth
+of a site is the total number of reads in it, and an “error read” is one
+of the counted reads that carries a wrong base).</p>
 <ol type="1">
 <li><p><strong>No read counts are generated</strong>; instead ADO and
 genotyping errors are directly imposed on the evolved genotypes at the
@@ -1675,15 +1678,14 @@ is not allowed to specify -G and -C (see below) at the same time.</p>
 1 1 0 1
 1 1 1 0</code></pre>
 <p><strong>C#: sequencing coverage: integer [1-inf)</strong></p>
-<p>CellCoal does not simulate individual reads (there are no sequences,
-no FASTQ and no BAM files): it simulates the number of reads of each
-nucleotide in each cell and site (read counts). Expected number of reads
-per site and cell. It is the mean of a <em>Poisson</em> distribution if
-there is no dispersion (option -V). In the case of dispersed coverage
-(option -V &gt; 0), this is the mean of a <em>Negative Binomial
-distribution</em>. If there is no allelic imbalance (option -I = 0.5),
-then the reads are randomly assigned to the maternal/paternal
-chromosomes.</p>
+<p>In the read-counts mode CellCoal simulates the number of reads of
+each nucleotide in each cell and site (read counts). Expected number of
+reads per site and cell. It is the mean of a <em>Poisson</em>
+distribution if there is no dispersion (option -V). In the case of
+dispersed coverage (option -V &gt; 0), this is the mean of a
+<em>Negative Binomial distribution</em>. If there is no allelic
+imbalance (option -I = 0.5), then the reads are randomly assigned to the
+maternal/paternal chromosomes.</p>
 <p><strong>V#: coverage dispersion: double (0-inf)</strong></p>
 <p>Alpha shape of the gamma distribution in a Negative Binomial
 distribution (i.e., <em>dispersion</em> parameter) whose mean
@@ -2179,11 +2181,10 @@ that cells and sites with the same read counts in both modes have the
 same genotype likelihoods (without amplification error, whose per-site
 value is random).</p>
 <h2 id="the-vcf-file">6.11 The VCF file</h2>
-<p>CellCoal does not simulate individual reads (there are no sequences,
-no FASTQ and no BAM files): it simulates the number of reads of each
-nucleotide in each cell and site (read counts). The fields of the VCF
-(<code>DP</code>, <code>RC</code>, <code>PL</code>/<code>GL</code>) are
-computed from those counts.</p>
+<p>In the read-counts mode CellCoal simulates the number of reads of
+each nucleotide in each cell and site (read counts). The fields of the
+VCF (<code>DP</code>, <code>RC</code>, <code>PL</code>/<code>GL</code>)
+are computed from those counts.</p>
 <p>When read counts are simulated (option -C), CellCoal writes a
 <em>vcf</em> file (VCF v4.3) with one line per SNV site and one column
 per cell (plus the outgroup cell). If the option -v is active, each

@@ -1,28 +1,68 @@
-## CellCoal 2
-CellCoal: coalescent simulation of single-cell NGS genotypes 
+# CellCoal 2
+
+**Coalescent simulation of single-cell sequencing data: from the genealogy of a tumour to the reads of every cell.**
 
 &copy;2020 David Posada, University of Vigo, Spain <http://darwin.uvigo.es>
 
-## About CellCoal
-CellCoal simulates the somatic evolution of single-cells. CellCoal generates a coalescent genealogy for a sample of somatic cells –no recombination– obtained from a growing population, together with a another cell as outgroup, introduces mutations along this genealogy, and produces single-cell diploid genotypes (single-nuclotide variants or SNVs). CellCoal implements multiple mutations models (0/1, DNA, infinite and finite site models, deletion, copy-neutral LOH, 30 cancer signatures) and is able to generate read counts and genotype likelihoods considering allelic dropout, sequencing and amplification error, plus doublet cells. **CellCoal does not simulate individual reads (there are no sequences, no FASTQ and no BAM files): it simulates the number of reads of each nucleotide in each cell and site (read counts).** Rate variation among lineages can be simulated with a gamma distribution or with a few *rate switches* (`-N`): each switch picks a branch at random, with probability proportional to its length, and multiplies the length of that branch and of all its descendants by a given factor, creating a clade that evolves faster or slower (for example, `-N2 4 0.2`).
+## What CellCoal does
 
-## Developed with Claude
+CellCoal simulates the somatic evolution of a sample of cells and the single-cell sequencing experiment that observes them. It generates a coalescent genealogy of the cells (no recombination; a growing or birth-death population, or a tree you provide), together with a healthy outgroup cell, and evolves their diploid genomes along it with:
 
-**CellCoal 2 was developed together with Claude.** The CellCoal 2 series (versions 2.0.0 onwards) was developed by Claude, an AI model made by Anthropic, working as a coding agent (Claude Code) in collaboration with David Posada. Claude took part in all the work on the code: finding and fixing bugs, making the program faster and lighter in memory, splitting the source into modules, new features (sparse and streamed genomes, BCF output, `--summary`, `--sweep`, `--config`, `--check`), the test suite, the continuous integration, the packages for Linux, macOS and Windows, the releases and the documentation, including this text. David Posada defined the goals, made the scientific and design decisions, tested the program and approved every release, and is the author of CellCoal and responsible for it. The 2020 article describes version 1, which was written before this work.
+- **point mutations**: binary (0/1) or DNA data, infinite- and finite-sites models (JC, HKY, GTR), rate variation among sites and lineages, germline SNPs, and the 30 COSMIC mutational signatures or your own (`--signature-file`);
+- **copy-number events**: point deletions and copy-neutral LOH, and **losses and gains of chromosome segments** (up to 4 copies per site by default) that happen on the branches of the tree, in random order together with the SNVs, so that the order of events matters. The phase of every copy is known and can be written out.
+
+It then simulates the experiment, at three levels of detail (you choose with the options, `--check` tells you which one a run is):
+
+| Mode | What it simulates | Main outputs |
+|---|---|---|
+| **Genotypes** | the true genotypes, with allelic dropout (ADO) and genotyping error | genotype and haplotype files, trees |
+| **Read counts** (`-C`) | the number of reads of each nucleotide in every cell and site, with sequencing and amplification error, allelic imbalance, doublets, and the genotype likelihoods that follow | VCF/BCF, CATG, PILEUP, bulk VAF |
+| **Reads** (`-C --bam --fastq`) | paired-end Illumina-like reads of the amplified genome of every cell, as molecules with PCR duplicates, amplification errors and gain, base qualities and strand bias | BAM + index, FASTQ, `ref.fa`, `truth.vcf` |
+
+Other things it can do:
+
+- **Allelic dropout in blocks of sites**, correlated with the coverage and with doublets; coverage that varies between cells, sites and along the genome (`--gain-sd`); amplification errors with a trinucleotide signature (`--amp-signature`).
+- **A real or a long chromosome**: simulate a chromosome in blocks on one tree (`--blocks`), take the reference from a FASTA file and a region (`--fasta`, `--region`) and put in your own germline variants (`--germline-vcf`), writing one VCF with real chromosome coordinates, or one BAM per cell along the whole chromosome.
+- **Tumour only** (`--no-outgroup`) and the calling filters of a real analysis (`--min-alt-reads`, `--min-alt-vaf`).
+- **Very large data sets**: 10,000 cells x 1,000,000 sites in seconds and a few hundred MB (sparse genomes), reads streamed in blocks, parallel with OpenMP and identical results for any number of threads.
+- **Experiments**: `--summary` compares what a caller would see with the truth (called fraction, genotype error, precision and recall of the SNVs), and `--sweep` runs a grid of parameter values in parallel and resumes, with plots.
+- **Reproducibility**: seeds, `Results/run.json` (version, command line, environment) and configuration files (YAML/JSON) that repeat any run.
+
+CellCoal is validated against theory (coalescent times, site frequency spectrum, depth, errors) and with a test suite that runs on Linux, macOS and Windows; see [Tests](#tests) and [Validation](#validation).
 
 ## Getting started
 
-New to CellCoal? Chapter 3 of the manual ([docs/cellcoal.manual.v2.0.html](docs/cellcoal.manual.v2.0.html)) is a quickstart: installation on Linux, macOS and Windows, a first simulation, worked examples (read counts and VCF, bulk VAF, doublets, summaries, parameter and configuration files) and a tutorial on `--sweep`.
+The manual ([html](https://dapogon.github.io/cellcoal/) or [pdf](docs/cellcoal.manual.v2.0.pdf)) has a quickstart (chapter 3) with installation on Linux, macOS and Windows, a first simulation, worked examples and a tutorial on `--sweep`.
 
-1. **Download**: get the program from the GitHub repository at <https://github.com/dapogon/cellcoal>. Under the Code tab you will see a section call *release*. Click on it download the source code in .zip (or tar.gz) format. Then unzip the *cellcoal-x.y.z.zip* file (for example, cellcoal-2.2.3.zip). You should see now a folder called *cellcoal-x.y.z*. Move into the folder to compile and run the program.
+**Install.** Download the binary for your system from the [releases](https://github.com/dapogon/cellcoal/releases) page (Linux, macOS and Windows), or install it with Homebrew (`brew tap dapogon/cellcoal https://github.com/dapogon/cellcoal && brew install cellcoal`) or conda (recipe in `conda/`). To compile from the source (the zip or tar.gz of a release, or `git clone`), type `make`: the program is written in C, has no dependencies and appears in `bin/` as `cellcoal-x.y.z`. OpenMP is detected automatically (on macOS `brew install libomp`; `make OMPFLAG=` builds without it). `OMP_NUM_THREADS=n` chooses the threads.
 
-2. **Compile**: type `make`. The program should compile without much problem in Linux/MacOSX. A *Makefile* is provided. The executable file will be located in the *bin* folder (e.g., `bin/cellcoal-2.2.3`). OpenMP (multithreading) is detected automatically: `-fopenmp` if the compiler supports it, otherwise Homebrew's `libomp` on macOS (`brew install libomp`), otherwise the program is built single-threaded with identical results. Use `OMP_NUM_THREADS=n` to choose the number of threads, or `make OMPFLAG=` to build without OpenMP.
+**Run.** Options go on the command line, in a parameter file (`bin/cellcoal-x.y.z` with no arguments reads the file called *parameters*) or in a configuration file (`--config`, see [examples](examples)). Results go to the folder *Results* (or the one given with `-o`). A few examples:
 
-3. **Run**: `bin/cellcoal-x.y.z`. In this case, the program arguments will be read from a file called *parameters*. Alternatively, arguments can be entered directly in the command line, or from a specific parameter file with a different name.
+```
+# genotypes of 20 cells with allelic dropout, SNV genotypes and trees
+cellcoal -n1 -s20 -l1000 -u1e-6 -e10000 -D0.1 -1 -6
 
-4. **Inspect results**: Once the run is finished, different output files will be written by default inside a folder called *Results* (or the folder given with `-o`).
+# read counts at 10x, a VCF with genotype likelihoods, and a summary against the truth
+cellcoal -n10 -s20 -l1000 -u1e-6 -e10000 -C10 -E0.001 --summary
 
-## Bulk-like VAF distribution
+# paired-end reads (BAM and FASTQ) of 20 amplified cells, with a truth VCF
+cellcoal -n1 -s20 -l30000 -u1e-7 -e10000 -C10 --ado mean=0.1,block=3000 --reads bam,fastq
+
+# a chromosome of 50 blocks of 200,000 sites on one tree, tumour only; or a region of a real reference
+cellcoal -s50 -l200000 -u1e-8 -e10000 -C10 --tree no-outgroup --chromosome blocks=50
+cellcoal -s50 -l200000 -u1e-8 -e10000 -C10 --chromosome fasta=hg38.fa.gz,region=chr1:10000001-20000000
+
+# copy-number losses and gains of segments, with the phase in the genotypes
+cellcoal -n1 -s20 -l5000 -u1e-6 -e1000 --mutation loss-rate=1e-3,gain-rate=1e-3,segment-length=500 -1 --phase
+```
+
+`cellcoal --help` lists the everyday options and the groups of parameters (`--tree`, `--mutation`, `--ado`, `--errors`, `--depth`, `--reads`, `--chromosome`, `--output`, ...); `--help-all` lists every parameter with its configuration key.
+
+## Developed with Claude
+
+**CellCoal 2 was developed together with Claude.** The CellCoal 2 series (versions 2.0.0 onwards) was developed by Claude, an AI model made by Anthropic, working as a coding agent (Claude Code) in collaboration with David Posada. Claude took part in all the work on the code: finding and fixing bugs, making the program faster and lighter in memory, splitting the source into modules, new features (sparse and streamed genomes, BCF output, `--summary`, `--sweep`, `--config`, `--check`, the read-level simulator, a chromosome in blocks and the copy-number model), the test suite, the continuous integration, the packages for Linux, macOS and Windows, the releases and the documentation, including this text. David Posada defined the goals, made the scientific and design decisions, tested the program and approved every release, and is the author of CellCoal and responsible for it. The 2020 article describes version 1, which was written before this work.
+
+## Bulk-like VAF distribution (tools/bulk_vaf.py)
 
 Easiest: option `-0` makes CellCoal write the read counts pooled over the tumour cells, one line per site (VAF from the simulated read counts and the true VAF; size independent of the number of cells), and `python3 tools/bulk_vaf.py --bulk Results/bulk --out vaf.png` plots it (add `-Z` to skip the VCF when you only need the bulk file; add `--depth 100 --purity 0.8` to mimic a real bulk experiment). The details below cover the other inputs.
 
@@ -39,12 +79,12 @@ With simulated read counts, sequencing and amplification errors give almost ever
 
 A short summary of each series; the details of every release are in [docs/CHANGELOG.md](docs/CHANGELOG.md) and in `docs/CHANGES-X.Y.Z.md`.
 
-- **2.5: copy number.** Losses and gains of chromosome segments are simulated together with the SNVs, point deletions and cnLOH, branch by branch and in random order, over copies with known phase (up to 4 copies per site by default). Genotypes with several copies, the phase (`--phase`), one haplotype row per copy and a truth file of the copies per cell (`cnv_segments`). It works with every substitution model and in the three modes.
-- **2.4: realistic amplification, Illumina reads and a chromosome in blocks.** Allelic dropout in contiguous segments, signature files, signature-shaped amplification errors, autocorrelated coverage; paired-end reads (BAM, FASTQ) with PCR duplicates, base qualities and a truth VCF; a chromosome in blocks inside the program (`--blocks`, `--fasta`, `--region`); explicit modes (genotypes, read counts, reads); grouped options (`--ado`, `--depth`, `--output`, ...) and a cleaner code base (2.4.1 and 2.4.2: about 2,300 lines less, same output).
-- **2.3: tumor-only runs and long chromosomes.** `--no-outgroup`, calling filters that keep singletons (`--min-alt-reads`, `--min-alt-vaf`), the depth of the non-variable sites (`--coverage`) and `tools/chrom.py` to simulate a long chromosome by blocks.
-- **2.2: speed, BCF, summaries and sweeps.** Faster read counts (`--fast`), BCF output, streaming with every output, `--summary` with metrics against the true genotypes, `--sweep` parameter grids (parallel and resumable), validation against theory and a fuzzer-hardened code, `--check`, `--amp-cell-var`, a quickstart chapter, and binaries for Linux, macOS and Windows.
-- **2.1: very large data sets.** Sparse genome storage (10,000 cells x 1,000,000 sites in about 7 s), streamed read counts with small memory, bulk VAF (`-0`), coverage varying between sites and cells (`-O`, `-J`), configuration files, a modular source, `run.json` run records, Homebrew and conda packages.
-- **2.0: a faster, safer CellCoal.** Bug fixes (genotyping error, allelic dropout, memory safety), 3-4 times faster with about 7 times less memory, and parallel read counts. The output for a given seed differs from versions 1.3.4 and earlier.
+- **2.5, copy number on the tree.** Losses and gains of chromosome segments are simulated together with the SNVs, point deletions and cnLOH, branch by branch and in random order, over copies with known phase (up to 4 copies per site by default) and with every substitution model. Genotypes with several copies, the phase (`--phase`), one haplotype row per copy and a truth file of the copies per cell and segment (`cnv_segments`).
+- **2.4, reads, amplification and whole chromosomes.** Paired-end Illumina-like reads (BAM, FASTQ) with PCR duplicates, base qualities and a truth VCF; allelic dropout in blocks of sites; signature files and signature-shaped amplification errors; coverage that varies along the genome; a chromosome in blocks, from a real FASTA reference and with your germline variants (`--blocks`, `--fasta`, `--region`, `--germline-vcf`); explicit modes (genotypes, read counts, reads); grouped options (`--ado`, `--depth`, `--output`, ...) and a cleaner code base (2.4.1 and 2.4.2: about 2,300 lines less, same output).
+- **2.3, tumour-only runs and long chromosomes.** `--no-outgroup`, calling filters that keep singletons (`--min-alt-reads`, `--min-alt-vaf`), the depth of the non-variable sites (`--coverage`) and `tools/chrom.py`.
+- **2.2, experiments at scale.** Faster read counts (`--fast`), BCF output, streaming with every output, `--summary` with metrics against the true genotypes, `--sweep` parameter grids (parallel and resumable), validation against theory, `--check`, and binaries for Linux, macOS and Windows.
+- **2.1, very large data sets.** Sparse genome storage (10,000 cells x 1,000,000 sites in about 7 s), streamed read counts with small memory, bulk VAF (`-0`), coverage varying between sites and cells (`-O`, `-J`), configuration files, a modular source, `run.json` run records, Homebrew and conda packages.
+- **2.0, a faster, safer CellCoal.** Bug fixes (genotyping error, allelic dropout, memory safety), 3-4 times faster with about 7 times less memory, and parallel read counts. The output for a given seed differs from versions 1.3.4 and earlier.
 
 ## Citation
 
@@ -52,9 +92,7 @@ A short summary of each series; the details of every release are in [docs/CHANGE
 
 ## Tests
 
-The CI also builds with clang and without OpenMP, runs the suite under AddressSanitizer/UBSan, fuzzes the options and the `--config` parser (`tests/fuzz.py`), reports code coverage, and `tests/theory.py` (part of `make test`) validates the model against theory: coalescent waiting times, growth, number and site frequency spectrum of mutations, depth, sequencing error and dropout. See section 6.10h of the manual.
-
-`make test` runs a small regression suite (`tests/run_tests.sh`): the example parameter files, identical results with 1 and 2 threads, reproducibility with the same seed, and inheritance of germline SNPs (`-c`), and that the observed rates of allelic dropout (`-D`), genotyping error (`-G`) the fixed number of mutations (`-j`), allelic imbalance (`-I`), doublets (`-B`), ADO per cell (`-P`) and the spectrum of mutational signature 1 match the expected values. It also checks that sparse genome storage gives the same output as dense storage and the same ADO and genotyping-error rates, that streamed read counts give the same VCF, PILEUP and bulk file as stored read counts, that `-0`, `-Z`, `-z` and `-M` behave, that the pooled (bulk) VAF of the read counts agrees with the true VAF (ratio of means and correlation), that doublets multiply the pooled depth by the expected factor with stored and streamed read counts, and the content of `run.json`. It does not depend on exact floating-point output, so it can be run on any platform.
+`make test` runs the regression suite (`tests/run_tests.sh`): the example files, reproducibility and identical results for 1 and 2 threads, the observed rates of ADO, genotyping error, doublets and allelic imbalance, the mutation models and signatures (also with copy-number events), the equivalence of dense, sparse and streamed genomes, the read counts, the reads and the copy-number outputs. It does not depend on exact floating-point output, so it runs on any platform. The CI also builds with clang and without OpenMP, runs the suite under AddressSanitizer/UBSan, fuzzes the options and the `--config` parser (`tests/fuzz.py`) and reports code coverage; `tests/theory.py` validates the model against theory (coalescent waiting times, growth, number and spectrum of mutations, depth, sequencing error and dropout). See section 6.10h of the manual.
 
 ## Validation
 A script that simulates with CellCoal, infers the tree with CellPhy and compares it with the true tree is in [examples/validation](examples/validation).
