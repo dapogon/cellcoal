@@ -972,27 +972,39 @@ signatures), which can be mixed along the genome.</p>
 <blockquote>
 <p>Note that CellCoal does not simulate structural variants. Copy-number
 alterations are limited to point deletions (<code>-d</code>), cnLOH
-(<code>-H</code>) and losses of segments (<code>--loss-rate</code>,
-<code>--loss-len</code>, see below).</p>
+(<code>-H</code>) and losses of segments (<code>--seg-loss-rate</code>,
+<code>--seg-len</code>, see below).</p>
 </blockquote>
-<p><strong>Losses of segments (<code>--loss-rate</code>,
-<code>--loss-len</code>; group
-<code>--mutation loss-rate=...,loss-len=...</code>).</strong> Each
-haplotype suffers a Poisson number of losses, with mean the total tree
-length in generations times <code>--loss-rate</code> (per haplotype and
-generation). Each loss falls on a branch chosen according to its length,
-starts at a uniform site and covers a geometric number of sites with
-mean <code>--loss-len</code> (default 1000), clipped at the end of the
-genome. Every cell below the branch loses the segment in that haplotype
-(its alleles become deletions), so the genotypes, read counts and VCF
-treat them like point deletions. The SNVs that were inside a lost
-segment disappear in the cells that lost it (they remain as hemizygous
-alleles if the SNV is in the other haplotype), so with <code>-j</code>
-the number of mutations is the number placed, not the number that
-survive. The log and the summary (<code>segment_losses</code>,
-<code>snv_lost_segments</code> columns, only with
-<code>--loss-rate</code>) report the number of losses and the variable
-sites lost.</p>
+<p><strong>Losses and gains of segments (<code>--seg-loss-rate</code>,
+<code>--seg-gain-rate</code>, <code>--seg-len</code>; group
+<code>--mutation loss-rate=...,gain-rate=...,segment-length=...</code>).</strong>
+Each haplotype suffers a Poisson number of losses (mean the total tree
+length in generations times <code>--seg-loss-rate</code>, per haplotype
+and generation) and of gains (<code>--seg-gain-rate</code>). Each event
+falls on a branch chosen according to its length, starts at a uniform
+site and covers a geometric number of sites with mean
+<code>--seg-len</code> (default 1000), clipped at the end of the genome.
+Every cell below the branch carries the event in that haplotype.
+<strong>A loss</strong> turns the alleles of the segment into deletions,
+so the genotypes, read counts and VCF treat them like point deletions.
+The SNVs that were inside a lost segment disappear in the cells that
+lost it (they remain as hemizygous alleles if the SNV is in the other
+haplotype), so with <code>-j</code> the number of mutations is the
+number placed, not the number that survive. <strong>A gain</strong> is
+one extra copy of the haplotype (a haplotype has at most two copies, so
+no high amplifications): the genotype does not change, but the haplotype
+gets twice the reads, so the allele fractions of a gained segment are
+2:1 or 1:2 and the depth is 1.5 times the normal one. Gains need read
+counts (<code>-C</code>) or reads
+(<code>--bam</code>/<code>--fastq</code>); without them they are
+ignored. The log and the summary (<code>segment_losses</code>,
+<code>snv_lost_segments</code> and <code>segment_gains</code> columns,
+only when the option is used) report the number of events and the
+variable sites lost, and the file <code>cnv_events</code>
+(<code>cnv_events_dir/</code> with <code>-v</code>) is the truth for the
+benchmarking of copy-number callers: one row per event with the type,
+the haplotype, the start and end of the segment (1-based, inclusive) and
+the cells that carry it.</p>
 <h3 id="generation-of-reference-and-ancestral-genomes">5.2.1 Generation
 of reference and ancestral genomes</h3>
 <p>The first step to generate the cell genotypes is the generation of a

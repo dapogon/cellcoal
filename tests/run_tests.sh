@@ -1106,14 +1106,38 @@ printf 'cells: 2\nsites: 800\nseed: 7\nmutation: rate=1e-6\n' > c.yaml
 "$BIN" --config c.yaml -n2 -l800 -s7 -u1e-6 -oC >/dev/null 2>&1 && ok "config accepts group keys" || bad "config group key"
 cd "$ROOT"
 
-echo "2g46. Copy-number losses of segments (--loss-rate, --loss-len)"
+echo "2g46. Copy-number losses of segments (--seg-loss-rate, --seg-len)"
 mkdir -p "$TMP/loss" && cd "$TMP/loss" && rm -rf ./*
 "$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --summary -#5 >/dev/null 2>&1; a=$(cut -f6 Results/summary.tsv | tail -1)
-"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --loss-rate 2e-3 --loss-len 500 --summary -#5 >/dev/null 2>&1; b=$(cut -f6 Results/summary.tsv | tail -1); lost=$(tail -1 Results/summary.tsv | awk -F'\t' '{print $NF}')
+"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --seg-loss-rate 2e-3 --seg-len 500 --summary -#5 >/dev/null 2>&1; b=$(cut -f6 Results/summary.tsv | tail -1); lost=$(tail -1 Results/summary.tsv | awk -F'\t' '{print $NF}')
 [ "$a" = 200 ] && [ "$b" -lt "$a" ] && [ $((a - b)) -eq "$lost" ] && ok "segment losses remove variable sites and the summary counts them" || bad "segment losses ($a $b $lost)"
-"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --mutation loss-rate=2e-3,loss-len=500 --summary -#5 >/dev/null 2>&1; c=$(cut -f6 Results/summary.tsv | tail -1)
-[ "$b" = "$c" ] && ok "--mutation loss-rate,loss-len = --loss-rate/--loss-len" || bad "group loss-rate"
-"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -C20 --loss-rate 2e-3 >/dev/null 2>&1 && ok "segment losses with read counts" || bad "segment losses with -C"
+"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --mutation loss-rate=2e-3,segment-length=500 --summary -#5 >/dev/null 2>&1; c=$(cut -f6 Results/summary.tsv | tail -1)
+[ "$b" = "$c" ] && ok "--mutation loss-rate,loss-len = --seg-loss-rate/--seg-len" || bad "group loss-rate"
+"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -C20 --seg-loss-rate 2e-3 >/dev/null 2>&1 && ok "segment losses with read counts" || bad "segment losses with -C"
+cd "$ROOT"
+
+echo "2g47. Copy-number gains of segments (--seg-gain-rate)"
+mkdir -p "$TMP/gain" && cd "$TMP/gain" && rm -rf ./*
+cat > meandepth.py <<'PY'
+import sys
+t = n = 0
+for l in open(sys.argv[1] + '/pileup'):
+    p = l.rstrip('\n').split('\t')
+    if len(p) < 6: continue
+    for k in range((len(p) - 3) // 3):
+        t += int(p[3 + 3 * k]); n += 1
+print(t / n if n else 0)
+PY
+"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -C100 -9 -#5 -oA >/dev/null 2>&1
+"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -C100 -9 -#5 --seg-gain-rate 1e-3 --seg-len 1500 -oB >/dev/null 2>&1
+if command -v python3 >/dev/null; then
+  da=$(python3 meandepth.py A); db=$(python3 meandepth.py B)
+  python3 -c "import sys; sys.exit(0 if float('$db') > 1.1*float('$da') else 1)" && ok "gained segments raise the read depth" || bad "gain depth ($da $db)"
+else echo "  skip (python3 not installed)"; fi
+grep -q "^gain" B/cnv_events && ok "cnv_events lists the gains" || bad "cnv_events"
+"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 -C100 -9 -#5 --mutation gain-rate=1e-3,segment-length=1500 -oG >/dev/null 2>&1
+cmp -s B/pileup G/pileup && ok "group gain-rate,segment-length = --seg-gain-rate/--seg-len" || bad "group gain-rate"
+"$BIN" -n1 -s8 -l4000 -u1e-5 -e1000 -b1 --seg-gain-rate 1e-3 2>&1 | grep -aq "ignored without -C" && ok "--seg-gain-rate without -C is reported as ignored" || bad "gain without -C"
 cd "$ROOT"
 
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"

@@ -368,6 +368,7 @@ static void CheckModeOptions (void)
 		{"-E (sequencing error)", sequencingError > 0.0},
 		{"-X (error matrix)", thereIsEij == YES},
 		{"--gain-sd/--gain-len", gainSd > 0.0 || gainLen > 0.0},
+		{"--seg-gain-rate", gainRate > 0.0},
 		{"--amp-signature", ampSignatureFile != NULL},
 		{NULL, 0}
 		};
@@ -479,6 +480,8 @@ static void PrintReplicateOutputs (int dataSetNum)
 	fprintf (stderr, "\nNumber of SNVs                 =   %d", numSNVs);
 	fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
 	fprintf (stderr, "\nNumber of cnLOH events         =   %d", numCNLOH);
+	if (gainRate > 0)
+		fprintf (stderr, "\nNumber of segment gains        =   %d", numSegGain);
 	if (lossRate > 0)
 		fprintf (stderr, "\nNumber of segment losses       =   %d (variable sites lost in them: %d)", numSegLoss, snvsLostBySegments);
 	
@@ -614,7 +617,9 @@ static void WriteBlocksTotal (void)
 	for (k=0; k<10; k++)
 		fprintf (fpSummary, "\t%lld", inv[k]);
 	if (lossRate > 0)
-		fprintf (fpSummary, "\tNA\tNA");	/* the segment losses are not summed over the blocks */
+		fprintf (fpSummary, "\tNA\tNA");
+	if (gainRate > 0)
+		fprintf (fpSummary, "\tNA");	/* the segment losses are not summed over the blocks */
 	fprintf (fpSummary, "\n");
 	free (blockRows);
 	blockRows = NULL;
@@ -746,6 +751,7 @@ static void SimulateGenomes (int dataSetNum, long int *seed)
 		AccumAdd (&runStats.del, numDEL);
 		}
 	snvsLostBySegments = 0;
+	ResetSegments ();
 	if (lossRate > 0)
 		{
 		int		before = CountTrueVariants ();
@@ -753,6 +759,10 @@ static void SimulateGenomes (int dataSetNum, long int *seed)
 		EvolveBothGenomes ("segment losses", EvolveSegmentLossesOnTree, seed);
 		snvsLostBySegments = before - CountTrueVariants ();	/* variable sites that disappeared inside lost segments */
 		}
+	if (gainRate > 0)
+		EvolveBothGenomes ("segment gains", EvolveSegmentGainsOnTree, seed);
+	if (lossRate > 0 || gainRate > 0)
+		WriteCnvEvents (dataSetNum);
 
 	/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 	numSNVs = CountTrueVariants ();
@@ -857,6 +867,8 @@ static void WriteSummaryRow (int dataSetNum)
 		fprintf (fpSummary, "\t%lld", inv[k]);
 	if (lossRate > 0)
 		fprintf (fpSummary, "\t%d\t%d", numSegLoss, snvsLostBySegments);
+	if (gainRate > 0)
+		fprintf (fpSummary, "\t%d", numSegGain);
 	fprintf (fpSummary, "\n");
 	fflush (fpSummary);
 	}
@@ -1365,7 +1377,7 @@ int main (int argc, char **argv)
 			fprintf (stderr, "Can't open \"%s\"\n", File);
 			exit(-1);
 			}
-		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\tado_simulated\tsingleton_sites\tsingleton_recall\tinv_AA\tinv_AC\tinv_AG\tinv_AT\tinv_CC\tinv_CG\tinv_CT\tinv_GG\tinv_GT\tinv_TT%s\n", lossRate > 0 ? "\tsegment_losses\tsnv_lost_segments" : "");
+		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\tado_simulated\tsingleton_sites\tsingleton_recall\tinv_AA\tinv_AC\tinv_AG\tinv_AT\tinv_CC\tinv_CG\tinv_CT\tinv_GG\tinv_GT\tinv_TT%s%s\n", lossRate > 0 ? "\tsegment_losses\tsnv_lost_segments" : "", gainRate > 0 ? "\tsegment_gains" : "");
 		}
 
 	/* Read user treefile */

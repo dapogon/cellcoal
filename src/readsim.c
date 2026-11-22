@@ -628,6 +628,8 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 				{
 				if (gainOn == YES && cellIdx >= 0)
 					g = GainAt (cellIdx, hap, pos + W/2);
+				if (copyGainOn == YES && cellIdx >= 0)
+					g *= CopyGainAt (cellIdx, hap, pos + W/2);
 				}
 			lambda = depth * cm * 0.5 * g / (2.0 * L * (1.0 + dupMean)) * (double) W;
 			nfrag = RandomPoisson (lambda, seed);

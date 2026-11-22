@@ -18,6 +18,7 @@
 	X(qual_sd,        "--qual-sd",        '\216', 2, qualSd,     0)      \
 	X(qual_slope,     "--qual-slope",     '\217', 2, qualSlope,  0)      \
 	X(strand_bias,    "--strand-bias",    '\220', 2, strandBias, 0)    \
-	X(loss_rate,      "--loss-rate",      '\221', 2, lossRate,   0)      \
-	X(loss_len,       "--loss-len",       '\222', 2, lossLen,    1000)
+	X(seg_loss_rate,  "--seg-loss-rate",      '\221', 2, lossRate,   0)      \
+	X(seg_len,        "--seg-len",       '\222', 2, segLen,    1000)  \
+	X(seg_gain_rate,  "--seg-gain-rate",  '\223', 2, gainRate,   0)
 #endif
