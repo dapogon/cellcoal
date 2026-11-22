@@ -1004,21 +1004,30 @@ many were lost). The model is the infinite sites model (ISM): the
 finite-sites DNA models, signatures, Mk2 and mixed models are not
 available with copy-number events, and an ISM violation is an error.</p>
 <p><strong>Genotypes with several copies.</strong> The text genotypes
-(SNV and full genotypes) show the alleles of the maternal copies,
-<code>|</code>, and the alleles of the paternal copies, so the phase is
-explicit: <code>A|A</code> (normal), <code>GG|A</code> (two maternal
-copies with G, one paternal with A), <code>AGT|-</code> (three maternal
-copies, paternal lost). In the VCF, <code>TG</code> lists the alleles of
-all the copies (<code>0|1|1</code>) and the extra format field
-<code>CN</code> gives the number of copies of each haplotype
-(<code>2|1</code>). In read counts and reads, the reads of a haplotype
-are shared among its copies, so a site with copies A,A,G has allele
-fractions 2/3 and 1/3 for that haplotype. The file
-<code>cnv_events</code> lists every loss and gain with its haplotype,
-segment and the cells that carry it. Copy-number events need
-<code>-C</code> or reads for the read-based outputs; the true haplotype
-files (<code>-Y</code>, <code>-2</code>, <code>-4</code>) show only the
-first copy of each haplotype.</p>
+(SNV and full genotypes) list the alleles of all the copies, the
+maternal ones first and then the paternal ones (<code>GGA</code>,
+<code>AGT-</code>; a deleted haplotype is <code>-</code>). With
+<strong><code>--phase</code></strong> (group
+<code>--output phase</code>) the maternal and the paternal copies are
+separated by <code>|</code>, so the phase is explicit: <code>GG|A</code>
+is two maternal copies with G and one paternal with A;
+<code>AGT|-</code> is three maternal copies and the paternal lost. In
+the VCF, <code>TG</code> lists the alleles of all the copies
+(<code>A|G|G</code>) and the extra format field <code>CN</code> gives
+the number of copies of each haplotype (<code>2|1</code>). In read
+counts and reads, the reads of a haplotype are shared among its copies,
+so a site with copies A,A,G has allele fractions 2/3 and 1/3 for that
+haplotype. The true haplotype files (<code>-Y</code>, <code>-2</code>,
+<code>-4</code>) have one row for every copy (<code>cell0001m</code>,
+<code>cell0001m2</code>, <code>cell0001p</code>, …; <code>-</code> where
+the cell has fewer copies). The file <code>cnv_events</code> lists every
+loss and gain with its haplotype, segment and the cells that carry it,
+and <strong><code>cnv_segments</code></strong> gives the true number of
+copies of every cell by segments of sites with the same copies
+(<code>cell start end maternal_copies paternal_copies total_copies</code>),
+the truth for evaluating a copy-number caller. The observed genotypes
+(maximum likelihood, <code>NG</code>) stay diploid: like a diploid
+caller on real data, they ignore the extra copies.</p>
 <p>The log and the summary (<code>segment_losses</code>,
 <code>snv_lost_segments</code> and <code>segment_gains</code> columns,
 only when the option is used) report the number of events and the

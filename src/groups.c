@@ -133,6 +133,7 @@ static const GroupKey groupKeys[] =
 	{"output", "no-vcf",           'F', "-Z", "do not write the VCF (needs catg, pileup or bulk)"},
 	{"output", "vcf-gz",           'F', "-z", "write the VCF compressed with gzip"},
 	{"output", "bcf",              'F', "--bcf", "write a BCF file instead of a VCF"},
+	{"output", "phase",             'F', "--phase", "show the phase (maternal|paternal copies) in the genotypes with copy-number events"},
 	{"output", "summary",          'F', "--summary", "summary.tsv: one row of metrics per replicate"},
 	{"output", "replicate-folders",'F', "-v", "one folder per replicate"},
 	{"output", "tumor-names",      'F', "-W", "name the cells with tumor nomenclature"},

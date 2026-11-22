@@ -750,6 +750,7 @@ static void SimulateGenomes (int dataSetNum, long int *seed)
 		if (deletionRate > 0)
 			AccumAdd (&runStats.del, numDEL);
 		WriteCnvEvents (dataSetNum);
+		WriteCnvSegments (dataSetNum);
 		}
 	else
 		{

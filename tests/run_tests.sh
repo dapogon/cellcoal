@@ -1191,14 +1191,38 @@ for l in open('Results/snv_gen'):
 print(1 if bad == 0 and bars > 0 and seen == lim else 0)
 PY
 if command -v python3 >/dev/null; then
-  "$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 4e-3 --seg-len 300 -1 >/dev/null 2>&1
+  "$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 4e-3 --seg-len 300 -1 --phase >/dev/null 2>&1
   [ "$(python3 maxc.py 4)" = 1 ] && ok "genotypes show maternal|paternal copies, up to 4 by default" || bad "copy genotypes (max 4)"
-  "$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 4e-3 --seg-len 300 --seg-max-copies 3 -1 >/dev/null 2>&1
+  "$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 4e-3 --seg-len 300 --seg-max-copies 3 -1 --phase >/dev/null 2>&1
   [ "$(python3 maxc.py 3)" = 1 ] && ok "--seg-max-copies limits the copies of a site" || bad "--seg-max-copies"
 else echo "  skip (python3 not installed)"; fi
 "$BIN" -n1 -s10 -l300 -u2e-5 -e3000 -d0 -#7 --seg-loss-rate 1e-3 >E.txt 2>&1; grep -aq "ISM" E.txt && ok "copy-number events keep the ISM check" || bad "ISM check with copy number"
-"$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 -1 >A.txt 2>&1; cp Results/snv_gen a.gen
-"$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 -1 >A.txt 2>&1
+"$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 -1 -2 --phase >A.txt 2>&1; cp Results/snv_gen a.gen
+cat > truth.py <<'PY'
+# cnv_segments agrees with the genotypes and with the haplotype rows
+import collections
+segs = collections.defaultdict(list)
+for l in open('Results/cnv_segments'):
+    p = l.split()
+    if len(p) == 6 and p[0] != 'cell': segs[p[0]].append((int(p[1]), int(p[2]), int(p[3]), int(p[4])))
+L = open('Results/snv_gen').read().split('\n')
+pos = [int(x) for x in L[3].split()]
+ok = 1
+for l in L[4:]:
+    p = l.split()
+    if len(p) < 2 or '|' not in p[1]: continue
+    for site, g in zip(pos, p[1:]):
+        m, q = g.split('|')
+        for s, e, cm, cp in segs[p[0]]:
+            if s <= site <= e:
+                if (len(m.replace('-', '')) != cm) or (len(q.replace('-', '')) != cp): ok = 0
+H = open('Results/snv_hap').read().split('\n')
+rows = [x for x in H[4:] if x.strip()]
+if int(H[2].split()[0]) != len(rows): ok = 0
+print(ok)
+PY
+[ "$(python3 truth.py)" = 1 ] && ok "cnv_segments, genotypes and haplotype rows (one per copy) agree" || bad "cnv_segments / haplotype rows"
+"$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 -1 -2 --phase >A.txt 2>&1
 cmp -s Results/snv_gen a.gen && ok "copy-number runs are reproducible with the same seed" || bad "copy-number reproducibility"
 cd "$ROOT"
 

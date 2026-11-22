@@ -130,7 +130,9 @@ void		JCmodel (double Pij[4][4], double branchLength);
 void		HKYmodel (double Pij[4][4], double branchLength);
 void		GTRmodel (double Pij[4][4], double branchLength);
 void 	SimulateCopyNumberGenomes (TreeNode *root, long int *seed);
-extern int numPlannedSNV;
+extern int numPlannedSNV, doPhase;
+int MaxExtraCopies (int node, int genome);
+void WriteCnvSegments (int replicate);
 #define MAX_COPIES 16
 #define CN_EVENTS (lossRate > 0 || gainRate > 0)		/* copy-number events (--seg-loss-rate, --seg-gain-rate) */
 int		ExtraCopies (int node, int genome, long site, Geno *out);
