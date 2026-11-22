@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.6.1
+Doublets (`-B`) in reads mode, `--region-rates` (mutation rate that changes along the chromosome, needs `--blocks` or `--fasta`), `--seq-context` (sequencing errors that depend on the sequence), faster `cnv_segments` with sparse genomes, suggestions for mistyped options, `tests/manual_check.py`; the data are identical to 2.6.0.
+
 ## 2.6.0
 Reads mode parallel by cells (the reads of a given seed change; same statistics), `--compress-level`, valid zero and negative values accepted by the long options, `--check` shows copy number, `--help` fixes. See [CHANGES-2.6.0.md](CHANGES-2.6.0.md).
 
