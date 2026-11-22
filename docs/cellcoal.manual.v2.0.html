@@ -1896,8 +1896,13 @@ maternal|paternal, INFO <code>NC</code> cells carrying the allele,
 cell-level and site-level precision/recall of any caller’s VCF (and
 singleton recall); <code>tools/benchmark.py pileup reads_1</code> is a
 naive pileup baseline with and without the PCR duplicates.</p>
-<p>Limits of this first version: no indels, no doublets, one contig, the
-quality is constant (Phred from <code>-E</code>).
+<p>Doublets (<code>-B</code>, section 5.4.6) work here too: the BAM and
+FASTQ files of a doublet contain the reads of the cell and of its donor
+(each with its own coverage multiplier and amplification), and
+<code>doublets.tsv</code> in the reads folder lists every doublet and
+its donor (the same pairs are in <code>cell_params</code>). Limits of
+this first version: no indels, one contig, the quality is constant
+(Phred from <code>-E</code>).
 <code>tools/bamcheck.py ref.fa x.bam</code> is a dependency-free BAM
 checker.</p>
 <p>By default every base of the reads has the same quality, Q = -10

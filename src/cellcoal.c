@@ -828,6 +828,8 @@ static void ObserveGenomes (int dataSetNum, long int *seed)
 	/* generate the reads or the read counts, and count the SNVs that we observe now */
 	if (doBam || doFastq)
 		{
+		if (meanDoubletRate > 0.0 && !(blocksOn && blockIndex > 0))
+			SetupDoublets (seed, 1);		/* the cells and donors of the doublets (their reads are made in GenerateReadLevel) */
 		SetupCellCoverage (seed);
 		GenerateReadLevel (seed, dataSetNum);
 		numSNVs = numSNVsTrue;	/* the reads are written to files; no genotype calling here */
@@ -1153,11 +1155,6 @@ static void CheckReadOptions (void)
 		if (doNGS == NO || alphabet == BINARY || ploidy != 2)
 			{
 			fprintf (stderr, "\nERROR: --bam/--fastq need the mean coverage (-C) and diploid DNA\n");
-			exit (-1);
-			}
-		if (meanDoubletRate > 0.0)
-			{
-			fprintf (stderr, "\nERROR: --bam/--fastq cannot be combined with doublets\n");
 			exit (-1);
 			}
 		if ((fixedADOrate > 0 || doADOcell == YES || doADOsite == YES) && adoBlockLen <= 0.0)

@@ -1292,6 +1292,32 @@ for f in cell0001.bam cell0006.bam normal.bam cell0002.R1.fastq.gz cell0005.R2.f
 rm -rf TH1 TH3
 cd "$ROOT"
 
+echo "2g55. Doublets in reads mode: the BAM of a doublet has the reads of its donor, any number of threads gives the same files"
+cd "$TMP"
+A="-n1 -s9 -l20000 -u1e-7 -e10000 -C10 -E0.001 -D0.1 --ado-block 2000 -B0.4 0.01 --bam --fastq -#6"
+OMP_NUM_THREADS=1 "$BIN" $A -oDB1 >/dev/null 2>&1; OMP_NUM_THREADS=3 "$BIN" $A -oDB3 >/dev/null 2>&1
+same=1
+for f in cell0001.bam cell0004.bam cell0005.bam cell0003.R1.fastq.gz doublets.tsv; do cmp -s DB1/reads_1/$f DB3/reads_1/$f || { same=0; echo "    differs: $f"; }; done
+[ $same = 1 ] && ok "1 and 3 threads give identical files with doublets" || bad "doublets in reads mode depend on the number of threads"
+nd=$(tail -n +2 DB1/reads_1/doublets.tsv 2>/dev/null | wc -l)
+[ "$nd" -gt 0 ] && ok "doublets.tsv lists $nd doublets" || bad "doublets.tsv has no doublets"
+if command -v python3 >/dev/null && [ "$nd" -gt 0 ]; then
+  python3 - DB1/reads_1 "$ROOT" <<'PYEOF' && ok "doublets have about twice the depth of the other cells, and sorted BAM" || bad "depth or order of the BAM of a doublet"
+import sys, subprocess, re, glob
+dr, root = sys.argv[1:3]
+dbl = set(l.split("\t")[0] for l in open(dr + "/doublets.tsv").read().splitlines()[1:])
+ds, ss = [], []
+for f in sorted(glob.glob(dr + "/cell*.bam")):
+    o = subprocess.run(["python3", root + "/tools/bamcheck.py", dr + "/ref.fa", f], capture_output=True, text=True).stdout.strip().splitlines()[-1]
+    if "sorted True" not in o: sys.exit(1)
+    (ds if f.split("/")[-1][:-4] in dbl else ss).append(float(re.search(r"depth ([0-9.]+)X", o).group(1)))
+m1, m0 = sum(ds) / len(ds), sum(ss) / len(ss)
+sys.exit(0 if 1.5 < m1 / m0 < 2.6 else 1)
+PYEOF
+fi
+rm -rf DB1 DB3
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

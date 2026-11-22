@@ -598,7 +598,7 @@ static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, i
 	}
 
 /* Reads of one cell (cellIdx >= 0) or of the healthy genome (cellIdx = -1). Returns the number of read pairs. */
-static long SimulateGenome (int cellIdx, double depth, int amplified, const char *rg, long int *seed, ReadOut *ro)
+static long SimulateGenome (int cellIdx0, double depth, int amplified, const char *rg, long int *seed, ReadOut *ro, int donor)
 	{
 	RecSet	rs;
 	FastqOut *fq = &ro->fq;
@@ -610,7 +610,7 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 	int		qualOn = (qualSd > 0.0 || qualSlope != 0.0);
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
-	double	cm = (cellIdx >= 0 && cellCovMult != NULL) ? cellCovMult[cellIdx] : 1.0;
+	int		srcs[2] = {cellIdx0, donor}, nsrc = (donor >= 0) ? 2 : 1, si;
 
 	memset (&rs, 0, sizeof(rs));
 	q = (int) (-10.0 * log10 (qerr) + 0.5);
@@ -620,6 +620,13 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 		QualSetup (L, seed);
 	ta = (char*) malloc (4 * (size_t) (L + 2));
 	tb = ta + L + 2; ra = tb + L + 2; rb = ra + L + 2;
+	/* a doublet (a cell captured together with its donor) has the reads of both genomes in the same files, in one sorted set of records */
+	for (si=0; si<nsrc; si++)
+	{
+	int		cellIdx = srcs[si];
+	double	cm = (cellIdx >= 0 && cellCovMult != NULL) ? cellCovMult[cellIdx] : 1.0;
+
+	nev[0] = nev[1] = 0;
 	for (hap=0; hap<2; hap++)
 		{
 		if (amplified)
@@ -691,13 +698,15 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 				}
 			}
 		}
-	if (doBam)
-		BamAppend (&ro->bo, &rs);
-	ro->molecule = molecule;
 	for (i=0; i<2; i++)
 		{
 		free (ev[i]);
+		ev[i] = NULL;
 		}
+	}
+	if (doBam)
+		BamAppend (&ro->bo, &rs);
+	ro->molecule = molecule;
 	free (ta);
 	free (rs.buf);
 	free (rs.idx);
@@ -711,6 +720,7 @@ static ReadOut	*routs = NULL;
 static int		nrouts = 0;
 static FILE		*refFp = NULL;
 static long		refPos = 0;			/* bases of the chromosome already written to ref.fa */
+static int		*readDonor = NULL;	/* donor cell of every doublet (-1: not a doublet); chosen in the first block of a chromosome */
 static char		readDir[3*MAX_NAME];
 
 static void RefPut (int c)
@@ -772,6 +782,8 @@ void FinishReadLevel (void)
 		ReadOutClose (&routs[i]);
 	free (routs);
 	routs = NULL;
+	free (readDonor);
+	readDonor = NULL;
 	while (refPos < len)
 		RefPut ('N');
 	if (refPos % 60)
@@ -817,6 +829,49 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 			}
 		}
 
+	/* doublets: the cells and donors were chosen (SetupDoublets, with the correlations of SetupCellCoverage); their reads are those of the cell and of its donor */
+	if (meanDoubletRate > 0.0 && readDonor == NULL && doubletDonor != NULL)
+		{
+		int		nd = 0;
+
+		readDonor = (int*) malloc (numCells * sizeof(int));
+		for (i=0; i<numCells; i++)
+			{
+			readDonor[i] = (cell[i].hasDoublet == YES) ? doubletDonor[i] : -1;
+			if (readDonor[i] == i && numCells > 1)		/* a cell cannot be its own partner */
+				{
+				int d = RandomUniformTo (numCells - 1, seed);
+
+				readDonor[i] = (d >= i) ? d + 1 : d;
+				}
+			nd += (readDonor[i] >= 0);
+			free (cell[i].doublet);
+			cell[i].doublet = NULL;
+			cell[i].hasDoublet = NO;
+			}
+		free (doubletDonor);
+		doubletDonor = NULL;
+		if (nd > 0)
+			{
+			FILE *fd;
+
+			snprintf (path, sizeof(path), "%s/doublets.tsv", readDir);
+			if ((fd = fopen (path, "w")) != NULL)
+				{
+				fprintf (fd, "cell\tdonor\n");
+				for (i=0; i<numCells; i++)
+					if (readDonor[i] >= 0)
+						{
+						if (doUserTree == NO)
+							fprintf (fd, "%s%04d\t%s%04d\n", inCellName, i + 1, inCellName, readDonor[i] + 1);
+						else
+							fprintf (fd, "%s\t%s\n", cellNames[i], cellNames[readDonor[i]]);
+						}
+				fclose (fd);
+				}
+			}
+		}
+
 	/* the reference is the healthy root genome (the FASTA with --fasta); sites that are not in the simulation are N */
 	for (j=0; j<numSites; j++)
 		{
@@ -856,16 +911,20 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 			snprintf (rgi, sizeof(rgi), "normal");
 		StartStream (base, (uint64_t) i + 1);
 		if (i < numCells)
-			total += SimulateGenome (i, coverage, 1, rgi, seed, &routs[i]);
+			total += SimulateGenome (i, coverage, 1, rgi, seed, &routs[i], readDonor != NULL ? readDonor[i] : -1);
 		else
-			SimulateGenome (-1, bulkDepth, 0, rgi, seed, &routs[i]);
+			SimulateGenome (-1, bulkDepth, 0, rgi, seed, &routs[i], -1);
 		streamActive = 0;
 		}
 	}
 	if (noisy > 0)
 		fprintf (stderr, "\rreads: %ld pairs in %d cells -> %s\n", total, numCells, readDir);
 	if (blocksOn == 0)
+		{
 		FinishReadLevel ();
+		free (readDonor);
+		readDonor = NULL;
+		}
 	}
 
 

@@ -1021,7 +1021,7 @@ void SetupCellCoverage (long int *seed)
 		for (i=0; i<numCells+1; i++)
 			cellAmpMean[i] = RandomBetaMeanVar (meanAmplificationError, ampCellVar, seed);
 		}
-	if (covAdoCorr != 0.0 || covDoubletCorr != 0.0 || adoDoubletCorr != 0.0 || cellAmpMean != NULL)
+	if (covAdoCorr != 0.0 || covDoubletCorr != 0.0 || adoDoubletCorr != 0.0 || cellAmpMean != NULL || (meanDoubletRate > 0.0 && (doBam || doFastq)))
 		WriteCellParams (adoReplicate);
 	}
 
