@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.3.0)"
+date: "November, 2026 (CellCoal 2.4.0)"
 ---
 
 # 1. About CellCoal
@@ -1140,19 +1140,19 @@ Almost all the false sites left with M=2 have exactly 2 alternative reads and a 
 
 The summary table has `singleton_sites` and `singleton_recall`, so that the loss of singletons can be checked for any setting.
 
-## 8.24 Allelic dropout in contiguous segments: `--ado-block` (unreleased)
+## 8.24 Allelic dropout in contiguous segments: `--ado-block` (2.4.0)
 
 By default allelic dropout (ADO, `-D`, `-P`) is drawn independently at every site. In real data whole segments of one allele are lost (a region of a chromosome that was not amplified). With `--ado-block L` every allele of every cell is a two-state chain along the genome, *present* or *lost*, with segments of exponential length: lost segments of mean length L sites and present segments of mean length L(1-a)/a, where a = 1 - sqrt(1-D) is the ADO rate of an allele. The fraction of the genome lost is therefore the same as without `--ado-block`, but the lost sites are contiguous. A cell can lose one allele and keep the other, so at a heterozygous site the genotype looks homozygous over a whole segment. The ADO rate of the cells can still vary (`-P`); ADO among sites (`-Q`) cannot be combined with `--ado-block`.
 
 To simulate a long chromosome in pieces (`tools/chrom.py`), `--ado-origin O` gives the position of the first site of the piece on the chromosome and `--ado-seed S` the seed of the segments (and of the ADO rate of the cells): the segments are generated from the start of the chromosome with a seed that depends only on S, the cell and the allele, so consecutive pieces see one continuous process. `tools/chrom.py` passes both automatically when `--ado-block` is given after `--`. The likelihood models of the genotype caller still assume the mean ADO rate (`-D`), as before. Sparse and dense genomes give the same data.
 
-## 8.25 Signature profiles from a file: `--signature-file` (unreleased)
+## 8.25 Signature profiles from a file: `--signature-file` (2.4.0)
 
 `-S` uses the 30 COSMIC v2 signatures built into the program. With `--signature-file FILE` the profiles come from a table in COSMIC format instead: a header line (`Type`, name of signature 1, 2, ...) and 96 lines `A[C>A]A v1 v2 ...` (the reference base is the pyrimidine; the columns are normalized to sum 1). The signature numbers of `-S` are then the columns of the file. The folder `data/signatures/` has `COSMIC_v3.6_SBS1_SBS5_GRCh37.txt` (SBS1 and SBS5 of COSMIC v3.6) and `PTA_artifact_SCAN2.txt` (the SNV artifact signature of PTA of SCAN2, Luquette *et al.* 2022; 68% C>T). Example, 40% SBS1 and 60% SBS5: `-S2 1 0.4 2 0.6 --signature-file data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt`. With a real reference as root (`-U`), SBS1 alone gives 98.7% C>T, 94% of them in CpG.
 
 Note on the built-in signatures: they are the 30 signatures of COSMIC v2 and have exactly the values of `data/signatures/COSMIC_v2_SBS_GRCh37.txt`. Signature 1 has 67.5% C>T in the profile; in a simulation the share depends on how many CpG contexts the sequence has (a human sequence has few), e.g. about 59% in 200 kb of hg38. For the 96-context profiles of COSMIC v3.x use `--signature-file`.
 
-## 8.26 Amplification errors with a trinucleotide profile: `--amp-signature` (unreleased)
+## 8.26 Amplification errors with a trinucleotide profile: `--amp-signature` (2.4.0)
 
 The amplification error (`-A`, section 5.3.4) is by default the same at every site and its substitutions follow the error matrix (`-X`). With `--amp-signature FILE`, `FILE` is a table in COSMIC format (the first column is used; see `--signature-file`) with the 96-context profile of the errors, for example `data/signatures/PTA_artifact_SCAN2.txt`, the PTA artifact signature of SCAN2 (Luquette *et al.* 2022; 68% C>T). Then:
 
@@ -1162,7 +1162,7 @@ The amplification error (`-A`, section 5.3.4) is by default the same at every si
 
 Needs read counts (`-C`) and `-A`; the first and last sites of the genome have no context and use the matrix `-X`. In a simulation with the PTA profile the spectrum of the errors reproduces the 96-context signature (correlation 1.0 with 10 cells at 30X, `-A0.02 0.0002 0`). Without `--amp-signature` the data are unchanged.
 
-## 8.27 Amplification gain along the genome: `--gain-sd`, `--gain-len` (unreleased)
+## 8.27 Amplification gain along the genome: `--gain-sd`, `--gain-len` (2.4.0)
 
 Single-cell whole-genome amplification (MDA, PTA...) does not cover the genome evenly: the depth of a cell changes smoothly over regions of kilobases to megabases, and the two haplotypes are amplified differently. With the default model the depth of every site is drawn independently, so there is no such structure. With `--gain-sd S --gain-len L` every haplotype of every cell has a *gain*: a lognormal multiplier with mean 1 and log-standard deviation S that is constant over segments of exponential length (mean L sites) and independent between segments. The mean read depth of each allele is multiplied by its gain, so one mechanism produces:
 
@@ -1172,7 +1172,7 @@ Single-cell whole-genome amplification (MDA, PTA...) does not cover the genome e
 
 `--ado-block` is the all-or-nothing version of the same idea (a segment of an allele is present or lost); the gain is the continuous one, and both can be used together. The process starts at chromosome position 0 and is generated from a seed that depends only on `--ado-seed`, the cell and the haplotype, so that the pieces of a chromosome simulated with `--ado-origin` (as `tools/chrom.py` does) see one continuous process. Example: `-C30 --gain-sd 0.6 --gain-len 40000` gives windows of 5 kb with a correlation between neighbours of 0.86 and the same mean depth (30); without it the correlation is 0. Larger S and L mimic MDA, smaller values PTA; these parameters have to be taken from real data (for example from the per-cell coverage profile that `--coverage` writes). Needs read counts (`-C`). Without these options the data are unchanged.
 
-## 8.28 Reads of single-cell genomes: `--bam`, `--fastq` (unreleased)
+## 8.28 Reads of single-cell genomes: `--bam`, `--fastq` (2.4.0)
 
 With `--bam` and/or `--fastq` (and `-C`, diploid DNA) CellCoal does not simulate read counts but paired-end reads of the amplified genome of every cell, for benchmarking any single-cell caller (SCAN2, PTATO, SCcaller, Monovar...). Output in `<results>/reads_<n>/`: `cellNNNN.bam` (+ `.bai`, sorted, one read group per cell), `cellNNNN.R1.fastq.gz` and `.R2.fastq.gz`, `ref.fa` and `ref.fa.fai` (the healthy root genome, contig `--contig`, default `chr1`) and, with `--bulk-depth D`, `normal.bam`/FASTQ of the healthy genome (no amplification).
 
@@ -1182,7 +1182,7 @@ Truth: `reads_<n>/truth.vcf` has the true genotype of every cell (before dropout
 
 Limits of this first version: no indels, no doublets, one contig, the quality is constant (Phred from `-E`). `tools/bamcheck.py ref.fa x.bam` is a dependency-free BAM checker.
 
-## 8.29 A chromosome in blocks: `--blocks`, `--fasta`, `--region`, `--germline-vcf` (unreleased)
+## 8.29 A chromosome in blocks: `--blocks`, `--fasta`, `--region`, `--germline-vcf` (2.4.0)
 
 `--blocks B` simulates a chromosome of B blocks of `-l` sites on **one** coalescent tree (made in the first block and reused in the others). With no recombination the sites are independent given the tree, so the blocks add up to a long chromosome without holding it in memory. The output is that of one data set: one VCF with the positions of the chromosome (CHROM `--contig`, default `chr1`; ID `snv<position>`), `summary.tsv` with one row per block and a TOTAL row (counts added, rates averaged, precision/recall/singleton recall weighted), `coverage.tsv` in chromosome coordinates, and `blocks_info.txt`. `-n` is ignored. `--ado-block` and `--gain-sd` continue from one block to the next (`--ado-origin` is set by the program; give `--ado-seed` to fix the processes).
 
