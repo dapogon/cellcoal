@@ -623,7 +623,14 @@ void PrintConfigKeys (FILE *fp)
 		else if (LongValueOption (optionNames[i].flag) != NULL)
 			snprintf (what, sizeof(what), "%s", LongValueOption (optionNames[i].flag));
 		else
+			{
+			char *u;
+
 			snprintf (what, sizeof(what), "--%s", optionNames[i].name);
+			for (u = what; *u; u++)			/* the command-line options use hyphens: --sweep-keep, --no-outgroup */
+				if (*u == '_')
+					*u = '-';
+			}
 		fprintf (fp, "%s%-34s %-18s", (col % 2 == 0) ? "\n" : "  ", optionNames[i].name, what);
 		col++;
 		}

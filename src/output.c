@@ -1623,6 +1623,9 @@ void PrintCheck (FILE *fp)
 	else
 		fprintf (fp, "  mutations:           about %.0f per replicate expected under the model (the number varies among replicates)\n", expNumMU);
 	fprintf (fp, "  expected tree depth: %.3f (in units of N generations, mean TMRCA of the tumour cells)\n", expTMRCA);
+	if (doSimulateData == YES && CN_EVENTS)
+		fprintf (fp, "  copy number:         segment losses %g and gains %g per haplotype and generation, mean length %g (losses) and %g (gains) sites, at most %d copies per site; events of all kinds interleaved along the branches (cnv_events, cnv_segments)\n",
+				lossRate, gainRate, segLossLen > 0 ? segLossLen : segLen, segGainLen > 0 ? segGainLen : segLen, maxCopies);
 	if (doSimulateData == YES)
 		{
 		if (doNGS == YES)
