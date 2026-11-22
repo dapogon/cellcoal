@@ -479,6 +479,8 @@ static void PrintReplicateOutputs (int dataSetNum)
 	fprintf (stderr, "\nNumber of SNVs                 =   %d", numSNVs);
 	fprintf (stderr, "\nNumber of deletion events      =   %d", numDEL);
 	fprintf (stderr, "\nNumber of cnLOH events         =   %d", numCNLOH);
+	if (lossRate > 0)
+		fprintf (stderr, "\nNumber of segment losses       =   %d (variable sites lost in them: %d)", numSegLoss, snvsLostBySegments);
 	
 	if (doTreeRateSwitches == YES)
 		fprintf(stderr, "\nTree rate switches             =   %d %s", numTreeRateSwitches, treeRateInfo);
@@ -611,6 +613,8 @@ static void WriteBlocksTotal (void)
 		}
 	for (k=0; k<10; k++)
 		fprintf (fpSummary, "\t%lld", inv[k]);
+	if (lossRate > 0)
+		fprintf (fpSummary, "\tNA\tNA");	/* the segment losses are not summed over the blocks */
 	fprintf (fpSummary, "\n");
 	free (blockRows);
 	blockRows = NULL;
@@ -741,6 +745,14 @@ static void SimulateGenomes (int dataSetNum, long int *seed)
 		EvolveBothGenomes ("deletions", EvolveDeletionsOnTree, seed);
 		AccumAdd (&runStats.del, numDEL);
 		}
+	snvsLostBySegments = 0;
+	if (lossRate > 0)
+		{
+		int		before = CountTrueVariants ();
+
+		EvolveBothGenomes ("segment losses", EvolveSegmentLossesOnTree, seed);
+		snvsLostBySegments = before - CountTrueVariants ();	/* variable sites that disappeared inside lost segments */
+		}
 
 	/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 	numSNVs = CountTrueVariants ();
@@ -843,6 +855,8 @@ static void WriteSummaryRow (int dataSetNum)
 		}
 	for (k=0; k<10; k++)
 		fprintf (fpSummary, "\t%lld", inv[k]);
+	if (lossRate > 0)
+		fprintf (fpSummary, "\t%d\t%d", numSegLoss, snvsLostBySegments);
 	fprintf (fpSummary, "\n");
 	fflush (fpSummary);
 	}
@@ -934,6 +948,7 @@ static void RunReplicate (int dataSetNum, long int *seed)
 	int		i;
 	double	keepTMRCA = TMRCA;
 
+	numSegLoss = 0;
 	numCA = numMU = numDEL = numCNLOH = numProposedMU = TMRCA = numSNVmaternal = 0;
 	if (blocksOn && dataSetNum > 0)
 		TMRCA = keepTMRCA;		/* chromosome in blocks: the tree of the first block */
@@ -1350,7 +1365,7 @@ int main (int argc, char **argv)
 			fprintf (stderr, "Can't open \"%s\"\n", File);
 			exit(-1);
 			}
-		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\tado_simulated\tsingleton_sites\tsingleton_recall\tinv_AA\tinv_AC\tinv_AG\tinv_AT\tinv_CC\tinv_CG\tinv_CT\tinv_GG\tinv_GT\tinv_TT\n");
+		fprintf (fpSummary, "replicate\ttmrca\tmutations\tdeletions\tcnloh\tsnv_true\tsnv_observed\tsnv_ratio\tcalled_fraction\tgenotype_error\tsnv_precision\tsnv_recall\thet_error\thom_error\thet_to_hom\tdoublet_error\tsinglet_error\tado_simulated\tsingleton_sites\tsingleton_recall\tinv_AA\tinv_AC\tinv_AG\tinv_AT\tinv_CC\tinv_CG\tinv_CT\tinv_GG\tinv_GT\tinv_TT%s\n", lossRate > 0 ? "\tsegment_losses\tsnv_lost_segments" : "");
 		}
 
 	/* Read user treefile */

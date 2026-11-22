@@ -47,6 +47,8 @@ static const GroupKey groupKeys[] =
 	{"mutation", "germline-rate",  'L', "-c", "germline SNP rate"},
 	{"mutation", "deletion-rate",  'L', "-d", "deletion rate"},
 	{"mutation", "cnloh-rate",     'L', "-H", "CNLOH rate"},
+	{"mutation", "loss-rate",      'S', "--loss-rate", "copy-number losses of segments: rate per haplotype and generation"},
+	{"mutation", "loss-len",       'S', "--loss-len", "mean length in sites of the lost segments (default 1000)"},
 	{"mutation", "fixed",          'L', "-j", "fixed number of mutations"},
 	{"mutation", "signatures",     'L', "-S", "trinucleotide signatures: number, then the signature and its weight for each (e.g. signatures=2:3:0.8:13:0.2)"},
 	{"mutation", "signature-file", 'S', "--signature-file", "96-context profiles in COSMIC format used by signatures instead of the 30 built-in ones"},

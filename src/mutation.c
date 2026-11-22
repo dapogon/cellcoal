@@ -1708,3 +1708,65 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
 
 
 
+
+
+/********************************** EvolveSegmentLossesOnTree ***********************************/
+/*	Copy-number losses of segments (--loss-rate, --loss-len), simulated after the SNVs, cnLOH and point deletions.
+	The number of events of a haplotype is a Poisson with mean (total tree length in generations) * lossRate; each event falls
+	on a branch chosen according to its length, starts at a uniform site and covers a geometric number of sites (mean lossLen,
+	clipped at the end of the genome). Every cell below the branch loses the segment: its sites become DELETION in that haplotype,
+	so the genotypes, read counts, VCF and summaries treat them as deleted alleles. */
+static void LossCollectNodes (TreeNode *p, TreeNode **list, int *n)
+	{
+	if (p == NULL)
+		return;
+	if (p->isHealthyRoot != YES)
+		list[(*n)++] = p;
+	LossCollectNodes (p->left, list, n);
+	LossCollectNodes (p->right, list, n);
+	}
+
+static void LossDeleteBelow (TreeNode *p, int genome, int from, int to)
+	{
+	int		j;
+
+	if (p == NULL)
+		return;
+	for (j=from; j<to; j++)
+		SetG (genome, p->label, j, DELETION);
+	LossDeleteBelow (p->left, genome, from, to);
+	LossDeleteBelow (p->right, genome, from, to);
+	}
+
+void EvolveSegmentLossesOnTree (TreeNode *p, int genome, long int *seed)
+	{
+	TreeNode	**list;
+	int			n = 0, e, numEvents, k, start, len;
+	double		total = 0.0, u, cum;
+
+	list = (TreeNode **) Checked (calloc (numNodes + 1, sizeof (TreeNode *)), "Could not allocate the list of branches of the segment losses\n");
+	LossCollectNodes (p, list, &n);
+	for (k=0; k<n; k++)
+		total += list[k]->branchLength;
+	numEvents = RandomPoisson (total / mutationRate * lossRate, seed);
+	for (e=0; e<numEvents; e++)
+		{
+		u = RandomUniform (seed) * total;
+		cum = 0.0;
+		for (k=0; k<n-1; k++)
+			{
+			cum += list[k]->branchLength;
+			if (u < cum)
+				break;
+			}
+		start = RandomUniformTo (numSites, seed);
+		len = 1 + (int) (log (1.0 - RandomUniform (seed)) / log (1.0 - 1.0 / lossLen));
+		if (lossLen <= 1.0)
+			len = 1;
+		if (start + len > numSites)
+			len = numSites - start;
+		LossDeleteBelow (list[k], genome, start, start + len);
+		numSegLoss++;
+		}
+	free (list);
+	}
