@@ -345,15 +345,23 @@ The first three are the original events of CellCoal; copy-number losses and gain
 
 **Two ways of adding the events.** When no loss or gain of segments is requested, SNVs, cnLOH and point deletions are added one kind after another, as in the earlier versions of CellCoal. When the loss or the gain rate is above zero, all the kinds of events are planned together and applied branch by branch in random order (section 5.2.8), because the order matters when the copy number changes.
 
-### 5.2.1 Generation of reference and ancestral genomes
+### 5.2.1 Reference and ancestral genomes: simulated or from a real chromosome
 
-The first step to generate the cell genotypes is the generation of a **reference genome**. Under the binary alphabet, it will consist of all 0s. For DNA, the reference genome will be simulated at random according to the specified nucleotide frequencies, unless genetic signatures are specified, in which case the reference genome will be simulated according to the trinucleotide frequencies in the human genome (version GRCh37). Alternatively, for DNA data, the user can specify its own reference genome in a FASTA file.
+The first step to generate the cell genotypes is to have a **reference genome**, and then an **ancestral genome** at the sample/outgroup MRCA of the genealogy (the genome of the healthy cell), from which the somatic events start. CellCoal can make both **from scratch** or **start from a real chromosome**:
 
-The **ancestral genome** at the sample/outgroup MRCA of the genealogy will be simulated by introducing **germline variation (option -c)** (single nucleotide polymorphisms or SNPs) into the reference genome at a rate specified by the user. Logically, if this rate is 0, the reference and the ancestral genomes will be identical. Once the ancestral genome is in place, mutations are introduced according to the specified mutation model.
+| Starting point | How | What you get |
+|---|---|---|
+| **Simulated reference** (default) | nothing to give | binary alphabet: all 0s. DNA: random sequence with the nucleotide frequencies of `-f`; with genetic signatures (`-S`) the sequence follows the trinucleotide frequencies of the human genome (GRCh37) |
+| **A real genome of up to 10^6^ sites** | `-U FILE` (DNA) | the diploid genome of the FASTA file (a maternal and a paternal sequence) is the ancestral genome, so it can already be heterozygous |
+| **A real chromosome or region of any length** | `--fasta FILE` (plain or `.gz`), with `--region chrom:start-end` for a region | the real sequence is the reference; it is simulated in blocks of `-l` sites on one tree, so the memory is that of one block (section 5.3). The positions in the VCF are the real ones and the reference base is the REF of the VCF |
+| **Real germline variation** | `--germline-vcf FILE` | the germline SNVs (GT 0\|1, 1\|0, 1\|1) of a real individual are put into the healthy genome, which becomes the ancestral genome; those sites are flagged `GERMLINE` in the VCF |
+| **Simulated germline variation** | `-c RATE` | SNPs at that rate per site are added to the reference to make the ancestral genome (with rate 0 both are identical). Not with `--germline-vcf` |
 
-> The reference genome can be simulated according to the trinucleotide frequencies in the human genome (version GRCh37); germline SNPS can be added afterwards.
+With a real chromosome the mutation models, the signatures (`-S`) and the copy-number events work as with a simulated one; the trinucleotide context of every site is the real one, so a signature such as SBS1 concentrates on the CpG sites that the sequence really has (section 5.2.3). Sites that are not A, C, G or T are left out. The reads mode (`--bam`, `--fastq`) writes the reads of the whole chromosome in its real coordinates (section 5.5).
 
-A real reference can also be given: `-U` reads a diploid genome of up to 10^6^ sites from a FASTA file, and `--fasta` (with `--region`) simulates a chromosome of any length in blocks (section 5.3); `--germline-vcf` puts the germline SNVs of a real genome into the healthy cell.
+> To start from a real chromosome: `cellcoal -s20 -u2e-8 -l1000000 --fasta chr21.fa --region chr21:20000000-30000000 --blocks 10 -C10 -E0.001 -P0.2 0.02 -oChr21` simulates 10 blocks of 1 Mb of that region on one tree.
+
+Once the ancestral genome is in place, mutations are introduced according to the specified mutation model.
 
 ### 5.2.2 Infinite-site SNV models
 
