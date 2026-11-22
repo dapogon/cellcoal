@@ -1318,6 +1318,39 @@ fi
 rm -rf DB1 DB3
 cd "$ROOT"
 
+echo "2g56. --region-rates: the density of SNVs follows the multipliers of the regions, only with a chromosome with coordinates"
+cd "$TMP"
+printf "# test\nchr1 0 5000 4\nchr1 5000 10000 0.25\n" > rr.bed
+for m in rr plain; do
+  : > rr_$m.txt
+  for sd in 1 2 3 4; do
+    X=""; [ $m = rr ] && X="--region-rates rr.bed"
+    rm -rf RR; "$BIN" -n1 -s10 -#$sd --blocks 4 -l5000 -u2e-7 -e10000 -1 $X -oRR >/dev/null 2>&1
+    awk 'NF==2 && $1==11 {print $2}' RR/snv_gen | tr '\n' ' ' >> rr_$m.txt; echo >> rr_$m.txt
+  done
+done
+python3 - <<'P' && ok "blocks with multipliers 4, 0.25, 1, 1 give 2.56, 0.16, 0.64, 0.64 times the SNVs of the plain run (the total does not change)" || bad "regional mutation rates"
+def tot(f):
+    t = [0, 0, 0, 0]
+    for l in open(f):
+        v = l.split()
+        for i in range(4): t[i] += int(v[i])
+    return t
+a, b = tot("rr_rr.txt"), tot("rr_plain.txt")
+exp = [2.56, 0.16, 0.64, 0.64]
+for i in range(4):
+    r = a[i] / b[i]
+    assert abs(r - exp[i]) < 0.25 * exp[i] + 0.05, (i, r, exp[i])
+assert abs(sum(a) / sum(b) - 1) < 0.12, (sum(a), sum(b))
+P
+"$BIN" -n1 -s10 -l5000 -u2e-7 -e10000 -1 --region-rates rr.bed -oRR2 > rr2.out 2>&1
+grep -q "needs a chromosome with coordinates" rr2.out && ok "without --blocks or --fasta the option is an error that explains why" || bad "--region-rates without coordinates was accepted"
+printf "chr1 100 50 2\n" > bad.bed
+"$BIN" -n1 -s10 -#1 --blocks 2 -l5000 -u2e-7 -e10000 -1 --region-rates bad.bed -oRR3 > rr3.out 2>&1
+grep -q "line 1" rr3.out && ok "a wrong line of the file is reported with its number" || bad "bad region file not reported"
+rm -rf RR RR2 RR3
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

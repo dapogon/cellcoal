@@ -27,7 +27,7 @@ static char		chromName[MAX_NAME] = "1";
 static GermSnv	*germ = NULL;
 static long		numGerm = 0;
 
-static FILE *OpenText (const char *path, int *isPipe)
+FILE *OpenText (const char *path, int *isPipe)
 	{
 	size_t	n = strlen (path);
 	FILE	*fp;
@@ -56,7 +56,7 @@ static FILE *OpenText (const char *path, int *isPipe)
 	return fp;
 	}
 
-static void CloseText (FILE *fp, int isPipe)
+void CloseText (FILE *fp, int isPipe)
 	{
 	if (isPipe)
 		pclose (fp);
@@ -382,6 +382,11 @@ void BlocksFree (void)
 	free (posMap); posMap = NULL;
 	free (refUserGenome); refUserGenome = NULL;
 	free (germFlag); germFlag = NULL;
+	}
+
+long BlocksRegionStart (void)
+	{
+	return regStart;
 	}
 
 const char *BlocksChrom (void)

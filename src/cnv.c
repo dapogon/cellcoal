@@ -359,7 +359,7 @@ static int CountInRange (const int *list, int n, int a, int b, int *first)
 static void NewCopyMutations (TreeNode *x, double u0, int h, int id, int a, int b, long int *seed)
 	{
 	int		k, nb = 0, m, i, y, cnt, lo, st;
-	double	eff, frac, u;
+	double	eff, frac, u, rmx = (regionRatesOn == YES) ? regionRmax : 1.0;
 
 	Subtree (x, &nb);
 	for (k=0; k<nb; k++)
@@ -384,11 +384,15 @@ static void NewCopyMutations (TreeNode *x, double u0, int h, int id, int a, int 
 		if (numDefaultModelSites > 0)
 			{
 			cnt = CountInRange (DefaultModelSites, numDefaultModelSites, a, b, &lo);
-			m = (cnt > 0) ? RandomPoisson (eff * (double) cnt, seed) : 0;
+			m = (cnt > 0) ? RandomPoisson (eff * (double) cnt * rmx, seed) : 0;
 			for (i=0; i<m; i++)
 				{
+				int site = DefaultModelSites[lo + RandomUniformTo (cnt, seed)];
+
 				u = EVENT_TIME ();
-				AddEvent (y, EV_SNV, h, id, DefaultModelSites[lo + RandomUniformTo (cnt, seed)], 0, u);
+				if (regionRatesOn == YES && RandomUniform (seed) * rmx > RegionRel (site))
+					continue;
+				AddEvent (y, EV_SNV, h, id, site, 0, u);
 				}
 			}
 		if (numAltModelSites > 0)
@@ -411,11 +415,15 @@ static void NewCopyMutations (TreeNode *x, double u0, int h, int id, int a, int 
 				}
 			else			/* haploid ISM */
 				{
-				m = RandomPoisson (eff * (double) cnt, seed);
+				m = RandomPoisson (eff * (double) cnt * rmx, seed);
 				for (i=0; i<m; i++)
 					{
+					int site = AltModelSites[lo + RandomUniformTo (cnt, seed)];
+
 					u = EVENT_TIME ();
-					AddEvent (y, EV_SNV, h, id, AltModelSites[lo + RandomUniformTo (cnt, seed)], 0, u);
+					if (regionRatesOn == YES && RandomUniform (seed) * rmx > RegionRel (site))
+						continue;
+					AddEvent (y, EV_SNV, h, id, site, 0, u);
 					}
 				}
 			}
@@ -590,7 +598,7 @@ static int ApplyCNLOH (TreeNode *x, int h, int site, int nb)
 
 /************************************* events of the replicate *************************************/
 /* the number of mutations of the infinite sites models: a Poisson (or a fixed number, -j) */
-static int NumISMMutations (int h, int numModelSites)
+static int NumISMMutations (int h, int numModelSites, double rel)
 	{
 	if (doSimulateFixedNumMutations == YES)
 		{
@@ -598,7 +606,7 @@ static int NumISMMutations (int h, int numModelSites)
 			return numSNVmaternal = RandomBinomial (0.5, numFixedMutations, rseed);
 		return numFixedMutations - numSNVmaternal;
 		}
-	return RandomPoisson (totalTreeLength * numModelSites, rseed);
+	return RandomPoisson (totalTreeLength * numModelSites * rel, rseed);
 	}
 
 static void ISMViolation (int numMutations, int available, const char *what)
@@ -618,7 +626,7 @@ static void PlanISM (int h, const int *sites, int ns, int hapMode, char *usedSnv
 
 	if (ns == 0 && sigMode == 0)
 		return;
-	numMutations = NumISMMutations (h, sigMode ? numSites : ns);
+	numMutations = NumISMMutations (h, sigMode ? numSites : ns, (regionRatesOn == YES && !sigMode) ? RegionMean (sites, ns) : 1.0);
 	if (hapMode == NO && numISMmutations + numMutations > (sigMode ? numSites : ns))
 		ISMViolation (numMutations, sigMode ? numSites : ns, "diploid");
 	if (hapMode == YES && numISMmutations + numMutations > 2 * ns)
@@ -632,7 +640,7 @@ static void PlanISM (int h, const int *sites, int ns, int hapMode, char *usedSnv
 				site = ChooseTrinucleotideSite (rseed, &st, h);
 			else
 				{
-				i = RandomUniformTo (ns, rseed);
+				i = RegionPickSite (sites, ns, rseed);
 				site = sites[i];
 				}
 			if (!((hapMode == NO && (usedSnv[MATERNAL][site] || usedSnv[PATERNAL][site])) || (hapMode == YES && usedSnv[h][site])))
@@ -970,9 +978,9 @@ void SimulateCopyNumberGenomes (TreeNode *root, long int *seed)
 	finiteMode = (!sigMode && propAltModelSites > 0 && altModel != ISMhap) ? 1 : 0;
 	free (siteAlt);
 	siteAlt = NULL;
-	if (rateVarAmongSites == YES)
-		for (i=0; i<numSites; i++)
-			allSites[i].rateMultiplier = RandomGamma (alphaSites, seed) / alphaSites;
+	SiteRateMultipliers (seed);
+	if (regionRatesOn == YES)
+		RegionRatesSetup ();
 	numDefaultModelSites = numAltModelSites = 0;
 	if (sigMode || propAltModelSites == 0)
 		for (i=0; i<numSites; i++)

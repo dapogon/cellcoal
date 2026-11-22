@@ -1331,6 +1331,24 @@ int main (int argc, char **argv)
         RandomUniform(&seed);
         }
 
+	/* regional mutation rates need a chromosome with coordinates: a simulated one in blocks or a real one (--blocks, --fasta) */
+	if (strlen (regionRatesFile) > 0)
+		{
+		if (blocksN == 0 && strlen (fastaFile) == 0)
+			{
+			fprintf (stderr, "\nERROR: --region-rates needs a chromosome with coordinates: use --blocks (simulated chromosome) or --fasta (real chromosome).\n");
+			fprintf (stderr, "Without them the sites of the simulation have no position, so there are no regions.\n");
+			exit (-1);
+			}
+		if (doGeneticSignatures == YES)
+			{
+			fprintf (stderr, "\nERROR: --region-rates cannot be combined with mutational signatures\n");
+			exit (-1);
+			}
+		regionRatesOn = YES;
+		rateVarAmongSites = YES;
+		}
+
 	/* chromosome in blocks (--blocks, --fasta): the reference and the number of blocks */
 	if (blocksN > 0 || strlen (fastaFile) > 0)
 		{

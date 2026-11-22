@@ -531,9 +531,9 @@ void EvolveSitesOnTree (TreeNode *treeRoot, int genome, long int *seed)
     {
     int i = 0;
 		
-    if (rateVarAmongSites == YES)
-        for (i=0; i<numSites; i++)
-            allSites[i].rateMultiplier = RandomGamma (alphaSites, seed) / alphaSites;
+    SiteRateMultipliers (seed);
+    if (regionRatesOn == YES)
+        RegionRatesSetup ();
 
     if (doGeneticSignatures == YES)
 		{
@@ -649,6 +649,8 @@ void SimulateISM (TreeNode *p, int genome, int doISMhaploid, long int *seed)
 
 
 	totalBranchSum = totalTreeLength * numModelSites;
+	if (regionRatesOn == YES && doSimulateFixedNumMutations == NO)
+		totalBranchSum *= RegionMean (modelSites, numModelSites);	/* the number of mutations follows the mean regional rate of the sites */
 
     if (doSimulateFixedNumMutations == YES) /* conditioned on a specific number of mutations */
         {
@@ -685,12 +687,12 @@ void SimulateISM (TreeNode *p, int genome, int doISMhaploid, long int *seed)
     mutationsSoFar = 0;
     while (mutationsSoFar < numMutations)
         {
-        i = RandomUniformTo(numModelSites, seed);  /* choose a site at random */
+        i = RegionPickSite (modelSites, numModelSites, seed);  /* choose a site at random */
         while (((doISMhaploid == NO)  && (allSites[modelSites[i]].numMutations != 0))  ||
                ((doISMhaploid == YES) && (genome == MATERNAL) && (allSites[modelSites[i]].numMutationsMaternal != 0)) ||
                ((doISMhaploid == YES) && (genome == PATERNAL) && (allSites[modelSites[i]].numMutationsPaternal != 0)))
             {
-            i = RandomUniformTo(numModelSites, seed);
+            i = RegionPickSite (modelSites, numModelSites, seed);
             if (trials++ > 100*numModelSites)
                 {
                 fprintf (stderr, "\n\n ERROR: after %d trials cannot find an unmuted site",100*numModelSites);

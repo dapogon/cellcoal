@@ -1144,10 +1144,11 @@ void	PrintRunInformation (FILE *fp)
 					fprintf (fp, "GTnR");
 				}
 			
-			if (rateVarAmongSites == YES)
+			if (rateVarAmongSites == YES && alphaSites != infinity)
 				fprintf (fp, "\n Rate variation among sites (alpha)           =   %-3.2f", alphaSites);
-			else
+			else if (regionRatesOn == NO)
 				fprintf (fp, "\n Equal rates among sites");
+			RegionRatesInfo (fp);
 		   }
 
         if (alphabet == DNA && propAltModelSites > 0 && altModel == 2 && doGeneticSignatures == NO)

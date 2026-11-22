@@ -411,6 +411,20 @@ long				BlockSitePos (int j);
 void				BlocksInfo (FILE *fp);
 void				BlocksFree (void);
 const char			*BlocksChrom (void);
+long				BlocksRegionStart (void);
+FILE				*OpenText (const char *path, int *isPipe);
+void				CloseText (FILE *fp, int isPipe);
+
+/* regional mutation rates (--region-rates): relative rate of every site, mean 1 over the chromosome */
+extern char			*regionRatesFile;
+extern int			regionRatesOn;
+extern double		regionRmax;
+void				RegionRatesSetup (void);
+double				RegionRel (int site);
+double				RegionMean (const int *sites, int n);
+int					RegionPickSite (const int *sites, int n, long int *seed);
+void				SiteRateMultipliers (long int *seed);
+void				RegionRatesInfo (FILE *fp);
 extern char				*contigName;
 extern int					gainOn;
 void		BuildGain (long int *seed);

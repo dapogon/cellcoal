@@ -25,5 +25,6 @@
 	X(seg_gain_len,   "--seg-gain-len",   '\225', 2, segGainLen, 0)    \
 	X(seg_max_copies, "--seg-max-copies", '\226', 1, maxCopies,  4)    \
 	X(phase,          "--phase",          '\227', 0, doPhase,    0)    \
-	X(compress_level, "--compress-level", '\230', 1, compressLevel, 6)
+	X(compress_level, "--compress-level", '\230', 1, compressLevel, 6) \
+	X(region_rates,   "--region-rates",   '\231', 3, regionRatesFile, 0)
 #endif

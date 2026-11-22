@@ -793,7 +793,7 @@ optional healthy <code>normal.bam</code></td>
 </tr>
 <tr class="odd">
 <td><code>--blocks</code>, <code>--fasta</code>, <code>--region</code>,
-<code>--germline-vcf</code></td>
+<code>--germline-vcf</code>, <code>--region-rates</code></td>
 <td>no</td>
 <td>yes</td>
 <td>yes</td>
@@ -1464,6 +1464,50 @@ the files of earlier versions (<code>chrom.vcf</code>,
 BED per cell) and uses <code>--min-alt-reads 2 --min-alt-vaf 0.3</code>
 by default. Not combined with <code>--bam</code>/<code>--fastq</code> or
 <code>-U</code>.</p>
+<p><strong>Mutation rate along the chromosome
+(<code>--region-rates</code>).</strong> Real mutation rates are not the
+same along the genome: late-replicating, gene-poor or closed chromatin
+regions accumulate more mutations than early-replicating, open ones.
+<code>--region-rates FILE</code> gives the relative mutation rate of
+regions of the chromosome. <strong>It only makes sense when the sites
+have coordinates, that is, with a chromosome: a simulated one
+(<code>--blocks</code>) or a real one (<code>--fasta</code>).</strong>
+Without them (the plain <code>-l</code> genome of the older mode) the
+sites have no position, so there are no regions, and the program stops
+with an error.</p>
+<p>The file has one region per line, with the fields separated by blanks
+or tabs and the coordinates of a BED file (the start is 0-based and the
+end is not included): chromosome, start, end and a multiplier of the
+mutation rate. Lines that start with <code>#</code> are comments, and
+the file can be compressed (<code>.gz</code>). Sites outside the regions
+have multiplier 1, and the regions cannot overlap.</p>
+<pre><code># chromosome  start     end       multiplier
+chr21         20000000  22000000  3.0
+chr21         25000000  26000000  0.2</code></pre>
+<p>The multipliers are divided by their mean over the chromosome, so the
+average rate (and therefore <code>-u</code>, theta and the expected
+number of SNVs) does not change: the option changes where the mutations
+are, not how many. With a multiplier of 3 and a mean of 1.5, a site has
+twice the mean rate. With blocks, a block in a hot region has more SNVs
+than one in a cold region, and a multiplier 0 gives a region without
+mutations. With <code>--fasta</code> only the lines of the chromosome of
+the FASTA are used (<code>chr21</code> and <code>21</code> are the same
+chromosome), and the coordinates are those of the FASTA, not of
+<code>--region</code>. With a simulated chromosome the coordinates go
+from 1 to the number of blocks times <code>-l</code>.</p>
+<p>It works with every model of sites (infinite sites, finite sites and
+mixtures), with the gamma variation among sites (<code>-a</code>; both
+factors multiply) and with copy-number events. It cannot be combined
+with the mutational signatures. Under the infinite sites models the
+sites are chosen with probability proportional to their rate; under the
+finite sites models the rate of the site is multiplied.</p>
+<blockquote>
+<p>Example:
+<code>cellcoal -s20 -u2e-7 -l5000 --blocks 4 --region-rates hot.bed -1 -oHot</code>
+(four blocks of 5000 sites; with a file that gives multiplier 4 to the
+first 5000 positions, the first block has about 2.5 times the SNVs of
+the plain run, and the others fewer).</p>
+</blockquote>
 <h2 id="single-cell-genomics">5.4 Single-cell genomics</h2>
 <p>CellCoal can simulate the technical artifacts resulting from
 single-cell genomics, like allelic dropout (ADO), allelic imbalance,
@@ -2523,6 +2567,13 @@ tree</td>
 <td><code>germline-vcf</code></td>
 <td>germline SNVs of the healthy genome (SNVs only, not with
 <code>-c</code>)</td>
+</tr>
+<tr class="odd">
+<td><code>--region-rates FILE</code></td>
+<td><code>region-rates</code></td>
+<td>relative mutation rate of regions (BED: chromosome, start, end,
+multiplier); needs <code>--blocks</code> or <code>--fasta</code>
+(section 5.3)</td>
 </tr>
 </tbody>
 </table>

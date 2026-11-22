@@ -237,7 +237,7 @@ CellCoal produces data in one of three ways, and each option belongs to one or m
 | `-C`, `-J`, `-A`, `-E`, `-X`, `--gain-sd/--gain-len`, `--amp-signature`, `--amp-cell-var`, `--cov-ado-corr` | no | yes | yes |
 | `-V`, `-O`, `-R`, `-I`, `-B`, `--cov-doublet-corr`, `--ado-doublet-corr`, `--min-alt-reads`, `--min-alt-vaf`, `-M`, `--coverage`, `--fast`, `-8`, `-9`, `-0`, `--bcf`, `-z`, `-Z` | no | yes | no |
 | `--bam`, `--fastq`, `--read-len`, `--insert-mean`, `--insert-sd`, `--dup-mean`, `--bulk-depth`, `--qual-sd`, `--qual-slope`, `--strand-bias` | no | no | yes |
-| `--blocks`, `--fasta`, `--region`, `--germline-vcf` | no | yes | yes |
+| `--blocks`, `--fasta`, `--region`, `--germline-vcf`, `--region-rates` | no | yes | yes |
 
 Where two options look alike they do different things: `-M` keeps the sites whose **pooled** VAF (all the cells together) is at least M, whereas `--min-alt-reads` and `--min-alt-vaf` keep the sites where some **cell** has a call supported by enough reads; `-D/-P/-Q` set how much allelic dropout there is and `--ado-block` how it is spread along the genome (in contiguous segments). `-F` (parameter file) and `-U` (diploid genome in FASTA) are older: `--config` reads the options from a JSON or YAML file, and `--fasta` with `--region` and `--germline-vcf` gives a real reference.
 
@@ -450,6 +450,22 @@ The text genotypes (SNV and full genotypes) list the alleles of all the copies, 
 **Blocks and reads.** `--blocks` or `--fasta` together with `--bam`/`--fastq` simulates the reads of a whole chromosome: the reads of each block are written, in the coordinates of the chromosome, to one BAM (+BAI) and one FASTQ pair per cell (`reads_1/cellNNNN.*`), so a block is processed and released before the next one and the memory is that of one block. The BAM header and `ref.fa` have the length of the chromosome (`chrom:start-end` regions keep the real coordinates; what lies before the region, after the last block and the masked sites are `N`), and `truth.vcf` has the real CHROM and POS, REF = the reference base and the flag GERMLINE at the germline sites. No read spans the boundary between blocks nor a masked site, and the coverage, the amplification error and the gain of a cell are the same in all the blocks (the per-cell parameters are drawn in the first block).
 
 `tools/chrom.py` is a wrapper of these options that writes the files of earlier versions (`chrom.vcf`, `chrom_summary.tsv`, `chrom_coverage.tsv` and one BED per cell) and uses `--min-alt-reads 2 --min-alt-vaf 0.3` by default. Not combined with `--bam`/`--fastq` or `-U`.
+
+**Mutation rate along the chromosome (`--region-rates`).** Real mutation rates are not the same along the genome: late-replicating, gene-poor or closed chromatin regions accumulate more mutations than early-replicating, open ones. `--region-rates FILE` gives the relative mutation rate of regions of the chromosome. **It only makes sense when the sites have coordinates, that is, with a chromosome: a simulated one (`--blocks`) or a real one (`--fasta`).** Without them (the plain `-l` genome of the older mode) the sites have no position, so there are no regions, and the program stops with an error.
+
+The file has one region per line, with the fields separated by blanks or tabs and the coordinates of a BED file (the start is 0-based and the end is not included): chromosome, start, end and a multiplier of the mutation rate. Lines that start with `#` are comments, and the file can be compressed (`.gz`). Sites outside the regions have multiplier 1, and the regions cannot overlap.
+
+```
+# chromosome  start     end       multiplier
+chr21         20000000  22000000  3.0
+chr21         25000000  26000000  0.2
+```
+
+The multipliers are divided by their mean over the chromosome, so the average rate (and therefore `-u`, theta and the expected number of SNVs) does not change: the option changes where the mutations are, not how many. With a multiplier of 3 and a mean of 1.5, a site has twice the mean rate. With blocks, a block in a hot region has more SNVs than one in a cold region, and a multiplier 0 gives a region without mutations. With `--fasta` only the lines of the chromosome of the FASTA are used (`chr21` and `21` are the same chromosome), and the coordinates are those of the FASTA, not of `--region`. With a simulated chromosome the coordinates go from 1 to the number of blocks times `-l`.
+
+It works with every model of sites (infinite sites, finite sites and mixtures), with the gamma variation among sites (`-a`; both factors multiply) and with copy-number events. It cannot be combined with the mutational signatures. Under the infinite sites models the sites are chosen with probability proportional to their rate; under the finite sites models the rate of the site is multiplied.
+
+> Example: `cellcoal -s20 -u2e-7 -l5000 --blocks 4 --region-rates hot.bed -1 -oHot` (four blocks of 5000 sites; with a file that gives multiplier 4 to the first 5000 positions, the first block has about 2.5 times the SNVs of the plain run, and the others fewer).
 
 ## 5.4 Single-cell genomics
 
@@ -1038,6 +1054,7 @@ Group `--chromosome` (section 5.3).
 | `--fasta FILE` | `fasta` | real reference in FASTA (plain or `.gz`) |
 | `--region chrom:start-end` | `region` | region of the FASTA (1-based, inclusive) |
 | `--germline-vcf FILE` | `germline-vcf` | germline SNVs of the healthy genome (SNVs only, not with `-c`) |
+| `--region-rates FILE` | `region-rates` | relative mutation rate of regions (BED: chromosome, start, end, multiplier); needs `--blocks` or `--fasta` (section 5.3) |
 
 ## 6.9 Output options
 
