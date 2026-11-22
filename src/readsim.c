@@ -492,7 +492,7 @@ static void FastqPut (Bgzf *z, const char *name, int mate, const char *seq, int 
 	}
 
 /* the two templates of a fragment (first and last L bases): 1 when a site is lost (deletion or ADO), else 0 */
-static int LoadTemplates (int hap, int cellIdx, long s, long ins, int L, char *ta, char *tb, int extraCopy)
+static int LoadTemplates (int hap, int cellIdx, long s, long ins, int L, char *ta, char *tb, int copyRank)
 	{
 	int		j, a, b;
 
@@ -500,14 +500,14 @@ static int LoadTemplates (int hap, int cellIdx, long s, long ins, int L, char *t
 		{
 		a = Allele (hap, cellIdx, s + j);
 		b = Allele (hap, cellIdx, s + ins - L + j);
-		if (extraCopy)		/* the fragment comes from the extra copy of the haplotype where there is one */
+		if (copyRank > 0)		/* the fragment comes from an extra copy of the haplotype (--seg-gain-rate) where there is one */
 			{
-			int ea = ExtraCopy (cellIdx, hap, s + j), eb = ExtraCopy (cellIdx, hap, s + ins - L + j);
+			Geno	ex[MAX_COPIES];
 
-			if (ea >= 0)
-				a = ea;
-			if (eb >= 0)
-				b = eb;
+			if (ExtraCopies (cellIdx, hap, s + j, ex) >= copyRank)
+				a = ex[copyRank-1];
+			if (ExtraCopies (cellIdx, hap, s + ins - L + j, ex) >= copyRank)
+				b = ex[copyRank-1];
 			}
 		if (a < 0 || a > 3 || b < 0 || b > 3)
 			return 1;
@@ -638,14 +638,18 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 				if (gainOn == YES && cellIdx >= 0)
 					g = GainAt (cellIdx, hap, pos + W/2);
 				if (copyGainOn == YES && cellIdx >= 0)
-					g *= CopyGainAt (cellIdx, hap, pos + W/2);	/* an extra copy (--seg-gain-rate) doubles the fragments */
+					{
+					Geno	ex[MAX_COPIES];
+
+					g *= 1.0 + ExtraCopies (cellIdx, hap, pos + W/2, ex);	/* the extra copies (--seg-gain-rate) add fragments */
+					}
 				}
 			lambda = depth * cm * 0.5 * g / (2.0 * L * (1.0 + dupMean)) * (double) W;
 			nfrag = RandomPoisson (lambda, seed);
 			for (f=0; f<nfrag; f++)
 				{
 				long	s = pos + (long) (RandomUniform (seed) * W), ins;
-				int		copies, c, fwdFrag;
+				int		copies, c, fwdFrag, copyRank = 0;
 
 				ins = (long) (insertMean + insertSd * Normal (seed) + 0.5);
 				if (ins < L)
@@ -654,7 +658,13 @@ static long SimulateGenome (int cellIdx, double depth, int amplified, const char
 					continue;
 				if (posMap != NULL && CP (s + ins - 1) - CP (s) != ins - 1)
 					continue;	/* the fragment would span masked sites (N) */
-				if (LoadTemplates (hap, cellIdx, s, ins, L, ta, tb, (copyGainOn == YES && cellIdx >= 0 && RandomUniform (seed) < 0.5)))
+				if (copyGainOn == YES && cellIdx >= 0)
+					{
+					Geno	ex[MAX_COPIES];
+
+					copyRank = RandomUniformTo (1 + ExtraCopies (cellIdx, hap, s, ex), seed);	/* the fragment comes from one of the copies */
+					}
+				if (LoadTemplates (hap, cellIdx, s, ins, L, ta, tb, copyRank))
 					continue;
 				if (nev[hap] > 0)
 					ApplyAmpErrors (ev[hap], nev[hap], s, ins, L, ta, tb, seed);

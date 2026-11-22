@@ -129,7 +129,12 @@ void		FillSubstitutionMatrix (double ch_prob[4][4], double branchLength);
 void		JCmodel (double Pij[4][4], double branchLength);
 void		HKYmodel (double Pij[4][4], double branchLength);
 void		GTRmodel (double Pij[4][4], double branchLength);
-void 	SimulateSegmentEvents (TreeNode *root, long int *seed);
+void 	SimulateCopyNumberGenomes (TreeNode *root, long int *seed);
+extern int numPlannedSNV;
+#define MAX_COPIES 16
+#define CN_EVENTS (lossRate > 0 || gainRate > 0)		/* copy-number events (--seg-loss-rate, --seg-gain-rate) */
+int		ExtraCopies (int node, int genome, long site, Geno *out);
+void	MarkExtraCopyVariants (char *isVar);
 void 	EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed);
 void 	EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed);
 void		SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed);
@@ -376,9 +381,7 @@ extern double				gainSd, gainLen;
 extern int					doBam, doFastq, readLen;
 extern double				lossRate, gainRate, segLen, segLossLen, segGainLen;
 extern int					numSegLoss, numSegGain, snvsLostBySegments;
-extern int					copyGainOn;
-double CopyGainAt (int node, int genome, long site);
-int ExtraCopy (int node, int genome, long site);
+extern int					copyGainOn, maxCopies;
 void ResetSegments (void);
 void WriteCnvEvents (int replicate);
 extern double				insertMean, insertSd, bulkDepth, dupMean, qualSd, qualSlope, strandBias;

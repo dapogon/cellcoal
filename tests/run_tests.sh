@@ -1174,5 +1174,33 @@ else echo "  skip (python3 not installed)"; fi
 [ "$l2" -lt "$l1" ] && ok "--seg-loss-len sets the length of the losses (longer losses lose more SNVs)" || bad "--seg-loss-len ($l1 $l2)"
 cd "$ROOT"
 
+echo "2g49. Copy-number genotypes: phase is shown, the number of copies is limited by --seg-max-copies"
+mkdir -p "$TMP/cng" && cd "$TMP/cng" && rm -rf ./*
+cat > maxc.py <<'PY'
+import sys
+lim = int(sys.argv[1]); seen = 0; bad = 0; bars = 0
+for l in open('Results/snv_gen'):
+    p = l.split()
+    if len(p) < 3 or '|' not in p[1]: continue
+    for g in p[1:]:
+        m, q = g.split('|')
+        bars += 1
+        n = len(m.replace('-', '')) + len(q.replace('-', ''))
+        seen = max(seen, n)
+        if n > lim: bad += 1
+print(1 if bad == 0 and bars > 0 and seen == lim else 0)
+PY
+if command -v python3 >/dev/null; then
+  "$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 4e-3 --seg-len 300 -1 >/dev/null 2>&1
+  [ "$(python3 maxc.py 4)" = 1 ] && ok "genotypes show maternal|paternal copies, up to 4 by default" || bad "copy genotypes (max 4)"
+  "$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 4e-3 --seg-len 300 --seg-max-copies 3 -1 >/dev/null 2>&1
+  [ "$(python3 maxc.py 3)" = 1 ] && ok "--seg-max-copies limits the copies of a site" || bad "--seg-max-copies"
+else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s10 -l300 -u2e-5 -e3000 -d0 -#7 --seg-loss-rate 1e-3 >E.txt 2>&1; grep -aq "ISM" E.txt && ok "copy-number events keep the ISM check" || bad "ISM check with copy number"
+"$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 -1 >A.txt 2>&1; cp Results/snv_gen a.gen
+"$BIN" -n1 -s10 -l2000 -u1e-6 -e1000 -d0 -#7 --seg-loss-rate 1e-3 --seg-gain-rate 2e-3 -1 >A.txt 2>&1
+cmp -s Results/snv_gen a.gen && ok "copy-number runs are reproducible with the same seed" || bad "copy-number reproducibility"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

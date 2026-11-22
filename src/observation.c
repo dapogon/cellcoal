@@ -492,8 +492,14 @@ int CountTrueVariants (void)
 	{
     int		cell, site;
     int		nVariants = 0;
-    char	*isVar;
+    char	*isVar, *extraVar = NULL;
     Geno	*matRoot, *patRoot, *mat, *pat;
+
+    if (copyGainOn == YES)	/* sites where an extra copy (--seg-gain-rate) differs from the root */
+        {
+        extraVar = (char *) Checked (calloc (numSites, sizeof(char)), "Could not allocate the extraVar vector\n");
+        MarkExtraCopyVariants (extraVar);
+        }
 
     if (sparseMode == YES)
         {
@@ -503,7 +509,14 @@ int CountTrueVariants (void)
             Geno *c = sparseCols[site];
             Geno mr, pr;
             if (c == NULL)
+                {
+                if (extraVar != NULL && extraVar[site])
+                    {
+                    allSites[site].isVariant = YES;
+                    variantSites[nVariants++] = site;
+                    }
                 continue;
+                }
             mr = data[MATERNAL][OUTGROUP_ROOT][site];
             pr = data[PATERNAL][OUTGROUP_ROOT][site];
             for (cell=0; cell<numCells+1; cell++)
@@ -515,7 +528,13 @@ int CountTrueVariants (void)
                     break;
                     }
                 }
+            if (allSites[site].isVariant != YES && extraVar != NULL && extraVar[site])
+                {
+                allSites[site].isVariant = YES;
+                variantSites[nVariants++] = site;
+                }
             }
+        free (extraVar);
         return nVariants;
         }
 
@@ -534,13 +553,14 @@ int CountTrueVariants (void)
         }
     for (site=0; site<numSites; site++)
         {
-        if (isVar[site])
+        if (isVar[site] || (extraVar != NULL && extraVar[site]))
             {
             allSites[site].isVariant = YES;
             variantSites[nVariants++] = site;
             }
         }
     free (isVar);
+    free (extraVar);
     return nVariants;
 	}
 
