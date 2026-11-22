@@ -347,7 +347,7 @@ The first three are the original events of CellCoal; copy-number losses and gain
 
 ### 5.2.1 The starting genome: simulated or a real chromosome
 
-Before any mutation, CellCoal needs the genome that the cells inherit: the **ancestral genome**, which is the genome of the healthy cell and of the common ancestor of all the cells. The somatic events (SNVs, deletions, cnLOH, copy-number losses and gains) are then added to it along the tree. The ancestral genome is the **reference genome** (the sequence that the REF column of the VCF shows) plus, optionally, **germline variation** (the differences between the individual and the reference).
+Before any mutation, CellCoal needs the genome that the cells inherit: the **ancestral genome**, which is the genome of the healthy cell and of the common ancestor of all the cells. The somatic events (SNVs, deletions, cnLOH, copy-number losses and gains) are then added to it along the tree. The starting point is always **one reference sequence** (the one that the REF column of the VCF shows): the ancestral genome is that sequence, present in the maternal and in the paternal haplotype, plus, optionally, **germline variation** (the sites where the individual differs from the reference, which make the two haplotypes differ).
 
 There are two ways to get the reference, and then you can add germline variation to it.
 
@@ -361,7 +361,7 @@ There are two ways to get the reference, and then you can add germline variation
 | Option | Use it for | How it works |
 |---|---|---|
 | `--fasta FILE` (plain or `.gz`), with `--region chrom:start-end` | a whole chromosome or any region, of any length (the normal way) | the sequence is simulated in blocks of `-l` sites on one tree, so the memory is that of one block (section 5.3). The VCF has the real positions, and REF is the base of the FASTA |
-| `-U FILE` | a short genome, up to 10^6^ sites | the file has two sequences, maternal and paternal, each on one line and of the same length; they are used as the ancestral genome, so it can already be heterozygous |
+| `-U FILE` | a short genome, up to 10^6^ sites | an older way, for a genome that already has its germline variation: the file has the maternal and the paternal sequence, each on one line and of the same length (the reference is the one sequence they derive from) |
 
 **3. Germline variation (optional).** The ancestral genome is the reference with its germline SNPs:
 

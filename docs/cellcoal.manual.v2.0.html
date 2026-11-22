@@ -1088,10 +1088,12 @@ starting genome: simulated or a real chromosome</h3>
 inherit: the <strong>ancestral genome</strong>, which is the genome of
 the healthy cell and of the common ancestor of all the cells. The
 somatic events (SNVs, deletions, cnLOH, copy-number losses and gains)
-are then added to it along the tree. The ancestral genome is the
-<strong>reference genome</strong> (the sequence that the REF column of
-the VCF shows) plus, optionally, <strong>germline variation</strong>
-(the differences between the individual and the reference).</p>
+are then added to it along the tree. The starting point is always
+<strong>one reference sequence</strong> (the one that the REF column of
+the VCF shows): the ancestral genome is that sequence, present in the
+maternal and in the paternal haplotype, plus, optionally,
+<strong>germline variation</strong> (the sites where the individual
+differs from the reference, which make the two haplotypes differ).</p>
 <p>There are two ways to get the reference, and then you can add
 germline variation to it.</p>
 <p><strong>1. A simulated reference (default).</strong> Nothing to
@@ -1133,9 +1135,10 @@ real positions, and REF is the base of the FASTA</td>
 <tr class="even">
 <td><code>-U FILE</code></td>
 <td>a short genome, up to 10<sup>6</sup> sites</td>
-<td>the file has two sequences, maternal and paternal, each on one line
-and of the same length; they are used as the ancestral genome, so it can
-already be heterozygous</td>
+<td>an older way, for a genome that already has its germline variation:
+the file has the maternal and the paternal sequence, each on one line
+and of the same length (the reference is the one sequence they derive
+from)</td>
 </tr>
 </tbody>
 </table>
