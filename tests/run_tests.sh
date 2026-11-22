@@ -1106,5 +1106,15 @@ printf 'cells: 2\nsites: 800\nseed: 7\nmutation: rate=1e-6\n' > c.yaml
 "$BIN" --config c.yaml -n2 -l800 -s7 -u1e-6 -oC >/dev/null 2>&1 && ok "config accepts group keys" || bad "config group key"
 cd "$ROOT"
 
+echo "2g46. Copy-number losses of segments (--loss-rate, --loss-len)"
+mkdir -p "$TMP/loss" && cd "$TMP/loss" && rm -rf ./*
+"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --summary -#5 >/dev/null 2>&1; a=$(cut -f6 Results/summary.tsv | tail -1)
+"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --loss-rate 2e-3 --loss-len 500 --summary -#5 >/dev/null 2>&1; b=$(cut -f6 Results/summary.tsv | tail -1); lost=$(tail -1 Results/summary.tsv | awk -F'\t' '{print $NF}')
+[ "$a" = 200 ] && [ "$b" -lt "$a" ] && [ $((a - b)) -eq "$lost" ] && ok "segment losses remove variable sites and the summary counts them" || bad "segment losses ($a $b $lost)"
+"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --mutation loss-rate=2e-3,loss-len=500 --summary -#5 >/dev/null 2>&1; c=$(cut -f6 Results/summary.tsv | tail -1)
+[ "$b" = "$c" ] && ok "--mutation loss-rate,loss-len = --loss-rate/--loss-len" || bad "group loss-rate"
+"$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -C20 --loss-rate 2e-3 >/dev/null 2>&1 && ok "segment losses with read counts" || bad "segment losses with -C"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

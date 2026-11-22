@@ -300,7 +300,9 @@ CellCoal simulates the evolution of cell genotypes along the genealogy by adding
 
 > The default SNV model is a diploid infinite site model (ISM).
 
-> Note that CellCoal does not simulate copy number alterations or structural variants.
+> Note that CellCoal does not simulate structural variants. Copy-number alterations are limited to point deletions (`-d`), cnLOH (`-H`) and losses of segments (`--loss-rate`, `--loss-len`, see below).
+
+**Losses of segments (`--loss-rate`, `--loss-len`; group `--mutation loss-rate=...,loss-len=...`).** Each haplotype suffers a Poisson number of losses, with mean the total tree length in generations times `--loss-rate` (per haplotype and generation). Each loss falls on a branch chosen according to its length, starts at a uniform site and covers a geometric number of sites with mean `--loss-len` (default 1000), clipped at the end of the genome. Every cell below the branch loses the segment in that haplotype (its alleles become deletions), so the genotypes, read counts and VCF treat them like point deletions. The SNVs that were inside a lost segment disappear in the cells that lost it (they remain as hemizygous alleles if the SNV is in the other haplotype), so with `-j` the number of mutations is the number placed, not the number that survive. The log and the summary (`segment_losses`, `snv_lost_segments` columns, only with `--loss-rate`) report the number of losses and the variable sites lost.
 
 ### 5.2.1 Generation of reference and ancestral genomes
 

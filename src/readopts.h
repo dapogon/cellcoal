@@ -17,5 +17,7 @@
 	X(germline_vcf,   "--germline-vcf",   '\215', 3, germlineVcf, 0)      \
 	X(qual_sd,        "--qual-sd",        '\216', 2, qualSd,     0)      \
 	X(qual_slope,     "--qual-slope",     '\217', 2, qualSlope,  0)      \
-	X(strand_bias,    "--strand-bias",    '\220', 2, strandBias, 0)
+	X(strand_bias,    "--strand-bias",    '\220', 2, strandBias, 0)    \
+	X(loss_rate,      "--loss-rate",      '\221', 2, lossRate,   0)      \
+	X(loss_len,       "--loss-len",       '\222', 2, lossLen,    1000)
 #endif

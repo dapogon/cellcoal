@@ -36,3 +36,7 @@
 - Related options can now be given as one grouped option: `--tree`, `--mutation`, `--substitution`, `--ado`, `--errors`, `--amplification`, `--depth`, `--cell-corr`, `--call-filter`, `--reads`, `--chromosome`, `--output`. Syntax: `--GROUP key=value,key,...` (':' separates several numbers), e.g. `--ado cells=0.1:0.001,sites=0.2:0.01 --depth mean=20,cells=0.3 --output snv-genotypes,vcf-gz`.
 - The single-letter options keep working and give identical results. The same group names are accepted as keys in configuration files.
 - `--help` is organized by group and includes a table of equivalences with the single-letter options; error messages use the group key names.
+
+## Losses of segments
+
+- New `--loss-rate` and `--loss-len` (group `--mutation loss-rate=...,loss-len=...`): copy-number losses of segments of a haplotype, inherited along the tree; the lost sites are deletions in the cells below the branch. Without `--loss-rate` nothing changes. The log and `summary.tsv` report the losses and the variable sites lost in them.
