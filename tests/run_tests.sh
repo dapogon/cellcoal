@@ -1292,5 +1292,15 @@ for f in cell0001.bam cell0006.bam normal.bam cell0002.R1.fastq.gz cell0005.R2.f
 rm -rf TH1 TH3
 cd "$ROOT"
 
+echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
+cd "$ROOT"
+if command -v python3 >/dev/null; then
+  python3 tests/manual_check.py "$BIN" > "$TMP/manual_check.txt" 2>&1 && ok "manual and README commands run; every long option of --help is in the manual" || { bad "manual_check.py"; cat "$TMP/manual_check.txt"; }
+else echo "  skip (python3 not installed)"; fi
+cd "$TMP"
+"$BIN" -n1 -s4 -l100 --seg-lenn 5 2>&1 | grep -q "did you mean --seg-len?" && ok "unknown long option: suggests the closest one" || bad "no suggestion for a mistyped option"
+"$BIN" --check -n3 -s10 -l500 -u1e-6 --sweep "C=2,5" >Chk.txt 2>&1 && grep -q "not run" Chk.txt && ok "--check with --sweep checks the options and does not run the grid" || bad "--check --sweep"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

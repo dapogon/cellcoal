@@ -871,7 +871,17 @@ void ReadParametersFromCommandLine (int argc,char **argv)
                 exit (0);
                 break;
             default :
-                fprintf (stderr, "\n!!! PARAMETER ERROR: Incorrect parameter: %c\n\n", flag);
+                if (flag == '-')		/* a long option that does not exist: say which, and the closest one */
+                    {
+                    const char *wrong = argv[i] - 2, *similar = SimilarLongOption (wrong);
+
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Unknown option: %s", wrong);
+                    if (similar)
+                        fprintf (stderr, "  (did you mean %s?)", similar);
+                    fprintf (stderr, "\n\n");
+                    }
+                else
+                    fprintf (stderr, "\n!!! PARAMETER ERROR: Incorrect parameter: %c\n\n", flag);
                 PrintUsage(stderr);
                 break;
         }

@@ -34,6 +34,8 @@ void 	PrintHeader (FILE *fp);
 void	PrintCheck (FILE *fp);
 extern int	checkOnly;
 extern void 	PrintUsage (FILE *fp);
+extern const char	*GroupNameAt (int i);
+extern const char	*SimilarLongOption (const char *opt);
 extern void 	PrintHelp (FILE *fp);
 extern void 	PrintUsageAll (FILE *fp);
 extern void 	PrintConfigKeys (FILE *fp);

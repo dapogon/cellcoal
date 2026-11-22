@@ -142,6 +142,16 @@ static const GroupKey groupKeys[] =
 	{NULL, NULL, 0, NULL, NULL}
 	};
 
+/* the name of the group number i (0 ...), or NULL after the last one */
+const char *GroupNameAt (int i)
+	{
+	int n;
+
+	for (n=0; groupInfo[n].name; n++)
+		;
+	return (i >= 0 && i < n) ? groupInfo[i].name : NULL;
+	}
+
 int IsGroupName (const char *name)
 	{
 	int g;

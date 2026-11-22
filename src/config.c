@@ -561,6 +561,44 @@ static const char *SimilarKey (const char *key)
 	return (best <= limit) ? name : NULL;
 	}
 
+/* the long option (or group) closest to a mistyped --option, with its dashes, or NULL: "--seg-lenn" gives "--seg-len" */
+const char *SimilarLongOption (const char *opt)
+	{
+	static char	best[64], cand[64];
+	static const char *fixed[] = {"--config", "--check", "--fast", "--sweep", "--sweep-keep", "--sweep-jobs", "--sweep-resume", "--version", "--help", NULL};
+	int		i, bestDist = 99, dist, limit;
+	const char *name = opt + 2;
+	char	*u;
+
+	if (opt[0] != '-' || opt[1] != '-' || opt[2] == '\0')
+		return NULL;
+	limit = (int) strlen (name) / 3;
+	if (limit < 2)
+		limit = 2;
+	best[0] = '\0';
+#define TRY(str) do { dist = EditDistance (name, (str) + 2); if (dist < bestDist) { bestDist = dist; snprintf (best, sizeof(best), "%s", (str)); } } while (0)
+	for (i=0; fixed[i]; i++)
+		TRY (fixed[i]);
+	for (i=0; optionNames[i].name; i++)
+		if (strlen (optionNames[i].name) > 1)
+			{
+			snprintf (cand, sizeof(cand), "--%s", optionNames[i].name);
+			for (u = cand; *u; u++)
+				if (*u == '_')
+					*u = '-';
+			TRY (cand);
+			}
+	for (i=0; extraOpts[i].key; i++)
+		TRY (extraOpts[i].opt);
+	for (i=0; GroupNameAt (i); i++)
+		{
+		snprintf (cand, sizeof(cand), "--%s", GroupNameAt (i));
+		TRY (cand);
+		}
+#undef TRY
+	return (bestDist <= limit && bestDist > 0) ? best : NULL;
+	}
+
 static int KeyToFlag (const CfgItem *it, const char *path)
 	{
 	const char *key = it->key;
@@ -943,6 +981,17 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		}
 	if (sweepSpec)
 		{
+		for (i=0; i<n; i++)
+			if (strcmp (out[i], "--check") == 0)
+				break;
+		if (i < n)
+			{
+			fprintf (stderr, "--check: the options are checked, but the grid of --sweep \"%s\" is not run\n", sweepSpec);
+			sweepSpec = NULL;
+			}
+		}
+	if (sweepSpec)
+		{
 		out[n] = NULL;
 		RunSweep (n, out, sweepSpec, sweepKeep, sweepJobs, sweepResume);
 		}
@@ -1064,6 +1113,8 @@ char **ExpandConfigArgs (int *argc, char **argv)
 			doSummary = YES;
 		else if (strcmp (out[i], "--check") == 0)
 			checkOnly = YES;
+		else if (strcmp (out[i], "--sweep") == 0)
+			i++;	/* reaches here only with --check, which does not run the grid */
 		else if (strcmp (out[i], "--sweep-keep") == 0 || strcmp (out[i], "--sweep-resume") == 0)
 			;
 		else if (strcmp (out[i], "--sweep-jobs") == 0)
