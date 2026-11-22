@@ -1,0 +1,7 @@
+# CellCoal 2.5.0 — what changed
+
+**Without `--seg-loss-rate` and `--seg-gain-rate` the simulated data of all existing runs are identical to 2.4.2.**
+
+## Copy-number losses and gains of segments
+- New copy-number model (`--seg-loss-rate`, `--seg-gain-rate`, `--seg-len`, `--seg-loss-len`, `--seg-gain-len`, `--seg-max-copies`): SNVs, point deletions, cnLOH, segment losses and gains are simulated together, branch by branch and in random order, over genomes made of copies with known phase. A gain copies a random copy (with the alleles it has at that moment); every copy then accumulates its own SNVs. At most 4 copies per site by default (`--seg-max-copies`, code limit 16). Works with every substitution model (ISM, genetic signatures, Mk2, JC/HKY/GTR/GTnR, mixtures of default and alternative sites, rate variation among sites) and in the three modes. Without the rates nothing changes (golden battery identical).
+- Genotypes with several copies list the alleles of all the copies; `--phase` (group `--output phase`) separates the maternal from the paternal ones with `|` (`GG|A`, `AGT|-`). The true haplotype files have one row per copy and the new file `cnv_segments` gives the true copies per cell and segment. VCF `TG` lists all the alleles and the new `CN` field the copies per haplotype; reads are shared among the copies of a haplotype (allele fractions 1/3, 2/3). The file `cnv_events` lists every loss and gain with its cells. The log and `summary.tsv` report the losses, gains and the SNVs lost in them.
