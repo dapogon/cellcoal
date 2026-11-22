@@ -1351,6 +1351,50 @@ grep -q "line 1" rr3.out && ok "a wrong line of the file is reported with its nu
 rm -rf RR RR2 RR3
 cd "$ROOT"
 
+echo "2g57. --seq-context: errors concentrate in the contexts of the file, -E stays the mean error, any number of threads gives the same files"
+cd "$TMP"
+printf "# a C after GG: 8 times the error\nGGC 8\n" > ctx.txt
+A="-n1 -s6 -#3 -l30000 -u1e-7 -e10000 -C20 -E0.004 --bam"
+OMP_NUM_THREADS=1 "$BIN" $A --seq-context ctx.txt -oSC1 >/dev/null 2>&1; OMP_NUM_THREADS=3 "$BIN" $A --seq-context ctx.txt -oSC3 >/dev/null 2>&1; "$BIN" $A -oSC0 >/dev/null 2>&1
+cmp -s SC1/reads_1/cell0002.bam SC3/reads_1/cell0002.bam && ok "1 and 3 threads give identical BAM files" || bad "--seq-context depends on the number of threads"
+if command -v python3 >/dev/null; then
+python3 - "$ROOT" <<'P' && ok "GGC has several times the error of the other contexts (both reads of the pair) and the mean error is the same as without the option" || bad "context-dependent sequencing errors"
+import sys, glob, collections
+sys.path.insert(0, sys.argv[1] + "/tools")
+import bamcheck as b
+comp = {'A':'T','C':'G','G':'C','T':'A'}
+def stats(d):
+    name, ref = b.read_fasta(d + "/reads_1/ref.fa")
+    tot = collections.Counter(); err = collections.Counter()
+    for f in sorted(glob.glob(d + "/reads_1/cell*.bam")):
+        t, refs, recs = b.parse_bam(f)
+        for r in recs:
+            if r['flag'] & 1024: continue
+            rev = bool(r['flag'] & 16); p = r['pos']
+            for i in range(len(r['bases'])):
+                if p + i - 2 < 0: continue
+                g = ref[p+i-2:p+i+1] if not rev else ref[p+i:p+i+3]
+                if len(g) < 3 or 'N' in g: continue
+                c = g if not rev else ''.join(comp[x] for x in reversed(g))
+                k = 'GGC' if c == 'GGC' else 'x'
+                tot[k] += 1
+                if r['bases'][i] != ref[p+i]: err[k] += 1
+    return err['GGC'] / tot['GGC'], err['x'] / tot['x'], (err['GGC'] + err['x']) / (tot['GGC'] + tot['x'])
+g1, o1, m1 = stats("SC1")
+g0, o0, m0 = stats("SC0")
+assert g1 > 3.5 * o1, (g1, o1)
+assert abs(m1 / m0 - 1) < 0.15, (m1, m0)
+assert abs(g0 / o0 - 1) < 0.3, (g0, o0)
+P
+else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s6 -#3 -l30000 -u1e-7 -e10000 -C20 --bam --seq-context ctx.txt -oSC4 > sc4.out 2>&1
+grep -q "needs a sequencing error" sc4.out && ok "--seq-context without -E is an error" || bad "--seq-context accepted without -E"
+printf "GGX 2\n" > badctx.txt
+"$BIN" -n1 -s6 -#3 -l30000 -u1e-7 -e10000 -C20 -E0.004 --bam --seq-context badctx.txt -oSC5 > sc5.out 2>&1
+grep -q "line 1" sc5.out && ok "a wrong line of the context file is reported with its number" || bad "bad context file not reported"
+rm -rf SC0 SC1 SC3 SC4 SC5
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

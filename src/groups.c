@@ -109,6 +109,7 @@ static const GroupKey groupKeys[] =
 	{"reads", "contig",     'S', "--contig", "name of the contig"},
 	{"reads", "qual-sd",    'S', "--qual-sd", "log-sd of the base quality variation among bases (0 to 3)"},
 	{"reads", "qual-slope", 'S', "--qual-slope", "decline of the base quality along the read (-6 to 6)"},
+	{"reads", "seq-context", 'S', "--seq-context", "file with the error multiplier of trinucleotide contexts (e.g. GGC 4)"},
 	{"reads", "strand-bias",'S', "--strand-bias", "fraction of the amplification errors seen on one strand only (0 to 1)"},
 	{"reads", "bulk-depth", 'S', "--bulk-depth", "also simulate a bulk healthy sample (normal.bam) at this depth"},
 

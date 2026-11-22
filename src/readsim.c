@@ -384,6 +384,99 @@ static void SeqErrors (char *s, int len, long int *seed)
 		}
 	}
 
+/* Sequencing errors that depend on the sequence (--seq-context FILE). A line of the file is a context of three bases in the direction of the
+   sequencing (the two bases read before and the base itself: GGC is a C that follows GG) and a multiplier of the error probability of that
+   base; N stands for any base. The lines are applied in order (a later line overrides the earlier ones on the contexts that both match);
+   the contexts that no line matches have multiplier 1. The multipliers are divided by their mean over the trinucleotides of the reference,
+   so -E stays the mean error of the reads. */
+static double	ctxMult[64];
+static int		ctxOn = 0;
+
+static int BaseCode (int c)
+	{
+	return (c == 'A') ? 0 : (c == 'C') ? 1 : (c == 'G') ? 2 : (c == 'T') ? 3 : -1;
+	}
+
+static void LoadSeqContext (void)
+	{
+	FILE	*fp = fopen (seqContextFile, "r");
+	char	line[512], pat[16];
+	int		ln = 0, k, i;
+	double	m, freq3[64], sum, wsum, mean;
+	long	tot = 0;
+
+	if (!fp)
+		{
+		fprintf (stderr, "\nERROR: cannot open %s\n", seqContextFile);
+		exit (-1);
+		}
+	for (k=0; k<64; k++)
+		ctxMult[k] = 1.0;
+	while (fgets (line, sizeof(line), fp))
+		{
+		int ok = 1, a[3], x, y, z;
+
+		ln++;
+		if (line[0] == '#' || line[0] == '\n' || line[0] == '\r' || line[0] == '\0')
+			continue;
+		if (sscanf (line, "%15s %lf", pat, &m) != 2 || strlen (pat) != 3 || m < 0.0)
+			{
+			fprintf (stderr, "\nERROR: %s, line %d: expected \"CONTEXT MULTIPLIER\" (three bases, A C G T or N, and a number >= 0)\n", seqContextFile, ln);
+			exit (-1);
+			}
+		for (i=0; i<3; i++)
+			{
+			int c = toupper ((unsigned char) pat[i]);
+
+			a[i] = (c == 'N') ? -1 : BaseCode (c);
+			if (c != 'N' && a[i] < 0)
+				ok = 0;
+			}
+		if (!ok)
+			{
+			fprintf (stderr, "\nERROR: %s, line %d: the context has to be made of A, C, G, T or N\n", seqContextFile, ln);
+			exit (-1);
+			}
+		for (x=0; x<4; x++)
+			for (y=0; y<4; y++)
+				for (z=0; z<4; z++)
+					if ((a[0] < 0 || a[0] == x) && (a[1] < 0 || a[1] == y) && (a[2] < 0 || a[2] == z))
+						ctxMult[x*16 + y*4 + z] = m;
+		}
+	fclose (fp);
+	/* trinucleotides of the reference: the mean multiplier has to be 1 */
+	for (k=0; k<64; k++)
+		freq3[k] = 0.0;
+	for (i=0; i+2<numSites && tot < 2000000; i++)
+		{
+		int x = data[MATERNAL][OUTGROUP_ROOT][i], y = data[MATERNAL][OUTGROUP_ROOT][i+1], z = data[MATERNAL][OUTGROUP_ROOT][i+2];
+
+		if (refUserGenome != NULL)
+			{
+			x = BaseCode (refUserGenome[i]); y = BaseCode (refUserGenome[i+1]); z = BaseCode (refUserGenome[i+2]);
+			}
+		if (x < 0 || x > 3 || y < 0 || y > 3 || z < 0 || z > 3)
+			continue;
+		freq3[x*16 + y*4 + z] += 1.0;
+		tot++;
+		}
+	sum = wsum = 0.0;
+	for (k=0; k<64; k++)
+		{
+		sum += freq3[k];
+		wsum += freq3[k] * ctxMult[k];
+		}
+	mean = (sum > 0.0) ? wsum / sum : 1.0;
+	if (mean <= 0.0)
+		{
+		fprintf (stderr, "\nERROR: %s: the sequencing error of the contexts of the reference is 0 everywhere\n", seqContextFile);
+		exit (-1);
+		}
+	for (k=0; k<64; k++)
+		ctxMult[k] /= mean;
+	ctxOn = 1;
+	}
+
 /* Base qualities (--qual-sd, --qual-slope): the error probability of every base is eps * w(cycle) * m, where w rises along the read (log-slope
    --qual-slope between the first and the last cycle) and m is a lognormal multiplier of the base (log-sd --qual-sd); both have mean 1, so -E stays the
    mean error. The quality written is the one of that probability (calibrated: Q = -10 log10 p). The qualities are in the orientation of the BAM. */
@@ -418,11 +511,36 @@ static void QualSetup (int len, long int *seed)
 static void SeqErrorsQ (char *s, int len, int reverse, unsigned char *qv, double eps, long int *seed)
 	{
 	int		i;
+	char	orig[512];
 
+	memcpy (orig, s, len);		/* the context is that of the template, not of the bases that already have an error */
 	for (i=0; i<len; i++)
 		{
 		double	e = eps * qualW[reverse ? len - 1 - i : i] * qualMult[RandomUniformTo (1024, seed)];
 		int		qq;
+
+		if (ctxOn)
+			{
+			int x, y, z;
+
+			if (!reverse)			/* read in the direction of the genome: the bases before are the previous ones */
+				{
+				x = (i >= 2) ? BaseCode (orig[i-2]) : -1;
+				y = (i >= 1) ? BaseCode (orig[i-1]) : -1;
+				z = BaseCode (orig[i]);
+				}
+			else					/* the second read is the reverse complement: it reads the next bases first */
+				{
+				x = (i + 2 < len) ? 3 - BaseCode (orig[i+2]) : -1;
+				y = (i + 1 < len) ? 3 - BaseCode (orig[i+1]) : -1;
+				z = 3 - BaseCode (orig[i]);
+				if (x > 3) x = -1;
+				if (y > 3) y = -1;
+				if (z > 3) z = -1;
+				}
+			if (x >= 0 && y >= 0 && z >= 0)
+				e *= ctxMult[x*16 + y*4 + z];
+			}
 
 		if (e > 0.75) e = 0.75;
 		qq = (int) (-10.0 * log10 (e) + 0.5);
@@ -607,7 +725,7 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 	int		hap, q, L = readLen, i;
 	char	*ta, *tb, *ra, *rb, name[96];
 	unsigned char qa[512], qb[512];
-	int		qualOn = (qualSd > 0.0 || qualSlope != 0.0);
+	int		qualOn = (qualSd > 0.0 || qualSlope != 0.0 || ctxOn);
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
 	int		srcs[2] = {cellIdx0, donor}, nsrc = (donor >= 0) ? 2 : 1, si;
@@ -892,7 +1010,9 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 	uint64_t	base;
 	long		s1, s2;
 
-	if (qualSd > 0.0 || qualSlope != 0.0)
+	if (strlen (seqContextFile) > 0 && !ctxOn)
+		LoadSeqContext ();		/* before the threads start; the table is read only */
+	if (qualSd > 0.0 || qualSlope != 0.0 || ctxOn)
 		QualSetup (readLen, seed);		/* the multipliers of the bases are shared by all the cells: drawn once, before the threads start */
 	RandomUniform (seed);
 	s1 = *seed;

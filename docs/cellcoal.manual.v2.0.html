@@ -786,7 +786,7 @@ optional healthy <code>normal.bam</code></td>
 <code>--insert-mean</code>, <code>--insert-sd</code>,
 <code>--dup-mean</code>, <code>--bulk-depth</code>,
 <code>--qual-sd</code>, <code>--qual-slope</code>,
-<code>--strand-bias</code></td>
+<code>--strand-bias</code>, <code>--seq-context</code></td>
 <td>no</td>
 <td>no</td>
 <td>yes</td>
@@ -1965,6 +1965,33 @@ end. Quality-aware callers can then be tested;
 <code>benchmark.py pileup --min-bq Q</code> ignores the bases below Q.
 Default 0 and 0 (constant quality): the data are identical to
 before.</p>
+<p><strong>Errors that depend on the sequence
+(<code>--seq-context FILE</code>).</strong> Illumina errors are not
+uniform along the sequence: some motifs (such as GGC, a C that follows
+GG) and homopolymers fail much more than the rest, so the false SNVs of
+real data pile up in some contexts. <code>FILE</code> has one context
+per line, with the three bases in the direction of the sequencing (the
+two bases read before and the base itself) and a multiplier of the error
+probability of that base; <code>N</code> stands for any base, lines that
+start with <code>#</code> are comments, and a later line overrides an
+earlier one on the contexts that both match. For example:</p>
+<pre><code># a C after GG is read with 8 times the usual error; the homopolymers of G with 3 times
+GGC  8
+GGG  3</code></pre>
+<p>The contexts that no line mentions have multiplier 1. The multipliers
+are divided by their mean over the trinucleotides of the reference, so
+<code>-E</code> is still the mean error of the reads and only its
+distribution along the sequence changes (with the example,
+<code>GGC</code> has an error of about 7 times <code>-E</code>). The
+second read of a pair is read in the opposite direction, so its context
+is the reverse complement of the genome (it is read in its own
+direction, as the sequencer does). It combines with
+<code>--qual-sd</code> and <code>--qual-slope</code> (the factors
+multiply), needs <code>-E</code> greater than 0, and the qualities
+written are calibrated, so a quality-aware caller sees the low qualities
+of the risky contexts. The substitutions follow the error matrix
+(<code>-X</code>). It works in the reads mode only. Without the option
+the data are identical to before.</p>
 <p><strong><code>--strand-bias P</code></strong> makes a fraction P of
 the errors of the amplification strand specific: the molecule that
 carries the error shows it only in the reads of one strand (the left
@@ -2517,12 +2544,18 @@ are described in section 5.5. Group <code>--reads</code>.</p>
 constant)</td>
 </tr>
 <tr class="odd">
+<td><code>--seq-context FILE</code></td>
+<td><code>seq-context</code></td>
+<td>error multiplier of trinucleotide contexts in the direction of the
+sequencing (e.g. <code>GGC 8</code>)</td>
+</tr>
+<tr class="even">
 <td><code>--strand-bias P</code></td>
 <td><code>strand-bias</code></td>
 <td>fraction of the amplification errors seen on one strand only
 (0)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>--bulk-depth D</code></td>
 <td><code>bulk-depth</code></td>
 <td>also simulate a healthy bulk sample (<code>normal.bam</code>) at

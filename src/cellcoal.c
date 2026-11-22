@@ -381,6 +381,7 @@ static void CheckModeOptions (void)
 		{"--qual-sd", ExtraOptionGiven ("--qual-sd")},
 		{"--qual-slope", ExtraOptionGiven ("--qual-slope")},
 		{"--strand-bias", ExtraOptionGiven ("--strand-bias")},
+		{"--seq-context", ExtraOptionGiven ("--seq-context")},
 		{NULL, 0}
 		};
 	int		k;
@@ -1170,6 +1171,11 @@ static void CheckReadOptions (void)
 		if (qualSd < 0.0 || qualSd > 3.0 || qualSlope < -6.0 || qualSlope > 6.0 || strandBias < 0.0 || strandBias > 1.0)
 			{
 			fprintf (stderr, "\nERROR: bad --qual-sd (0 to 3), --qual-slope (-6 to 6) or --strand-bias (0 to 1)\n");
+			exit (-1);
+			}
+		if (strlen (seqContextFile) > 0 && sequencingError <= 0.0)
+			{
+			fprintf (stderr, "\nERROR: --seq-context needs a sequencing error (-E) greater than 0\n");
 			exit (-1);
 			}
 		/* the VCF of read counts and genotype likelihoods does not exist in this mode */
