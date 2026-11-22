@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.5.3)"
+date: "November, 2026 (CellCoal 2.6.0)"
 ---
 
 # 1. About CellCoal
@@ -1357,6 +1357,7 @@ Every release has a file with all its details (`docs/CHANGES-X.Y.Z.md`), and `do
 
 | Version | Main changes | Where |
 |---|---|---|
+| 2.6 | Reads mode in parallel by cells (the reads of a given seed change), `--compress-level` | 5.5 |
 | 2.5 | Copy-number losses and gains interleaved with SNVs, deletions and cnLOH; `--phase`, haplotypes per copy, `cnv_segments`; all the substitution models (2.5.1: Windows build; 2.5.2: README and manual) | 5.2.8, 5.2.9 |
 | 2.4 | Reads (`--bam`, `--fastq`) with duplicates, qualities and strand bias; chromosome in blocks, real references, germline VCF; dropout in segments, amplification gain, signature profiles from files; the three modes are explicit | 5.5, 5.3, 5.4.1, 5.4.3, 5.4.4 |
 | 2.3 | Tumour only (`--no-outgroup`); `--min-alt-reads` and `--min-alt-vaf` | 5.1.1, 5.6 |
