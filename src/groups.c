@@ -133,6 +133,7 @@ static const GroupKey groupKeys[] =
 	{"output", "no-vcf",           'F', "-Z", "do not write the VCF (needs catg, pileup or bulk)"},
 	{"output", "vcf-gz",           'F', "-z", "write the VCF compressed with gzip"},
 	{"output", "bcf",              'F', "--bcf", "write a BCF file instead of a VCF"},
+	{"output", "compress-level",   'S', "--compress-level", "zlib level (1 fastest, 9 smallest; default 6) of the BAM, BCF and FASTQ.gz files"},
 	{"output", "phase",             'F', "--phase", "show the phase (maternal|paternal copies) in the genotypes with copy-number events"},
 	{"output", "summary",          'F', "--summary", "summary.tsv: one row of metrics per replicate"},
 	{"output", "replicate-folders",'F', "-v", "one folder per replicate"},

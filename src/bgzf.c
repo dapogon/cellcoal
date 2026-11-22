@@ -52,7 +52,7 @@ void BgzfBlock (FILE *fp, const unsigned char *d, int n)
 		z_stream zs;
 
 		memset (&zs, 0, sizeof(zs));
-		if (deflateInit2 (&zs, 6, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY) == Z_OK)
+		if (deflateInit2 (&zs, compressLevel, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY) == Z_OK)
 			{
 			zs.next_in = (Bytef*) d;
 			zs.avail_in = n;

@@ -1178,6 +1178,11 @@ static void CheckReadOptions (void)
 		/* the VCF of read counts and genotype likelihoods does not exist in this mode */
 		doPrintVCF = NO;
 		}
+	if (compressLevel < 1 || compressLevel > 9)
+		{
+		fprintf (stderr, "\nERROR: --compress-level has to be between 1 and 9\n");
+		exit (-1);
+		}
 	}
 
 static void CloseGlobalFiles (void)

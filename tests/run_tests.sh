@@ -1270,5 +1270,17 @@ done
 [ $okopt = 1 ] && ok "values out of range are still rejected" || bad "out of range values accepted"
 cd "$ROOT"
 
+echo "2g52. --compress-level changes the size of the compressed files, not their content"
+cd "$TMP"
+A="-n1 -s3 -l20000 -u1e-7 -e10000 -C10 -E0.001 -D0.1 --ado-block 2000 --fastq --bam -#3"
+"$BIN" $A -oCL6 >/dev/null 2>&1; "$BIN" $A --compress-level 1 -oCL1 >/dev/null 2>&1; "$BIN" $A --compress-level 9 -oCL9 >/dev/null 2>&1
+h() { gzip -dc < "$1" | md5sum; }
+if [ "$(h CL6/reads_1/cell0001.R1.fastq.gz)" = "$(h CL1/reads_1/cell0001.R1.fastq.gz)" ] && [ "$(h CL6/reads_1/cell0001.R1.fastq.gz)" = "$(h CL9/reads_1/cell0001.R1.fastq.gz)" ] \
+   && [ "$(h CL6/reads_1/cell0001.bam)" = "$(h CL1/reads_1/cell0001.bam)" ] && [ "$(h CL6/reads_1/cell0001.bam)" = "$(h CL9/reads_1/cell0001.bam)" ] \
+   && [ "$(stat -c %s CL1/reads_1/cell0001.bam)" -gt "$(stat -c %s CL9/reads_1/cell0001.bam)" ]; then ok "levels 1, 6 and 9 give the same BAM and FASTQ content (level 1 is larger)"; else bad "--compress-level"; fi
+"$BIN" $A --compress-level 10 -oCL0 >/dev/null 2>&1 && bad "--compress-level 10 accepted" || ok "--compress-level out of range is rejected"
+rm -rf CL6 CL1 CL9 CL0
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

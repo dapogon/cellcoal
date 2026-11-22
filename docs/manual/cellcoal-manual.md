@@ -820,6 +820,10 @@ Mean length, in sites, of the lost and gained segments (geometric). Default 1000
 
 Maximum number of copies of a site, the two haplotypes together. Default 4.
 
+**--compress-level N: compression of BAM, BCF and FASTQ.gz: integer \[1-9\]**
+
+zlib level of the BGZF files (BAM, BCF and the FASTQ.gz of the reads mode). The default, 6, writes the same files as the earlier versions. Level 1 is about 40% faster in the reads mode (the compression is more than half of its time) and the files are about 20% larger; the content is the same. Group `--output compress-level`.
+
 **--phase: show the phase**
 
 Separates with `|` the maternal and the paternal copies in the genotypes (section 5.2.9). Group `--output phase`.

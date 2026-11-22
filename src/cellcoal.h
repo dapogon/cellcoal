@@ -392,6 +392,7 @@ extern int					numSegLoss, numSegGain, snvsLostBySegments;
 extern int					copyGainOn, maxCopies;
 void ResetSegments (void);
 void WriteCnvEvents (int replicate);
+extern int					compressLevel;
 extern double				insertMean, insertSd, bulkDepth, dupMean, qualSd, qualSlope, strandBias;
 void				GenerateReadLevel (long int *seed, int dataSetNum);
 void				WriteTruthVcf (int dataSetNum);

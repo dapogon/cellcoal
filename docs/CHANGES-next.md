@@ -5,3 +5,4 @@
 - `tests/fuzz.py` also gives random values to the long options (copy number, qualities, dropout in segments, correlations).
 - `--help`: the table of configuration keys showed `--sweep_keep` and `--no_outgroup`; the options are `--sweep-keep` and `--no-outgroup`.
 - `--check` shows the copy-number settings when losses or gains are on.
+- New option `--compress-level N` (1 to 9, default 6, which gives the same files as before): the zlib level of the BGZF files (BAM, BCF and FASTQ.gz). The compression is more than half of the time of the reads mode; level 1 makes it about 40% faster with files about 20% larger. The content is the same.

@@ -2159,6 +2159,13 @@ separately (groups <code>--mutation loss-length</code>,
 [2-16]</strong></p>
 <p>Maximum number of copies of a site, the two haplotypes together.
 Default 4.</p>
+<p><strong>–compress-level N: compression of BAM, BCF and FASTQ.gz:
+integer [1-9]</strong></p>
+<p>zlib level of the BGZF files (BAM, BCF and the FASTQ.gz of the reads
+mode). The default, 6, writes the same files as the earlier versions.
+Level 1 is about 40% faster in the reads mode (the compression is more
+than half of its time) and the files are about 20% larger; the content
+is the same. Group <code>--output compress-level</code>.</p>
 <p><strong>–phase: show the phase</strong></p>
 <p>Separates with <code>|</code> the maternal and the paternal copies in
 the genotypes (section 5.2.9). Group <code>--output phase</code>.</p>

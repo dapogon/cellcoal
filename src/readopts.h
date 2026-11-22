@@ -24,5 +24,6 @@
 	X(seg_loss_len,   "--seg-loss-len",   '\224', 2, segLossLen, 0)    \
 	X(seg_gain_len,   "--seg-gain-len",   '\225', 2, segGainLen, 0)    \
 	X(seg_max_copies, "--seg-max-copies", '\226', 1, maxCopies,  4)    \
-	X(phase,          "--phase",          '\227', 0, doPhase,    0)
+	X(phase,          "--phase",          '\227', 0, doPhase,    0)    \
+	X(compress_level, "--compress-level", '\230', 1, compressLevel, 6)
 #endif
