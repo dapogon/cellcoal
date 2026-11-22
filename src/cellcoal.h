@@ -131,6 +131,12 @@ void		HKYmodel (double Pij[4][4], double branchLength);
 void		GTRmodel (double Pij[4][4], double branchLength);
 void 	SimulateCopyNumberGenomes (TreeNode *root, long int *seed);
 extern int numPlannedSNV, doPhase;
+void InitTriNucleotides (void);
+void PrepareFiniteDNA (void);
+double FiniteDNAGenerator (double Q[4][4]);
+int ChooseSignatureSiteInRange (long int *seed, int *newState, int genome, int a, int b);
+int ChooseTrinucleotideSite (long int *seed, int *newState, int genome);
+void CountTriNucFrequencies (Geno *genome_array, int genome);
 int MaxExtraCopies (int node, int genome);
 void WriteCnvSegments (int replicate);
 #define MAX_COPIES 16

@@ -1000,9 +1000,14 @@ higher limit, up to 16). A loss of the last copy of a haplotype is a
 deletion; SNVs inside lost segments disappear in the cells that lost
 them (with <code>-j</code> the number of SNVs is the number planned, not
 the number that survive; the log and <code>summary.tsv</code> report how
-many were lost). The model is the infinite sites model (ISM): the
-finite-sites DNA models, signatures, Mk2 and mixed models are not
-available with copy-number events, and an ISM violation is an error.</p>
+many were lost). Every substitution model works with copy-number events:
+the infinite sites models (an ISM violation is an error), genetic
+signatures (the context is that of the root genome, as without
+copy-number events), Mk2, the finite sites DNA models (JC, HKY, GTR,
+GTnR) and the mixtures of default and alternative sites; every copy of a
+segment mutates at the rate and with the model of its site. The finite
+sites models are simulated exactly as a Markov chain (the jumps of the
+chain are events, so they are ordered with the losses and gains).</p>
 <p><strong>Genotypes with several copies.</strong> The text genotypes
 (SNV and full genotypes) list the alleles of all the copies, the
 maternal ones first and then the paternal ones (<code>GGA</code>,
