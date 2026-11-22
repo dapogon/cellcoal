@@ -50,7 +50,7 @@ Unpack it and run `cellcoal` (`cellcoal.exe` on Windows) from the folder that re
     make test          # optional: runs the test suite (several minutes)
     sudo make install  # optional: installs as cellcoal in /usr/local (PREFIX=... to change it)
 
-The program is `bin/cellcoal-x.y.z`; `make install` copies it as `cellcoal`, with `cellcoal-bulk-vaf`, `cellcoal-plots`, the manual and the examples. The Makefile detects OpenMP (multithreading) by itself: `-fopenmp` with gcc and clang on Linux, Homebrew's `libomp` on macOS (`brew install libomp`), and it is always used on Windows; if it is not available the program is built single-threaded with identical results (`make OMPFLAG=` forces that). Do not add `-ffast-math` or `-march=native` to the flags if you need identical results across machines. On **Windows** use MSYS2 (UCRT64): `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, and then `make` (section 6.10j).
+The program is `bin/cellcoal-x.y.z`; `make install` copies it as `cellcoal`, with `cellcoal-bulk-vaf`, `cellcoal-plots`, the manual and the examples. The Makefile detects OpenMP (multithreading) by itself: `-fopenmp` with gcc and clang on Linux, Homebrew's `libomp` on macOS (`brew install libomp`), and it is always used on Windows; if it is not available the program is built single-threaded with identical results (`make OMPFLAG=` forces that). Do not add `-ffast-math` or `-march=native` to the flags if you need identical results across machines. On **Windows** use MSYS2 (UCRT64): `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, and then `make` (section 8.3).
 
 **The plotting tools** (`tools/cellcoal_plots.py`, `tools/bulk_vaf.py`) need Python 3 with `numpy` and `matplotlib` (`pip install numpy matplotlib`). The simulator itself does not need Python.
 
@@ -62,7 +62,7 @@ Create an empty folder to work in and type:
 
     cellcoal -n1 -s6 -l1000 -u1e-6 -e10000 -1 -6 -#1 -oFirst
 
-It simulates one replicate (`-n1`) of a sample of 6 tumour cells (`-s6`), plus a healthy cell used as outgroup, with 1000 sites (`-l1000`), a somatic mutation rate of 10^-6^ per site and generation (`-u1e-6`) and an effective population size of 10000 (`-e10000`). `-1` writes the genotypes of the sites that have mutated, `-6` the genealogy, `-#1` fixes the seed of the random numbers (the same seed and the same options always give the same data) and `-oFirst` is the name of the folder for the results. Options are a letter followed by the value, without a space, and the ones you do not write have the defaults of section 7. The program prints a summary on the screen and writes the folder *First*:
+It simulates one replicate (`-n1`) of a sample of 6 tumour cells (`-s6`), plus a healthy cell used as outgroup, with 1000 sites (`-l1000`), a somatic mutation rate of 10^-6^ per site and generation (`-u1e-6`) and an effective population size of 10000 (`-e10000`). `-1` writes the genotypes of the sites that have mutated, `-6` the genealogy, `-#1` fixes the seed of the random numbers (the same seed and the same options always give the same data) and `-oFirst` is the name of the folder for the results. Options are a letter followed by the value, without a space, and the ones you do not write have the defaults of section 9. The program prints a summary on the screen and writes the folder *First*:
 
 | File | Content |
 |:--|:--|
@@ -90,7 +90,7 @@ The healthy cell does not carry the somatic mutations, so the cells with a genot
 
     cellcoal -n1 -s20 -l5000 -u1e-6 -e10000 -C10 -V5 -E0.001 -P0.2 0.02 -#1 -oReads
 
-`-C10` is the mean sequencing depth, `-V5` the overdispersion of the depth (the coverage of single cells is very uneven), `-E0.001` the sequencing error and `-P0.2 0.02` the mean and variance of the allelic dropout (ADO) rate among cells, which the amplification of one cell's DNA produces. The result is the file `vcf` (a plain-text VCF 4.3; it can be compressed with `-z` or written as BCF with `--bcf`), `ado_cells` (the dropout rate of each cell) and the usual `log` and `run.json`. In the VCF each cell has, at each variable site, the called genotype (`GT`), the depth (`DP`), the read counts of A, C, G and T (`RC`), the log~10~ likelihoods of the genotypes, the true genotype in the sample (`TG`) and more fields that are described in section 6.11. For several replicates use `-n` and, to have one file for each, `-v`. Other outputs are the read counts as a pileup (`-9`) or in CATG format (`-8`), and the true genotypes (`-1`) and haplotypes (`-2`).
+`-C10` is the mean sequencing depth, `-V5` the overdispersion of the depth (the coverage of single cells is very uneven), `-E0.001` the sequencing error and `-P0.2 0.02` the mean and variance of the allelic dropout (ADO) rate among cells, which the amplification of one cell's DNA produces. The result is the file `vcf` (a plain-text VCF 4.3; it can be compressed with `-z` or written as BCF with `--bcf`), `ado_cells` (the dropout rate of each cell) and the usual `log` and `run.json`. In the VCF each cell has, at each variable site, the called genotype (`GT`), the depth (`DP`), the read counts of A, C, G and T (`RC`), the log~10~ likelihoods of the genotypes, the true genotype in the sample (`TG`) and more fields that are described in section 6.12. For several replicates use `-n` and, to have one file for each, `-v`. Other outputs are the read counts as a pileup (`-9`) or in CATG format (`-8`), and the true genotypes (`-1`) and haplotypes (`-2`).
 
 **Genotypes with errors, without read counts.** To study methods that start from genotypes, you can skip the read counts and add allelic dropout (`-D`) and genotyping errors (`-G`, mean and variance of the error rate) directly to the true genotypes:
 
@@ -139,6 +139,18 @@ makes `report.html` with the read depth, the genotypes without read counts, a he
 
 The first writes its results in the folder `results_GTR_reads` (the name is in the file) and the second in `Results`, the default. In a parameter file the seed has to be in the file as well; with `--config`, the options typed after the file replace the ones in it (for example `--config file.yaml -n1`).
 
+**Copy-number losses and gains.** CellCoal can also add losses and gains of segments of the genome to the tree, together with the point mutations (section 5.2.8). With a loss and a gain rate above zero, `--phase` separates the maternal and paternal copies in the genotypes, and `cnv_segments` gives the true number of copies of every cell:
+
+    cellcoal -n1 -s6 -l2000 -u1e-6 -e10000 --seg-loss-rate 1e-6 --seg-gain-rate 1e-6 --seg-len 300 --phase -1 -#5 -oCopies
+
+In this run four of the six cells have lost the paternal copy of the sites 628 to 823 (`cnv_events` lists the event and the cells that carry it; `cnv_segments` has one row per cell and segment, for example `cell0002 628 823 1 0 1`: one maternal copy, no paternal copy, one copy in total), and in `snv_gen` the genotypes of the SNVs inside the lost segment of those cells show only the maternal allele (`G|-`).
+
+**Reads.** To benchmark a caller, the simulation can go one step further and write the paired-end reads of every cell as BAM and FASTQ files (section 5.5):
+
+    cellcoal -n1 -s5 -l20000 -u1e-7 -e10000 -C10 -E0.001 --ado-block 3000 -D0.1 --bam --fastq -#1 -oReadsMode
+
+The folder `ReadsMode/reads_1` has one BAM and one FASTQ pair per cell, the reference `ref.fa` and the file `truth.vcf` with the true genotypes.
+
 ## 3.4 Tutorial: how do coverage and sequencing error change the results?
 
 Simulating one data set tells little: one wants to know how a result changes when a condition changes. `--sweep` runs the program for every combination of the values that you list, with the same seed for all, and puts the metrics of `--summary` in one table. Here, the depth (`-C`) and the sequencing error (`-E`) are varied, with 10 replicates of 20 cells for each of the 8 combinations, 2 combinations at a time:
@@ -164,11 +176,10 @@ You can sweep any option of the simulation (the sequencing error `E`, the dropou
 
 - **Reproducibility.** The same seed (`-#`) and options give identical results in every run and independent of the number of threads (section 4.1). Without `-#`, the seed is taken from the clock and is written in `log` and `run.json`.
 - **Threads.** `OMP_NUM_THREADS=4 cellcoal ...` chooses the number of threads for the read counts and the VCF; by default all the cores are used.
-- **Size.** The VCF is by far the largest file (for example, 770 MB for 2 replicates of 100 cells with 30,000 sites). For many cells or sites use `-z` (compressed), `--bcf`, or write only what you need with `-Z` and `-0`, `-8` or `-9`. Runs with many sites keep the genotypes in a compact (sparse) form and, when the read counts would not fit in memory, they are generated and written site by site (section 5.3).
+- **Size.** The VCF is by far the largest file (for example, 770 MB for 2 replicates of 100 cells with 30,000 sites). For many cells or sites use `-z` (compressed), `--bcf`, or write only what you need with `-Z` and `-0`, `-8` or `-9`. Runs with many sites keep the genotypes in a compact (sparse) form and, when the read counts would not fit in memory, they are generated and written site by site (section 5.4).
 - **The help.** `cellcoal -?` (or `--help`) lists every option with its default value; `cellcoal --version` prints the version.
 - **Check before running.** `cellcoal --check` followed by your options (or alone, to check the `parameters` file) validates them and shows what the run would do: replicates, cells, sites, expected number of mutations and tree depth, outputs, and whether the results folder exists (a run deletes it). Nothing is simulated; invalid options give a non-zero exit code.
 - **Next.** Section 4 describes how options are given; section 5 how the data are simulated; section 6 every option.
-
 
 # 4. Basic usage
 
@@ -206,6 +217,8 @@ The genotype likelihoods of SNV sites can be kept in memory to avoid recalculati
 
 > **Reproducibility.** For a given seed (option -#) and a given set of arguments, the results are identical in every run and *independent of the number of threads*. To achieve this, the read counts of each site are generated from an independent random stream derived from the seed and the site number. As a consequence, **the results obtained with a given seed in version 2.0.0 are different from those obtained with versions 1.x** (the statistical properties are the same). If you need to reproduce an old analysis, use the original version. Note that if no seed is specified the current time is used, and that when the arguments are read from a parameter file (option -F) the seed has to be specified inside that file.
 
+**The run record.** Every run writes `Results/run.json`, a record of how it was run: program version, command line, options (including the seed that was used), number of replicates, cells and sites, number of threads, the `CELLCOAL_*` and `OMP_NUM_THREADS` environment variables that were set, the genome storage (dense or sparse) and read mode (stored or streamed) that were used, compiler, OpenMP, and the elapsed (wall clock) and CPU seconds. Together with the program version it is all that is needed to repeat a run (`--config Results/run.json`, section 6.11.2). The time reported at the end of a run is the elapsed time, followed by the CPU time.
+
 ## 4.2 The three modes and their options
 
 CellCoal produces data in one of three ways, and each option belongs to one or more of them. `--check` says which mode the options give, and an option that the mode does not use is an error (reads mode, or a read-counts option without `-C` and `--bam`) or a note (genotypes mode).
@@ -228,23 +241,35 @@ CellCoal produces data in one of three ways, and each option belongs to one or m
 
 Where two options look alike they do different things: `-M` keeps the sites whose **pooled** VAF (all the cells together) is at least M, whereas `--min-alt-reads` and `--min-alt-vaf` keep the sites where some **cell** has a call supported by enough reads; `-D/-P/-Q` set how much allelic dropout there is and `--ado-block` how it is spread along the genome (in contiguous segments). `-F` (parameter file) and `-U` (diploid genome in FASTA) are older: `--config` reads the options from a JSON or YAML file, and `--fasta` with `--region` and `--germline-vcf` gives a real reference.
 
+## 4.3 Large data sets: sparse genomes and streamed read counts
+
+CellCoal chooses how to store the data according to their size, and the results do not depend on that choice (except where noted).
+
+**Sparse genomes.** When dense genomes would exceed 2048 MB (environment variable `CELLCOAL_DENSE_MB`), the genomes are stored sparsely: only the varying sites keep per-node columns (`CELLCOAL_SPARSE=1` forces and `CELLCOAL_SPARSE=0` disables it). Allelic dropout and genotyping errors are then applied lazily by an observation layer (same distributions, different random stream; the dropout at invariant sites is not counted). 10,000 cells x 1,000,000 sites runs in about 7 s and 360 MB for genotype outputs. Dense genomes use one byte per site. The full-sequence outputs (`-4`, `-5`, `-Y`) stop with an error on data sets above the dense limit unless the read counts are streamed. The copy-number engine (section 5.2.8) keeps the genomes dense.
+
+**Streamed read counts.** When the per-cell, per-site read data would exceed 2048 MB (environment variable `CELLCOAL_STREAM_MB`), read counts and genotype likelihoods are simulated, and the VCF, PILEUP and CATG files written, in blocks of sites with small memory (`CELLCOAL_STREAM=1` forces and `CELLCOAL_STREAM=0` disables it). The results are the same as without streaming for the same seed and any number of threads. Everything that can be requested with read counts is available while streaming: VCF, PILEUP, CATG (`-8`), the bulk file (`-0`), the ML genotypes and haplotypes (`-1`, `-2`, `-3`, `-4`), the ancestors (`-5`) and the true haplotypes (`-Y`). The maximum-likelihood alleles of every site are written block by block to a temporary file (one byte per cell and site) and the files are produced from it row by row, so the memory is that of the streamed read counts and not that of all the genomes (200 cells x 60,000 sites with `-3 -4 -Y`: 106 MB instead of 825 MB; 1,000 cells x 30,000 sites with `-1` and `-8`: 191 MB instead of 1.7 GB). The temporary file has `cells x sites` bytes, about a third of the full genotype file; the files themselves still have `cells x sites` characters per haplotype, so very large genomes produce very large files. The computing time is still proportional to cells x sites and the VCF lists every apparent SNV.
+
+**Cache of genotype likelihoods.** The likelihoods of SNV sites can be kept in memory to avoid recalculating them when printing; the memory of that cache is set, in megabytes, with `CELLCOAL_GL_CACHE_MB` (default 256; 0 disables it). Besides, the log10 genotype likelihoods of a cell and site depend only on its four read counts and on its amplification errors. Each thread keeps a cache of the likelihoods already computed, so cells and sites with the same counts share them. It is exact (the output is bit-identical, also without `--fast`) and helps most at low coverage with a common amplification error (no `-A`, or the same value everywhere): the simulation of the read counts is then about 30% faster. When the amplification error is random in every cell and site (`-A` with variance) there are no repetitions and the cache switches itself off after 4096 lookups. `CELLCOAL_NO_GL_CACHE=1` disables it; the tests use it to check that it does not change the results.
+
+**Speed and memory.** In a test with 300 cells, 3000 sites, genotype likelihoods, ADO, doublets and one replicate, version 1.3.4 needed 17-19 s and about 1 GB, whereas version 2 needs about 4.9 s and 134 MB with one thread and about 3.4 s with two. The improvements include a compact storage of the genotype likelihoods, memoization of logarithms (exact), faster VCF formatting, the allocation of the per-cell, per-site blocks only when an option needs them (runs that print only SNV genotypes use about 66% less memory), and the OpenMP parallelization of the read counts and the VCF (`OMP_NUM_THREADS`). `--fast` (section 6.11.4) is faster still. The CI compares the speed with the latest release (section 8.1).
+
 # 5. CellCoal implementation
 
 The main steps of CellCoal are:
 
 1.  Coalescent simulation of the genealogy of a sample of cells (the user can also specify a tree with branch lengths).
 
-2.  Addition of an outgroup and optionally, modification of the branch lengths.
+2.  Addition of an outgroup (a healthy cell) and, optionally, modification of the branch lengths.
 
-3.  Simulation of a reference and an ancestral genome, with or without germline variation.
+3.  Simulation of a reference and an ancestral genome, with or without germline variation, or reading of a real reference.
 
-4.  Addition of mutations, LOH and deletions along the tree in order to obtain the true genotypes.
+4.  Addition of mutations along the tree in order to obtain the true genotypes: SNVs, point deletions, copy-neutral LOH, and losses and gains of segments (copy-number events).
 
-5.  Addition of technical errors without generating read counts (ADO + genotype errors) OR Addition of technical errors while generating read counts (ADO + amplification error + sequencing error.
+5.  Addition of technical errors without generating read counts (ADO + genotype errors) OR addition of technical errors while generating read counts (ADO + amplification error + sequencing error) OR simulation of the paired-end reads of the amplified cells.
 
-6.  Estimation of genotype likelihoods under various models
+6.  Estimation of genotype likelihoods under various models.
 
-7.  Print genotypes/haplotypes to files.
+7.  Print genotypes/haplotypes, VCF and other files.
 
 8.  Print summary statistics.
 
@@ -282,6 +307,12 @@ In a tumor scenario, the outgroup cell will be naturally a healthy cell (Fig. 4)
 
 Fig. 4. Addition of a healthy cell in a tumor scenario. In this case we expect that the healthy cell has evolved much slower than the tumoral cells, so a small (or zero) outgroup might make more sense. In this example, the corresponding values where -k0.5 -q0.05.
 
+**Tumour only.** With `--no-outgroup` only the tumour cells are reported. The healthy cell is still simulated (it defines the reference, the healthy root genome with all the alleles 0, and the trunk of `-k` is kept, so the truncal mutations are variants in every cell), but it is not in the outputs:
+
+- the outgroup is not in the tree file, the VCF/BCF, CATG, PILEUP or the genotype files, nor in the statistics, and it does not decide whether a site is a variable site;
+- the tree written with `-6` contains the ingroup only, which is the format `-T` expects, so it can be read back without editing;
+- the simulation of the tumour cells is not changed.
+
 ### 5.1.2 Rate variation among lineages
 
 The standard coalescent results in an ultrametric tree, where all the tips are at the same distance from the most recent common ancestor (MRCA) of the sample. These branches can be modified by introducing rate variation among linages/branches, here using multipliers sampled from a Gamma distribution (see Fig. 5). This approach was introduced by Yang (for an easy review see Yang 1996) to add substitution rate variation among different nucleotide sites in a DNA sequence. Biologically this is interesting if we want to simulate for example a situation under which some lineages evolve at different rates.
@@ -294,19 +325,25 @@ Fig. 5. Rate variation among branches. Rate variation among lineages can be a pr
 
 Alternatively to the gamma rate variation, a few *rate switches* can be introduced in the genealogy (option -N). Each switch chooses one branch of the ingroup tree at random, with probability proportional to its length (the root branch is excluded, and the same branch is never chosen twice), and multiplies by a given factor the length of that branch *and* of all the branches descending from it. Because mutations accumulate along branches, a factor larger than 1 produces a clade with an accelerated mutation rate (for example, a mutator lineage), and a factor smaller than 1 a clade that evolves more slowly. If a switch falls inside the subtree of another switch, their factors are multiplied. With the noisy option -y2 or higher, the node chosen by each switch, its factor and the cells in the affected clade are printed on screen for each replicate (for example, `node 17 *0.20 ( 1 5 9 7 )`); the log file records the number of switches and their factors. For example, `-N2 4 0.2` introduces two switches, one that makes a clade evolve four times faster and another that makes a clade evolve five times slower. This option cannot be combined with rate variation among lineages (-i). See section 6.2.
 
-## 5.2 Genotype evolution models
+## 5.2 Somatic mutation models
 
-CellCoal simulates the evolution of cell genotypes along the genealogy by adding somatic mutations (single-nucleotide variants -SNVs-, copy-neutral loss of heterozygosity events -cnLOH-, and point deletions), starting from an ancestral genome at the *sample/outgroup MRCA*. CellCoal considers two possible **alphabets (0/1 or DNA; option -b)** and several single-nucleotide mutation models (infinite and finite sites models, including trinucleotide mutational signatures), which can be mixed along the genome.
+CellCoal simulates the evolution of the genotypes along the genealogy by adding somatic events to an ancestral genome at the *sample/outgroup MRCA*. There are five kinds of events, which differ in what they do to the genome of a cell:
 
-> The default SNV model is a diploid infinite site model (ISM).
+| Event | Option | Effect on the genotype of a site |
+|---|---|---|
+| **SNV** (single-nucleotide variant) | `-u` (rate) or `-j` (fixed number) | the allele of one copy of one haplotype changes |
+| **Point deletion** | `-d` | one haplotype loses the site (`-`) |
+| **Copy-neutral LOH** (cnLOH) | `-H` | one haplotype takes the allele of the other (A/G becomes A/A or G/G) |
+| **Segment loss** | `--seg-loss-rate` | a random copy of a haplotype is lost over a segment of sites |
+| **Segment gain** | `--seg-gain-rate` | a random copy of a haplotype is duplicated over a segment of sites |
 
-> Note that CellCoal does not simulate structural variants. Copy-number alterations are limited to point deletions (`-d`), cnLOH (`-H`) and losses of segments (`--seg-loss-rate`, `--seg-len`, see below).
+The first three are the original events of CellCoal; copy-number losses and gains (section 5.2.8) are one more type of mutation, and they are simulated together with all the others, in the order in which they happen on the branches. CellCoal considers two possible **alphabets (0/1 or DNA; option -b)** and several single-nucleotide mutation models (infinite and finite sites models, including trinucleotide mutational signatures), which can be mixed along the genome. All of them work with all the kinds of events.
 
-**Losses and gains of segments (`--seg-loss-rate`, `--seg-gain-rate`, `--seg-len`, `--seg-loss-len`, `--seg-gain-len`, `--seg-max-copies`; group `--mutation loss-rate=...,gain-rate=...,segment-length=...,loss-length=...,gain-length=...,max-copies=...`).** With either rate above zero, CellCoal simulates SNVs, point deletions, cnLOH, segment losses and segment gains **together, branch by branch, in a random order**: on every branch the events of all kinds are interleaved by chance, and the order matters (an SNV before a gain is in both copies, an SNV after it in one only; an SNV in a segment that is lost later is lost). Every haplotype is a set of copies (lineages) whose phase is known: a gain copies the alleles of a random copy at that moment, and each copy then accumulates its own SNVs (the SNV rate applies to every copy). Losses and gains fall on a random copy of the haplotype, start at a uniform site and cover a geometric number of sites (mean `--seg-len`, default 1000, or `--seg-loss-len` and `--seg-gain-len`), clipped at the end of the genome. A site has at most `--seg-max-copies` copies in the two haplotypes together (default 4; the code allows a higher limit, up to 16). A loss of the last copy of a haplotype is a deletion; SNVs inside lost segments disappear in the cells that lost them (with `-j` the number of SNVs is the number planned, not the number that survive; the log and `summary.tsv` report how many were lost). Every substitution model works with copy-number events: the infinite sites models (an ISM violation is an error), genetic signatures (the context is that of the root genome, as without copy-number events), Mk2, the finite sites DNA models (JC, HKY, GTR, GTnR) and the mixtures of default and alternative sites; every copy of a segment mutates at the rate and with the model of its site. The finite sites models are simulated exactly as a Markov chain (the jumps of the chain are events, so they are ordered with the losses and gains).
+> The default SNV model is a diploid infinite site model (ISM), with no deletions, cnLOH or copy-number events.
 
-**Genotypes with several copies.** The text genotypes (SNV and full genotypes) list the alleles of all the copies, the maternal ones first and then the paternal ones (`GGA`, `AGT-`; a deleted haplotype is `-`). With **`--phase`** (group `--output phase`) the maternal and the paternal copies are separated by `|`, so the phase is explicit: `GG|A` is two maternal copies with G and one paternal with A; `AGT|-` is three maternal copies and the paternal lost. In the VCF, `TG` lists the alleles of all the copies (`A|G|G`) and the extra format field `CN` gives the number of copies of each haplotype (`2|1`). In read counts and reads, the reads of a haplotype are shared among its copies, so a site with copies A,A,G has allele fractions 2/3 and 1/3 for that haplotype. The true haplotype files (`-Y`, `-2`, `-4`) have one row for every copy (`cell0001m`, `cell0001m2`, `cell0001p`, ...; `-` where the cell has fewer copies). The file `cnv_events` lists every loss and gain with its haplotype, segment and the cells that carry it, and **`cnv_segments`** gives the true number of copies of every cell by segments of sites with the same copies (`cell start end maternal_copies paternal_copies total_copies`), the truth for evaluating a copy-number caller. The observed genotypes (maximum likelihood, `NG`) stay diploid: like a diploid caller on real data, they ignore the extra copies.
+> CellCoal does not simulate other structural variants (inversions, translocations, insertions): the copy-number alterations are the point deletions (`-d`), cnLOH (`-H`) and the losses and gains of segments (`--seg-loss-rate`, `--seg-gain-rate`).
 
-The log and the summary (`segment_losses`, `snv_lost_segments` and `segment_gains` columns, only when the option is used) report the number of events and the variable sites lost. The file `cnv_events` (`cnv_events_dir/` with `-v`) is the truth for the benchmarking of copy-number callers: one row per event, in the order in which they were applied, with the type, the haplotype, the start and end of the segment (1-based, inclusive) and the cells that carry it.
+**Two ways of adding the events.** When no loss or gain of segments is requested, SNVs, cnLOH and point deletions are added one kind after another, as in the earlier versions of CellCoal. When the loss or the gain rate is above zero, all the kinds of events are planned together and applied branch by branch in random order (section 5.2.8), because the order matters when the copy number changes.
 
 ### 5.2.1 Generation of reference and ancestral genomes
 
@@ -315,6 +352,8 @@ The first step to generate the cell genotypes is the generation of a **reference
 The **ancestral genome** at the sample/outgroup MRCA of the genealogy will be simulated by introducing **germline variation (option -c)** (single nucleotide polymorphisms or SNPs) into the reference genome at a rate specified by the user. Logically, if this rate is 0, the reference and the ancestral genomes will be identical. Once the ancestral genome is in place, mutations are introduced according to the specified mutation model.
 
 > The reference genome can be simulated according to the trinucleotide frequencies in the human genome (version GRCh37); germline SNPS can be added afterwards.
+
+A real reference can also be given: `-U` reads a diploid genome of up to 10^6^ sites from a FASTA file, and `--fasta` (with `--region`) simulates a chromosome of any length in blocks (section 5.3); `--germline-vcf` puts the germline SNVs of a real genome into the healthy cell.
 
 ### 5.2.2 Infinite-site SNV models
 
@@ -334,35 +373,81 @@ Importantly, for computational efficiency, in the current implementation we assu
 
 > IMPORTANT: In order to get the expected counts under each signature, one should always simulate long genomes, otherwise rare trinucleotide will not be available and, depending on the signature, could significantly bias the observed counts. For the same reason, the number of mutations should be small relative to the number of available sites of the most frequent contexts: under the infinite-sites model a site cannot mutate twice, so when the contexts favored by a signature (for example, CpG sites in signature 1) are exhausted, the observed proportions drift away from the signature.
 
-### 5.2.4 Infinite-site copy-neutral LOH
+**Signature profiles from a file.** `-S` uses the 30 COSMIC v2 signatures built into the program (they have exactly the values of `data/signatures/COSMIC_v2_SBS_GRCh37.txt`; signature 1 has 67.5% C>T in the profile, and in a simulation the share depends on how many CpG contexts the sequence has: a human sequence has few, e.g. about 59% in 200 kb of hg38). With `--signature-file FILE` the profiles come from a table in COSMIC format instead: a header line (`Type`, name of signature 1, 2, ...) and 96 lines `A[C>A]A v1 v2 ...` (the reference base is the pyrimidine; the columns are normalized to sum 1). The signature numbers of `-S` are then the columns of the file. The folder `data/signatures/` has `COSMIC_v3.6_SBS1_SBS5_GRCh37.txt` (SBS1 and SBS5 of COSMIC v3.6) and `PTA_artifact_SCAN2.txt` (the SNV artifact signature of PTA of SCAN2, Luquette *et al.* 2022; 68% C>T). Example, 40% SBS1 and 60% SBS5: `-S2 1 0.4 2 0.6 --signature-file data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt`. With a real reference as root (`-U`), SBS1 alone gives 98.7% C>T, 94% of them in CpG.
 
-**Copy-neutral loss of heterozygosity (cnLOH) (option -H**) events (e.g., A/G -\> A/A, or A/G -\> G/G) can be added assuming a haploid ISM, which means that cnLOH cannot happen in the same site twice unless they occur in a different maternal/paternal genome. As for SNVs, the number of cnLOH events will be distributed as a *Poisson* according to the total cnLOH tree length (which in this case is a function of the cnLOH rate and time). The specific sites where the cnLOH events occur are selected uniformly along the genome. The particular branches of the cell genealogy where cnLOH events are located are selected according to their (cnLOH) lengths.
-
-### 5.2.5 Infinite-site single-nucleotide deletions
-
-**Single-nucleotide deletions (option -d)** (e.g., N/N -\> –/N, or N/N -\> N/–) can be added also assuming a haploid ISM. As for SNVs, the number of point deletions will be distributed as a *Poisson* according to the total deletion tree length (which in this case is a function of the deletion rate and time). The specific sites where the deletions occur are selected uniformly along the genome. The particular branches of the cell genealogy where deletions are located are selected according to their (deletion) lengths.
-
-### 5.2.6 Finite-site SNV models
+### 5.2.4 Finite-site SNV models
 
 CellCoal also implements several **finite-sites mutation models (option -m)** (FSM) for SNVs. In this case, multiple mutations can happen along a branch. Typically, these models assume a continuous Markov process and are very typical in phylogenetics, where they are often referred as substitution models (<https://en.wikipedia.org/wiki/Models_of_DNA_evolution>).
 
 For 0/1 data, the model implemented is known as Cavender-Farris-Neyman or Mk2 model (see Lewis 2001), and is equivalent to a Jukes-Cantor (1969) model for two alleles. For DNA data, reversible (assume that the rate X-\>Y is the same as Y-\>X) and non-reversible models can be built by specifying the **nucleotide frequencies (option -f)** (at equilibrium; they are not expected to change along the genealogy), a **transition/transversion rate ratio (option -t)** or a full 4x4 **instantaneous mutation rate matrix (option -r)**, plus **rate variation among sites** **(option -a)** (using a Gamma distribution; see Yang 1996). One can define in this way popular models like Jukes-Cantor (1969), Hasegawa-Kishino-Yano (1985) or General-Time-Reversible (Tavaré 1986). It is also possible to specify non-reversible models (i.e., asymmetrical rates among nucleotides).
 
-### 5.2.7 Mixed ISM-FSM
+### 5.2.5 Mixed ISM-FSM
 
 Both ISM and FSM for SNVs can be incorporated by setting up a **proportion of sites expected to evolve under each type of model (option –p).** Each site is then assigned to the alternative model (option -m) with probability p, and to the default diploid ISM with probability 1-p. Also, a **relative mutation rate (option –w)** can be specified for the sites evolving under the alternative model
 
-## 5.3 Single-cell genomics
+### 5.2.6 Single-nucleotide deletions
 
-CellCoal can simulate the technical artifacts resulting from single-cell genomics, like allelic dropout (ADO), allelic imbalance, sequencing error, amplification error, plus doublet cells. For this, CellCoal implements two different strategies:
+**Single-nucleotide deletions (option -d)** (e.g., N/N -\> –/N, or N/N -\> N/–) can be added also assuming a haploid ISM. As for SNVs, the number of point deletions will be distributed as a *Poisson* according to the total deletion tree length (which in this case is a function of the deletion rate and time). The specific sites where the deletions occur are selected uniformly along the genome. The particular branches of the cell genealogy where deletions are located are selected according to their (deletion) lengths.
 
-**What is simulated.** In the read-counts mode CellCoal does not simulate individual reads (no sequences, base qualities, FASTQ or BAM files; those are the reads mode, 8.28). It simulates *read counts*: for each cell and site, how many reads support each of the four nucleotides, and the genotype likelihoods that follow from those counts. When this manual says "reads" it means those counts (the depth of a site is the total number of reads in it, and an "error read" is one of the counted reads that carries a wrong base).
+### 5.2.7 Copy-neutral LOH
+
+**Copy-neutral loss of heterozygosity (cnLOH) (option -H**) events (e.g., A/G -\> A/A, or A/G -\> G/G) can be added assuming a haploid ISM, which means that cnLOH cannot happen in the same site twice unless they occur in a different maternal/paternal genome. As for SNVs, the number of cnLOH events will be distributed as a *Poisson* according to the total cnLOH tree length (which in this case is a function of the cnLOH rate and time). The specific sites where the cnLOH events occur are selected uniformly along the genome. The particular branches of the cell genealogy where cnLOH events are located are selected according to their (cnLOH) lengths.
+
+### 5.2.8 Copy-number losses and gains of segments
+
+A **loss** removes one copy of a haplotype over a segment of sites, and a **gain** adds one extra copy. They are controlled by a rate per haplotype and generation, like the other mutations (`--seg-loss-rate`, `--seg-gain-rate`; group `--mutation loss-rate=...,gain-rate=...`), by the mean length of the segments (`--seg-len`, default 1000 sites; `--seg-loss-len` and `--seg-gain-len` set it separately for losses and gains) and by the maximum number of copies of a site (`--seg-max-copies`, default 4 in the two haplotypes together; the code allows up to 16). A segment starts at a uniform site, has a geometric length and is clipped at the end of the genome.
+
+**Haplotypes are sets of copies.** Every haplotype (maternal and paternal) is a set of copies, and the phase of every copy is known. A cell starts with one copy of each haplotype. A loss falls on a random copy of the haplotype; if it was the last copy, the haplotype is deleted over the segment (a point deletion is the loss of one site). A gain copies the alleles that a random copy has at that moment, so the new copy is identical to the copy it came from, and the two copies then accumulate their own mutations.
+
+**Everything is interleaved, in a random order.** The events of every kind (SNVs, point deletions, cnLOH, losses and gains) are planned for every branch of the tree and applied in the order in which they happen along the branch, so the order matters and the result is what the process would have made in a cell:
+
+- an SNV before a gain is in both copies, an SNV after it in one only;
+- an SNV inside a segment that is lost later is lost: the cells that carry the loss do not have it (with `-j` the number of SNVs is the number planned, not the number that survive; the log and `summary.tsv` report how many were lost, in `segment_losses`, `snv_lost_segments` and `segment_gains`, which appear only when the option is used);
+- the SNV rate applies to every copy, so a segment with three copies receives three times the SNVs of a segment with one.
+
+**Every substitution model works with copy-number events.** The infinite sites models (diploid and haploid ISM; a violation of the model is an error, as without copy-number events), the genetic signatures (the context is that of the root genome, as without copy-number events; a new copy draws its sites from the signature again), Mk2, the finite sites DNA models (JC, HKY, GTR and the non-reversible GTnR), the mixtures of default and alternative sites (`-p`, `-w`, section 5.2.5) and the gamma rate variation among sites (`-a`). Every copy of a segment mutates at the rate and with the model of its site. The finite sites models are simulated exactly as a Markov chain: the jumps of the chain are events, so they are ordered with the losses and gains.
+
+**Limits.** The program keeps the genomes of this engine dense (there is no sparse storage when copy-number events are on), and its memory and time grow with the number of copies. The observed genotypes (maximum likelihood, `NG`) stay diploid (section 5.2.9). Complex structural variants are not simulated.
+
+### 5.2.9 Genotypes with several copies, phase and the true copy number
+
+The text genotypes (SNV and full genotypes) list the alleles of all the copies, the maternal ones first and then the paternal ones (`GGA`, `AGT-`; a deleted haplotype is `-`). With **`--phase`** (group `--output phase`) the maternal and the paternal copies are separated by `|`, so the phase is explicit: `GG|A` is two maternal copies with G and one paternal with A; `AGT|-` is three maternal copies and the paternal lost.
+
+| Output | What it shows with copy-number events |
+|---|---|
+| SNV and full genotypes (`-1`, `-3`), haplotypes (`-2`, `-4`, `-Y`, `-5`) | the alleles of all the copies; the haplotype files have one row for every copy (`cell0001m`, `cell0001m2`, `cell0001p`, ...; `-` where the cell has fewer copies) |
+| VCF | `TG` lists the alleles of all the copies (`A|G|G`) and the extra FORMAT field `CN` gives the number of copies of each haplotype (`2|1`) |
+| Read counts and reads | the reads of a haplotype are shared among its copies: a site with copies A,A,G has allele fractions 2/3 and 1/3 for that haplotype |
+| `cnv_events` (`cnv_events_dir/` with `-v`) | one row per loss or gain, in the order in which they were applied: type, haplotype, start and end of the segment (1-based, inclusive) and the cells that carry it |
+| `cnv_segments` | the true number of copies of every cell by segments of sites with the same copies: `cell start end maternal_copies paternal_copies total_copies` |
+
+`cnv_events` and `cnv_segments` are the truth for evaluating a copy-number caller. The observed genotypes (maximum likelihood, `NG`) stay diploid: like a diploid caller on real data, they ignore the extra copies.
+
+## 5.3 A long chromosome in blocks, and real references
+
+`--blocks B` simulates a chromosome of B blocks of `-l` sites on **one** coalescent tree (made in the first block and reused in the others). With no recombination the sites are independent given the tree, so the blocks add up to a long chromosome without holding it in memory. The output is that of one data set: one VCF with the positions of the chromosome (CHROM `--contig`, default `chr1`; ID `snv<position>`), `summary.tsv` with one row per block and a TOTAL row (counts added, rates averaged, precision/recall/singleton recall weighted), `coverage.tsv` in chromosome coordinates, and `blocks_info.txt`. `-n` is ignored. `--ado-block` and `--gain-sd` continue from one block to the next (`--ado-origin` is set by the program; give `--ado-seed` to fix the processes). Copy-number events work inside each block.
+
+`--fasta FILE` (plain or `.gz`, several lines per sequence, upper or lower case) uses a real reference: with `--region chrom:start-end` (1-based, inclusive) the region, otherwise the first sequence; `-l` is the size of the blocks and `--blocks B` limits their number. Sites that are not A, C, G or T are left out (not simulated, not in the VCF, not in the invariant counts); the positions of the VCF are the real ones. The reference base is the REF of the VCF.
+
+`--germline-vcf FILE` gives the germline SNVs of the healthy genome (SNVs only; GT 0|1, 1|0, 1|1, 0/1, 1/1; unphased heterozygous genotypes are phased at random; it cannot be used with `-c`). Those sites carry the flag `GERMLINE` instead of `SOMATIC` in the VCF.
+
+**Blocks and reads.** `--blocks` or `--fasta` together with `--bam`/`--fastq` simulates the reads of a whole chromosome: the reads of each block are written, in the coordinates of the chromosome, to one BAM (+BAI) and one FASTQ pair per cell (`reads_1/cellNNNN.*`), so a block is processed and released before the next one and the memory is that of one block. The BAM header and `ref.fa` have the length of the chromosome (`chrom:start-end` regions keep the real coordinates; what lies before the region, after the last block and the masked sites are `N`), and `truth.vcf` has the real CHROM and POS, REF = the reference base and the flag GERMLINE at the germline sites. No read spans the boundary between blocks nor a masked site, and the coverage, the amplification error and the gain of a cell are the same in all the blocks (the per-cell parameters are drawn in the first block).
+
+`tools/chrom.py` is a wrapper of these options that writes the files of earlier versions (`chrom.vcf`, `chrom_summary.tsv`, `chrom_coverage.tsv` and one BED per cell) and uses `--min-alt-reads 2 --min-alt-vaf 0.3` by default. Not combined with `--bam`/`--fastq` or `-U`.
+
+## 5.4 Single-cell genomics
+
+CellCoal can simulate the technical artifacts resulting from single-cell genomics, like allelic dropout (ADO), allelic imbalance, sequencing error, amplification error, plus doublet cells. For this, CellCoal implements three different strategies (section 4.2):
+
+**What is simulated.** In the read-counts mode CellCoal does not simulate individual reads (no sequences, base qualities, FASTQ or BAM files; those are the reads mode, section 5.5). It simulates *read counts*: for each cell and site, how many reads support each of the four nucleotides, and the genotype likelihoods that follow from those counts. When this manual says "reads" it means those counts (the depth of a site is the total number of reads in it, and an "error read" is one of the counted reads that carries a wrong base).
 
 1.  **No read counts are generated**; instead ADO and genotyping errors are directly imposed on the evolved genotypes at the tip of the genealogy.
 
 2.  **Read counts are simulated** at a variable depth along the genome, including allelic imbalance, ADO, amplification and sequencing errors. Then, genotype calling is performed under different maximum likelihood models for single-cells.
 
-### 5.3.1 Fixed or variable allelic dropout (ADO)
+3.  **Reads are simulated** (`--bam`, `--fastq`): paired-end reads of the amplified genome of every cell, with PCR duplicates, base qualities and strand bias (section 5.5).
+
+### 5.4.1 Fixed or variable allelic dropout (ADO)
 
 During the amplification of single-cells, one or both alleles at a single site can be lost, so a truly heterozygous genotype might appear as a homozygote (e.g., 0/1 =\> 0/\_ or 0/1 =\> \_/1). CellCoal can remove alleles from single chromosomes at a **fixed ADO rate per genotype (option -D)**. Alternatively, ADO rates per genotype can be specified to vary **across cells (option -P)** and/or **across sites (option -Q)** according to a *Beta-binomial* distribution. The ADO rate of each cell and the ADO rate of each site are sampled once and reused for all the genotypes of that cell or site (this was not done correctly before version 2.0.0). In this case, the total ADO rate is the combination of both:
 
@@ -374,15 +459,23 @@ During the amplification of single-cells, one or both alleles at a single site c
 
 Fig. 6. Examples of probability densities for three different *Beta* distributions.
 
-### 5.3.2 Genotyping error
+The ADO rate of every cell (`-P`) is written to the file `ado_cells` (`ado_cells_dir/ado_cells.NNNN` with `-v`): one section `[#replicate]` per replicate with the columns `cell` and `ado_rate`, including the outgroup (healthy) cell. It is the rate of the cell itself; the dropout probability of a genotype also combines it with the rate of its site (`-Q`).
+
+**Dropout in contiguous segments (`--ado-block`).** By default ADO is drawn independently at every site. In real data whole segments of one allele are lost (a region of a chromosome that was not amplified). With `--ado-block L` every allele of every cell is a two-state chain along the genome, *present* or *lost*, with segments of exponential length: lost segments of mean length L sites and present segments of mean length L(1-a)/a, where a = 1 - sqrt(1-D) is the ADO rate of an allele. The fraction of the genome lost is therefore the same as without `--ado-block`, but the lost sites are contiguous. A cell can lose one allele and keep the other, so at a heterozygous site the genotype looks homozygous over a whole segment. The ADO rate of the cells can still vary (`-P`); ADO among sites (`-Q`) cannot be combined with `--ado-block`. To simulate a long chromosome in pieces (`tools/chrom.py`), `--ado-origin O` gives the position of the first site of the piece on the chromosome and `--ado-seed S` the seed of the segments (and of the ADO rate of the cells): the segments are generated from the start of the chromosome with a seed that depends only on S, the cell and the allele, so consecutive pieces see one continuous process. The likelihood models of the genotype caller still assume the mean ADO rate (`-D`). Sparse and dense genomes give the same data.
+
+### 5.4.2 Genotyping error
 
 **Genotype errors (option -G)** can be directly introduced in the observed genotypes at a given rate per genotype, which is sampled from a *Beta-binomial* distribution (therefore, if desired, it can change across cells and sites). For DNA data, nucleotides are substituted by a different one according to a user-defined error matrix (option -X); the rows of the matrix are normalized, so the substituted nucleotide is drawn with probabilities proportional to the entries of its row (with the default matrix each of the three other nucleotides has probability 1/3; before version 2.0.0 the first non-zero entry was always chosen). These errors encapsulate into a single class different types of error than can take place along the single-cell genomics pipeline, like amplification, sequencing and calling errors.
 
-### 5.3.3 Sequencing coverage
+### 5.4.3 Sequencing coverage
 
 For each individual genotype the program will generate read counts at a certain sequencing coverage or depth. For a given site the number of reads will follow a *Poisson* distribution around the **mean coverage (option -C)**, unless **coverage dispersion (option -V)** is specified, in which case the coverage per site will follow a *Negative Binomial* distribution. Reads will randomly assigned to the maternal or paternal genome, according to a given **allelic imbalance (option -I)** whose *Beta-binomial* mean by default is 0.5 (i.e., the same probability for maternal or paternal read). If the genotype is haploid due to ADO, the expected **haploid coverage reduction (option -R)**, which is 0.5 by default, can also be specified.
 
-### 5.3.4 Amplification error
+**Variation of the depth among sites and cells (`-O`, `-J`).** Some sites are covered more than others in all the cells (mappability, capture or amplification bias) and some cells are sequenced deeper than others (library size, amplification efficiency). `-O` multiplies the depth expected at every site by a gamma variate shared by all the cells and `-J` multiplies the depth of every cell, at all its sites, by a gamma variate; both have mean 1, so `-C` stays the mean.
+
+**Amplification gain along the genome (`--gain-sd`, `--gain-len`).** Single-cell whole-genome amplification (MDA, PTA...) does not cover the genome evenly: the depth of a cell changes smoothly over regions of kilobases to megabases, and the two haplotypes are amplified differently. With the default model the depth of every site is drawn independently, so there is no such structure. With `--gain-sd S --gain-len L` every haplotype of every cell has a *gain*: a lognormal multiplier with mean 1 and log-standard deviation S that is constant over segments of exponential length (mean L sites) and independent between segments. The mean read depth of each allele is multiplied by its gain, so one mechanism produces autocorrelated coverage (the total depth is the sum of the two haplotypes), allelic imbalance that changes along the genome (the haplotypes have different gains) and, together with `-D` / `--ado-block`, dropout where the gain is low. `--ado-block` is the all-or-nothing version of the same idea; the gain is the continuous one, and both can be used together. The process starts at chromosome position 0 and is generated from a seed that depends only on `--ado-seed`, the cell and the haplotype, so that the pieces of a chromosome simulated with `--ado-origin` (as `tools/chrom.py` does) see one continuous process. Example: `-C30 --gain-sd 0.6 --gain-len 40000` gives windows of 5 kb with a correlation between neighbours of 0.86 and the same mean depth (30); without it the correlation is 0. Larger S and L mimic MDA, smaller values PTA; these parameters have to be taken from real data (for example from the per-cell coverage profile that `--coverage` writes). Needs read counts (`-C`).
+
+### 5.4.4 Amplification error
 
 In order to obtain enough DNA material from single-cells for sequencing library construction, the genomes of single cells are most often amplified. During this amplification step, the DNA polymerase can introduce nucleotide errors that can appear in a high proportion of the resulting templates for that site if occurring during the first amplification cycles. If many templates contain an error, many reads will be also be wrong for the specific site. The **amplification error (option -A)** for a given maternal/paternal site follows a *Beta-binomial* distribution with mean and variance specified by the user. The probability of the different types of errors (e.g., A=\>C, A=\>G, A=\>T ,etc.) can be indicated using an **4x4 error matrix (option – X)**. CellCoal considers two different amplification error models:
 
@@ -398,15 +491,39 @@ Fig. 7. Four-template model for amplification ($\gamma$) and sequencing ($\varep
 
 Fig. 8. Two-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
 
-### 5.3.5 Sequencing error
+**Amplification error that varies among cells (`--amp-cell-var`).** With `-A MEAN VAR MODEL` the fraction of wrong templates of every cell, site and haplotype comes from the same beta distribution in all the cells. In real data some cells amplify much worse than others. `--amp-cell-var V` (or `amplification_error_cell_variance: V` in a configuration file) first draws, for every cell and replicate, its own mean amplification error from a beta distribution with mean `MEAN` (from `-A`) and variance `V`; then the fraction of wrong templates of every site and haplotype of that cell is drawn from a beta distribution with that mean and a variance that keeps the concentration of `-A`, that is `VAR * m_i (1 - m_i) / (MEAN (1 - MEAN))` for a cell with mean `m_i`. It needs `-A`, and `V` has to be smaller than `MEAN (1 - MEAN)`. The mean of every cell is written to `cell_params` (new column `amplification_error`). The per-cell means are drawn from the main random stream after the other per-cell parameters, so the rest of the simulation (genealogy, mutations, coverage and ADO of the cells) is the same with and without the option; stored and streamed read counts give the same files. Without the option the output is identical to the previous version.
+
+Example, with the mean amplification error of the cells spread roughly between 0.01 and 0.1 and the ADO rate of the cells roughly between 0.2 and 0.5:
+
+```
+cellcoal -n10 -s100 -l100000 -u5.3e-7 -m2 -p1 -q0 -P0.35 0.0075 -C10 -E0.01 -A0.055 0.003 0 --amp-cell-var 0.0007 -9 -5 -Y
+```
+
+**Trinucleotide profile of the errors (`--amp-signature`).** The amplification error (`-A`) is by default the same at every site and its substitutions follow the error matrix (`-X`). With `--amp-signature FILE`, `FILE` is a table in COSMIC format (the first column is used; see `--signature-file`) with the 96-context profile of the errors, for example `data/signatures/PTA_artifact_SCAN2.txt`, the PTA artifact signature of SCAN2 (Luquette *et al.* 2022; 68% C>T). Then:
+
+- the mean amplification error of a site depends on its trinucleotide context (taken from the healthy root genome): the rate of the context is the mass of the profile in that context divided by the frequency of the context in the sequence, so that the mean over the sequence is still the `-A` value;
+- the variance keeps the concentration of `-A`, and the substitution of an error is drawn with the probabilities of the three substitutions of that context in the profile (a purine base uses the reverse complement context);
+- the genotype likelihoods use the same context-specific substitutions.
+
+Needs read counts (`-C`) and `-A`; the first and last sites of the genome have no context and use the matrix `-X`. In a simulation with the PTA profile the spectrum of the errors reproduces the 96-context signature (correlation 1.0 with 10 cells at 30X, `-A0.02 0.0002 0`). Without `--amp-signature` the data are unchanged.
+
+### 5.4.5 Sequencing error
 
 Once the genomes have been amplified, during sequencing, additional errors can add to the reads. **Sequencing error (option -E)** is assumed to be constant across sites and cells. The probability of the different types of errors (e.g., A=\>C, A=\>G, A=\>T, etc.) uses the same 4x4 error matrix **(option – X)** as the amplification error.
 
-### 5.3.6 Cell doublets
+### 5.4.6 Cell doublets
 
 Sometimes, due to errors during the cell isolation process, a single sequencing library can contain DNA templates from two cells, and therefore reads which are assume to come from a single cell come in fact from two different cells. This is called a *doublet*. CellCoal can consider the effect of cell doublets by producing the read counts of two of the sampled cells and adding them as if they originated from a single cell, given a user-specified **doublet rate per cell (option -B)**.
 
-### 5.3.7 Genotype likelihoods
+### 5.4.7 Correlations among the parameters of the cells
+
+In real data the cells that amplify badly often have both low coverage and high allelic dropout. `--cov-ado-corr RHO` (or `cov_ado_correlation: RHO` in a configuration file), with RHO between -1 and 1, correlates the coverage multiplier of the cells (`-J`) with their ADO rate (`-P`); both options are required. RHO < 0 means that cells with more dropout have less coverage (the usual case), RHO > 0 the opposite, and 0 (the default) no relation.
+
+It works as a Gaussian copula on the ranks: the coverage multipliers that `-J` has drawn are reassigned to the cells so that their ranks follow `RHO z + sqrt(1-RHO^2) e`, where `z` are the normal scores of the ranks of the ADO rates and `e` is standard normal noise. Only the assignment changes, so the ADO rates (see `ado_cells`) and the distribution of the coverage multipliers are exactly those requested without the option, and the rank (Spearman) correlation of the two is close to RHO. The observed depth is noisier than the multiplier, so the correlation measured in the data is somewhat smaller. Without the option the output is bit-identical to previous versions.
+
+Doublets can be correlated with the other per-cell parameters too. `--cov-doublet-corr RHO` correlates (-1 to 1) the coverage multiplier of a cell (`-J`) with the cell being a doublet (`-B`); `--ado-doublet-corr RHO` does the same with the ADO rate (`-P`). They can be combined with `--cov-ado-corr`; the three correlations must form a valid correlation matrix (otherwise the program stops with a parameter error). The cells are ranked with a Gaussian copula: each cell gets a latent score that is a mixture of the standardized latent coverage and ADO values and independent noise, and the cells with the highest scores become the doublets, so the number of doublets is the same as without the correlation. The correlation is between latent variables; the observed correlation between a 0/1 doublet indicator and a continuous variable is smaller (about 0.75 times the latent value with 30% of doublets). The coverage, ADO rate and doublet status of every cell are written to `cell_params` (columns `cell`, `coverage_multiplier`, `ado_rate`, `doublet`, `donor`) whenever a correlation is used. Without the new options the output is identical to the previous version. Stored and streamed read counts give the same files.
+
+### 5.4.8 Genotype likelihoods
 
 CellCoal can simulate genotype likelihoods for single-cell NGS data, given the read counts simulated, and the sequencing and amplification errors specified by the user, plus ADO, under three different models: GATK standard, 4-template and 2-template models. The basic model used to calculate the genotype likelihoods is similar to that implemented in GATK (DePristo et al. 2011; see also Korneliussen et al. 2013):
 
@@ -433,7 +550,7 @@ where $\delta$ is the probability of ADO at a given site.
 Importantly, CellCoal can calculate the genotype likelihoods, with or without ADO, under three different models: GATK-like, 4-template and 2-template models, which only differ in how the probability of a particular read given the true allele, *p(b\|A)*, is calculated, as explained in the next three subsections.\
 \
 
-#### 5.3.7.1 GATK-like model
+#### 5.4.8.1 GATK-like model
 
 It assumes the same sequencing error rate ($\epsilon$) for all bases and sites, and no amplification error. In this case, the probability of a particular read given the true allele, *p(b\|A)*, is:
 
@@ -449,7 +566,7 @@ $\varepsilon$ = probability of sequencing error per site
 
 \
 
-#### 5.3.7.2 Four-template amplification error model
+#### 5.4.8.2 Four-template amplification error model
 
 This model extends the previous one in order to consider the amplification error, which, together with the sequencing error, can be different for distinct bases **(option – X**) and that is sampled for each site from a *Beta-binomial* distribution with mean and variance specified by the user **(option -A)**. It allows for multiple amplification errors at a single site, and therefore that all four templates are possible (the correct one and the other three; see Fig. 6 above). In this case, *p(b\|A)* is:
 
@@ -484,7 +601,7 @@ $$ p\left( b \middle| A \right) = \left\{ \begin{matrix} \left( 1 - \gamma \righ
 
 \
 
-#### 5.3.7.3 Two-template amplification error model
+#### 5.4.8.3 Two-template amplification error model
 
 This model is very similar to the previous one, but it assumes that only a single amplification error can occur at a single site, and that therefore only two templates (the “correct” one and a wrong one) are possible (see Fig. 7 above). In this case *p(b\|A)* is:
 
@@ -509,7 +626,43 @@ $\varepsilon_{i \rightarrow j}$ = probability of sequencing error from template 
 $e_{i \rightarrow j}$ = relative probability of amplification/sequencing error from base *i* to base *j*\
 \
 
+## 5.5 Reads of single-cell genomes (BAM and FASTQ)
+
+With `--bam` and/or `--fastq` (and `-C`, diploid DNA) CellCoal does not simulate read counts but paired-end reads of the amplified genome of every cell, for benchmarking any single-cell caller (SCAN2, PTATO, SCcaller, Monovar...). Output in `<results>/reads_<n>/`: `cellNNNN.bam` (+ `.bai`, sorted, one read group per cell), `cellNNNN.R1.fastq.gz` and `.R2.fastq.gz`, `ref.fa` and `ref.fa.fai` (the healthy root genome, contig `--contig`, default `chr1`) and, with `--bulk-depth D`, `normal.bam`/FASTQ of the healthy genome (no amplification).
+
+Model. For every cell and haplotype, molecules (fragments of length N(`--insert-mean`, `--insert-sd`)) start along the genome with a density set by `-C` and `-J`, the gain (`--gain-sd`/`--gain-len`: a multiplier per haplotype and segment, which is the amplicon structure) and the allelic dropout (`-D`, `--ado-block`: fragments that fall in a lost segment are not produced). Errors of the amplification (`-A`, `--amp-signature`) are events at sites with a fraction of the molecules carrying the wrong base; the molecule carries them and **copies them to its PCR duplicates** (`--dup-mean M`: extra copies per molecule, geometric; default 0.3, about 23% duplicates). Sequencing errors (`-E`) are independent in each read. Reads are 150 bp (`--read-len`), flags 99/147/83/163, duplicates marked 1024, tags `RG`, `HP` (haplotype 1/2) and `MI` (molecule).
+
+Truth: `reads_<n>/truth.vcf` has the true genotype of every cell (before dropout and genotyping errors; GT maternal|paternal, INFO `NC` cells carrying the allele, `GERMLINE` for sites where the healthy genome differs from `ref.fa` or is heterozygous). `tools/benchmark.py eval truth.vcf caller.vcf` gives cell-level and site-level precision/recall of any caller's VCF (and singleton recall); `tools/benchmark.py pileup reads_1` is a naive pileup baseline with and without the PCR duplicates.
+
+Limits of this first version: no indels, no doublets, one contig, the quality is constant (Phred from `-E`). `tools/bamcheck.py ref.fa x.bam` is a dependency-free BAM checker.
+
+By default every base of the reads has the same quality, Q = -10 log10(E). **`--qual-sd S`** and **`--qual-slope B`** make it variable: the probability of a sequencing error of a base is `E * w * m`, where `w` rises along the read (log-slope `B` between the first and the last cycle; positive = worse towards the end, as in Illumina) and `m` is a lognormal multiplier of every base (log-sd `S`); both have mean 1, so `-E` stays the mean error. The quality written to the BAM and the FASTQ is the quality of that probability (Q = -10 log10 p, between 2 and 41), so it is calibrated: the observed error rate of the bases with Q 20-23 is about 0.007. The cycle of the second read of a pair runs from its own 5' end. Quality-aware callers can then be tested; `benchmark.py pileup --min-bq Q` ignores the bases below Q. Default 0 and 0 (constant quality): the data are identical to before.
+
+**`--strand-bias P`** makes a fraction P of the errors of the amplification strand specific: the molecule that carries the error shows it only in the reads of one strand (the left read of the pair is the forward strand, the right read the reverse strand). In real data many artifacts (damage, copy errors of one strand) have this signature and callers filter them with the alternative reads on each strand. `benchmark.py pileup --both-strands` adds the baseline that requires alternative reads on both strands: with `--strand-bias 0.8` (20 cells, 8X) the false positives of the baseline fall from 1229 (duplicates out) to 407 and its recall from 0.74 to 0.58. Default 0.
+
+In reads mode allelic dropout has to be given in segments (`--ado-block`); with `-D` alone (independent at every site) almost no fragment of 300 bp survives, and CellCoal now says so instead of writing empty BAM files.
+
+## 5.6 Which sites are called: `--min-alt-reads` and `--min-alt-vaf`
+
+A site is written to the VCF when some cell has a non-reference maximum-likelihood genotype. With many cells this is almost always true, because a small genotype error per cell adds up (100 cells, 10X, error 0.001, ADO 0.25: about 85,000 of 200,000 sites). `--min-alt-reads M` asks for at least M reads of the alternative allele in a cell that is called non-reference. It does not count cells, so singletons (a mutation in one cell only) are kept.
+
+Example (100 cells, 100 kb, 10X, ADO 0.25, error 0.001, `-u2.4e-8`, one replicate, 68 singleton sites):
+
+| M | sites in the VCF | precision | recall | singleton recall |
+|---|---|---|---|---|
+| 1 | 42,638 | 0.008 | 0.985 | 0.93 |
+| 2 | 460 | 0.71 | 0.96 | 0.82 |
+| 3 | 318 | 1.00 | 0.94 | 0.72 |
+| 4 | 303 | 1.00 | 0.89 | 0.57 |
+| 5 | 282 | 1.00 | 0.83 | 0.38 |
+
+Almost all the false sites left with M=2 have exactly 2 alternative reads and a low fraction of the reads of the cell (VAF below 0.3), while true singletons are mostly heterozygous (VAF near 0.5). `--min-alt-vaf F` adds that condition: with `--min-alt-reads 2 --min-alt-vaf 0.3` the precision of the example above is 0.97, keeping 98% of the true sites (93% of the singletons) that M=2 keeps. A VAF threshold assumes balanced amplification; with strong allelic imbalance true singletons can be lost, and the singleton recall of the summary shows it.
+
+The summary table has `singleton_sites` and `singleton_recall`, so that the loss of singletons can be checked for any setting.
+
 # 6. Arguments
+
+The options are grouped as in `cellcoal --help`. Every option has a single-letter or long name (`-C10`, `--bam`) and can also be given inside a group (`--depth mean=10`, `--reads bam`) or as a key of a configuration file (section 6.11.2); the three forms give identical results. Parameter files (`-F`) use the letters.
 
 ## 6.1 Coalescent arguments
 
@@ -587,6 +740,10 @@ Amount of rate variation among lineages, specified with the alpha shape paramete
 
 Number of rate switches along the genealogy, an integer between 1 and the number of ingroup cells, followed by one rate multiplier per switch (each a double \> 0). Each switch chooses a branch at random, with probability proportional to its length (no branch is chosen twice), and multiplies the length of that branch and of all the branches descending from it by its multiplier (see section 5.1.3). For example, `N2 4 0.2` makes two switches, one with multiplier 4 and another with multiplier 0.2. With the noisy option -y2 or higher, the chosen nodes, their multipliers and the cells in each affected clade are printed on screen for each replicate; the log file records the number of switches and their multipliers. This option cannot be used together with rate variation among lineages (option -i).
 
+**--no-outgroup: tumour only**
+
+Leaves the healthy outgroup cell out of the outputs (section 5.1.1). Group `--tree no-outgroup`.
+
 ## 6.3 Mutation models
 
     [MUTATION MODEL]
@@ -631,6 +788,26 @@ Deletion rate per site per generation under a haploid ISM.
 
 Copy-neutral LOH rate per site per generation under a haploid ISM.
 
+**--seg-loss-rate RATE: segment loss rate: double \[0-inf)**
+
+Rate per haplotype and generation of losses of a segment of one copy (section 5.2.8). Group `--mutation loss-rate`. Default 0.
+
+**--seg-gain-rate RATE: segment gain rate: double \[0-inf)**
+
+Rate per haplotype and generation of gains (an extra copy of a random copy of the haplotype over a segment). Group `--mutation gain-rate`. Default 0.
+
+**--seg-len L: mean segment length: double \[1-inf)**
+
+Mean length, in sites, of the lost and gained segments (geometric). Default 1000. `--seg-loss-len` and `--seg-gain-len` set the mean for losses and for gains separately (groups `--mutation loss-length`, `gain-length`).
+
+**--seg-max-copies N: maximum number of copies: integer \[2-16\]**
+
+Maximum number of copies of a site, the two haplotypes together. Default 4.
+
+**--phase: show the phase**
+
+Separates with `|` the maternal and the paternal copies in the genotypes (section 5.2.9). Group `--output phase`.
+
 **j#: fixed number of mutations: integer \[0-inf)**
 
 Number of ISM mutations to be added along the genealogy.
@@ -644,6 +821,10 @@ S1 5 1.0 implies that mutations will come from signature 5 only.
 S2 11 0.3 22 0.7 implies that mutations will come from two signatures: from signature 11 with probability 0.3, and from signature 22 with probability 0.7.
 
 > Note that to get the expected counts under each signature it is important to simulate long genomes, otherwise rare trinucleotide will not be available and, depending on the signature, could bias the observed counts.
+
+**--signature-file FILE: signature profiles from a file**
+
+Table in COSMIC format with the 96-context profiles used by `-S` instead of the 30 built-in signatures (section 5.2.3). Group `--mutation signature-file`.
 
 **m#: alternative mutation model: integer \[0-2\]**
 
@@ -723,6 +904,22 @@ Expected *Beta-binomial* probability (*mean*) of introducing an amplification er
 
 Probability of a doublet per cell, which follows a *Beta-binomial* distribution with *mean* and *variance* specified by the user. Doublets are simulated at the level of the read counts, so this option only has an effect when read counts are simulated (option -C).
 
+**--ado-block L: dropout in segments: double \[1-inf)**
+
+Allelic dropout in contiguous segments of mean length L sites instead of independently at every site (section 5.4.1). Needed in reads mode. `--ado-origin O` and `--ado-seed S` make the segments continuous across the pieces of a chromosome. Group `--ado block,origin,seed`.
+
+**--amp-cell-var V: amplification error among cells: double (0-inf)**
+
+Variance of the mean amplification error among cells (section 5.4.4); needs `-A`, and V has to be smaller than MEAN (1 - MEAN). Group `--amplification cell-var`.
+
+**--amp-signature FILE: trinucleotide profile of the amplification errors**
+
+COSMIC-format profile of the errors (section 5.4.4); needs `-A` and read counts. Group `--amplification signature`.
+
+**--gain-sd S, --gain-len L: amplification gain along the genome**
+
+Log-standard deviation and mean segment length of the lognormal gain of every haplotype and cell (section 5.4.3); needs read counts. Group `--amplification gain-sd,gain-len`.
+
 ## 6.5 Genotyping parameters
 
     [GENOTYPING PARAMETERS]
@@ -780,7 +977,49 @@ Probability of introducing a (constant) sequencing error per read site. For DNA 
 
 This 4×4 matrix specifies the relative error rates among the different nucleotides due to sequencing or amplification errors (the matrix is the same for both types of errors), in order ACGT for rows and columns. It does not need to be symmetrical, but all diagonals should be zero.
 
-## 6.7 Output options
+**--cov-ado-corr RHO, --cov-doublet-corr RHO, --ado-doublet-corr RHO: correlations among the parameters of the cells: double \[-1,1\]**
+
+Correlate the coverage multiplier of the cells (`-J`), their ADO rate (`-P`) and their being a doublet (`-B`) (section 5.4.7). The three correlations must form a valid correlation matrix. Group `--cell-corr ado-depth,depth-doublet,ado-doublet`.
+
+**--min-alt-reads M, --min-alt-vaf F: sites written to the VCF**
+
+A site is written only if some cell has a non-reference call with at least M reads of the alternative allele and at least a fraction F of the reads of that cell (section 5.6). Group `--call-filter reads,vaf`.
+
+**--coverage W: coverage per window**
+
+Writes `coverage.tsv`, the mean depth of every cell over the non-variable sites in windows of W sites. Group `--depth window`.
+
+**--fast: faster read counts**
+
+See section 6.11.4.
+
+## 6.7 Read simulator parameters
+
+These options need read counts (`-C`) and diploid DNA, and are described in section 5.5. Group `--reads`.
+
+| Option | Group key | Meaning (default) |
+|---|---|---|
+| `--bam`, `--fastq` | `bam`, `fastq` | write BAM (+ index) and/or FASTQ files of the amplified cells |
+| `--read-len N` | `length` | read length (150) |
+| `--insert-mean M`, `--insert-sd S` | `insert` | insert size, mean and standard deviation (400, 60) |
+| `--dup-mean M` | `duplicates` | mean extra PCR copies of a molecule (0.3) |
+| `--contig NAME` | `contig` | name of the contig (`chr1`) |
+| `--qual-sd S`, `--qual-slope B` | `qual-sd`, `qual-slope` | variation of the base quality among bases and along the read (0, 0: constant) |
+| `--strand-bias P` | `strand-bias` | fraction of the amplification errors seen on one strand only (0) |
+| `--bulk-depth D` | `bulk-depth` | also simulate a healthy bulk sample (`normal.bam`) at depth D |
+
+## 6.8 Chromosome parameters
+
+Group `--chromosome` (section 5.3).
+
+| Option | Group key | Meaning |
+|---|---|---|
+| `--blocks B` | `blocks` | simulate a chromosome of B blocks of `-l` sites on one tree |
+| `--fasta FILE` | `fasta` | real reference in FASTA (plain or `.gz`) |
+| `--region chrom:start-end` | `region` | region of the FASTA (1-based, inclusive) |
+| `--germline-vcf FILE` | `germline-vcf` | germline SNVs of the healthy genome (SNVs only, not with `-c`) |
+
+## 6.9 Output options
 
 All the output files produced by the program are printed inside folder called by default *Results*, located at the same level as the executable. CellCoal always writes a log file; a vcf file is also written when read counts are simulated (option -C).
 
@@ -851,7 +1090,7 @@ Prints the read counts in *PILEUP* format (see <http://samtools.sourceforge.net/
 
 **0: print pooled (bulk) read counts**
 
-Prints, for every site, the read counts pooled over the tumour cells, the bulk VAF and the true VAF to a file called *bulk* inside the *Results* folder (subfolder *bulk_dir* with -v). It requires simulating read counts (option -C); see section 8.9.
+Prints, for every site, the read counts pooled over the tumour cells, the bulk VAF and the true VAF to a file called *bulk* inside the *Results* folder (subfolder *bulk_dir* with -v). It requires simulating read counts (option -C); see section 7.2.
 
 **Z: do not print the VCF**
 
@@ -886,6 +1125,18 @@ Prints maternal and paternal sequence as a single consensus sequence with IUPAC 
   \_/A =\> a    \_/C =\> c   \_/G =\> g   \_/T =\> t   */* =\> -    \_/- =\> -
   -/A =\> a     -/C =\> c    -/G =\> g    -/T =\> t    -/\_ =\> -   -/- =\> -
 
+**--bcf: write the likelihoods as BCF**
+
+`--bcf` (or `bcf: true` in a configuration file) writes the genotype likelihoods as a BCF file instead of a VCF file: `Results/vcf.bcf` (`vcf_dir/vcf.NNNN.bcf` with `-v`). With several replicates it needs `-v`, because a BCF file cannot hold several data sets; it cannot be combined with `-z` or `-Z`. The file is BCF 2.2 in a BGZF container, as written by bcftools, with the same fields as the VCF (a field with the same name has the same values; floats are stored as 32-bit floats). It can be read with `bcftools view`, `bcftools query`, htslib, pysam, etc.; the program also writes the CSI index (`vcf.bcf.csi`, section 8.2), so region queries (`bcftools view -r 1:1000-2000 vcf.bcf`) work at once.
+
+**--phase: show the phase**
+
+With copy-number events, separates the maternal and the paternal copies of the genotypes with `|` (section 5.2.9). Group `--output phase`.
+
+**--summary: one row of metrics per replicate**
+
+Writes `summary.tsv` (section 7.1). Group `--output summary`.
+
 **o\$: results folder name**
 
 Name of the folder where the output data files will be stored, at the same level as the program executable. By default, this folder is called *Results*.
@@ -911,7 +1162,7 @@ Name of the file with a diploid reference genome in FASTA format, with a maximum
     >paternal genome
     AAAAAAACCTGAAACCTTCAGAAGCTGTTTCAGTAGGTAAAGAAAAAGG…
 
-## 6.8 Other options
+## 6.10 Other options
 
     [OTHER]
     [tumor labels] [W]
@@ -940,13 +1191,15 @@ Amount of information to be printed to the screen:
 
 Seed for the random number generator. If no seed is specified, the current time will be used as seed.
 
-## 6.9 Parameter file name at the command line
+## 6.11 Running options: parameter files, configuration files, --check, --fast and --sweep
+
+### 6.11.1 Parameter file
 
 By default, the parameter file is called *parameters*. Alternatively, the user can indicate the name of the parameter file name at the command line with the **option -F**, like this:
 
 `bin/cellcoal-x.y.z -Fexamples/parameters.ISM.binary`
 
-## 6.10 Configuration files (--config)
+### 6.11.2 Configuration files (--config)
 
 A run can be described in a JSON or YAML file instead of a long list of options:
 
@@ -968,37 +1221,11 @@ Errors in the file are reported with the line and column and the text of the lin
        |   ^
 ```
 
-## 6.10a ADO rate of each cell
+### 6.11.3 --check
 
-With `-P` (allelic dropout varying among cells) the ADO rate of every cell is drawn from a beta distribution. These rates are written to the file `ado_cells` (`ado_cells_dir/ado_cells.NNNN` with `-v`): one section `[#replicate]` per replicate with the columns `cell` and `ado_rate`, including the outgroup (healthy) cell. This is the rate of the cell itself; the dropout probability of a genotype also combines it with the rate of its site (`-Q`).
+`cellcoal --check` followed by your options (or alone, to check the `parameters` file) validates them and shows what the run would do: the mode (genotypes, read counts or reads), replicates, cells, sites, the expected number of mutations and tree depth, the outputs, and whether the read counts will be streamed. It simulates nothing. An option that the mode does not use is reported (section 4.2).
 
-## 6.10c Correlation between coverage and dropout (--cov-ado-corr)
-
-In real data the cells that amplify badly often have both low coverage and high allelic dropout. `--cov-ado-corr RHO` (or `cov_ado_correlation: RHO` in a configuration file), with RHO between -1 and 1, correlates the coverage multiplier of the cells (`-J`) with their ADO rate (`-P`); both options are required. RHO < 0 means that cells with more dropout have less coverage (the usual case), RHO > 0 the opposite, and 0 (the default) no relation.
-
-It works as a Gaussian copula on the ranks: the coverage multipliers that `-J` has drawn are reassigned to the cells so that their ranks follow `RHO z + sqrt(1-RHO^2) e`, where `z` are the normal scores of the ranks of the ADO rates and `e` is standard normal noise. Only the assignment changes, so the ADO rates (see `ado_cells`) and the distribution of the coverage multipliers are exactly those requested without the option, and the rank (Spearman) correlation of the two is close to RHO. The observed depth is noisier than the multiplier, so the correlation measured in the data is somewhat smaller. Without the option the output is bit-identical to previous versions.
-
-## 6.10c2 Amplification error that varies among cells (--amp-cell-var)
-
-With `-A MEAN VAR MODEL` the fraction of wrong templates of every cell, site and haplotype comes from the same beta distribution in all the cells. In real data some cells amplify much worse than others. `--amp-cell-var V` (or `amplification_error_cell_variance: V` in a configuration file) first draws, for every cell and replicate, its own mean amplification error from a beta distribution with mean `MEAN` (from `-A`) and variance `V`; then the fraction of wrong templates of every site and haplotype of that cell is drawn from a beta distribution with that mean and a variance that keeps the concentration of `-A`, that is `VAR * m_i (1 - m_i) / (MEAN (1 - MEAN))` for a cell with mean `m_i`. It needs `-A`, and `V` has to be smaller than `MEAN (1 - MEAN)`. The mean of every cell is written to `cell_params` (new column `amplification_error`). The per-cell means are drawn from the main random stream after the other per-cell parameters, so the rest of the simulation (genealogy, mutations, coverage and ADO of the cells) is the same with and without the option; stored and streamed read counts give the same files. Without the option the output is identical to the previous version.
-
-Example, with the mean amplification error of the cells spread roughly between 0.01 and 0.1 and the ADO rate of the cells roughly between 0.2 and 0.5:
-
-```
-cellcoal -n10 -s100 -l100000 -u5.3e-7 -m2 -p1 -q0 -P0.35 0.0075 -C10 -E0.01 -A0.055 0.003 0 --amp-cell-var 0.0007 -9 -5 -Y
-```
-
-## 6.10d BCF output (--bcf)
-
-`--bcf` (or `bcf: true` in a configuration file) writes the genotype likelihoods as a BCF file instead of a VCF file: `Results/vcf.bcf` (`vcf_dir/vcf.NNNN.bcf` with `-v`). With several replicates it needs `-v`, because a BCF file cannot hold several data sets; it cannot be combined with `-z` or `-Z`. The file is BCF 2.2 in a BGZF container, as written by bcftools, with the same fields as the VCF (a field with the same name has the same values; floats are stored as 32-bit floats). It can be read with `bcftools view`, `bcftools query`, htslib, pysam, etc.; the program also writes the CSI index (`vcf.bcf.csi`, section 6.10g), so region queries (`bcftools view -r 1:1000-2000 vcf.bcf`) work at once.
-
-The VCF is written first as text and converted when the file is closed, so the memory use is the same as without `--bcf`. If zlib was available when the program was compiled (the Makefile checks it) the blocks are compressed and the file has about the size of `vcf.gz` (about 4-5 times smaller than the VCF); without zlib they are stored without compression. `tests/bcf_check.py` decodes a BCF independently of the program and compares every record with the VCF; the CI also checks the files with bcftools.
-
-## 6.10e Cache of genotype likelihoods
-
-The log10 genotype likelihoods of a cell and site depend only on its four read counts and on its amplification errors. Each thread keeps a cache of the likelihoods already computed, so cells and sites with the same counts share them. It is exact (the output is bit-identical, also without `--fast`) and helps most at low coverage with a common amplification error (no `-A`, or the same value everywhere): the simulation of the read counts is then about 30% faster. When the amplification error is random in every cell and site (`-A` with variance) there are no repetitions and the cache switches itself off after 4096 lookups. `CELLCOAL_NO_GL_CACHE=1` disables it; the tests use it to check that it does not change the results.
-
-## 6.10b Fast mode (--fast)
+### 6.11.4 Fast mode (--fast)
 
 `--fast` (or `fast: true` in a configuration file) makes the simulation of the read counts about 25-30% faster. It changes only how the read data are sampled, never the tree, the mutations or the true genotypes:
 
@@ -1010,7 +1237,11 @@ The distributions are the same as in the default mode, but the random numbers ar
 
 `tests/fast_stats.py` checks that the distributions agree: it runs the same seeds with and without `--fast` in three scenarios (plain, with doublets and coverage dispersion, with high coverage) and compares depth, read counts of each nucleotide, error reads and genotype likelihoods with Kolmogorov-Smirnov and z tests. The same test detects a 2% change in the mean coverage, and checks directly that cells and sites with the same read counts in both modes have the same genotype likelihoods (without amplification error, whose per-site value is random).
 
-## 6.11 The VCF file
+### 6.11.5 --sweep
+
+`--sweep "KEY=V1,V2,... KEY2=..."` runs the program for every combination of the values and collects the metrics of `--summary` in a table, with `--sweep-keep`, `--sweep-jobs N` and `--sweep-resume` (section 7.1).
+
+## 6.12 The VCF file
 
 In the read-counts mode CellCoal simulates the number of reads of each nucleotide in each cell and site (read counts). The fields of the VCF (`DP`, `RC`, `PL`/`GL`) are computed from those counts.
 
@@ -1031,208 +1262,19 @@ A genotype likelihood that is exactly zero (log10 = -inf; this happens, for inst
   `DG`            Genotype in the NGS library for the second cell if there is a doublet
   `TG`            True genotype (considers deletions; ignores ADO and doublets)
 
-# 7. Default settings
+With copy-number events the field `TG` lists the alleles of all the copies (`A|G|G`) and an extra field `CN` gives the number of copies of each haplotype (`2|1`); the observed genotypes (`GT`, `ML`, `NG`) stay diploid (section 5.2.9). With `--blocks` or `--fasta` the VCF has the positions of the chromosome (CHROM `--contig`, ID `snv<position>`), and the sites of the germline VCF carry the flag `GERMLINE` instead of `SOMATIC`.
 
-By default, CellCoal will simulate 50 replicates of samples with 20 ingroup cells plus one outgroup cell, obtained from an exponentially growing population (SH91 model) with a growth rate of 1e-03 and a current effective population size of 10000. The root and outgroup branch length ratios will be 0.5, and 1, respectively. Each cell will harbor 1000 genomic sites evolving with a mutation rate of 1e-07 under a DNA ISM diploid model. By default, there will be no ADO, amplification or sequencing error, and the sequencing depth will be 5X. No read counts are simulated by default, so the only output is the log file (“*log*”), written to the results folder (“*Results*”); the other output files have to be requested with the output options (-1 to -9, -Y, -x) and the VCF file (“*vcf*”) is written when read counts are simulated (option -C). To run the program with settings equivalent to the defaults we could just type:
+# 7. Summaries, sweeps and plots
 
-`bin/cellcoal-x.y.z -n50 -s20 -l1000 -e10000 -g0.001 -k0.5 -q1 -b1 -u1.0e-07 -m0 -p0.0 -D0.0 -oResults -y1`
-
-# 8. What's new in version 2.0
-
-Version 2.0.0 fixes several bugs, is considerably faster and uses much less memory, and generates read counts in parallel. **The results for a given seed are different from those of versions 1.x** (see section 4.1).
-
-## 8.1 Bug fixes that change the simulated data
-
--   **Genotyping error (-G).** The rows of the error matrix were not normalized, so with the default matrix the first non-zero entry was always chosen as the erroneous nucleotide. Now the nucleotide is drawn with the intended probabilities.
--   **Allelic dropout (-P, -Q).** The variation of the ADO rate among cells and among sites is now simulated correctly: one rate per cell and one rate per site, reused for all genotypes.
--   **VCF PL/PLN.** They are now −10 × log10 of the likelihood, as defined in the VCF specification (non-negative; 0 for the most likely genotype in `PLN`). Before they were 10 × log10, i.e. negative.
--   **VCF likelihoods.** Genotype likelihoods that are exactly zero (`-inf`) are printed as `.` in `G10`, `G10N`, `GL`, `GLN`, `PL` and `PLN`.
-
-## 8.2 Robustness
-
--   Memory errors and leaks fixed (reading of user genomes and trees, mutational signatures); the program runs clean under AddressSanitizer and UBSan.
--   Options with a missing argument are reported instead of reading beyond the command line; buffer sizes, `realloc` and `calloc` are checked.
--   The program compiles without warnings.
-
-## 8.3 Speed and memory
-
-In a test with 300 cells, 3000 sites, genotype likelihoods, ADO, doublets and one replicate, version 1.3.4 needed 17-19 s and about 1 GB of memory, whereas version 2.0.0 needs about 4.9 s and 134 MB with one thread, and about 3.4 s with two threads. The improvements include a compact storage of genotype likelihoods, a memory-limited cache of likelihoods (`CELLCOAL_GL_CACHE_MB`), memoization of logarithms (exact), faster VCF formatting, and OpenMP parallelization of read-count generation and VCF printing (`OMP_NUM_THREADS`).
-
-## 8.4 Version 2.0.1
-
-The per-cell, per-site data blocks are now allocated only when an option needs them (read counts, haplotypes, full genotypes, ancestors). Runs that print only SNV genotypes use about 66% less peak memory (for example, 695 MB to 236 MB with 500 cells and 20,000 sites) and are slightly faster, with identical output. Memory that was not freed at exit (user tree names, genetic signature tables) is now released.
-
-## 8.5 Version 2.0.2
-
-Fixed the germline variation option (`-c`): the germline SNPs were added only to the root genome and were not inherited by the cells. They are now passed down to all the cells and the healthy cell. Simulations with `-c` \> 0 change; the rest is identical.
-
-## 8.6 Version 2.0.3
-
-Performance release with output identical to 2.0.2: allele counting traverses the genomes cell by cell and genomes are stored with one byte per site, which divides the memory used by the genomes by four (for example, 1000 cells and 50,000 sites, genotypes only: 775 MB to 203 MB, and 1.5 s to 0.6 s).
-
-## 8.7 Version 2.1.0: sparse genomes
-
-Scaling release. When dense genomes would exceed 2048 MB (environment variable `CELLCOAL_DENSE_MB`), genomes are stored sparsely (only varying sites keep per-node columns); `CELLCOAL_SPARSE=1` forces and `CELLCOAL_SPARSE=0` disables this. Allelic dropout and genotyping errors are then applied lazily by an observation layer (same distributions, different random stream; ADO at invariant sites is not counted). 10,000 cells x 1,000,000 sites runs in about 7 s and 360 MB for genotype outputs. Read counts, VCF, CATG and PILEUP are not yet supported in sparse mode, and full-sequence outputs (-4, -5, -Y) stop with an error on data sets above the dense limit. Dense output is identical to 2.0.3.
-
-## 6.10f Streamed read counts with the full genotype and haplotype files
-
-The large-memory outputs can now also be used with streamed read counts (section 8.8): the full ML genotypes (`-3`) and haplotypes (`-4`), the ancestors (`-5`) and the true haplotypes (`-Y`). The maximum-likelihood alleles of every site are written block by block to a temporary file (one byte per cell and site) and the files are produced from it row by row, so the memory use is that of the streamed read counts and not that of all the genomes (200 cells x 60,000 sites with `-3 -4 -Y`: 106 MB instead of 825 MB). `-5` and `-Y` read the genomes, which sparse storage keeps compactly. The files are identical to those of the stored mode for the same seed and any number of threads (`tests/run_tests.sh`, section 2g13). The temporary file has `cells x sites` bytes, which is about a third of the full genotype file; the files themselves still have `cells x sites` characters per haplotype, so very large genomes produce very large files.
-
-## 6.10g Index of the BCF file
-
-With `--bcf` the program writes `vcf.bcf.csi` (`vcf_dir/vcf.NNNN.bcf.csi` with `-v`) next to every BCF file: a CSI index (minimum shift 14, as `bcftools index -c` makes, with more levels if the contig is longer than 512 Mb). The records of CellCoal are one base long, so every record is in a bin of the lowest level and each bin is a run of consecutive records; each bin has one chunk, its loffset is its first record, and each contig has the usual pseudo-bin with the offsets of its first and last records and the number of records (what `bcftools index -n` and `-s` report). `tests/bcf_check.py` decodes the index independently and checks that every record is inside a chunk of its bin, the loffsets, the order of the chunks and the statistics; the CI also queries a region with bcftools and compares it with the VCF. Delete or rebuild the index with `bcftools index -f` if you modify the BCF.
-
-## 6.10h Tests: sanitizers, fuzzing, compilers and theory
-
-Beyond the regression suite (`make test`), the CI checks the program in several other ways, all of which can be run locally.
-
-- **Compilers and OpenMP.** The suite also runs with clang and with gcc and clang without OpenMP (`make CC=clang`, `make OMPFLAG=`); the results must be identical.
-- **Sanitizers.** A build with AddressSanitizer and UndefinedBehaviorSanitizer runs the whole suite: `make CFLAGS="-Wall -O1 -g -ffp-contract=off -fsanitize=address,undefined -fopenmp -DUSE_COLORS" LDFLAGS="-fsanitize=address,undefined"`, then `ASAN_OPTIONS=detect_leaks=0 make test`.
-- **Fuzzing.** `python3 tests/fuzz.py bin/cellcoal-x.y.z --runs 400 --seed 1` gives the program random, often invalid, options and values, and randomly damaged YAML and JSON configuration files. An invalid input must be rejected with a message; a crash, a hang or a sanitizer report is a failure and the offending command or file is printed. It found a 2-byte heap overflow in the BCF writer (present in 2.2.0 and 2.2.1), a hang with an enormous gamma shape (for example `-a1e308`) and two integer overflows with absurd values; all are fixed in 2.2.2.
-- **Coverage.** The CI builds with `--coverage`, runs the suite and writes the line coverage of every source file (`tools/gcov_summary.py`) in the summary of the job.
-- **Speed.** `python3 tests/bench.py REFERENCE_BIN NEW_BIN` runs three fixed workloads (trees and mutations, read counts with VCF, read counts with doublets and coverage variation) with one thread and compares the time with a reference binary (the CI builds the latest release on the same runner); it fails if any workload is more than 25% slower. Comparing two builds on the same machine avoids the noise of absolute timings.
-- **Theory.** `python3 tests/theory.py bin/cellcoal-x.y.z` (a few seconds, also part of `make test`) checks that the model is right, not only stable: (1) in a constant population the waiting time with k lineages is exponential with mean 2N/(k(k-1)) and the total tree length has mean 2N times the sum of 1/i; (2) with exponential growth the time to the coalescence of two cells agrees with the numerical integral of its distribution; (3) under the diploid infinite-sites model the number of mutations is Theta times the sum of 1/i (Theta = 4 N mu L) and the site frequency spectrum of the true genotypes is Theta/i; (4) the depth of the reads has the expected mean and variance (each chromosome has a negative binomial depth with mean C/2 and dispersion V, so the variance of a cell is C + C^2/2V), the fraction of error reads is the sequencing error (estimated at low rates with a zero-truncated likelihood, because the bulk file lists only sites with alternate reads), and a genotype loses an allele with probability D and both with probability (1 - sqrt(1 - D))^2. Seeds are fixed, so the result is reproducible; each statistic is a z-score that must be below 4, which detects a change of a few percent in the rates.
-
-## 6.10i Per-cell correlations with doublets, `--summary` and `--sweep`
-
-**Doublets and the other per-cell parameters.** `--cov-doublet-corr RHO` correlates (-1 to 1) the coverage multiplier of a cell (`-J`) with the cell being a doublet (`-B`); `--ado-doublet-corr RHO` does the same with the ADO rate (`-P`). They can be combined with `--cov-ado-corr`; the three correlations must form a valid correlation matrix (otherwise the program stops with a parameter error). The cells are ranked with a Gaussian copula: each cell gets a latent score that is a mixture of the standardized latent coverage and ADO values and independent noise, and the cells with the highest scores become the doublets, so the number of doublets is the same as without the correlation. The correlation is between latent variables; the observed correlation between a 0/1 doublet indicator and a continuous variable is smaller (about 0.75 times the latent value with 30% of doublets). The coverage, ADO rate and doublet status of every cell are written to `cell_params` (columns `cell`, `coverage_multiplier`, `ado_rate`, `doublet`, `donor`) whenever a correlation is used. Without the new options the output is identical to the previous version. Stored and streamed read counts give the same files.
+## 7.1 Summary table and parameter sweeps
 
 **`--summary`** writes `summary.tsv` in the results folder, one row per replicate: `replicate`, `tmrca`, `mutations`, `deletions`, `cnloh`, `snv_true` (variable sites of the true genotypes, before dropout and errors), `snv_observed` (after dropout, errors and read counts) and `snv_ratio` (observed over true; it can be above 1 because errors create false variants). With read counts (`-C`) it adds ten metrics against the true genotypes, computed for the tumour cells (not the healthy cell) site by site while the read counts are simulated, so they are the same with stored and streamed read counts: `called_fraction` (genotypes called from the read counts over cells x sites), `genotype_error` (called genotypes that differ from the true unphased genotype over called genotypes; a true genotype with one deleted allele counts as homozygous for the other, and a cell with both alleles deleted is left out; a doublet is judged against its own true genotype), `snv_precision` and `snv_recall` (sites where the called genotypes show a variant, against the sites that are variable in the true genotypes). Five more split the error: `het_error` and `hom_error` (error of the cells whose true genotype is heterozygous or homozygous), `het_to_hom` (heterozygous cells that are called homozygous, which is the visible footprint of allelic dropout; it is almost all of `het_error` when there is dropout), and `doublet_error` and `singlet_error` (error of the cells that are doublets, judged by their doublet genotype, and of the others; `NA` when there are no doublets). `ado_simulated` is the allelic dropout that was simulated in the genotypes: the heterozygous genotypes that lost one allele, over those that kept at least one. It is the value to compare with `het_to_hom` (what is seen in the called genotypes): `het_to_hom` is a little higher because a low depth can also leave a heterozygous cell with reads of one allele only, and the difference shrinks as the coverage grows. CellCoal does not detect doublets, so there is no precision or recall for them. Without read counts these columns are `NA`.
 
 **`--sweep "KEY=V1,V2,... KEY2=..."`** runs the program once for every combination of the listed values and collects the metrics of `--summary` in a table, instead of writing a script. A key is an option letter (`C`, `E`, `s`, ...) or a long name (`coverage`, `cells`, `cov-ado-corr`, ...). A value can be a range `LOW..HIGH..STEP`; options that take several numbers use colons (`A=0.05:0.01:0,0.1:0.02:0`). All the runs use the same seed (`-#`, or one drawn at random and printed), so a parameter that does not alter the random numbers consumed before the tree (for example `C` or `E`) gives the same genealogies in all the runs and the differences between rows are due to the parameter only; parameters that change the stream (for example `J`, `s`) give different genealogies. The other options of the command line (or of `--config`, where `sweep: "C=2,5"` is also allowed) are common to all the runs. Output, in the folder of `-o` (default `Sweep`): `sweep.tsv` (one row per combination: the values, the number of replicates `n`, and the mean and the standard error `_se` of every metric) and `sweep_replicates.tsv` (all the replicates of all the runs). The run folders are deleted unless `--sweep-keep` is given; the summary of every finished run is kept in `<dir>/runs`. `--sweep-jobs N` runs N combinations at the same time (each with `OMP_NUM_THREADS` set to the number of cores divided by N, unless the variable is already set; on Windows the runs go one after another). `--sweep-resume` continues an interrupted sweep: the runs whose summary is in `<dir>/runs` are not repeated, and the program refuses to resume if the folder holds a different sweep (other options, values or seed; the command lines are in `sweep_spec.txt`). Metrics that are `NA` in every replicate are `NA` in `sweep.tsv`; otherwise the mean and the standard error use the replicates that have a value. `python3 tools/cellcoal_plots.py sweep Sweep` draws the metrics (mean and standard error) against the first parameter, one line per value of the second (`--x`, `--metrics`, `--logx`). `-n`, `-o`, `-#` and `-F` cannot be swept. Example: `cellcoal -n50 -s20 -l10000 -u1e-6 -e10000 -b1 -E0.001 --sweep "C=2,5,10 E=0.001,0.01" -oCovErr`.
 
-## 8.17 Version 2.2.3: doublet correlations, --summary, --sweep
-
-`--cov-doublet-corr`, `--ado-doublet-corr`, `--summary` and `--sweep` (section 6.10i); a crash of `--ado-doublet-corr` used alone is fixed. `main` is split into functions and the CI checks the speed against the latest release (section 6.10h). The output of existing runs is identical to 2.2.2.
-
-
-## 8.18 Version 2.2.4: truth metrics, parallel sweeps, speed, Windows
-
-`--summary` adds metrics against the true genotypes; `--sweep` gains `--sweep-jobs`, `--sweep-resume`, ranges and a plot command (section 6.10i). Runs without read counts are about 35% faster. The program builds on Windows and the CI runs the whole suite there (section 6.10j). The output of existing runs is identical to 2.2.3.
-
-
-## 8.19 Version 2.2.5: quickstart, more truth metrics, Windows binary
-
-New chapter 3 (quickstart). `--summary` adds `het_error`, `hom_error`, `het_to_hom`, `doublet_error`, `singlet_error` and `ado_simulated` (section 6.10i). The release includes a Windows program, built with OpenMP, and the program accepts the arguments that PowerShell splits (`-E0.001` as `-E0 .001`) (section 6.10j). The plotting tools work with the files of a single replicate. CellCoal simulates read counts, not individual reads, and the text says so. The simulated data of existing runs are identical to 2.2.4.
-
-## 8.20 Version 2.2.6: --version, --check, Intel Mac binary
-
-`--version`, `--help`; `--check` (section 3.5) validates the options and shows what a run would do without simulating; binary for Intel Macs; `LICENSE`, `CITATION.cff`, issue templates; `parameters` template with 100 cells and 1000 sites; the log says "read counts" instead of "reads". The data are identical to 2.2.5.
-
-## 8.21 Version 2.2.7: amplification error among cells
-
-New option `--amp-cell-var` (section 6.10c2): the mean amplification error varies among cells. Fix: `run.json` did not record the long options (`--fast`, `--summary`, `--cov-ado-corr`, ...) and now does, so `--config Results/run.json` repeats any run. The README, the manual (section 1.1), `CITATION.cff` and the source header state that CellCoal 2 was developed together with Claude (Anthropic). Without the new option the output is identical to 2.2.6.
-
-## 8.22 Tumor only: `--no-outgroup` (2.3.0)
-
-By default the simulation includes one healthy outgroup cell (`outgcell`) that hangs from the healthy root. With `--no-outgroup` only the tumor cells are reported:
-
-- the outgroup is not in the tree file, the VCF/BCF, catg, pileup or the genotype files, nor in the statistics, and it does not decide whether a site is a variable site;
-- the reference is still the healthy root genome (all alleles 0), and the trunk (`-k`) is kept, so truncal mutations are variants in every cell;
-- the tree written with `-6` contains the ingroup only, which is the format `-T` expects, so it can be read back without editing;
-- the simulation of the tumor cells is not changed.
-
-## 8.23 Fewer false variable sites: `--min-alt-reads` (2.3.0)
-
-A site is written to the VCF when some cell has a non-reference maximum-likelihood genotype. With many cells this is almost always true, because a small genotype error per cell adds up (100 cells, 10X, error 0.001, ADO 0.25: about 85,000 of 200,000 sites). `--min-alt-reads M` asks for at least M reads of the alternative allele in a cell that is called non-reference. It does not count cells, so singletons (a mutation in one cell only) are kept.
-
-Example (100 cells, 100 kb, 10X, ADO 0.25, error 0.001, `-u2.4e-8`, one replicate, 68 singleton sites):
-
-| M | sites in the VCF | precision | recall | singleton recall |
-|---|---|---|---|---|
-| 1 | 42,638 | 0.008 | 0.985 | 0.93 |
-| 2 | 460 | 0.71 | 0.96 | 0.82 |
-| 3 | 318 | 1.00 | 0.94 | 0.72 |
-| 4 | 303 | 1.00 | 0.89 | 0.57 |
-| 5 | 282 | 1.00 | 0.83 | 0.38 |
-
-Almost all the false sites left with M=2 have exactly 2 alternative reads and a low fraction of the reads of the cell (VAF below 0.3), while true singletons are mostly heterozygous (VAF near 0.5). `--min-alt-vaf F` adds that condition: with `--min-alt-reads 2 --min-alt-vaf 0.3` the precision of the example above is 0.97, keeping 98% of the true sites (93% of the singletons) that M=2 keeps. A VAF threshold assumes balanced amplification; with strong allelic imbalance true singletons can be lost, and the singleton recall of the summary shows it.
-
-The summary table has `singleton_sites` and `singleton_recall`, so that the loss of singletons can be checked for any setting.
-
-## 8.24 Allelic dropout in contiguous segments: `--ado-block` (2.4.0)
-
-By default allelic dropout (ADO, `-D`, `-P`) is drawn independently at every site. In real data whole segments of one allele are lost (a region of a chromosome that was not amplified). With `--ado-block L` every allele of every cell is a two-state chain along the genome, *present* or *lost*, with segments of exponential length: lost segments of mean length L sites and present segments of mean length L(1-a)/a, where a = 1 - sqrt(1-D) is the ADO rate of an allele. The fraction of the genome lost is therefore the same as without `--ado-block`, but the lost sites are contiguous. A cell can lose one allele and keep the other, so at a heterozygous site the genotype looks homozygous over a whole segment. The ADO rate of the cells can still vary (`-P`); ADO among sites (`-Q`) cannot be combined with `--ado-block`.
-
-To simulate a long chromosome in pieces (`tools/chrom.py`), `--ado-origin O` gives the position of the first site of the piece on the chromosome and `--ado-seed S` the seed of the segments (and of the ADO rate of the cells): the segments are generated from the start of the chromosome with a seed that depends only on S, the cell and the allele, so consecutive pieces see one continuous process. `tools/chrom.py` passes both automatically when `--ado-block` is given after `--`. The likelihood models of the genotype caller still assume the mean ADO rate (`-D`), as before. Sparse and dense genomes give the same data.
-
-## 8.25 Signature profiles from a file: `--signature-file` (2.4.0)
-
-`-S` uses the 30 COSMIC v2 signatures built into the program. With `--signature-file FILE` the profiles come from a table in COSMIC format instead: a header line (`Type`, name of signature 1, 2, ...) and 96 lines `A[C>A]A v1 v2 ...` (the reference base is the pyrimidine; the columns are normalized to sum 1). The signature numbers of `-S` are then the columns of the file. The folder `data/signatures/` has `COSMIC_v3.6_SBS1_SBS5_GRCh37.txt` (SBS1 and SBS5 of COSMIC v3.6) and `PTA_artifact_SCAN2.txt` (the SNV artifact signature of PTA of SCAN2, Luquette *et al.* 2022; 68% C>T). Example, 40% SBS1 and 60% SBS5: `-S2 1 0.4 2 0.6 --signature-file data/signatures/COSMIC_v3.6_SBS1_SBS5_GRCh37.txt`. With a real reference as root (`-U`), SBS1 alone gives 98.7% C>T, 94% of them in CpG.
-
-Note on the built-in signatures: they are the 30 signatures of COSMIC v2 and have exactly the values of `data/signatures/COSMIC_v2_SBS_GRCh37.txt`. Signature 1 has 67.5% C>T in the profile; in a simulation the share depends on how many CpG contexts the sequence has (a human sequence has few), e.g. about 59% in 200 kb of hg38. For the 96-context profiles of COSMIC v3.x use `--signature-file`.
-
-## 8.26 Amplification errors with a trinucleotide profile: `--amp-signature` (2.4.0)
-
-The amplification error (`-A`, section 5.3.4) is by default the same at every site and its substitutions follow the error matrix (`-X`). With `--amp-signature FILE`, `FILE` is a table in COSMIC format (the first column is used; see `--signature-file`) with the 96-context profile of the errors, for example `data/signatures/PTA_artifact_SCAN2.txt`, the PTA artifact signature of SCAN2 (Luquette *et al.* 2022; 68% C>T). Then:
-
-- the mean amplification error of a site depends on its trinucleotide context (taken from the healthy root genome): the rate of the context is the mass of the profile in that context divided by the frequency of the context in the sequence, so that the mean over the sequence is still the `-A` value;
-- the variance keeps the concentration of `-A`, and the substitution of an error is drawn with the probabilities of the three substitutions of that context in the profile (a purine base uses the reverse complement context);
-- the genotype likelihoods use the same context-specific substitutions.
-
-Needs read counts (`-C`) and `-A`; the first and last sites of the genome have no context and use the matrix `-X`. In a simulation with the PTA profile the spectrum of the errors reproduces the 96-context signature (correlation 1.0 with 10 cells at 30X, `-A0.02 0.0002 0`). Without `--amp-signature` the data are unchanged.
-
-## 8.27 Amplification gain along the genome: `--gain-sd`, `--gain-len` (2.4.0)
-
-Single-cell whole-genome amplification (MDA, PTA...) does not cover the genome evenly: the depth of a cell changes smoothly over regions of kilobases to megabases, and the two haplotypes are amplified differently. With the default model the depth of every site is drawn independently, so there is no such structure. With `--gain-sd S --gain-len L` every haplotype of every cell has a *gain*: a lognormal multiplier with mean 1 and log-standard deviation S that is constant over segments of exponential length (mean L sites) and independent between segments. The mean read depth of each allele is multiplied by its gain, so one mechanism produces:
-
-- **autocorrelated coverage** (the total depth is the sum of the two haplotypes),
-- **allelic imbalance** that changes along the genome (the haplotypes have different gains),
-- together with `-D` / `--ado-block`, dropout where the gain is low.
-
-`--ado-block` is the all-or-nothing version of the same idea (a segment of an allele is present or lost); the gain is the continuous one, and both can be used together. The process starts at chromosome position 0 and is generated from a seed that depends only on `--ado-seed`, the cell and the haplotype, so that the pieces of a chromosome simulated with `--ado-origin` (as `tools/chrom.py` does) see one continuous process. Example: `-C30 --gain-sd 0.6 --gain-len 40000` gives windows of 5 kb with a correlation between neighbours of 0.86 and the same mean depth (30); without it the correlation is 0. Larger S and L mimic MDA, smaller values PTA; these parameters have to be taken from real data (for example from the per-cell coverage profile that `--coverage` writes). Needs read counts (`-C`). Without these options the data are unchanged.
-
-## 8.28 Reads of single-cell genomes: `--bam`, `--fastq` (2.4.0)
-
-With `--bam` and/or `--fastq` (and `-C`, diploid DNA) CellCoal does not simulate read counts but paired-end reads of the amplified genome of every cell, for benchmarking any single-cell caller (SCAN2, PTATO, SCcaller, Monovar...). Output in `<results>/reads_<n>/`: `cellNNNN.bam` (+ `.bai`, sorted, one read group per cell), `cellNNNN.R1.fastq.gz` and `.R2.fastq.gz`, `ref.fa` and `ref.fa.fai` (the healthy root genome, contig `--contig`, default `chr1`) and, with `--bulk-depth D`, `normal.bam`/FASTQ of the healthy genome (no amplification).
-
-Model. For every cell and haplotype, molecules (fragments of length N(`--insert-mean`, `--insert-sd`)) start along the genome with a density set by `-C` and `-J`, the gain (`--gain-sd`/`--gain-len`: a multiplier per haplotype and segment, which is the amplicon structure) and the allelic dropout (`-D`, `--ado-block`: fragments that fall in a lost segment are not produced). Errors of the amplification (`-A`, `--amp-signature`) are events at sites with a fraction of the molecules carrying the wrong base; the molecule carries them and **copies them to its PCR duplicates** (`--dup-mean M`: extra copies per molecule, geometric; default 0.3, about 23% duplicates). Sequencing errors (`-E`) are independent in each read. Reads are 150 bp (`--read-len`), flags 99/147/83/163, duplicates marked 1024, tags `RG`, `HP` (haplotype 1/2) and `MI` (molecule).
-
-Truth: `reads_<n>/truth.vcf` has the true genotype of every cell (before dropout and genotyping errors; GT maternal|paternal, INFO `NC` cells carrying the allele, `GERMLINE` for sites where the healthy genome differs from `ref.fa` or is heterozygous). `tools/benchmark.py eval truth.vcf caller.vcf` gives cell-level and site-level precision/recall of any caller's VCF (and singleton recall); `tools/benchmark.py pileup reads_1` is a naive pileup baseline with and without the PCR duplicates.
-
-Limits of this first version: no indels, no doublets, one contig, the quality is constant (Phred from `-E`). `tools/bamcheck.py ref.fa x.bam` is a dependency-free BAM checker.
-
-## 8.29 A chromosome in blocks: `--blocks`, `--fasta`, `--region`, `--germline-vcf` (2.4.0)
-
-`--blocks B` simulates a chromosome of B blocks of `-l` sites on **one** coalescent tree (made in the first block and reused in the others). With no recombination the sites are independent given the tree, so the blocks add up to a long chromosome without holding it in memory. The output is that of one data set: one VCF with the positions of the chromosome (CHROM `--contig`, default `chr1`; ID `snv<position>`), `summary.tsv` with one row per block and a TOTAL row (counts added, rates averaged, precision/recall/singleton recall weighted), `coverage.tsv` in chromosome coordinates, and `blocks_info.txt`. `-n` is ignored. `--ado-block` and `--gain-sd` continue from one block to the next (`--ado-origin` is set by the program; give `--ado-seed` to fix the processes).
-
-`--fasta FILE` (plain or `.gz`, several lines per sequence, upper or lower case) uses a real reference: with `--region chrom:start-end` (1-based, inclusive) the region, otherwise the first sequence; `-l` is the size of the blocks and `--blocks B` limits their number. Sites that are not A, C, G or T are left out (not simulated, not in the VCF, not in the invariant counts); the positions of the VCF are the real ones. The reference base is the REF of the VCF.
-
-`--germline-vcf FILE` gives the germline SNVs of the healthy genome (SNVs only; GT 0|1, 1|0, 1|1, 0/1, 1/1; unphased heterozygous genotypes are phased at random; it cannot be used with `-c`). Those sites carry the flag `GERMLINE` instead of `SOMATIC` in the VCF.
-
-**Blocks and reads.** `--blocks` or `--fasta` together with `--bam`/`--fastq` simulates the reads of a whole chromosome: the reads of each block are written, in the coordinates of the chromosome, to one BAM (+BAI) and one FASTQ pair per cell (`reads_1/cellNNNN.*`), so a block is processed and released before the next one and the memory is that of one block. The BAM header and `ref.fa` have the length of the chromosome (`chrom:start-end` regions keep the real coordinates; what lies before the region, after the last block and the masked sites are `N`), and `truth.vcf` has the real CHROM and POS, REF = the reference base and the flag GERMLINE at the germline sites. No read spans the boundary between blocks nor a masked site, and the coverage, the amplification error and the gain of a cell are the same in all the blocks (the per-cell parameters are drawn in the first block).
-
-`tools/chrom.py` is a wrapper of these options that writes the files of earlier versions (`chrom.vcf`, `chrom_summary.tsv`, `chrom_coverage.tsv` and one BED per cell) and uses `--min-alt-reads 2 --min-alt-vaf 0.3` by default. Not combined with `--bam`/`--fastq` or `-U`.
-
-## 8.30 Base qualities and strand bias in the reads (`--qual-sd`, `--qual-slope`, `--strand-bias`, 2.4.1)
-
-By default every base of the reads has the same quality, Q = -10 log10(E). **`--qual-sd S`** and **`--qual-slope B`** make it variable: the probability of a sequencing error of a base is `E * w * m`, where `w` rises along the read (log-slope `B` between the first and the last cycle; positive = worse towards the end, as in Illumina) and `m` is a lognormal multiplier of every base (log-sd `S`); both have mean 1, so `-E` stays the mean error. The quality written to the BAM and the FASTQ is the quality of that probability (Q = -10 log10 p, between 2 and 41), so it is calibrated: the observed error rate of the bases with Q 20-23 is about 0.007. The cycle of the second read of a pair runs from its own 5' end. Quality-aware callers can then be tested; `benchmark.py pileup --min-bq Q` ignores the bases below Q. Default 0 and 0 (constant quality): the data are identical to before.
-
-**`--strand-bias P`** makes a fraction P of the errors of the amplification strand specific: the molecule that carries the error shows it only in the reads of one strand (the left read of the pair is the forward strand, the right read the reverse strand). In real data many artifacts (damage, copy errors of one strand) have this signature and callers filter them with the alternative reads on each strand. `benchmark.py pileup --both-strands` adds the baseline that requires alternative reads on both strands: with `--strand-bias 0.8` (20 cells, 8X) the false positives of the baseline fall from 1229 (duplicates out) to 407 and its recall from 0.74 to 0.58. Default 0.
-
-In reads mode allelic dropout has to be given in segments (`--ado-block`); with `-D` alone (independent at every site) almost no fragment of 300 bp survives, and CellCoal now says so instead of writing empty BAM files.
-
-## 6.10j Windows (experimental)
-
-CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with read counts and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).
-
-The Makefile enables OpenMP automatically on Windows (the compiler ships `libgomp`), so the Windows build runs in parallel like the others (`OMP_NUM_THREADS`). The release has a Windows zip (`cellcoal-<version>-windows-x86_64.zip`) with the program and the DLLs of the compiler it needs.
-
-From **PowerShell** (not from `cmd.exe` or MSYS2), PowerShell splits an argument such as `-E0.001` into two, `-E0` and `.001`, before the program receives it. CellCoal joins these pieces again (an option without a dot followed by an argument that starts with a dot and a digit), so the usual syntax works in PowerShell too.
-
-On Windows `long` has 32 bits, which overflowed in the random number generator and made the coalescent times statistically wrong; the generator and the index arithmetic now use 64-bit integers explicitly. The output on Linux and macOS is unchanged (bit-identical to 2.0.2 in the regression configurations).
-
-## 8.8 Version 2.1.1: streamed read counts
-
-Streamed read counts. When the per-cell, per-site read data would exceed 2048 MB (environment variable `CELLCOAL_STREAM_MB`), read counts and genotype likelihoods are simulated and the VCF and PILEUP files written in blocks of sites, with small memory; `CELLCOAL_STREAM=1` forces and `CELLCOAL_STREAM=0` disables it. Results are the same as without streaming for the same seed and any number of threads (from version 2.1.8 the doublets also use the stream of each site in both modes; before, stored read counts used the main stream). VCF, PILEUP and bulk (-0) were the only outputs available while streaming until version 2.1.6, which adds CATG (-8) and the SNV genotypes and haplotypes with read counts (-1, -2); -3, -4, -5 and -Y were not available until the version after 2.2.0 (section 6.10f). The computing time is still proportional to cells x sites and the VCF lists every apparent SNV, so very large read data sets produce very large files.
-
-## 8.9 Versions 2.1.2 to 2.1.4: bulk read counts, VCF options
-
-Version 2.1.2 adds option `-0`, version 2.1.3 option `-Z` (no VCF) and version 2.1.4 options `-z` (gzip VCF) and `-M` (minimum pooled VAF in the VCF); runs that only need the bulk file (`-0 -Z`) skip the genotype likelihoods and are faster.
+## 7.2 Bulk read counts and VAF
 
 Option `-0` (needs simulated read counts, `-C`) writes the file `bulk` (`bulk_dir/bulk.NNNN` with `-v`) with one line per site: site, reference, readsA, readsC, readsG, readsT, depth, alt_reads, bulk_vaf, true_alt_alleles and true_vaf. The read counts are pooled over the tumour cells, as in a bulk sample, and only sites with alternate reads or a true alternate allele are listed. Its size depends on the number of sites, not cells. `python3 tools/bulk_vaf.py --bulk Results/bulk --min-reads 10 --out vaf.png` plots the true and read-based VAF distributions (`--min-vaf` hides the sequencing-error floor, `--logy` uses a log axis, and `--depth` and `--purity` sample the pooled read counts at a realistic bulk depth and dilute them with healthy cells). With `-Z` no VCF is written: 5,000 cells x 20,000 sites with read counts and `-0 -Z` takes about 19 s and writes a 1 MB file.
-
-## 8.10 Bulk VAF distribution
 
 The script `tools/bulk_vaf.py` (Python with numpy and matplotlib) plots the variant allele frequency (VAF) distribution of the sample as if it were sequenced in bulk. With `--vcf` it uses the simulated read counts: the read counts (RC field) of all the tumour cells are pooled and VAF = alternate reads / total reads for every site (the healthy cell is excluded; `--min-reads` sets a minimum pooled depth). Without it, it takes the SNV genotypes written by `-1` and computes VAF as the fraction of alternate alleles among the tumour cells, optionally sampling reads at a given depth (`--depth`) and tumour purity (`--purity`). `--out` sets the plot file and `--tsv` writes the values per site.
 
@@ -1248,29 +1290,74 @@ Each command writes a PNG (`--out`), can write the per-cell numbers (`--tsv`) an
 
 `python3 tools/cellcoal_plots.py all Results --outdir plots` runs everything that the files of a Results folder allow (depth, missing, heatmap and the bulk VAF of `bulk_vaf.py`, from the bulk file if there is one, else from the VCF or the genotypes) and writes `plots/report.html`, a single page with the figures, their summaries and the run record (`--replicate` chooses the replicate when the run used one folder per replicate, option -v). What cannot be drawn because an output was not requested (for example the heatmap without option -1) is listed as skipped.
 
-## 8.11 Reproducibility and the run record
+## 7.3 Truth files and benchmark tools
 
-Read counts are generated from one independent random stream per site. For a given seed, the output is identical regardless of the number of threads. See section 4.1.
+The truth of a simulation is in the output: `truth.vcf` (reads mode), the true genotypes and haplotypes (`-1` to `-5`, `-Y`), `cnv_events` and `cnv_segments` (copy number), `ado_cells` and `cell_params` (per-cell parameters) and `summary.tsv`. `tools/benchmark.py eval truth.vcf caller.vcf` gives cell-level and site-level precision/recall of any caller's VCF (and singleton recall), and `tools/benchmark.py pileup reads_1` is a naive pileup baseline with and without the PCR duplicates (`--min-bq`, `--both-strands`). `tools/bamcheck.py ref.fa x.bam` is a dependency-free BAM checker. `tools/chrom.py` is a wrapper of the chromosome options (section 5.3).
 
-Every run writes `Results/run.json` (version 2.1.5 and later), a record of how it was run: program version, command line, seed, number of replicates, cells and sites, number of threads, the `CELLCOAL_*` and `OMP_NUM_THREADS` environment variables that were set, the genome storage (dense or sparse) and read mode (stored or streamed) that were used, compiler, OpenMP, and the elapsed (wall clock) and CPU seconds. Together with the version, the command line and the seed it is all that is needed to repeat a run. The time reported at the end of a run is now the elapsed time, followed by the CPU time.
+# 8. Testing, validation and portability
 
-## 8.10 Version 2.1.6: CATG and ML genotypes while streaming
+## 8.1 Tests: sanitizers, fuzzing, compilers and theory
 
-Streamed read counts (section 8.8) now also write the CATG file (-8) and the maximum-likelihood SNV genotypes (-1) and haplotypes (-2) obtained from the read counts. The CATG site lines go to a temporary file that is copied behind the header once the number of SNVs is known; the ML alleles are kept in a compact store of one byte per cell and SNV. The files are identical to those of the stored mode for the same seed, whatever the number of threads (with doublets this holds from version 2.1.8). For example, 1,000 cells x 30,000 sites with -1 and -8 needs 191 MB instead of 1.7 GB. Full genotypes and haplotypes (-3, -4), ancestors (-5) and -Y remain unavailable while streaming, and forcing streaming with them is an error.
+Beyond the regression suite (`make test`), the CI checks the program in several other ways, all of which can be run locally.
 
-## 8.11 Version 2.1.7: between-site coverage, ADO count, packaging
+- **Compilers and OpenMP.** The suite also runs with clang and with gcc and clang without OpenMP (`make CC=clang`, `make OMPFLAG=`); the results must be identical.
+- **Sanitizers.** A build with AddressSanitizer and UndefinedBehaviorSanitizer runs the whole suite: `make CFLAGS="-Wall -O1 -g -ffp-contract=off -fsanitize=address,undefined -fopenmp -DUSE_COLORS" LDFLAGS="-fsanitize=address,undefined"`, then `ASAN_OPTIONS=detect_leaks=0 make test`.
+- **Fuzzing.** `python3 tests/fuzz.py bin/cellcoal-x.y.z --runs 400 --seed 1` gives the program random, often invalid, options and values, and randomly damaged YAML and JSON configuration files. An invalid input must be rejected with a message; a crash, a hang or a sanitizer report is a failure and the offending command or file is printed. It found a 2-byte heap overflow in the BCF writer (present in 2.2.0 and 2.2.1), a hang with an enormous gamma shape (for example `-a1e308`) and two integer overflows with absurd values; all are fixed in 2.2.2.
+- **Coverage.** The CI builds with `--coverage`, runs the suite and writes the line coverage of every source file (`tools/gcov_summary.py`) in the summary of the job.
+- **Speed.** `python3 tests/bench.py REFERENCE_BIN NEW_BIN` runs three fixed workloads (trees and mutations, read counts with VCF, read counts with doublets and coverage variation) with one thread and compares the time with a reference binary (the CI builds the latest release on the same runner); it fails if any workload is more than 25% slower. Comparing two builds on the same machine avoids the noise of absolute timings.
+- **Theory.** `python3 tests/theory.py bin/cellcoal-x.y.z` (a few seconds, also part of `make test`) checks that the model is right, not only stable: (1) in a constant population the waiting time with k lineages is exponential with mean 2N/(k(k-1)) and the total tree length has mean 2N times the sum of 1/i; (2) with exponential growth the time to the coalescence of two cells agrees with the numerical integral of its distribution; (3) under the diploid infinite-sites model the number of mutations is Theta times the sum of 1/i (Theta = 4 N mu L) and the site frequency spectrum of the true genotypes is Theta/i; (4) the depth of the reads has the expected mean and variance (each chromosome has a negative binomial depth with mean C/2 and dispersion V, so the variance of a cell is C + C^2/2V), the fraction of error reads is the sequencing error (estimated at low rates with a zero-truncated likelihood, because the bulk file lists only sites with alternate reads), and a genotype loses an allele with probability D and both with probability (1 - sqrt(1 - D))^2. Seeds are fixed, so the result is reproducible; each statistic is a z-score that must be below 4, which detects a change of a few percent in the rates.
 
-Option -O adds coverage variation between sites (see its description in section 6). In sparse mode the allelic dropout of the sites that do not vary is now counted when the information of a site is printed (before it was not counted). The Makefile has an `install` target, the Release workflow attaches Linux and macOS binaries, and a Homebrew formula and a conda recipe are generated for each release. Results of existing runs are identical to 2.1.6.
+**Copy number.** `tests/run_tests.sh` checks the interleaved copy-number engine against the original one: with a negligible copy-number rate (`--seg-loss-rate 1e-13`) the mean number of mutation events and of variable sites agree (|z| < 2 on large numbers of replicates) for the ISM models, signatures, Mk2, JC, HKY, GTR, GTnR, mixtures of models and gamma rate variation; it also checks the phase output, the maximum number of copies, reproducibility and the files `cnv_events` and `cnv_segments`.
 
-## 8.12 Version 2.1.8: coverage between cells, doublets in one random stream
+## 8.2 The index of the BCF file
 
-Option -J adds coverage variation between cells (see section 6). The read counts of doublets are now simulated site by site from the stream of each site, in stored and in streamed read counts, so both modes give the same data for the same seed. Data sets with doublets therefore differ from those of version 2.1.7 (the doublet cells and donors are now chosen before the per-site streams are started); data sets without doublets are identical.
+With `--bcf` the program writes `vcf.bcf.csi` (`vcf_dir/vcf.NNNN.bcf.csi` with `-v`) next to every BCF file: a CSI index (minimum shift 14, as `bcftools index -c` makes, with more levels if the contig is longer than 512 Mb). The records of CellCoal are one base long, so every record is in a bin of the lowest level and each bin is a run of consecutive records; each bin has one chunk, its loffset is its first record, and each contig has the usual pseudo-bin with the offsets of its first and last records and the number of records (what `bcftools index -n` and `-s` report). `tests/bcf_check.py` decodes the index independently and checks that every record is inside a chunk of its bin, the loffsets, the order of the chunks and the statistics; the CI also queries a region with bcftools and compares it with the VCF. Delete or rebuild the index with `bcftools index -f` if you modify the BCF.
 
-## 8.13 Version 2.1.9: modules, configuration files, summary plots
+## 8.3 Windows (experimental)
 
-The source is divided in modules (`tree.c`, `mutation.c`, `observation.c`, `reads.c`, `reads_output.c`, `output.c`, `rng.c`, `options.c`, `config.c`, `globals.c` and the main program in `cellcoal.c`) instead of one file of 11,600 lines; the program and its output are the same, with the same speed. `--config` reads a JSON or YAML file (section 6.10) and `Results/run.json` records the options of the run so that it can be repeated. `tools/cellcoal_plots.py` draws the depth per cell, per site and per genotype (`depth`), the genotypes without read counts (`missing`) and a heatmap of the genotypes (`heatmap`); see section 4.1.
+CellCoal can be built on Windows with MSYS2 (UCRT64 or MinGW-w64 toolchain: `pacman -S make diffutils mingw-w64-ucrt-x86_64-gcc mingw-w64-ucrt-x86_64-libgomp python`, then `make`). The code that differs between systems is in `src/platform.h` (directories, in-memory streams, `getline`, 64-bit file offsets, time functions) and `src/winexe.c` (path of the executable, needed by `--sweep`). The CI has a `windows` job that builds the program, runs smoke tests (a run with read counts and `--summary`, a `--sweep`, and re-running over an existing results folder) and the whole suite. The whole suite passes on Windows (it needs `diffutils` in MSYS2 for `cmp` and `diff`; install it with `pacman -S diffutils`). Configuration files are read in text mode, so CRLF line endings are accepted. The results of the simulations are statistically correct on Windows (`tests/theory.py` passes).
 
-# 9. References
+The Makefile enables OpenMP automatically on Windows (the compiler ships `libgomp`), so the Windows build runs in parallel like the others (`OMP_NUM_THREADS`). The release has a Windows zip (`cellcoal-<version>-windows-x86_64.zip`) with the program and the DLLs of the compiler it needs.
+
+From **PowerShell** (not from `cmd.exe` or MSYS2), PowerShell splits an argument such as `-E0.001` into two, `-E0` and `.001`, before the program receives it. CellCoal joins these pieces again (an option without a dot followed by an argument that starts with a dot and a digit), so the usual syntax works in PowerShell too.
+
+On Windows `long` has 32 bits, which overflowed in the random number generator and made the coalescent times statistically wrong; the generator and the index arithmetic now use 64-bit integers explicitly. The output on Linux and macOS is unchanged (bit-identical to 2.0.2 in the regression configurations).
+
+# 9. Default settings
+
+By default, CellCoal will simulate 50 replicates of samples with 20 ingroup cells plus one outgroup cell, obtained from an exponentially growing population (SH91 model) with a growth rate of 1e-03 and a current effective population size of 10000. The root and outgroup branch length ratios will be 0.5, and 1, respectively. Each cell will harbor 1000 genomic sites evolving with a mutation rate of 1e-07 under a DNA ISM diploid model. By default, there will be no ADO, amplification or sequencing error, and the sequencing depth will be 5X. No read counts are simulated by default, so the only output is the log file (“*log*”), written to the results folder (“*Results*”); the other output files have to be requested with the output options (-1 to -9, -Y, -x) and the VCF file (“*vcf*”) is written when read counts are simulated (option -C). To run the program with settings equivalent to the defaults we could just type:
+
+`bin/cellcoal-x.y.z -n50 -s20 -l1000 -e10000 -g0.001 -k0.5 -q1 -b1 -u1.0e-07 -m0 -p0.0 -D0.0 -oResults -y1`
+
+There are no deletions, cnLOH or copy-number losses and gains (`-d`, `-H`, `--seg-loss-rate` and `--seg-gain-rate` are 0), no genetic signatures and no real reference, and the healthy outgroup cell is part of the output (`--no-outgroup` removes it).
+
+# 10. Version history
+
+Every release has a file with all its details (`docs/CHANGES-X.Y.Z.md`), and `docs/CHANGELOG.md` lists them, newest first. This table gives the main change of each series; every feature is described in its own section of this manual.
+
+| Version | Main changes | Where |
+|---|---|---|
+| 2.5 | Copy-number losses and gains interleaved with SNVs, deletions and cnLOH; `--phase`, haplotypes per copy, `cnv_segments`; all the substitution models (2.5.1: Windows build; 2.5.2: README and manual) | 5.2.8, 5.2.9 |
+| 2.4 | Reads (`--bam`, `--fastq`) with duplicates, qualities and strand bias; chromosome in blocks, real references, germline VCF; dropout in segments, amplification gain, signature profiles from files; the three modes are explicit | 5.5, 5.3, 5.4.1, 5.4.3, 5.4.4 |
+| 2.3 | Tumour only (`--no-outgroup`); `--min-alt-reads` and `--min-alt-vaf` | 5.1.1, 5.6 |
+| 2.2 | `--fast`, ADO per cell and correlations among the parameters of the cells, BCF, `--summary`, `--sweep`, `--check`, `--amp-cell-var`, quickstart, Windows, fuzzing, sanitizers and validation against theory | 6.11.4, 5.4.7, 7.1, 8.1 |
+| 2.1 | Sparse genomes, streamed read counts, bulk read counts, `-Z`, `-z`, `-M`, `-O`, `-J`, modules, configuration files, run record, plots | 4.3, 7.2, 6.11.2 |
+| 2.0 | Bug fixes, faster, lighter, parallel (OpenMP) read counts | 4.1 |
+
+**Data that changed.** Output is identical from one release to the next for the same seed and options, with these exceptions: version 2.0.0 (all the data of 1.x differ, see below), 2.0.2 (germline variation `-c`), 2.1.0 (sparse genomes use another random stream), 2.1.8 (data sets with doublets) and the options that are new in each release, which change nothing when they are not used.
+
+**Fixes of version 2.0.0 that change the data.**
+
+-   **Genotyping error (-G).** The rows of the error matrix were not normalized, so with the default matrix the first non-zero entry was always chosen as the erroneous nucleotide. Now the nucleotide is drawn with the intended probabilities.
+-   **Allelic dropout (-P, -Q).** The variation of the ADO rate among cells and among sites is now simulated correctly: one rate per cell and one rate per site, reused for all genotypes.
+-   **VCF PL/PLN.** They are now −10 × log10 of the likelihood, as defined in the VCF specification (non-negative; 0 for the most likely genotype in `PLN`). Before they were 10 × log10, i.e. negative.
+-   **VCF likelihoods.** Genotype likelihoods that are exactly zero (`-inf`) are printed as `.` in `G10`, `G10N`, `GL`, `GLN`, `PL` and `PLN`.
+
+**Version 2.0.2.** Germline variation (`-c`): the germline SNPs were added only to the root genome and were not inherited by the cells; they are now passed down to all the cells and the healthy cell.
+
+**Version 2.1.8.** The read counts of doublets are simulated site by site from the stream of each site, in stored and in streamed read counts, so both modes give the same data for the same seed.
+
+# 11. References
 
 Alexandrov LB et al. 2013. Signatures of mutational processes in human cancer. *Nature* 22: 415-421.
 
@@ -1297,17 +1384,3 @@ Tavaré S. 1986. Some probabilistic and statistical problems in the analysis of 
 Yang Z. 1996. Among-site rate variation and its impact on phylogenetic analysis. *Trends in Ecology and Evolution* 11:367-372.
 
 Zafar H, Wang Y, Nakhleh L, Navin N, Chen K. 2016. Monovar: single-nucleotide variant detection in single cells. Nat Meth. 13:505–507.
-
-## 8.14 Version 2.2.0: fast mode, ADO per cell, coverage-ADO correlation
-
-`--fast` (section 6.10b) simulates the read counts 10-15% faster with the same distributions; the ADO rate of every cell (`-P`) is written to `ado_cells` (6.10a); `--cov-ado-corr RHO` correlates the coverage and the ADO rate of the cells (6.10c); `--config` errors give the line and column and suggest the correct key; `plots all` writes every plot and a report. Without the new options the output is identical to 2.1.9.
-
-
-## 8.15 Version 2.2.1: BCF, streaming with -3 -4 -5 -Y, faster read counts
-
-`--bcf` writes the likelihoods as BCF with its CSI index (6.10d, 6.10g); streamed read counts work with `-3 -4 -5 -Y` (6.10f); an exact cache of genotype likelihoods (6.10e) speeds up the default mode and `--fast` is 25-30% faster than the default. Without the new options the output is bit-identical to 2.2.0.
-
-
-## 8.16 Version 2.2.2: fixes found by the fuzzer, stricter CI, validation against theory
-
-A 2-byte heap overflow in the BCF writer, hangs with enormous gamma shapes and two integer overflows are fixed; the output is identical to 2.2.1. The CI now uses clang, no OpenMP, sanitizers, fuzzing and coverage, and `tests/theory.py` validates the model (section 6.10h).

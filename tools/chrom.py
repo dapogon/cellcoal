@@ -4,7 +4,7 @@
 One coalescent tree is generated once and every block of sites is simulated on that same tree (no recombination, so the sites are
 independent given the tree).  For each block only the variable sites go to the VCF; the rest of the block is summarized by the number
 of sites for each genotype of the healthy root (inv_AA ... inv_TT in the summary table).  The simulation itself is done by the binary
-(--blocks, --fasta, --region, --germline-vcf; see the manual, section 8.29); this script sets the options, adds the defaults of the
+(--blocks, --fasta, --region, --germline-vcf; see the manual, section 5.3); this script sets the options, adds the defaults of the
 block mode and writes the files of earlier versions.
 
 Usage (random sequence):
@@ -95,7 +95,7 @@ def main():
     if a.tree:
         cmd += ["-T%s" % os.path.abspath(a.tree)]
     if "--min-alt-reads" not in opts:
-        cmd += ["--min-alt-reads", "2"]   # one alternative read is not believed (manual 8.23)
+        cmd += ["--min-alt-reads", "2"]   # one alternative read is not believed (manual, section 5.6)
     if "--min-alt-vaf" not in opts:
         cmd += ["--min-alt-vaf", "0.3"]   # and at least 30% of the reads of the cell
     if a.coverage_window > 0:
