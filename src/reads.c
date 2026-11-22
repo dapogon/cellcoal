@@ -637,6 +637,11 @@ void SiteReadCounts (CellSiteStr *c, int i, int j, double *probs, double **ngsEi
 	/* amplification gain of the two haplotypes at this site (--gain-sd) */
 	gM = (gainOn == YES) ? GainAt (i, MATERNAL, j) : 1.0;
 	gP = (gainOn == YES) ? GainAt (i, PATERNAL, j) : 1.0;
+	if (copyGainOn == YES)		/* extra copy of a segment (--seg-gain-rate): twice the reads of that haplotype */
+		{
+		gM *= CopyGainAt (i, MATERNAL, j);
+		gP *= CopyGainAt (i, PATERNAL, j);
+		}
 
 	/* number of reads of each haplotype around the mean coverage; a haplotype alone gets haploidCoverageReduction */
 	if (thereIsMaternalAllele == YES && thereIsPaternalAllele == YES)

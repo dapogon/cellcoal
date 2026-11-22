@@ -37,6 +37,7 @@
 - The single-letter options keep working and give identical results. The same group names are accepted as keys in configuration files.
 - `--help` is organized by group and includes a table of equivalences with the single-letter options; error messages use the group key names.
 
-## Losses of segments
+## Losses and gains of segments
 
-- New `--loss-rate` and `--loss-len` (group `--mutation loss-rate=...,loss-len=...`): copy-number losses of segments of a haplotype, inherited along the tree; the lost sites are deletions in the cells below the branch. Without `--loss-rate` nothing changes. The log and `summary.tsv` report the losses and the variable sites lost in them.
+- New `--seg-gain-rate`: copy-number gains of segments (one extra copy of a haplotype, at most; the haplotype gets twice the reads, in read counts and reads modes). `--seg-len` is the mean length of the lost and gained segments. The file `cnv_events` lists every loss and gain with its segment and the cells that carry it.
+- New `--seg-loss-rate` and `--seg-len` (group `--mutation loss-rate=...,gain-rate=...,segment-length=...`): copy-number losses of segments of a haplotype, inherited along the tree; the lost sites are deletions in the cells below the branch. Without `--seg-loss-rate` nothing changes. The log and `summary.tsv` report the losses and the variable sites lost in them.

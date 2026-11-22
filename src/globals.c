@@ -92,8 +92,8 @@ int					doBam = 0, doFastq = 0, readLen = 150;	/* read-level simulator (--bam, -
 double				insertMean = 400.0, insertSd = 60.0, bulkDepth = 0.0, dupMean = 0.3, qualSd = 0.0, qualSlope = 0.0, strandBias = 0.0;
 char				*contigName = "chr1";
 double				gainSd = 0.0;	/* --gain-sd: standard deviation of the log amplification gain of a haplotype (0 = off) */
-double				lossRate = 0.0, lossLen = 1000.0;	/* --loss-rate, --loss-len: copy-number losses of segments (rate per genome and generation, mean length in sites) */
-int					numSegLoss = 0, snvsLostBySegments = 0;
+double				lossRate = 0.0, gainRate = 0.0, segLen = 1000.0;	/* --seg-loss-rate, --seg-len: copy-number losses of segments (rate per genome and generation, mean length in sites) */
+int					numSegLoss = 0, numSegGain = 0, snvsLostBySegments = 0;
 double				gainLen = 0.0;	/* --gain-len: mean length (sites) of the segments of constant gain */
 int					gainOn = 0;
 char				*ampSignatureFile = NULL;	/* --amp-signature: 96-context profile of the amplification errors (COSMIC format) */
