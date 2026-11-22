@@ -796,7 +796,7 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 	if (routs == NULL)
 		{
 		snprintf (readDir, sizeof(readDir), "%s/reads_%d", resultsDir, blocksOn ? 1 : dataSetNum + 1);
-		mkdir (readDir, 0755);
+		MAKE_DIR (readDir);
 		snprintf (path, sizeof(path), "%s/ref.fa", readDir);
 		if ((refFp = fopen (path, "w")) == NULL)
 			{
@@ -861,7 +861,7 @@ void WriteTruthVcf (int dataSetNum)
 	static int started = 0;		/* with --blocks the file is written block after block */
 
 	snprintf (dir, sizeof(dir), "%s/reads_%d", resultsDir, blocksOn ? 1 : dataSetNum + 1);
-	mkdir (dir, 0755);
+	MAKE_DIR (dir);
 	snprintf (path, sizeof(path), "%s/truth.vcf", dir);
 	if ((fp = fopen (path, (blocksOn && started) ? "a" : "w")) == NULL)
 		{
