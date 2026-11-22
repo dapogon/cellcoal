@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.5.3
+Documentation: the manual is reorganized from top to bottom (copy number with the mutation models, starting from a real chromosome, one chapter per topic). Output identical to 2.5.2. See [CHANGES-2.5.3.md](CHANGES-2.5.3.md).
+
 ## 2.5.2
 Documentation: a rewritten README and an updated manual. Output identical to 2.5.1. See [CHANGES-2.5.2.md](CHANGES-2.5.2.md).
 
