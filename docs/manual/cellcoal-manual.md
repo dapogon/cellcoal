@@ -356,12 +356,9 @@ There are two ways to get the reference, and then you can add germline variation
 - Binary alphabet (`-b0`): all the sites are 0.
 - DNA (`-b1`): a random sequence with the nucleotide frequencies of `-f`. If genetic signatures are used (`-S`), the sequence is drawn with the trinucleotide frequencies of the human genome (GRCh37), so that the signatures find the contexts they need.
 
-**2. A real reference, such as a human chromosome.** You give a FASTA file and the cells start from that real sequence. There are two ways, depending on the length:
+**2. A real reference, such as a human chromosome.** You give a FASTA file with one sequence and the cells start from it: `--fasta FILE` (plain or `.gz`), with `--region chrom:start-end` to choose a chromosome or a region of any length. The sequence is simulated in blocks of `-l` sites on one tree, so the memory is that of one block (section 5.3). The VCF has the real positions, and REF is the base of the FASTA.
 
-| Option | Use it for | How it works |
-|---|---|---|
-| `--fasta FILE` (plain or `.gz`), with `--region chrom:start-end` | a whole chromosome or any region, of any length (the normal way) | the sequence is simulated in blocks of `-l` sites on one tree, so the memory is that of one block (section 5.3). The VCF has the real positions, and REF is the base of the FASTA |
-| `-U FILE` | a short genome, up to 10^6^ sites | an older way, for a genome that already has its germline variation: the file has the maternal and the paternal sequence, each on one line and of the same length (the reference is the one sequence they derive from) |
+> `-U FILE` is the format of the older versions, kept for compatibility: a diploid genome of up to 10^6^ sites, with the maternal and the paternal sequence (each on one line and of the same length). Use `--fasta` instead.
 
 **3. Germline variation (optional).** The ancestral genome is the reference with its germline SNPs:
 

@@ -1107,41 +1107,18 @@ frequencies of the human genome (GRCh37), so that the signatures find
 the contexts they need.</li>
 </ul>
 <p><strong>2. A real reference, such as a human chromosome.</strong> You
-give a FASTA file and the cells start from that real sequence. There are
-two ways, depending on the length:</p>
-<table>
-<colgroup>
-<col style="width: 33%" />
-<col style="width: 33%" />
-<col style="width: 33%" />
-</colgroup>
-<thead>
-<tr class="header">
-<th>Option</th>
-<th>Use it for</th>
-<th>How it works</th>
-</tr>
-</thead>
-<tbody>
-<tr class="odd">
-<td><code>--fasta FILE</code> (plain or <code>.gz</code>), with
-<code>--region chrom:start-end</code></td>
-<td>a whole chromosome or any region, of any length (the normal
-way)</td>
-<td>the sequence is simulated in blocks of <code>-l</code> sites on one
-tree, so the memory is that of one block (section 5.3). The VCF has the
-real positions, and REF is the base of the FASTA</td>
-</tr>
-<tr class="even">
-<td><code>-U FILE</code></td>
-<td>a short genome, up to 10<sup>6</sup> sites</td>
-<td>an older way, for a genome that already has its germline variation:
-the file has the maternal and the paternal sequence, each on one line
-and of the same length (the reference is the one sequence they derive
-from)</td>
-</tr>
-</tbody>
-</table>
+give a FASTA file with one sequence and the cells start from it:
+<code>--fasta FILE</code> (plain or <code>.gz</code>), with
+<code>--region chrom:start-end</code> to choose a chromosome or a region
+of any length. The sequence is simulated in blocks of <code>-l</code>
+sites on one tree, so the memory is that of one block (section 5.3). The
+VCF has the real positions, and REF is the base of the FASTA.</p>
+<blockquote>
+<p><code>-U FILE</code> is the format of the older versions, kept for
+compatibility: a diploid genome of up to 10<sup>6</sup> sites, with the
+maternal and the paternal sequence (each on one line and of the same
+length). Use <code>--fasta</code> instead.</p>
+</blockquote>
 <p><strong>3. Germline variation (optional).</strong> The ancestral
 genome is the reference with its germline SNPs:</p>
 <ul>
