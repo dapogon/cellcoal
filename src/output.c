@@ -228,6 +228,29 @@ static void PrintRowLabel (FILE *fp, int i, int kind)
 		fprintf (fp, kind == LABEL_SPACED ? "%-*s " : "%-*s", stringPrecision, cellNames[i]);
 	}
 
+/* Genotype of one cell at one site with extra copies (copy-number gains): the alleles of the maternal copies, '|', and those of the
+   paternal copies; the first copy of each haplotype comes first. Without gains it is the usual two letters. */
+static void PrintCopyGenotype (FILE *fp, int i, int site, int binary)
+	{
+	Geno	ex[MAX_COPIES];
+	int		n, e;
+	Geno	a[2] = {GetG(MATERNAL, i, site), GetG(PATERNAL, i, site)};
+	int		h;
+
+	for (h=0; h<2; h++)
+		{
+		if (h == 1 && CN_EVENTS)
+			fputc ('|', fp);
+		fputc (binary ? WhichMut (a[h]) : WhichNuc (a[h]), fp);
+		if (copyGainOn == YES && a[h] != DELETION)
+			{
+			n = ExtraCopies (i, h, site, ex);
+			for (e=0; e<n; e++)
+				fputc (binary ? WhichMut (ex[e]) : WhichNuc (ex[e]), fp);
+			}
+		}
+	}
+
 /************************ PrintSiteInfo ***********************/
 /* Prints info for the site struct */
 
@@ -309,7 +332,7 @@ void PrintSNVGenotypes (FILE *fp)
 	
     if (alphabet == DNA)
         {
-        if (doNGS == NO)
+        if (doNGS == NO && !CN_EVENTS)
             {
             /* Genotypes are gathered for a block of cells, site by site (the genomes are stored by site in sparse
                mode), in a text buffer that is then written row by row. */
@@ -353,7 +376,12 @@ void PrintSNVGenotypes (FILE *fp)
 				{
 				int	mm, pp;
 
-				if (doNGS == NO)
+				if (doNGS == NO && CN_EVENTS)
+					{
+					fputc (' ', fp);
+					PrintCopyGenotype (fp, i, SNVsites[j], NO);
+					}
+				else if (doNGS == NO)
 					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, SNVsites[j])), WhichNuc(GetG(PATERNAL, i, SNVsites[j])));
 				else
 					{
@@ -381,7 +409,15 @@ void PrintSNVGenotypes (FILE *fp)
             {
 			PrintRowLabel (fp, i, LABEL_TIGHT);
 			for (j=0; j<numSNVs; j++)
-				fprintf (fp, " %c%c", WhichMut(GetG(MATERNAL, i, SNVsites[j])),WhichMut(GetG(PATERNAL, i, SNVsites[j])));
+				{
+				if (CN_EVENTS)
+					{
+					fputc (' ', fp);
+					PrintCopyGenotype (fp, i, SNVsites[j], YES);
+					}
+				else
+					fprintf (fp, " %c%c", WhichMut(GetG(MATERNAL, i, SNVsites[j])),WhichMut(GetG(PATERNAL, i, SNVsites[j])));
+				}
 			fprintf (fp,"\n");
             }
 			
@@ -418,7 +454,12 @@ void PrintFullGenotypes (FILE *fp)
             PrintRowLabel (fp, i, LABEL_TIGHT);
 			for (j=0; j<numSites; j++)
 				{
-				if (doNGS == NO)
+				if (doNGS == NO && CN_EVENTS)
+					{
+					fputc (' ', fp);
+					PrintCopyGenotype (fp, i, j, NO);
+					}
+				else if (doNGS == NO)
 					fprintf (fp, " %c%c", WhichNuc(GetG(MATERNAL, i, j)), WhichNuc(GetG(PATERNAL, i, j)));
 				else
 					{
@@ -448,7 +489,15 @@ void PrintFullGenotypes (FILE *fp)
             {
             PrintRowLabel (fp, i, LABEL_TIGHT);
 			for (j=0; j<numSites; j++)
-                fprintf (fp, " %c%c", WhichMut(GetG(0, i, j)),WhichMut(GetG(1, i, j)));
+                {
+                if (CN_EVENTS)
+                    {
+                    fputc (' ', fp);
+                    PrintCopyGenotype (fp, i, j, YES);
+                    }
+                else
+                    fprintf (fp, " %c%c", WhichMut(GetG(0, i, j)),WhichMut(GetG(1, i, j)));
+                }
             fprintf (fp,"\n");
 			}
 			

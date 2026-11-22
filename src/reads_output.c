@@ -325,7 +325,7 @@ static char *VCF_PutGTAllele (char *p, int allele, int referenceAllele, const Si
 	}
 
 /* writes the tab-started genotype fields (GT ... TG) of one cell at one SNV site */
-static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, DoubletSiteStr *ds, int hasDoublet, SiteStr *st, int referenceAllele, int npairs, const int *pa1, const int *pa2)
+static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, DoubletSiteStr *ds, int hasDoublet, SiteStr *st, int referenceAllele, int npairs, const int *pa1, const int *pa2, int cellIdx, int siteIdx)
 	{
 	char	buf[4096], *p = buf;
 	double	(*LG)[4], (*NLG)[4], LGs[4][4], NLGs[4][4];
@@ -443,7 +443,30 @@ static void VCFCellFields (FILE *fp, CellSiteStr *cs, const double *glp, Doublet
 		}
 	/* TG */
 	*p++ = ':';
-	*p++ = WhichNuc (cs->trueMaternalAllele);  *p++ = '|';  *p++ = WhichNuc (cs->truePaternalAllele);
+	{
+	Geno	exM[MAX_COPIES], exP[MAX_COPIES];
+	int		nM = 0, nP = 0, e;
+
+	if (copyGainOn == YES)
+		{
+		if (cs->trueMaternalAllele != DELETION)
+			nM = ExtraCopies (cellIdx, MATERNAL, siteIdx, exM);
+		if (cs->truePaternalAllele != DELETION)
+			nP = ExtraCopies (cellIdx, PATERNAL, siteIdx, exP);
+		}
+	*p++ = WhichNuc (cs->trueMaternalAllele);
+	for (e=0; e<nM; e++)
+		{
+		*p++ = '|';  *p++ = WhichNuc (exM[e]);
+		}
+	*p++ = '|';  *p++ = WhichNuc (cs->truePaternalAllele);
+	for (e=0; e<nP; e++)
+		{
+		*p++ = '|';  *p++ = WhichNuc (exP[e]);
+		}
+	if (CN_EVENTS)		/* CN: number of copies of the maternal and the paternal haplotype */
+		p += sprintf (p, ":%d|%d", (cs->trueMaternalAllele != DELETION) + nM, (cs->truePaternalAllele != DELETION) + nP);
+	}
 
 	fwrite (buf, 1, (size_t)(p - buf), fp);
 	}
@@ -525,7 +548,7 @@ static void VCFSiteLine (FILE *fp, int j)
 	fprintf (fp, (germFlag != NULL && germFlag[j]) ? ";GERMLINE" : ";SOMATIC");
 	
 	/* VFC: FORMAT */
-	fprintf (fp, "\tGT:DP:RC:G10:G10N:GL:GLN:PL:PLN:ML:NG:DG:TG");
+	fprintf (fp, "\tGT:DP:RC:G10:G10N:GL:GLN:PL:PLN:ML:NG:DG:TG%s", CN_EVENTS ? ":CN" : "");
 	
 	{
 	int npairs = 0, pa1[10], pa2[10];
@@ -540,7 +563,7 @@ static void VCFSiteLine (FILE *fp, int j)
 		{
 		double glbuf[GL_NUM];
 		const double *glp = GetSiteGL (i, j, glbuf);
-		VCFCellFields (fp, &CS(i,j), glp, cell[i].doublet ? &CD(i,j) : NULL, cell[i].hasDoublet, &allSites[j], referenceAllele, npairs, pa1, pa2);
+		VCFCellFields (fp, &CS(i,j), glp, cell[i].doublet ? &CD(i,j) : NULL, cell[i].hasDoublet, &allSites[j], referenceAllele, npairs, pa1, pa2, i, j);
 		}
 	}
 	}
@@ -579,7 +602,9 @@ static void PrintVCFHeader (FILE *fp)
 	fprintf (fp,"\n##FORMAT=<ID=PLN,Number=G,Type=Integer,Description=\"Normalized Phred-scaled genotype likelihoods\">");	fprintf (fp,"\n##FORMAT=<ID=ML,Number=1,Type=String,Description=\"Maximum likelihood genotype\">");
 	fprintf (fp,"\n##FORMAT=<ID=NG,Number=1,Type=String,Description=\"Genotype in the NGS library (considers ADO/DEL; ignores doublets)\">");
 	fprintf (fp,"\n##FORMAT=<ID=DG,Number=1,Type=String,Description=\"Genotype in the NGS library for the second cell if there is a doublet\">");
-	fprintf (fp,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True genotype (considers DEL; ignores ADO/doublets\">");
+	fprintf (fp,"\n##FORMAT=<ID=TG,Number=1,Type=String,Description=\"True genotype (considers DEL; ignores ADO/doublets%s\">", CN_EVENTS ? "); with copy-number events it lists the alleles of all the copies, the maternal ones first" : "");
+	if (CN_EVENTS)
+		fprintf (fp,"\n##FORMAT=<ID=CN,Number=1,Type=String,Description=\"True number of copies of the maternal and the paternal haplotype\">");
 	fprintf (fp,"\n#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
 	
 	if (doUserTree == NO)

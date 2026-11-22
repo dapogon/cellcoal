@@ -977,43 +977,46 @@ alterations are limited to point deletions (<code>-d</code>), cnLOH
 </blockquote>
 <p><strong>Losses and gains of segments (<code>--seg-loss-rate</code>,
 <code>--seg-gain-rate</code>, <code>--seg-len</code>,
-<code>--seg-loss-len</code>, <code>--seg-gain-len</code>; group
-<code>--mutation loss-rate=...,gain-rate=...,segment-length=...,loss-length=...,gain-length=...</code>).</strong>
-Each haplotype suffers a Poisson number of losses (mean the total tree
-length in generations times <code>--seg-loss-rate</code>, per haplotype
-and generation) and of gains (<code>--seg-gain-rate</code>). Each event
-falls on a branch chosen according to its length, at a uniform position
-along it, starts at a uniform site and covers a geometric number of
-sites, clipped at the end of the genome. The mean length is
-<code>--seg-len</code> (default 1000) for both, or
-<code>--seg-loss-len</code> and <code>--seg-gain-len</code> to give a
-different one to the losses and the gains. Every cell below the branch
-carries the event in that haplotype.</p>
-<p>The events are applied in the order of the tree, from the root to the
-tips and, inside a branch, by their position, on genomes that already
-have the SNVs, cnLOH and point deletions. The order matters for the
-gains: <strong>a gain</strong> is one extra copy of the haplotype (at
-most one: a haplotype has one or two copies, so no high amplifications)
-and the extra copy keeps the alleles that the haplotype had at the
-moment of the gain. The SNVs of the ancestral branches, and those of the
-branch itself that happened before the gain, are in both copies, and the
-SNVs that happen later are in one copy only. In the reads, the haplotype
-of a gained segment gets twice the reads (1.5 times the normal depth),
-so the allele fractions are 2/3 for an SNV that was already there at the
-gain and 1/3 for a later one, instead of 1/2. The two copies are
-interchangeable, so the genome of the haplotype (the genotype files)
-keeps the copy that has the later SNVs; the phase of the SNVs between
-the two copies is not simulated. Gains need read counts
-(<code>-C</code>) or reads (<code>--bam</code>/<code>--fastq</code>);
-without them they are ignored. <strong>A loss</strong> turns the alleles
-of the segment into deletions, so the genotypes, read counts and VCF
-treat them like point deletions, and the SNVs that were inside disappear
-in the cells that lost it (they remain as hemizygous alleles if the SNV
-is in the other haplotype), so with <code>-j</code> the number of
-mutations is the number placed, not the number that survive. A mutation
-cannot hit DNA that is already gone, so a loss does not need to be
-ordered with the SNVs. A loss over a segment with two copies removes the
-extra copy. A haplotype that is already gone is not duplicated.</p>
+<code>--seg-loss-len</code>, <code>--seg-gain-len</code>,
+<code>--seg-max-copies</code>; group
+<code>--mutation loss-rate=...,gain-rate=...,segment-length=...,loss-length=...,gain-length=...,max-copies=...</code>).</strong>
+With either rate above zero, CellCoal simulates SNVs, point deletions,
+cnLOH, segment losses and segment gains <strong>together, branch by
+branch, in a random order</strong>: on every branch the events of all
+kinds are interleaved by chance, and the order matters (an SNV before a
+gain is in both copies, an SNV after it in one only; an SNV in a segment
+that is lost later is lost). Every haplotype is a set of copies
+(lineages) whose phase is known: a gain copies the alleles of a random
+copy at that moment, and each copy then accumulates its own SNVs (the
+SNV rate applies to every copy). Losses and gains fall on a random copy
+of the haplotype, start at a uniform site and cover a geometric number
+of sites (mean <code>--seg-len</code>, default 1000, or
+<code>--seg-loss-len</code> and <code>--seg-gain-len</code>), clipped at
+the end of the genome. A site has at most <code>--seg-max-copies</code>
+copies in the two haplotypes together (default 4; the code allows a
+higher limit, up to 16). A loss of the last copy of a haplotype is a
+deletion; SNVs inside lost segments disappear in the cells that lost
+them (with <code>-j</code> the number of SNVs is the number planned, not
+the number that survive; the log and <code>summary.tsv</code> report how
+many were lost). The model is the infinite sites model (ISM): the
+finite-sites DNA models, signatures, Mk2 and mixed models are not
+available with copy-number events, and an ISM violation is an error.</p>
+<p><strong>Genotypes with several copies.</strong> The text genotypes
+(SNV and full genotypes) show the alleles of the maternal copies,
+<code>|</code>, and the alleles of the paternal copies, so the phase is
+explicit: <code>A|A</code> (normal), <code>GG|A</code> (two maternal
+copies with G, one paternal with A), <code>AGT|-</code> (three maternal
+copies, paternal lost). In the VCF, <code>TG</code> lists the alleles of
+all the copies (<code>0|1|1</code>) and the extra format field
+<code>CN</code> gives the number of copies of each haplotype
+(<code>2|1</code>). In read counts and reads, the reads of a haplotype
+are shared among its copies, so a site with copies A,A,G has allele
+fractions 2/3 and 1/3 for that haplotype. The file
+<code>cnv_events</code> lists every loss and gain with its haplotype,
+segment and the cells that carry it. Copy-number events need
+<code>-C</code> or reads for the read-based outputs; the true haplotype
+files (<code>-Y</code>, <code>-2</code>, <code>-4</code>) show only the
+first copy of each haplotype.</p>
 <p>The log and the summary (<code>segment_losses</code>,
 <code>snv_lost_segments</code> and <code>segment_gains</code> columns,
 only when the option is used) report the number of events and the

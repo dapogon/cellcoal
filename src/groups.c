@@ -50,6 +50,7 @@ static const GroupKey groupKeys[] =
 	{"mutation", "loss-rate",      'S', "--seg-loss-rate", "copy-number losses of segments: rate per haplotype and generation"},
 	{"mutation", "gain-rate",      'S', "--seg-gain-rate", "copy-number gains of segments (one extra copy of a haplotype; needs read counts): rate per haplotype and generation"},
 	{"mutation", "segment-length", 'S', "--seg-len", "mean length in sites of the lost and gained segments (default 1000)"},
+	{"mutation", "max-copies",     'S', "--seg-max-copies", "maximum number of copies of a site, both haplotypes together (default 4)"},
 	{"mutation", "loss-length",    'S', "--seg-loss-len", "mean length in sites of the lost segments (default: segment-length)"},
 	{"mutation", "gain-length",    'S', "--seg-gain-len", "mean length in sites of the gained segments (default: segment-length)"},
 	{"mutation", "fixed",          'L', "-j", "fixed number of mutations"},

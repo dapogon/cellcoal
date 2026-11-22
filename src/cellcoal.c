@@ -738,32 +738,40 @@ static void SimulateGenomes (int dataSetNum, long int *seed)
 		AddGermlineVariation (seed);
 		InheritRootGenome (healthyRoot);		/* the germline SNPs were added to the root genome only */
 		}
-	EvolveBothGenomes ("genome", EvolveSitesOnTree, seed);
-	AccumAdd (&runStats.mu, numMU);
-	if (CNLOHrate > 0)
-		{
-		EvolveBothGenomes ("CN_LOH", EvolveCNLOHonTree, seed);
-		AccumAdd (&runStats.cnloh, numCNLOH);
-		}
-	if (deletionRate > 0)
-		{
-		EvolveBothGenomes ("deletions", EvolveDeletionsOnTree, seed);
-		AccumAdd (&runStats.del, numDEL);
-		}
 	snvsLostBySegments = 0;
 	ResetSegments ();
 	if (lossRate > 0 || gainRate > 0)
 		{
-		int		before = CountTrueVariants ();
-
-		SimulateSegmentEvents (healthyRoot, seed);	/* copy-number losses and gains, in the order of the tree */
-		snvsLostBySegments = before - CountTrueVariants ();	/* variable sites that disappeared inside lost segments */
+		/* copy-number events: SNVs, CNLOH, deletions and segment losses and gains, branch by branch in the order of the tree */
+		SimulateCopyNumberGenomes (healthyRoot, seed);
+		AccumAdd (&runStats.mu, numMU);
+		if (CNLOHrate > 0)
+			AccumAdd (&runStats.cnloh, numCNLOH);
+		if (deletionRate > 0)
+			AccumAdd (&runStats.del, numDEL);
 		WriteCnvEvents (dataSetNum);
+		}
+	else
+		{
+		EvolveBothGenomes ("genome", EvolveSitesOnTree, seed);
+		AccumAdd (&runStats.mu, numMU);
+		if (CNLOHrate > 0)
+			{
+			EvolveBothGenomes ("CN_LOH", EvolveCNLOHonTree, seed);
+			AccumAdd (&runStats.cnloh, numCNLOH);
+			}
+		if (deletionRate > 0)
+			{
+			EvolveBothGenomes ("deletions", EvolveDeletionsOnTree, seed);
+			AccumAdd (&runStats.del, numDEL);
+			}
 		}
 
 	/* count how many SNVs we observe before ADO and genotype errors, but after CNLOH and deletion */
 	numSNVs = CountTrueVariants ();
 	numSNVsTrue = numSNVs;
+	if (lossRate > 0 || gainRate > 0)
+		snvsLostBySegments = (numPlannedSNV > numSNVs) ? numPlannedSNV - numSNVs : 0;		/* the mutations that were applied and are no longer variable: they were lost with a segment */
 
 	/* copy true genotypes before doing ADO but after CNLOH and deletion */
 	if (NEED_CELL_SITES && streamMode == NO)
