@@ -1,7 +1,7 @@
 name: Release
 
 # Manual workflow: run it from the Actions tab (works from a phone browser).
-# It tags the current master as v<version> and publishes a GitHub release
+# It tags the current master (or the commit given in ref) as v<version> and publishes a GitHub release
 # using docs/CHANGES-<version>.md as release notes, attaches the binaries (binaries.yml) and
 # updates the Homebrew formula and the conda recipe (packaging/).
 
@@ -12,6 +12,15 @@ on:
         description: "Version number without the v (e.g. 2.0.2)"
         required: true
         type: string
+      ref:
+        description: "Optional: commit (SHA) to release; default is the tip of master. It lets an earlier commit of master be released."
+        required: false
+        type: string
+      latest:
+        description: "Mark it as the latest release and update the Homebrew formula and the conda recipe (leave unchecked for an earlier version)"
+        required: false
+        type: boolean
+        default: true
 
 permissions:
   contents: write
@@ -22,7 +31,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          ref: master
+          ref: ${{ inputs.ref || 'master' }}
 
       - name: Check version
         run: |
@@ -41,8 +50,10 @@ jobs:
           GH_TOKEN: ${{ github.token }}
         run: |
           V="${{ inputs.version }}"
-          gh release create "v$V" --target master --title "CellCoal $V" \
-            --notes-file "docs/CHANGES-$V.md" --latest
+          LATEST=--latest
+          [ "${{ inputs.latest }}" = "true" ] || LATEST=--latest=false
+          gh release create "v$V" --target "$(git rev-parse HEAD)" --title "CellCoal $V" \
+            --notes-file "docs/CHANGES-$V.md" $LATEST
 
   binaries:
     needs: release
@@ -53,6 +64,7 @@ jobs:
   packaging:
     # writes the Homebrew formula and the conda recipe for the new tag (they need the SHA-256 of the tag's archive)
     needs: release
+    if: inputs.latest
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4
