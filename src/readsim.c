@@ -72,13 +72,13 @@ static int Reg2Bin (long beg, long end)
 static void Put16 (unsigned char *p, int v) { p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF; }
 
 /* BAM record of one read (sequence in the orientation of the reference) */
-static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mpos, long tlen, const char *seq, int len, int q, const unsigned char *qv, const char *rg, int hap, int mol)
+static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mpos, long tlen, const char *seq, int len, int q, const unsigned char *qv, const char *rg, int hap, int mol, const uint32_t *cig, int ncig, int reflen)
 	{
 	size_t	need, o;
 	int		nl = (int) strlen (name) + 1, rgl = (int) strlen (rg) + 1, i;
 	unsigned char *p;
 
-	need = 4 + 32 + nl + 4 + (len + 1) / 2 + len + 3 + rgl + 3 + 8 + 16;
+	need = 4 + 32 + nl + 4 * (ncig > 0 ? ncig : 1) + (len + 1) / 2 + len + 3 + rgl + 3 + 8 + 16;
 	Grow (&rs->buf, &rs->cap, rs->n + need);
 	if (rs->ni == rs->capi)
 		{
@@ -90,15 +90,27 @@ static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mp
 	Put32le (p + o, 0); o += 4;												/* refID */
 	Put32le (p + o, (uint32_t) pos); o += 4;
 	p[o++] = (unsigned char) nl; p[o++] = 60;								/* l_read_name, mapq */
-	Put16 (p + o, Reg2Bin (pos, pos + len)); o += 2;
-	Put16 (p + o, 1); o += 2;												/* n_cigar_op */
+	Put16 (p + o, Reg2Bin (pos, pos + reflen)); o += 2;
+	Put16 (p + o, ncig > 0 ? ncig : 1); o += 2;												/* n_cigar_op */
 	Put16 (p + o, flag); o += 2;
 	Put32le (p + o, (uint32_t) len); o += 4;
 	Put32le (p + o, 0); o += 4;												/* next refID */
 	Put32le (p + o, (uint32_t) mpos); o += 4;
 	Put32le (p + o, (uint32_t) (int32_t) tlen); o += 4;
 	memcpy (p + o, name, nl); o += nl;
-	Put32le (p + o, (uint32_t) len << 4); o += 4;							/* CIGAR: len M */
+	if (ncig > 0)														/* CIGAR */
+		{
+		int ci;
+
+		for (ci=0; ci<ncig; ci++)
+			{
+			Put32le (p + o, cig[ci]); o += 4;
+			}
+		}
+	else
+		{
+		Put32le (p + o, (uint32_t) len << 4); o += 4;						/* len M */
+		}
 	for (i=0; i<len; i+=2)
 		{
 		int a = (int) (strchr (BASES, seq[i]) - BASES), b = (i+1 < len) ? (int) (strchr (BASES, seq[i+1]) - BASES) : -1;
@@ -151,12 +163,12 @@ typedef struct
 	int			isOpen;
 	} BamOut;
 
-static long ReadRefLen (void)		/* length of the reference sequence of the BAM header */
+long ReadRefLen (void)		/* length of the reference sequence of the BAM header */
 	{
 	return blocksOn ? chromLength : (long) numSites;
 	}
 
-static const char *ReadContig (void)
+const char *ReadContig (void)
 	{
 	return blocksOn ? BlocksChrom () : contigName;
 	}
@@ -675,7 +687,7 @@ static int LoadTemplates (int hap, int cellIdx, long s, long ins, int L, char *t
 
 /* Errors of the amplification carried by a molecule (shared by its PCR duplicates): each event within reach of the
    reads of the fragment [s, s+ins) is inherited with probability f, on the strand it happened on */
-static void ApplyAmpErrors (const AmpEvent *ev, long nev, long s, long ins, int L, char *ta, char *tb, long int *seed)
+static void ApplyAmpErrors (const AmpEvent *ev, long nev, long s, long ins, int L, char *ta, char *tb, long int *seed, const long *ma, const long *mb)
 	{
 	long	lo = 0, hi = nev, mid, k, e;
 	long	errSite[16];
@@ -697,6 +709,22 @@ static void ApplyAmpErrors (const AmpEvent *ev, long nev, long s, long ins, int 
 				{
 				errSite[nerr] = e; errAlt[nerr] = ev[k].alt; errStr[nerr] = ev[k].strand; nerr++;
 				}
+		}
+	if (ma != NULL)		/* the reads of a fragment with indels: the bases of the reads are found by their site */
+		{
+		for (k=0; k<nerr; k++)
+			{
+			int i;
+
+			for (i=0; i<L; i++)
+				{
+				if (ma[i] == errSite[k] && errStr[k] != 1)
+					ta[i] = BASES[errAlt[k]];
+				if (mb[i] == errSite[k] && errStr[k] != 0)
+					tb[i] = BASES[errAlt[k]];
+				}
+			}
+		return;
 		}
 	for (k=0; k<nerr; k++)
 		{
@@ -792,9 +820,143 @@ static int DuplicateCopies (long int *seed)
 	return copies;
 	}
 
+/* The reads of a fragment that carries indels: the haplotype of the fragment (the sites s .. s+ins-1 with its insertions and deletions) is built, the first
+   and the last L bases are the reads, and every base remembers its site (-1 for an inserted base), which gives the CIGAR and the positions. */
+typedef struct
+	{
+	long		ma[512], mb[512];			/* site of every base of the two reads (-1: inserted base) */
+	uint32_t	ca[64], cb[64];				/* CIGAR of the reads */
+	int			nca, ncb;
+	long		posA, endA, posB, endB;		/* first and last site aligned by every read */
+	} Aln;
+
+static int SiteBase (int hap, int cellIdx, long j, int copyRank)
+	{
+	int a = Allele (hap, cellIdx, j);
+
+	if (copyRank > 0)
+		{
+		Geno	ex[MAX_COPIES];
+
+		if (ExtraCopies (cellIdx, hap, j, ex) >= copyRank)
+			a = ex[copyRank-1];
+		}
+	return (a < 0 || a > 3) ? -1 : a;
+	}
+
+static int MakeCigar (const long *pm, int L, uint32_t *cig, long *first, long *last)
+	{
+	int		n = 0, i, fm = 0, lm = L - 1;
+	long	prev;
+	uint32_t op = 99, len = 0;
+
+#define PUSHOP(O,N) do { if ((uint32_t)(O) == op) len += (N); else { if (len > 0) { if (n >= 63) return -1; cig[n++] = (len << 4) | op; } op = (O); len = (N); } } while (0)
+	while (fm < L && pm[fm] < 0)
+		fm++;
+	while (lm >= 0 && pm[lm] < 0)
+		lm--;
+	if (fm >= L || lm < 0)
+		return -1;
+	if (fm > 0)
+		PUSHOP (4, fm);
+	prev = -1;
+	for (i=fm; i<=lm; i++)
+		{
+		if (pm[i] < 0)
+			PUSHOP (1, 1);
+		else
+			{
+			if (prev >= 0 && pm[i] - prev > 1)
+				PUSHOP (2, (uint32_t) (pm[i] - prev - 1));
+			PUSHOP (0, 1);
+			prev = pm[i];
+			}
+		}
+	if (lm < L - 1)
+		PUSHOP (4, L - 1 - lm);
+	if (len > 0)
+		{
+		if (n >= 64)
+			return -1;
+		cig[n++] = (len << 4) | op;
+		}
+#undef PUSHOP
+	*first = pm[fm];
+	*last = pm[lm];
+	return n;
+	}
+
+/* 1 when some indel falls in the fragment; then the templates and the alignment are built (return 2) or the fragment is lost (return 3) */
+static int IndelTemplates (const IndelEv *ie, long nie, int hap, int cellIdx, long s, long ins, int L, int copyRank, char *ta, char *tb, Aln *aln)
+	{
+	long	lo = 0, hi = nie, mid, k, j, n = 0, cap;
+	int		*hb;
+	long	*hp;
+	int		i, ok = 1;
+
+	while (lo < hi)
+		{
+		mid = (lo + hi) / 2;
+		if (ie[mid].pos < s)
+			lo = mid + 1;
+		else
+			hi = mid;
+		}
+	if (lo >= nie || ie[lo].pos >= s + ins - 1)
+		return 0;
+	cap = ins + 64 * (indelMax + 1) + 8;
+	hb = (int*) Checked (malloc (cap * (sizeof(int) + sizeof(long))), "Could not allocate the reads\n");
+	hp = (long*) (hb + cap);
+	k = lo;
+	for (j=s; j<s+ins; j++)
+		{
+		hb[n] = SiteBase (hap, cellIdx, j, copyRank);
+		hp[n] = j;
+		n++;
+		while (k < nie && ie[k].pos == j)
+			{
+			const IndelEv *e = &ie[k++];
+
+			if (e->type == 0)
+				{
+				for (i=0; i<e->len && n < cap - 1; i++)
+					{
+					hb[n] = (int) (strchr (BASES, e->seq[i]) - BASES);
+					hp[n] = -1;
+					n++;
+					}
+				}
+			else
+				j += (j + e->len < s + ins) ? e->len : (s + ins - 1 - j);
+			}
+		if (n >= cap - 1)
+			break;
+		}
+	if (n < L)
+		ok = 0;
+	for (i=0; ok && i<L; i++)
+		{
+		if (hb[i] < 0 || hb[n - L + i] < 0)
+			ok = 0;
+		else
+			{
+			ta[i] = BASES[hb[i]];
+			tb[i] = BASES[hb[n - L + i]];
+			aln->ma[i] = hp[i];
+			aln->mb[i] = hp[n - L + i];
+			}
+		}
+	free (hb);
+	if (!ok)
+		return 3;
+	aln->nca = MakeCigar (aln->ma, L, aln->ca, &aln->posA, &aln->endA);
+	aln->ncb = MakeCigar (aln->mb, L, aln->cb, &aln->posB, &aln->endB);
+	return (aln->nca < 0 || aln->ncb < 0) ? 3 : 2;
+	}
+
 /* writes one read pair (copy c of a molecule) to the BAM records and/or the FASTQ files; ra and rb are the first and last reads of the fragment */
 static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, int c, long s, long ins, const char *ra, const char *rb, int q,
-					  const unsigned char *qa, const unsigned char *qb, const char *rg, int hap, long molecule)
+					  const unsigned char *qa, const unsigned char *qb, const char *rg, int hap, long molecule, const Aln *aln)
 	{
 	int		L = readLen, fa, fb;
 	char	rc[512];
@@ -807,8 +969,18 @@ static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, i
 		{ fa |= 1024; fb |= 1024; }
 	if (doBam)
 		{
-		AddRecord (rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, qa, rg, hap + 1, (int) molecule);
-		AddRecord (rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, qb, rg, hap + 1, (int) molecule);
+		if (aln != NULL)
+			{
+			long pa = CP (aln->posA), pb = CP (aln->posB), tl = CP (aln->endB) - pa + 1;
+
+			AddRecord (rs, name, fa, pa, pb, tl, ra, L, q, qa, rg, hap + 1, (int) molecule, aln->ca, aln->nca, (int) (aln->endA - aln->posA + 1));
+			AddRecord (rs, name, fb, pb, pa, -tl, rb, L, q, qb, rg, hap + 1, (int) molecule, aln->cb, aln->ncb, (int) (aln->endB - aln->posB + 1));
+			}
+		else
+			{
+			AddRecord (rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, qa, rg, hap + 1, (int) molecule, NULL, 0, L);
+			AddRecord (rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, qb, rg, hap + 1, (int) molecule, NULL, 0, L);
+			}
 		}
 	if (doFastq)
 		{
@@ -841,7 +1013,10 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 	int		qualOn = (qualSd > 0.0 || qualSlope != 0.0 || ctxOn);
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
+	const int indelsOn = (indelRate > 0.0);
 	int		srcs[2] = {cellIdx0, donor}, nsrc = (donor >= 0) ? 2 : 1, si;
+	Aln		aln;
+	int		indelAln = 0;
 
 	memset (&rs, 0, sizeof(rs));
 	q = (int) (-10.0 * log10 (qerr) + 0.5);
@@ -923,10 +1098,21 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 
 						copyRank = RandomUniformTo (1 + ExtraCopies (cellIdx, hap, s, ex), seed);	/* the fragment comes from one of the copies */
 						}
-					if (LoadTemplates (hap, cellIdx, s, ins, L, ta, tb, copyRank))
+					indelAln = 0;
+					if (indelsOn)
+						{
+						long		nie;
+						const IndelEv *ie = IndelsOf (cellIdx, hap, &nie);
+						int			r = (nie > 0) ? IndelTemplates (ie, nie, hap, cellIdx, s, ins, L, copyRank, ta, tb, &aln) : 0;
+
+						if (r == 3)
+							continue;
+						indelAln = (r == 2);
+						}
+					if (!indelAln && LoadTemplates (hap, cellIdx, s, ins, L, ta, tb, copyRank))
 						continue;
 					if (nev[si][hap] > 0)
-						ApplyAmpErrors (ev[si][hap], nev[si][hap], s, ins, L, ta, tb, seed);
+						ApplyAmpErrors (ev[si][hap], nev[si][hap], s, ins, L, ta, tb, seed, indelAln ? aln.ma : NULL, aln.mb);
 					if (ndmg > 0)
 						ApplyDamage (L, ta, tb, seed);
 					copies = DuplicateCopies (seed);
@@ -947,7 +1133,7 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 							SeqErrors (rb, L, seed);
 							}
 						snprintf (name, sizeof(name), "%s:%ld", rg, mol);
-						EmitPair (&rs, fq, name, fwdFrag, c, s, ins, ra, rb, q, qualOn ? qa : NULL, qualOn ? qb : NULL, rg, hap, mol);
+						EmitPair (&rs, fq, name, fwdFrag, c, s, ins, ra, rb, q, qualOn ? qa : NULL, qualOn ? qb : NULL, rg, hap, mol, indelAln ? &aln : NULL);
 						pairs++;
 						}
 					}
@@ -1150,6 +1336,12 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 		RefPut (c);
 		}
 
+	if (indelRate > 0.0)
+		{
+		IndelsGenerate (seed);
+		IndelsWriteVcf (readDir);
+		}
+
 	/* every cell (and the healthy bulk) has its own random stream, taken from the main stream, so the cells are simulated in parallel and
 	   the files are the same for any number of threads */
 	{
@@ -1191,6 +1383,7 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 		streamActive = 0;
 		}
 	}
+	IndelsFree ();
 	if (noisy > 0)
 		fprintf (stderr, "\rreads: %ld pairs in %d cells -> %s\n", total, numCells, readDir);
 	if (blocksOn == 0)

@@ -786,7 +786,9 @@ optional healthy <code>normal.bam</code></td>
 <code>--dup-mean</code>, <code>--bulk-depth</code>,
 <code>--qual-sd</code>, <code>--qual-slope</code>,
 <code>--strand-bias</code>, <code>--seq-context</code>,
-<code>--damage</code></td>
+<code>--damage</code>, <code>--indel-rate</code>,
+<code>--indel-ins</code>, <code>--indel-len</code>,
+<code>--indel-max</code></td>
 <td>no</td>
 <td>no</td>
 <td>yes</td>
@@ -2111,6 +2113,43 @@ duplicates inherit it (unlike the sequencing errors, which are
 independent in each read), and it also happens in the healthy bulk
 sample (which a caller can use to remove it). It works in the reads mode
 only; without the option the data are identical to before.</p>
+<p><strong>Insertions and deletions
+(<code>--indel-rate R</code>).</strong> Without this option the reads
+have substitutions only (CIGAR <code>150M</code>). With it, small
+insertions and deletions happen on the branches of the genealogy, on one
+haplotype, and every cell below the branch inherits them; the reads that
+overlap an indel carry it and their CIGAR has <code>I</code> and
+<code>D</code> operations (an inserted base at the end of a read is
+soft-clipped, <code>S</code>). It is the way to evaluate indel callers
+and the realignment, and the false SNVs that an aligner leaves around an
+indel. <code>R</code> is the rate of indels relative to the substitution
+rate (<code>-u</code>): <code>--indel-rate 0.1</code> gives one indel
+for every ten substitutions, a realistic proportion.
+<code>--indel-ins F</code> is the fraction of insertions (default 0.5),
+<code>--indel-len M</code> the mean length (default 2, a geometric
+distribution) and <code>--indel-max N</code> the maximum length (default
+10, up to 32). The indels are placed at random over the chromosome (not
+following <code>--region-rates</code>) and are
+<strong>left-aligned</strong> against the reference, as a variant caller
+reports them (the same indel in a homopolymer or a repeat always has the
+same position). The inserted bases are random. If an indel falls inside
+a deletion of the same haplotype it is lost with it. A substitution
+inside a deleted segment is not seen. The truth is
+<code>reads_&lt;n&gt;/indels_truth.vcf</code>: one line for each indel
+(VCF representation: <code>POS</code> is the base before the indel, a
+deletion has the deleted bases in <code>REF</code>, an insertion has the
+new bases in <code>ALT</code>), with <code>TYPE</code>,
+<code>LEN</code>, <code>NC</code> (cells that carry it) and the true
+genotype <code>GT</code> of every cell (maternal|paternal, 1 when the
+haplotype carries the indel). <code>truth.vcf</code> keeps the
+substitutions only. Indels work with
+<code>--blocks</code>/<code>--fasta</code> and with the doublets (the
+reads of the donor carry the donor’s indels), and give the same BAM for
+any tile size and number of threads; for now they cannot be combined
+with segment losses and gains (<code>--seg-loss-rate</code>,
+<code>--seg-gain-rate</code>), and there are no sequencing or PCR errors
+that are indels. It works in the reads mode only; without the option the
+data are identical to before.</p>
 <p><strong><code>--strand-bias P</code></strong> makes a fraction P of
 the errors of the amplification strand specific: the molecule that
 carries the error shows it only in the reads of one strand (the left
@@ -2700,12 +2739,21 @@ sequencing (e.g. <code>GGC 8</code>)</td>
 items (e.g. <code>G&gt;T:0.002,C&gt;T:0.001</code>)</td>
 </tr>
 <tr class="odd">
+<td><code>--indel-rate R</code>, <code>--indel-ins F</code>,
+<code>--indel-len M</code>, <code>--indel-max N</code></td>
+<td><code>indel-rate</code>, <code>indel-ins</code>,
+<code>indel-len</code>, <code>indel-max</code></td>
+<td>small insertions and deletions in the reads: rate relative to
+<code>-u</code> (0), fraction of insertions (0.5), mean (2) and maximum
+(10) length; truth in <code>indels_truth.vcf</code></td>
+</tr>
+<tr class="even">
 <td><code>--strand-bias P</code></td>
 <td><code>strand-bias</code></td>
 <td>fraction of the amplification errors seen on one strand only
 (0)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>--bulk-depth D</code></td>
 <td><code>bulk-depth</code></td>
 <td>also simulate a healthy bulk sample (<code>normal.bam</code>) at

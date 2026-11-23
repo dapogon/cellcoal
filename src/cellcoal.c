@@ -383,6 +383,10 @@ static void CheckModeOptions (void)
 		{"--strand-bias", ExtraOptionGiven ("--strand-bias")},
 		{"--seq-context", ExtraOptionGiven ("--seq-context")},
 		{"--damage", ExtraOptionGiven ("--damage")},
+		{"--indel-rate", ExtraOptionGiven ("--indel-rate")},
+		{"--indel-ins", ExtraOptionGiven ("--indel-ins")},
+		{"--indel-len", ExtraOptionGiven ("--indel-len")},
+		{"--indel-max", ExtraOptionGiven ("--indel-max")},
 		{NULL, 0}
 		};
 	int		k;
@@ -1177,6 +1181,16 @@ static void CheckReadOptions (void)
 		if (strlen (seqContextFile) > 0 && sequencingError <= 0.0)
 			{
 			fprintf (stderr, "\nERROR: --seq-context needs a sequencing error (-E) greater than 0\n");
+			exit (-1);
+			}
+		if (indelRate < 0.0 || indelIns < 0.0 || indelIns > 1.0 || indelLen < 1.0 || indelMax < 1 || indelMax > 32)
+			{
+			fprintf (stderr, "\nERROR: bad --indel-rate (0 or more), --indel-ins (0 to 1), --indel-len (1 or more) or --indel-max (1 to 32)\n");
+			exit (-1);
+			}
+		if (indelRate > 0.0 && (lossRate > 0.0 || gainRate > 0.0))
+			{
+			fprintf (stderr, "\nERROR: --indel-rate cannot be combined with segment losses and gains (--seg-loss-rate, --seg-gain-rate) yet\n");
 			exit (-1);
 			}
 		/* the VCF of read counts and genotype likelihoods does not exist in this mode */

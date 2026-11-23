@@ -1514,6 +1514,84 @@ grep -q "cannot be combined" dm3.out && ok "--demes with growth is an error" || 
 rm -rf DT
 cd "$ROOT"
 
+echo "2g62. Indels in the reads (--indel-rate): CIGAR with insertions and deletions, truth in indels_truth.vcf"
+cd "$TMP"
+cat > indelchk.py <<'PYEOF'
+import gzip,struct,sys,re,collections
+d=sys.argv[1]  # reads dir
+ref=''.join(l.strip() for l in open(d+'/ref.fa') if not l.startswith('>'))
+truth=collections.defaultdict(dict)  # (cell,hap) -> {(pos,type,seq):1}
+cells=None; events=[]
+for l in open(d+'/indels_truth.vcf'):
+    if l.startswith('##'): continue
+    f=l.rstrip('\n').split('\t')
+    if l.startswith('#'): cells=f[9:]; continue
+    pos=int(f[1]); R,A=f[3],f[4]
+    key=(pos,'D',R[1:]) if len(R)>len(A) else (pos,'I',A[1:])
+    events.append(key)
+    for c,g in zip(cells,f[9:]):
+        for h,x in enumerate(g.split('|')):
+            if x=='1': truth[(c,h+1)][key]=1
+nreads=nmis=nbad=0; seen=collections.defaultdict(set); cover=0; miss=0
+cig_re=re.compile(r'')
+for c in cells:
+    data=gzip.open(f'{d}/{c}.bam','rb').read()
+    lt=struct.unpack('<i',data[4:8])[0]; o=8+lt; nref=struct.unpack('<i',data[o:o+4])[0]; o+=4
+    for _ in range(nref):
+        l2=struct.unpack('<i',data[o:o+4])[0]; o+=4+l2+4
+    while o<len(data):
+        ln=struct.unpack('<i',data[o:o+4])[0]; o+=4
+        r=data[o-4:o+ln]
+        rid,pos,lrn,mq,bn,nc,fl,lseq,nrid,npos,tl=struct.unpack('<iiBBHHHiiii',data[o:o+32])
+        p=o+32+lrn
+        cg=struct.unpack('<%dI'%nc,data[p:p+4*nc]); p+=4*nc
+        sq=data[p:p+(lseq+1)//2]; p+=(lseq+1)//2
+        seq=''.join('=ACMGRSVTWYHKDBN'[(sq[i//2]>>(4 if i%2==0 else 0))&15] for i in range(lseq))
+        p+=lseq
+        aux=data[p:o+ln]
+        m=re.search(rb'HPC(.)',aux); hap=m.group(1)[0]
+        o+=ln
+        nreads+=1
+        rp=pos; qp=0; shown=[]
+        for x in cg:
+            L,op=x>>4,x&15
+            if op==0:
+                for i in range(L):
+                    if seq[qp+i]!=ref[rp+i]: nmis+=1
+                rp+=L; qp+=L
+            elif op==1:
+                shown.append((rp,'I',seq[qp:qp+L])); qp+=L   # rp = pos(0-based) of next ref base ; anchor 1-based = rp
+            elif op==2:
+                shown.append((rp,'D',ref[rp:rp+L])); rp+=L
+            elif op==4: qp+=L
+        for (a,t,s) in shown:
+            if (a,t,s) not in truth[(c,hap)]: nbad+=1; print('unexpected',c,hap,a,t,s)
+            seen[(c,hap)].add((a,t,s))
+        # coverage check: events (1-based anchor pos a) fully spanned by read -> must be shown
+        end=rp
+        for (a,t,s) in truth[(c,hap)]:
+            if t=='D' and pos+1<=a-0 and a+len(s)+1<=end: # anchor base idx a-1 >= pos, and base after deletion within read
+                if (a,t,s) not in shown:
+                    miss+=1
+            if t=='I' and pos+1<=a and a+1<=end:
+                if (a,t,s) not in shown:
+                    miss+=1
+print('reads',nreads,'M mismatches',nmis,'unexpected indels',nbad,'spanned-but-missing',miss,'events',len(events))
+
+assert nmis < 200 and nbad == 0 and miss == 0 and len(events) > 20, (nmis, nbad, miss, len(events))
+PYEOF
+rm -rf ID1 ID2; "$BIN" -n1 -s8 -l30000 -u1e-9 -e1000 -b1 -C20 -E0 -D0 --bam --fastq --indel-rate 300 -#3 -oID1 >/dev/null 2>&1
+python3 indelchk.py ID1/reads_1 >/dev/null 2>&1 && ok "every indel of a read is in the truth, every spanned indel is in the reads, and the aligned bases match the reference" || bad "indels in reads"
+grep -q "DEL" ID1/reads_1/indels_truth.vcf && grep -q "INS" ID1/reads_1/indels_truth.vcf && ok "indels_truth.vcf has insertions and deletions" || bad "indels_truth.vcf"
+CELLCOAL_READ_TILE=1024 "$BIN" -n1 -s8 -l30000 -u1e-9 -e1000 -b1 -C20 -E0 -D0 --bam --fastq --indel-rate 300 -#3 -oID2 >/dev/null 2>&1
+[ "$(zcat ID1/reads_1/cell0003.bam | md5sum)" = "$(zcat ID2/reads_1/cell0003.bam | md5sum)" ] && ok "the BAM with indels does not depend on the size of the tile" || bad "indel BAM depends on tile"
+"$BIN" -n1 -s5 -l500 -u1e-6 -C10 -E0.01 --bam --indel-rate 0.1 --indel-max 40 > id1.out 2>&1
+grep -q "bad --indel-rate" id1.out && ok "a bad --indel-max is an error" || bad "bad indel option accepted"
+"$BIN" -n1 -s5 -l500 -u1e-6 -C10 --indel-rate 0.1 > id2.out 2>&1
+grep -q "needs --bam" id2.out && ok "--indel-rate without reads mode is an error" || bad "--indel-rate accepted in the genotypes mode"
+rm -rf ID1 ID2
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

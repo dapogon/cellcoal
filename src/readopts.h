@@ -34,5 +34,9 @@
 	X(compress_level, "--compress-level", '\230', 1, compressLevel, 6) \
 	X(region_rates,   "--region-rates",   '\231', 3, regionRatesFile, 0) \
 	X(seq_context,    "--seq-context",    '\232', 3, seqContextFile, 0) \
-	X(damage,         "--damage",         '\233', 3, damageSpec, 0)
+	X(damage,         "--damage",         '\233', 3, damageSpec, 0)      \
+	X(indel_rate,     "--indel-rate",     '\242', 2, indelRate,  0)      \
+	X(indel_ins,      "--indel-ins",      '\243', 2, indelIns,   0.5)    \
+	X(indel_len,      "--indel-len",      '\244', 2, indelLen,   2)      \
+	X(indel_max,      "--indel-max",      '\245', 1, indelMax,   10)
 #endif

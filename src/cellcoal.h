@@ -421,6 +421,17 @@ long				BlocksRegionStart (void);
 FILE				*OpenText (const char *path, int *isPipe);
 void				CloseText (FILE *fp, int isPipe);
 
+/* indels in the reads (--indel-rate): events of the genealogy applied to the reads (indels.c) */
+typedef struct { long pos; long id; int type, len, hap; char seq[40]; } IndelEv;	/* type 0 = insertion after the site pos, 1 = deletion of the sites pos+1 .. pos+len */
+extern double		indelRate, indelIns, indelLen;
+extern int			indelMax;
+void				IndelsGenerate (long int *seed);
+void				IndelsFree (void);
+void				IndelsWriteVcf (const char *dir);
+const IndelEv		*IndelsOf (int cellIdx, int hap, long *n);
+const char			*ReadContig (void);
+long				ReadRefLen (void);
+
 /* regional mutation rates (--region-rates): relative rate of every site, mean 1 over the chromosome */
 extern char			*regionRatesFile;
 extern int			regionRatesOn;
