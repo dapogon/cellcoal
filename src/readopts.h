@@ -16,6 +16,11 @@
 	X(region,         "--region",         '\214', 3, regionSpec,  0)      \
 	X(germline_vcf,   "--germline-vcf",   '\215', 3, germlineVcf, 0)      \
 	X(germline_pop,   "--germline-pop",   '\234', 3, germlinePop, 0)      \
+	X(deme_n,         "--deme-n",         '\235', 3, demeN,       0)      \
+	X(deme_size,      "--deme-size",      '\236', 3, demeSize,    0)      \
+	X(deme_source,    "--deme-source",   '\237', 3, demeSource,  0)      \
+	X(deme_time,      "--deme-time",     '\240', 3, demeTime,    0)      \
+	X(deme_founders,  "--deme-founders", '\241', 3, demeFounders, 0)     \
 	X(qual_sd,        "--qual-sd",        '\216', 2, qualSd,     0)      \
 	X(qual_slope,     "--qual-slope",     '\217', 2, qualSlope,  0)      \
 	X(strand_bias,    "--strand-bias",    '\220', 2, strandBias, 0)    \

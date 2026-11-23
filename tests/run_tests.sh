@@ -1477,6 +1477,43 @@ grep -q "need --fasta" gpy.out && ok "--germline-pop without --fasta is an error
 rm -rf GP GPX GPY
 cd "$ROOT"
 
+echo "2g61. Structured coalescent (--demes): tumor regions founded by colonization, without migration"
+cd "$TMP"
+rm -rf DT; "$BIN" -n2000 -#3 -l10 -u1e-9 -e10000 -7 --demes n=3:3,size=1:0.5,time=1,founders=1 -oDT >/dev/null 2>&1
+python3 - <<'P' && ok "primary tumor and a monoclonal metastasis (size 0.5, colonized at 1): mean coalescence times 1.0 (primary), 0.43 (metastasis) and 2.0 (between)" || bad "structured coalescent times"
+import re, itertools
+txt = open('DT/times').read().split('-------------------- Nodes -------------------')[1:]
+deme = [0, 0, 0, 1, 1, 1]
+s = {}; c = {}
+for blk in txt:
+    node = {}
+    for line in blk.splitlines():
+        m = re.match(r'\s*(tip|internal|ingroupMRCA)\s+\d+\s+(\d+)\s+\(\s*(-?\d+)\s+(-?\d+)\s+(-?\d+)\)\s+\|\s+([-\d.]+)', line)
+        if m: node[int(m.group(2))] = (int(m.group(5)), float(m.group(6)))
+    def path(i):
+        p = [i]
+        while node[p[-1]][0] in node and node[p[-1]][0] != -1:
+            p.append(node[p[-1]][0])
+        return p
+    for i, j in itertools.combinations(range(1, 7), 2):
+        pj = set(path(j))
+        t = next(node[x][1] for x in path(i) if x in pj)
+        k = (deme[i-1], deme[j-1])
+        s[k] = s.get(k, 0) + t / 10000; c[k] = c.get(k, 0) + 1
+assert abs(s[(0, 0)] / c[(0, 0)] - 1.0) < 0.1, s[(0, 0)] / c[(0, 0)]
+assert abs(s[(1, 1)] / c[(1, 1)] - 0.432) < 0.06, s[(1, 1)] / c[(1, 1)]
+assert abs(s[(0, 1)] / c[(0, 1)] - 2.0) < 0.15, s[(0, 1)] / c[(0, 1)]
+P
+[ "$(cut -f2 DT/demes.tsv | tail -n +2 | tr '\n' ' ')" = "1 1 1 2 2 2 " ] && ok "demes.tsv lists the deme of every cell" || bad "demes.tsv"
+"$BIN" -n1 -#1 -l100 -u1e-6 --deme-n 3:3 > dm1.out 2>&1
+grep -q "deme-time is needed" dm1.out && ok "--deme-n without colonization times is an error" || bad "missing --deme-time accepted"
+"$BIN" -n1 -#1 -l100 -u1e-6 --deme-n 3:3:3 --deme-time 1:2 --deme-source 1:3 > dm2.out 2>&1
+grep -q "source has to be older\|has to be another deme" dm2.out && ok "a source that does not exist yet is an error" || bad "bad --deme-source accepted"
+"$BIN" -n1 -#1 -l100 -u1e-6 -g1e-4 --deme-n 3:3 --deme-time 1 > dm3.out 2>&1
+grep -q "cannot be combined" dm3.out && ok "--demes with growth is an error" || bad "--demes with growth accepted"
+rm -rf DT
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

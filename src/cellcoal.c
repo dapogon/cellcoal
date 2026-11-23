@@ -1299,6 +1299,8 @@ int main (int argc, char **argv)
 			}
 		}
 
+	DemesSetup ();		/* structured coalescent: the number of cells is that of the demes */
+
 	/* tumor only (--no-outgroup): the outgroup stays in the simulation with a branch of length 0 (= the healthy root genome, 0000) but is not in the outputs */
 	if (numOutgroup == 0)
 		healthyTipBranchLengthRatio = 0.0;
@@ -1509,6 +1511,7 @@ int main (int argc, char **argv)
 	wallSecs = (double)(wallEnd.tv_sec - wallStart.tv_sec) + 1e-9 * (double)(wallEnd.tv_nsec - wallStart.tv_nsec);
 	}
 	secs = (double)(clock() - start) / CLOCKS_PER_SEC;
+	WriteDemes ();
 	WriteRunRecord (wallSecs, secs);
 
 	/* free pending stuff */

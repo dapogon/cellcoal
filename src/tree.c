@@ -8,6 +8,204 @@
 #endif
 #include "definitions.h"
 
+/* Structured coalescent with colonizations (--deme-n, --deme-size, --deme-source, --deme-time, --deme-founders; group --demes). The sampled cells
+   belong to regions (demes) of a tumor: the primary tumor (deme 1) and its metastases. There is no exchange of cells between the demes: a deme is
+   founded once, at a time (in N generations before the present), by a number of cells of its source deme, and after that it grows apart. Looking
+   back in time, two lineages of the same deme coalesce at the rate 1/size (size relative to N), until the time of the colonization of the deme; then
+   its lineages go through the bottleneck of the founders (they coalesce until at most F remain) and continue in the source deme. */
+char	*demeN = "", *demeSize = "", *demeSource = "", *demeTime = "", *demeFounders = "";
+int		numDemes = 0, *cellDeme = NULL;
+static double	*demeSz = NULL, *demeT = NULL;		/* relative sizes and times of colonization (the first deme, the primary, has no time) */
+static int		*demeSrc = NULL, *demeFnd = NULL;	/* source deme (0-based) and number of founders */
+
+static int ParseNumbers (const char *s, double *v, int max)
+	{
+	int		n = 0;
+	char	*copy = strdup (s), *tok, *save = NULL;
+
+	for (tok = strtok_r (copy, ":", &save); tok; tok = strtok_r (NULL, ":", &save))
+		{
+		char *e;
+
+		if (n >= max)
+			{
+			free (copy);
+			return -1;
+			}
+		v[n] = strtod (tok, &e);
+		if (e == tok || *e != '\0')
+			{
+			free (copy);
+			return -1;
+			}
+		n++;
+		}
+	free (copy);
+	return n;
+	}
+
+void DemesSetup (void)
+	{
+	double	v[256];
+	int		k, n, K, total = 0;
+
+	if (strlen (demeN) == 0)
+		{
+		if (strlen (demeSize) > 0 || strlen (demeSource) > 0 || strlen (demeTime) > 0 || strlen (demeFounders) > 0)
+			{
+			fprintf (stderr, "\nERROR: --deme-size, --deme-source, --deme-time and --deme-founders need --deme-n (the number of cells of every deme)\n");
+			exit (-1);
+			}
+		return;
+		}
+	if (doUserTree == YES || doDemographics == YES || doExponential == YES || doOthsukiInnanCoal == YES)
+		{
+		fprintf (stderr, "\nERROR: the structured coalescent (--demes) cannot be combined with a user tree, growth or demographic periods\n");
+		exit (-1);
+		}
+	K = ParseNumbers (demeN, v, 64);
+	if (K < 2)
+		{
+		fprintf (stderr, "\nERROR: --deme-n needs the number of cells of at least two demes, separated by : (for example 20:10:10)\n");
+		exit (-1);
+		}
+	for (k=0; k<K; k++)
+		{
+		if (v[k] < 0.0 || v[k] != floor (v[k]) || (v[k] < 1.0 && k > 0))
+			{
+			fprintf (stderr, "\nERROR: --deme-n: the number of cells of a deme has to be a whole number of at least 1 (0 is allowed only for the first deme, a primary tumor that is not sampled)\n");
+			exit (-1);
+			}
+		total += (int) v[k];
+		}
+	if (total < 2)
+		{
+		fprintf (stderr, "\nERROR: --deme-n: at least two cells are needed\n");
+		exit (-1);
+		}
+	cellDeme = (int*) Checked (calloc (total, sizeof(int)), "Could not allocate the demes\n");
+	for (k=0, n=0; k<K; k++)
+		{
+		int c, m = (int) v[k];
+
+		for (c=0; c<m; c++)
+			cellDeme[n++] = k;
+		}
+	demeSz = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the demes\n");
+	demeT = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the demes\n");
+	demeSrc = (int*) Checked (calloc (K, sizeof(int)), "Could not allocate the demes\n");
+	demeFnd = (int*) Checked (calloc (K, sizeof(int)), "Could not allocate the demes\n");
+	for (k=0; k<K; k++)
+		{
+		demeSz[k] = 1.0;
+		demeFnd[k] = 1;
+		}
+	if (strlen (demeSize) > 0)
+		{
+		n = ParseNumbers (demeSize, v, 64);
+		if (n != K)
+			{
+			fprintf (stderr, "\nERROR: --deme-size needs %d sizes (one per deme), separated by :\n", K);
+			exit (-1);
+			}
+		for (k=0; k<K; k++)
+			{
+			if (v[k] <= 0.0)
+				{
+				fprintf (stderr, "\nERROR: --deme-size: the sizes have to be greater than 0\n");
+				exit (-1);
+				}
+			demeSz[k] = v[k];
+			}
+		}
+	if (strlen (demeTime) == 0)
+		{
+		fprintf (stderr, "\nERROR: --deme-time is needed: the time of colonization of the demes 2 to %d, in N generations before the present (%d numbers separated by :)\n", K, K - 1);
+		exit (-1);
+		}
+	n = ParseNumbers (demeTime, v, 64);
+	if (n != K - 1)
+		{
+		fprintf (stderr, "\nERROR: --deme-time needs %d times (demes 2 to %d), separated by :\n", K - 1, K);
+		exit (-1);
+		}
+	for (k=1; k<K; k++)
+		{
+		if (v[k-1] <= 0.0)
+			{
+			fprintf (stderr, "\nERROR: --deme-time: the times have to be greater than 0\n");
+			exit (-1);
+			}
+		demeT[k] = v[k-1];
+		demeSrc[k] = 0;
+		}
+	if (strlen (demeSource) > 0)
+		{
+		n = ParseNumbers (demeSource, v, 64);
+		if (n != K - 1)
+			{
+			fprintf (stderr, "\nERROR: --deme-source needs %d demes (the source of the demes 2 to %d), separated by :\n", K - 1, K);
+			exit (-1);
+			}
+		for (k=1; k<K; k++)
+			{
+			int sdeme = (int) v[k-1];
+
+			if (v[k-1] != sdeme || sdeme < 1 || sdeme > K || sdeme == k + 1)
+				{
+				fprintf (stderr, "\nERROR: --deme-source: the source of the deme %d has to be another deme, 1 to %d\n", k + 1, K);
+				exit (-1);
+				}
+			demeSrc[k] = sdeme - 1;
+			}
+		}
+	if (strlen (demeFounders) > 0)
+		{
+		n = ParseNumbers (demeFounders, v, 64);
+		if (n != K - 1)
+			{
+			fprintf (stderr, "\nERROR: --deme-founders needs %d numbers (the founder cells of the demes 2 to %d), separated by :\n", K - 1, K);
+			exit (-1);
+			}
+		for (k=1; k<K; k++)
+			{
+			if (v[k-1] < 1.0 || v[k-1] != floor (v[k-1]))
+				{
+				fprintf (stderr, "\nERROR: --deme-founders: a deme is founded by a whole number of cells, at least 1\n");
+				exit (-1);
+				}
+			demeFnd[k] = (int) v[k-1];
+			}
+		}
+	/* a deme can only be colonized from a deme that exists then: the source is older (and the chain of sources reaches the first deme) */
+	for (k=1; k<K; k++)
+		if (demeSrc[k] != 0 && !(demeT[demeSrc[k]] > demeT[k]))
+			{
+			fprintf (stderr, "\nERROR: the deme %d is colonized (time %g) from the deme %d, which is colonized later (time %g): the source has to be older\n", k + 1, demeT[k], demeSrc[k] + 1, demeT[demeSrc[k]]);
+			exit (-1);
+			}
+	numDemes = K;
+	numCells = total;			/* -s is ignored */
+	}
+
+/* demes.tsv: the deme of every cell */
+void WriteDemes (void)
+	{
+	char	file[2*MAX_NAME+16];
+	FILE	*fp;
+	int		i;
+
+	if (numDemes == 0)
+		return;
+	snprintf (file, sizeof(file), "%s/demes.tsv", resultsDir);
+	if ((fp = fopen (file, "w")) == NULL)
+		return;
+	fprintf (fp, "cell\tdeme\n");
+	for (i=0; i<numCells; i++)
+		fprintf (fp, "%s%04d\t%d\n", inCellName, i + 1, cellDeme[i] + 1);
+	fclose (fp);
+	}
+
 /************************* MakeCoalescenceTree  ************************/
 /*	Builds a genealogy  under the coalescent with exponential growth without recombination */
 
@@ -61,12 +259,158 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
         }
     nextAvailableNode = numActiveNodes;
 	
+    /* structured coalescent with colonizations: coalescences inside the demes that exist, and the colonization events */
+    if (numDemes > 0)
+        {
+        int		K = numDemes, **lin, *cnt, *done, total = numCells, k, j, a, b;
+        double	*coal, h, u, tNext, wait;
+        int		kNext;
+
+        lin = (int**) Checked (calloc (K, sizeof(int*)), "Could not allocate the demes\n");
+        cnt = (int*) Checked (calloc (2 * K, sizeof(int)), "Could not allocate the demes\n");
+        done = cnt + K;
+        coal = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the demes\n");
+        for (k=0; k<K; k++)
+            lin[k] = (int*) Checked (calloc (numCells, sizeof(int)), "Could not allocate the demes\n");
+        for (i=0; i<numCells; i++)
+            lin[cellDeme[i]][cnt[cellDeme[i]]++] = i;
+        currentTime = 0.0;
+        while (total > 1)
+            {
+            h = 0.0;
+            tNext = -1.0;
+            kNext = -1;
+            for (k=0; k<K; k++)		/* the demes that exist now: the ones not yet colonized (looking back) */
+                {
+                coal[k] = done[k] ? 0.0 : cnt[k] * (cnt[k] - 1) / 2.0 / demeSz[k];
+                h += coal[k];
+                if (k > 0 && !done[k] && (kNext < 0 || demeT[k] * N < tNext))
+                    {
+                    kNext = k;
+                    tNext = demeT[k] * N;
+                    }
+                }
+            wait = (h > 0.0) ? RandomExponential (h, seed) * N : -1.0;
+            if (kNext >= 0 && (wait < 0.0 || currentTime + wait >= tNext))
+                {
+                /* colonization of the deme kNext: its lineages go through the bottleneck of the founders and continue in the source deme */
+                int		F = demeFnd[kNext], m = cnt[kNext], *slot, c, src = demeSrc[kNext];
+                int		ncoal = 0;
+
+                currentTime = tNext;
+                slot = (int*) malloc ((m > 0 ? m : 1) * sizeof(int));
+                for (c=0; c<m; c++)
+                    slot[c] = (int) RandomUniformTo (F, seed);	/* every lineage descends from one of the F founders, at random */
+                for (c=0; c<m; c++)					/* the lineages of the same founder coalesce at the time of the colonization */
+                    {
+                    int d, first = -1;
+
+                    for (d=0; d<c; d++)
+                        if (slot[d] == slot[c])
+                            {
+                            first = d;
+                            break;
+                            }
+                    if (first >= 0 || slot[c] < 0)
+                        continue;
+                    /* c is the first lineage of its founder: coalesce the following ones into it */
+                    for (d=c+1; d<m; d++)
+                        if (slot[d] == slot[c])
+                            {
+                            double t = currentTime * (1.0 + 1e-9 * (++ncoal));
+                            TreeNode *pp = treeNodes + lin[kNext][c], *qq = treeNodes + lin[kNext][d], *rr = treeNodes + nextAvailableNode;
+
+                            numCA++;
+                            rr->index = nextAvailableNode;
+                            rr->left = pp;
+                            rr->right = qq;
+                            pp->anc = rr;
+                            qq->anc = rr;
+                            rr->time = t;
+                            pp->length = rr->time - pp->time;
+                            qq->length = rr->time - qq->time;
+                            pp->branchLength = pp->length * mutationRate;
+                            qq->branchLength = qq->length * mutationRate;
+                            lin[kNext][c] = nextAvailableNode;
+                            r = rr;
+                            nextAvailableNode++;
+                            total--;
+                            slot[d] = -1;		/* absorbed */
+                            if (nextAvailableNode >= numNodes)
+                                {
+                                fprintf (stderr, "\n\nERROR: Too many nodes!\n");
+                                exit (-1);
+                                }
+                            }
+                    }
+                for (c=0; c<m; c++)
+                    if (slot[c] >= 0)
+                        lin[src][cnt[src]++] = lin[kNext][c];
+                free (slot);
+                cnt[kNext] = 0;
+                done[kNext] = 1;
+                continue;
+                }
+            if (h <= 0.0)
+                {
+                fprintf (stderr, "\n\nERROR: the structured coalescent cannot finish (check --deme-source and --deme-time)\n");
+                exit (-1);
+                }
+            currentTime += wait;
+            u = RandomUniform (seed) * h;
+            for (k=0; k<K-1; k++)
+                {
+                if (u < coal[k])
+                    break;
+                u -= coal[k];
+                }
+            while (coal[k] <= 0.0 && k > 0)
+                k--;
+            a = (int) (cnt[k] * RandomUniform (seed));
+            if (a >= cnt[k]) a = cnt[k] - 1;
+            do
+                {
+                b = (int) (cnt[k] * RandomUniform (seed));
+                } while (a == b || b >= cnt[k]);
+            numCA++;
+            p = treeNodes + lin[k][a];
+            q = treeNodes + lin[k][b];
+            r = treeNodes + nextAvailableNode;
+            r->index = nextAvailableNode;
+            r->left = p;
+            r->right = q;
+            p->anc = r;
+            q->anc = r;
+            r->time = currentTime;
+            p->length = r->time - p->time;
+            q->length = r->time - q->time;
+            p->branchLength = p->length * mutationRate;
+            q->branchLength = q->length * mutationRate;
+            lin[k][a] = nextAvailableNode;
+            lin[k][b] = lin[k][cnt[k] - 1];
+            cnt[k]--;
+            total--;
+            nextAvailableNode++;
+            if (nextAvailableNode >= numNodes)
+                {
+                fprintf (stderr, "\n\nERROR: Too many nodes!\n");
+                exit (-1);
+                }
+            }
+        (void) j;
+        for (k=0; k<K; k++)
+            free (lin[k]);
+        free (lin);
+        free (cnt);
+        free (coal);
+        }
+
     /* make coalescence tree */
     eventNum = 0;
     period = 1;
     currentTime = 0.0;
     eventTime = 0.0;
-    while (numActiveNodes > 1)
+    while (numDemes == 0 && numActiveNodes > 1)
         {
         rateCA = numActiveNodes * (numActiveNodes - 1) / 2.0;
 			

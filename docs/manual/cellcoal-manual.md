@@ -325,6 +325,26 @@ Fig. 5. Rate variation among branches. Rate variation among lineages can be a pr
 
 Alternatively to the gamma rate variation, a few *rate switches* can be introduced in the genealogy (option -N). Each switch chooses one branch of the ingroup tree at random, with probability proportional to its length (the root branch is excluded, and the same branch is never chosen twice), and multiplies by a given factor the length of that branch *and* of all the branches descending from it. Because mutations accumulate along branches, a factor larger than 1 produces a clade with an accelerated mutation rate (for example, a mutator lineage), and a factor smaller than 1 a clade that evolves more slowly. If a switch falls inside the subtree of another switch, their factors are multiplied. With the noisy option -y2 or higher, the node chosen by each switch, its factor and the cells in the affected clade are printed on screen for each replicate (for example, `node 17 *0.20 ( 1 5 9 7 )`); the log file records the number of switches and their factors. For example, `-N2 4 0.2` introduces two switches, one that makes a clade evolve four times faster and another that makes a clade evolve five times slower. This option cannot be combined with rate variation among lineages (-i). See section 6.2.
 
+### 5.1.4 Tumor regions: the structured coalescent with colonizations
+
+By default the cells are a random sample of one panmictic population. A tumor is not like that: the primary tumor and its metastases are different regions whose cells are related inside each region more than between regions, and the SNVs shared by the cells of a region but not by the others are what spatial studies work with. The structured coalescent samples the cells from **demes** (regions). **There is no exchange of cells between the demes**: a metastasis is not fed continuously by the primary tumor, it is *founded* once, at a time, by one or a few cells of its source deme, and then grows apart. It is a model of colonization, not of migration.
+
+```
+cellcoal -l1000 -u1e-7 --demes n=20:10:10,size=1:0.5:0.2,time=2:0.5,source=1:2,founders=1:3
+```
+
+Deme 1 is the primary tumor, and the other demes are colonized from another deme:
+
+- `--deme-n` (`n=` in the group `--demes`) gives the number of cells of every deme, separated by `:` (`20:10:10` is three regions with 20, 10 and 10 cells). The number of cells is their sum and `-s` is ignored. The primary tumor (deme 1) can have 0 cells (`0:10:10`), for a primary tumor that is not sampled. The cells are numbered by deme, and the file `demes.tsv` of the results folder lists the deme (1, 2, ...) of every cell.
+- `--deme-time` (`time=`, needed) is the time of colonization of the demes 2, 3, ..., in units of *N* generations before the present (`time=2:0.5`: the deme 2 was founded 2*N* generations ago and the deme 3, 0.5*N* generations ago).
+- `--deme-source` (`source=`) is the deme that founded each of the demes 2, 3, ...; by default all come from the deme 1. A metastasis can seed another one (`source=1:2`: the deme 3 comes from the deme 2). The source has to exist when the colonization happens, so it has to be older than the deme that it founds.
+- `--deme-founders` (`founders=`) is the number of cells that found each of the demes 2, 3, ...; by default 1 (a monoclonal metastasis: all the cells of the deme descend from one cell, and the deme is a clade of the tree), and more cells give polyclonal seeding, where the deme descends from several cells of the source and its cells are not a clade.
+- `--deme-size` (`size=`) is the effective size of every deme relative to `-e` (default 1 for all). Two cells of the same deme coalesce at the rate 1/size per *N* generations, so a small deme is more clonal (its cells coalesce sooner), as a recently founded metastasis is.
+
+Looking back in time, the cells of a deme coalesce among themselves until the colonization; there they go through the bottleneck of the founders (they coalesce until at most the founders remain) and continue in the source deme, where they can coalesce with the cells of the source. With one founder the mean coalescence time of two cells of a deme of size *s* founded at *T* is *s*(1 - exp(-*T*/*s*)), and between a cell of the primary tumor (size 1) and a cell of that deme it is *T* + 1; the simulation reproduces both (*s* = 0.5, *T* = 1: 0.43 and 2.0).
+
+This model cannot be combined with growth, demographic periods or a user tree (the sizes of the demes are constant), and all the other options (mutation models, copy number, reads, doublets...) work as usual on the genealogy that it produces. The doublets (`-B`) choose their donor among all the cells, not within the deme.
+
 ## 5.2 Somatic mutation models
 
 CellCoal simulates the evolution of the genotypes along the genealogy by adding somatic events to an ancestral genome at the *sample/outgroup MRCA*. There are five kinds of events, which differ in what they do to the genome of a cell:
@@ -790,6 +810,26 @@ Number of rate switches along the genealogy, an integer between 1 and the number
 **--no-outgroup: tumour only**
 
 Leaves the healthy outgroup cell out of the outputs (section 5.1.1). Group `--tree no-outgroup`.
+
+**--deme-n N1:N2:...: structured coalescent, cells of every deme**
+
+Number of cells of every region (deme), separated by `:` (at least two demes; the first is the primary tumor and can have 0 cells); the number of cells is their sum and `-s` is ignored. The file `demes.tsv` lists the deme of every cell (section 5.1.4). Group `--demes n=...`.
+
+**--deme-time T2:T3:...: structured coalescent, colonization times**
+
+Time of colonization of the demes 2, 3, ..., in *N* generations before the present (needed with `--deme-n`). Group `--demes time=...`.
+
+**--deme-source S2:S3:...: structured coalescent, source deme**
+
+Deme that founded each of the demes 2, 3, ... (default: all from the deme 1); it has to be older than the deme that it founds. Group `--demes source=...`.
+
+**--deme-founders F2:F3:...: structured coalescent, founder cells**
+
+Number of cells that found each of the demes 2, 3, ... (default 1, a monoclonal metastasis). Group `--demes founders=...`.
+
+**--deme-size S1:S2:...: structured coalescent, size of the demes**
+
+Effective size of every deme relative to `-e` (greater than 0; default 1 for all). Group `--demes size=...`.
 
 ## 6.3 Mutation models
 

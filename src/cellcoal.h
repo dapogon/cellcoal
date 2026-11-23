@@ -403,6 +403,10 @@ void				WriteTruthVcf (int dataSetNum);
 void				FinishReadLevel (void);
 /* chromosome in blocks (blocks.c) */
 extern int			blocksN, blockIndex, blocksOn, *posMap;
+extern char			*demeN, *demeSize, *demeSource, *demeTime, *demeFounders;
+extern int			numDemes, *cellDeme;
+void				DemesSetup (void);
+void				WriteDemes (void);
 extern char			*fastaFile, *regionSpec, *germlineVcf, *germlinePop, *refUserGenome, *germFlag;
 extern long			blockOffset, blockSize, chromLength;
 int					ExtraOptionGiven (const char *opt);
