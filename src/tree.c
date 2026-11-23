@@ -219,7 +219,7 @@ static void FatalInfiniteCoalescentTime (double t)
 	exit (-1);
 	}
 
-void MakeCoalescenceTree(int numCells, int N, long int *seed)
+void MakeCoalescenceTree(int nCells, int popN, long int *seed)
 	{
     int			i, *activeNodes, numActiveNodes,nextAvailableNode,
 				firstNode, secondNode, newNode, eventNum,period;
@@ -250,7 +250,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
 	
     /* set up initial nodes */
     numActiveNodes = 0;
-    for (i=0; i<numCells; i++)
+    for (i=0; i<nCells; i++)
         {
         p = treeNodes + i;
         activeNodes[numActiveNodes] = i;
@@ -262,7 +262,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
     /* structured coalescent with colonizations: coalescences inside the demes that exist, and the colonization events */
     if (numDemes > 0)
         {
-        int		K = numDemes, **lin, *cnt, *done, total = numCells, k, j, a, b;
+        int		K = numDemes, **lin, *cnt, *done, total = nCells, k, j, a, b;
         double	*coal, h, u, tNext, wait;
         int		kNext;
 
@@ -271,8 +271,8 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
         done = cnt + K;
         coal = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the demes\n");
         for (k=0; k<K; k++)
-            lin[k] = (int*) Checked (calloc (numCells, sizeof(int)), "Could not allocate the demes\n");
-        for (i=0; i<numCells; i++)
+            lin[k] = (int*) Checked (calloc (nCells, sizeof(int)), "Could not allocate the demes\n");
+        for (i=0; i<nCells; i++)
             lin[cellDeme[i]][cnt[cellDeme[i]]++] = i;
         currentTime = 0.0;
         while (total > 1)
@@ -284,13 +284,13 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
                 {
                 coal[k] = done[k] ? 0.0 : cnt[k] * (cnt[k] - 1) / 2.0 / demeSz[k];
                 h += coal[k];
-                if (k > 0 && !done[k] && (kNext < 0 || demeT[k] * N < tNext))
+                if (k > 0 && !done[k] && (kNext < 0 || demeT[k] * popN < tNext))
                     {
                     kNext = k;
-                    tNext = demeT[k] * N;
+                    tNext = demeT[k] * popN;
                     }
                 }
-            wait = (h > 0.0) ? RandomExponential (h, seed) * N : -1.0;
+            wait = (h > 0.0) ? RandomExponential (h, seed) * popN : -1.0;
             if (kNext >= 0 && (wait < 0.0 || currentTime + wait >= tNext))
                 {
                 /* colonization of the deme kNext: its lineages go through the bottleneck of the founders and continue in the source deme */
@@ -451,7 +451,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
         else
             {
-            timeCA = RandomExponential (rateCA, seed) * N; /* time is kept in N generations */
+            timeCA = RandomExponential (rateCA, seed) * popN; /* time is kept in popN generations */
             if (doExponential == YES)
                 {
                 timeCA = log (exp(growthRate*currentTime) + growthRate * timeCA) / growthRate - currentTime;
@@ -467,7 +467,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
                 }
 			else if (doOthsukiInnanCoal == YES)
 				{
-				timeCA = RandomExponential (rateCA * 2.0 * birthRate, seed) * N;
+				timeCA = RandomExponential (rateCA * 2.0 * birthRate, seed) * popN;
 				timeCA = log (exp(growthRate*currentTime) + growthRate * timeCA) / growthRate - currentTime;
 
 				/*	When growth rate is very negative, coalescent time may be infinite
@@ -544,7 +544,7 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
             }
     } /* coalescent cell tree finished */
 	
-  	TMRCA = currentTime / N ;  /* TMRCA is now is back in N coalescent generations */
+  	TMRCA = currentTime / popN ;  /* TMRCA is now is back in popN coalescent generations */
 	coalTreeMRCA = r;
 	
     /* Connect the coalescent cell MRCA node with the healthy ancestral cell */
@@ -583,8 +583,8 @@ void MakeCoalescenceTree(int numCells, int N, long int *seed)
     /* Relabel nodes on tree (label tips with indexes) */
     if (noisy > 2)
         fprintf (stderr, "\n>> Relabeling nodes on tree ... ");
-    tipLabel = numCells;
-    intLabel = numCells+1;
+    tipLabel = nCells;
+    intLabel = nCells+1;
     RelabelNodes(healthyRoot);
     if (noisy > 2)
         fprintf (stderr, "DONE");

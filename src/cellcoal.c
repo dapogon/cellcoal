@@ -371,7 +371,7 @@ static void CheckModeOptions (void)
 		{"--amp-signature", ampSignatureFile != NULL},
 		{NULL, 0}
 		};
-	struct { const char *name; int given; } readsOnly[] =
+	struct { const char *name; int given; } readsOnlyArg[] =
 		{
 		{"--read-len", ExtraOptionGiven ("--read-len")},
 		{"--insert-mean", ExtraOptionGiven ("--insert-mean")},
@@ -395,10 +395,10 @@ static void CheckModeOptions (void)
 				exit (-1);
 				}
 	if (!reads)
-		for (k=0; readsOnly[k].name; k++)
-			if (readsOnly[k].given)
+		for (k=0; readsOnlyArg[k].name; k++)
+			if (readsOnlyArg[k].given)
 				{
-				fprintf (stderr, "\n!!! PARAMETER ERROR: %s is an option of the reads mode and needs --bam and/or --fastq\n\n", readsOnly[k].name);
+				fprintf (stderr, "\n!!! PARAMETER ERROR: %s is an option of the reads mode and needs --bam and/or --fastq\n\n", readsOnlyArg[k].name);
 				exit (-1);
 				}
 	if (genotypes)
@@ -1568,7 +1568,7 @@ static void JsonString (FILE *fp, const char *s)
 
 void WriteRunRecord (double wallSecs, double cpuSecs)
 	{
-	char		File[2*MAX_NAME+8], when[64];
+	char		fileArg[2*MAX_NAME+8], when[64];
 	FILE		*fp;
 	time_t		now = time (NULL);
 	struct tm	tmv;
@@ -1576,8 +1576,8 @@ void WriteRunRecord (double wallSecs, double cpuSecs)
 	const char	*envNames[] = {"CELLCOAL_SPARSE", "CELLCOAL_DENSE_MB", "CELLCOAL_STREAM", "CELLCOAL_STREAM_MB", "CELLCOAL_GL_CACHE_MB", "OMP_NUM_THREADS"};
 	int			first = YES;
 
-	snprintf (File, sizeof(File), "%s/%s", resultsDir, "run.json");
-	if ((fp = fopen (File, "w")) == NULL)
+	snprintf (fileArg, sizeof(fileArg), "%s/%s", resultsDir, "run.json");
+	if ((fp = fopen (fileArg, "w")) == NULL)
 		return;
 #ifdef _OPENMP
 	threads = omp_get_max_threads ();

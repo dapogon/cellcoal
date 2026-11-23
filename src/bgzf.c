@@ -82,9 +82,9 @@ void BgzfBlock (FILE *fp, const unsigned char *d, int n)
 	fwrite (out, 1, total, fp);
 	}
 
-void BgzfWrite (Bgzf *b, const void *data, size_t len)
+void BgzfWrite (Bgzf *b, const void *buf, size_t len)
 	{
-	const unsigned char *p = (const unsigned char*) data;
+	const unsigned char *p = (const unsigned char*) buf;
 
 	while (len > 0)
 		{

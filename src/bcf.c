@@ -282,28 +282,28 @@ static void PutSharedBody (Bytes *body, char **tok, char **alts, int nalt, char 
 	}
 
 /* GT of all the samples: integer vectors (allele + 1) << 1 | phased, 0 for a missing allele (htslib requires this) */
-static void PutGenotypeField (Bytes *indiv, char ***cell, int k, int nsamples, long lineNo)
+static void PutGenotypeField (Bytes *indiv, char ***cl, int k, int nsamples, long lineNo)
 	{
-	int		s, ploidy = 1;
+	int		s, ploidyN = 1;
 	char	*z;
 
-	for (z=cell[0][k]; *z; z++)
+	for (z=cl[0][k]; *z; z++)
 		if (*z == '|' || *z == '/')
-			ploidy++;
-	PutDesc (indiv, T_INT8, ploidy);
+			ploidyN++;
+	PutDesc (indiv, T_INT8, ploidyN);
 	for (s=0; s<nsamples; s++)
 		{
 		int np = 0;
 
-		z = cell[s][k];
-		while (np < ploidy)
+		z = cl[s][k];
+		while (np < ploidyN)
 			{
 			int allele = -1, phased = 0;
 
 			if (np > 0)
 				{
 				if (*z != '|' && *z != '/')
-					FailLine (lineNo, "inconsistent ploidy in GT");
+					FailLine (lineNo, "inconsistent ploidyN in GT");
 				phased = (*z == '|');
 				z++;
 				}
@@ -324,26 +324,26 @@ static void PutGenotypeField (Bytes *indiv, char ***cell, int k, int nsamples, l
 	}
 
 /* a string FORMAT key: fixed-width, padded with zeros */
-static void PutStringField (Bytes *indiv, char ***cell, int k, int nsamples)
+static void PutStringField (Bytes *indiv, char ***cl, int k, int nsamples)
 	{
 	size_t	mx = 0, l;
 	int		s;
 
 	for (s=0; s<nsamples; s++)
-		if (strlen (cell[s][k]) > mx)
-			mx = strlen (cell[s][k]);
+		if (strlen (cl[s][k]) > mx)
+			mx = strlen (cl[s][k]);
 	PutDesc (indiv, T_CHAR, (long) mx);
 	for (s=0; s<nsamples; s++)
 		{
-		l = strlen (cell[s][k]);
-		BPutRaw (indiv, cell[s][k], l);
+		l = strlen (cl[s][k]);
+		BPutRaw (indiv, cl[s][k], l);
 		for (; l<mx; l++)
 			BPut8 (indiv, 0);
 		}
 	}
 
 /* an integer or float FORMAT key: vectors padded to the longest one */
-static void PutNumericField (Bytes *indiv, char ***cell, int k, int kind, int nsamples, long lineNo)
+static void PutNumericField (Bytes *indiv, char ***cl, int k, int kind, int nsamples, long lineNo)
 	{
 	long	*iv;
 	unsigned char *miss;
@@ -355,7 +355,7 @@ static void PutNumericField (Bytes *indiv, char ***cell, int k, int kind, int ns
 		int c = 1;
 		char *z;
 
-		for (z=cell[s][k]; *z; z++)
+		for (z=cl[s][k]; *z; z++)
 			if (*z == ',')
 				c++;
 		if (c > len)
@@ -368,9 +368,9 @@ static void PutNumericField (Bytes *indiv, char ***cell, int k, int kind, int ns
 		int nn;
 		char *vv[64];
 
-		if (strlen (cell[s][k]) >= sizeof(tmp))
+		if (strlen (cl[s][k]) >= sizeof(tmp))
 			FailLine (lineNo, "field too long");
-		strcpy (tmp, cell[s][k]);
+		strcpy (tmp, cl[s][k]);
 		nn = Split (tmp, ',', vv, 64);
 		for (v=0; v<len; v++)
 			{
@@ -415,7 +415,7 @@ static void PutNumericField (Bytes *indiv, char ***cell, int k, int kind, int ns
 static void PutFormatFields (Bytes *indiv, char **tok, char **keys, int nkeys, int nsamples, long lineNo)
 	{
 	enum { MAXKEYS = 32 };
-	char	***cell = (char***) malloc (nsamples * sizeof(char**));
+	char	***cl = (char***) malloc (nsamples * sizeof(char**));
 	char	*parts[MAXKEYS];
 	int		k, s, d;
 
@@ -424,10 +424,10 @@ static void PutFormatFields (Bytes *indiv, char **tok, char **keys, int nkeys, i
 		{
 		int np;
 
-		cell[s] = (char**) malloc (nkeys * sizeof(char*));
+		cl[s] = (char**) malloc (nkeys * sizeof(char*));
 		np = Split (tok[9+s], ':', parts, MAXKEYS);
 		for (k=0; k<nkeys; k++)
-			cell[s][k] = (k < np) ? parts[k] : (char*) ".";
+			cl[s][k] = (k < np) ? parts[k] : (char*) ".";
 		}
 	for (k=0; k<nkeys; k++)
 		{
@@ -436,15 +436,15 @@ static void PutFormatFields (Bytes *indiv, char **tok, char **keys, int nkeys, i
 			FailLine (lineNo, "undeclared FORMAT key");
 		PutTypedInt (indiv, d);
 		if (strcmp (keys[k], "GT") == 0)
-			PutGenotypeField (indiv, cell, k, nsamples, lineNo);
+			PutGenotypeField (indiv, cl, k, nsamples, lineNo);
 		else if (dict[d].kind == K_STRING)
-			PutStringField (indiv, cell, k, nsamples);
+			PutStringField (indiv, cl, k, nsamples);
 		else
-			PutNumericField (indiv, cell, k, dict[d].kind, nsamples, lineNo);
+			PutNumericField (indiv, cl, k, dict[d].kind, nsamples, lineNo);
 		}
 	for (s=0; s<nsamples; s++)
-		free (cell[s]);
-	free (cell);
+		free (cl[s]);
+	free (cl);
 	}
 
 static void ConvertRecord (Bytes *rec, char *line, int nsamples, long lineNo)

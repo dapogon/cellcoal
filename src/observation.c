@@ -490,7 +490,7 @@ void GenotypeError (long int *seed)
 
 int CountTrueVariants (void)
 	{
-    int		cell, site;
+    int		cl, site;
     int		nVariants = 0;
     char	*isVar, *extraVar = NULL;
     Geno	*matRoot, *patRoot, *mat, *pat;
@@ -507,7 +507,7 @@ int CountTrueVariants (void)
         for (site=0; site<numSites; site++)
             {
             Geno *c = sparseCols[site];
-            Geno mr, pr;
+            Geno mrate, pr;
             if (c == NULL)
                 {
                 if (extraVar != NULL && extraVar[site])
@@ -517,11 +517,11 @@ int CountTrueVariants (void)
                     }
                 continue;
                 }
-            mr = data[MATERNAL][OUTGROUP_ROOT][site];
+            mrate = data[MATERNAL][OUTGROUP_ROOT][site];
             pr = data[PATERNAL][OUTGROUP_ROOT][site];
-            for (cell=0; cell<numCells+1; cell++)
+            for (cl=0; cl<numCells+1; cl++)
                 {
-                if ((c[cell] != DELETION && c[cell] != mr) || (c[numNodes+cell] != DELETION && c[numNodes+cell] != pr))
+                if ((c[cl] != DELETION && c[cl] != mrate) || (c[numNodes+cl] != DELETION && c[numNodes+cl] != pr))
                     {
                     allSites[site].isVariant = YES;
                     variantSites[nVariants++] = site;
@@ -542,10 +542,10 @@ int CountTrueVariants (void)
     isVar = (char *) Checked (calloc(numSites, sizeof(char)), "Could not allocate the isVar vector\n");
     matRoot = data[MATERNAL][OUTGROUP_ROOT];
     patRoot = data[PATERNAL][OUTGROUP_ROOT];
-    for (cell=0; cell<numCells+1; cell++)
+    for (cl=0; cl<numCells+1; cl++)
         {
-        mat = data[MATERNAL][cell];
-        pat = data[PATERNAL][cell];
+        mat = data[MATERNAL][cl];
+        pat = data[PATERNAL][cl];
         /* no branches, so that the compiler can vectorize it */
         for (site=0; site<numSites; site++)
             isVar[site] |= (char) (((mat[site] != DELETION) & (mat[site] != matRoot[site])) |
@@ -572,7 +572,7 @@ int CountTrueVariants (void)
 
 int CountAllelesInObservedGenotypes (void)
 	{
-	int		numAltAlleles, cell, site, s0, s1, k, ch;
+	int		numAltAlleles, cl, site, s0, s1, k, ch;
 	int		countA, countC, countG, countT, countADO, countDEL, nSNVs;
 	int		*cnt[7];
 	Geno	*row;
@@ -609,10 +609,10 @@ int CountAllelesInObservedGenotypes (void)
 					}
 				else
 					{
-					for (cell=0; cell<NUM_TAXA; cell++)
+					for (cl=0; cl<NUM_TAXA; cl++)
 						{
-						cnt[slot[GetG(MATERNAL, cell, site)+9]][site-s0]++;
-						cnt[slot[GetG(PATERNAL, cell, site)+9]][site-s0]++;
+						cnt[slot[GetG(MATERNAL, cl, site)+9]][site-s0]++;
+						cnt[slot[GetG(PATERNAL, cl, site)+9]][site-s0]++;
 						}
 					}
 				}
@@ -624,10 +624,10 @@ int CountAllelesInObservedGenotypes (void)
 			int				n = s1 - s0;
 
 			memset (c16, 0, sizeof(c16));
-			for (cell=0; cell<NUM_TAXA; cell++)
+			for (cl=0; cl<NUM_TAXA; cl++)
 				for (ch=0; ch<2; ch++)
 					{
-					const Geno *r = data[ch == 0 ? MATERNAL : PATERNAL][cell] + s0;
+					const Geno *r = data[ch == 0 ? MATERNAL : PATERNAL][cl] + s0;
 					unsigned short *a0 = c16[0], *a1 = c16[1], *a2 = c16[2], *a3 = c16[3], *a4 = c16[4], *a5 = c16[5];
 
 					for (site=0; site<n; site++)
@@ -647,11 +647,11 @@ int CountAllelesInObservedGenotypes (void)
 					cnt[k][site] = c16[k][site];
 			}
 		else
-		for (cell=0; cell<NUM_TAXA; cell++)
+		for (cl=0; cl<NUM_TAXA; cl++)
 			{
 			for (ch=0; ch<2; ch++)
 				{
-				row = data[ch == 0 ? MATERNAL : PATERNAL][cell];
+				row = data[ch == 0 ? MATERNAL : PATERNAL][cl];
 				for (site=s0; site<s1; site++)
 					{
 					cnt[slot[row[site]+9]][site-s0]++;
@@ -706,7 +706,7 @@ int CountAllelesInObservedGenotypes (void)
 
 /********************* CellAltCall  ************************/
 /* YES when the ML genotype of the cell at the site has a non-reference allele supported by at least minAltReads reads
-   (minAltReads = 0: any non-reference ML allele, the original criterion). A doublet cell is judged by its doublet reads. */
+   (minAltReads = 0: any non-reference ML allele, the original criterion). A doublet cl is judged by its doublet reads. */
 int CellAltCall (int ii, int jj)
 	{
 	int		ml[2], k, a, ref = allSites[jj].referenceAllele, reads, depth;

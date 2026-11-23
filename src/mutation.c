@@ -12,12 +12,12 @@
 /* Initialize all genomes with the reference states  */
 void InitializeGenomes (TreeNode *p, long int *seed)
     {
-    int     i, cell, anccell, site;
+    int     i, cl, anccell, site;
     double  ran;
 		
     if (p != NULL)
         {
-        cell = p->label;
+        cl = p->label;
         if (sparseMode == YES && p->isHealthyRoot == NO)
             ;	/* sparse mode: nodes are identical to the root until they are modified */
         else if (alphabet == DNA)
@@ -28,9 +28,9 @@ void InitializeGenomes (TreeNode *p, long int *seed)
 					{
 					for (site=0; site<numSites; site++) /* initialize genome with the user provided sequences */
 						{
-						SetG(MATERNAL, cell, site, WhichNucChar(maternalUserGenome[site]));
-						SetG(PATERNAL, cell, site, WhichNucChar(paternalUserGenome[site]));
-						allSites[site].referenceAllele = (refUserGenome != NULL) ? WhichNucChar(refUserGenome[site]) : GetG(MATERNAL, cell, site);   // then allSites[site].referenceAllele hosts the reference genome
+						SetG(MATERNAL, cl, site, WhichNucChar(maternalUserGenome[site]));
+						SetG(PATERNAL, cl, site, WhichNucChar(paternalUserGenome[site]));
+						allSites[site].referenceAllele = (refUserGenome != NULL) ? WhichNucChar(refUserGenome[site]) : GetG(MATERNAL, cl, site);   // then allSites[site].referenceAllele hosts the reference genome
 						}
 					}
   				else if (doGeneticSignatures == NO) /* initialize genome with mononucleotide frequencies */
@@ -42,7 +42,7 @@ void InitializeGenomes (TreeNode *p, long int *seed)
 							{
 							if (ran <= cumfreq[i])
 								{
-								allSites[site].referenceAllele = SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, i));
+								allSites[site].referenceAllele = SetG(MATERNAL, cl, site, SetG(PATERNAL, cl, site, i));
 								// then allSites[site].referenceAllele hosts the reference genome
 								break;
 								}
@@ -51,20 +51,20 @@ void InitializeGenomes (TreeNode *p, long int *seed)
 					}
 				else /* initialize genome with trinucleotide frequencies */
 					{
-					SimulateTriNucFreqGenome (cell, seed);
+					SimulateTriNucFreqGenome (cl, seed);
 					}
 				}
             else
                 {
                 anccell = p->anc->label;
                 /* here the genomes are dense (sparse mode never gets here): copy the ancestor's rows */
-                memcpy (data[MATERNAL][cell], data[MATERNAL][anccell], numSites * sizeof(Geno));
-                memcpy (data[PATERNAL][cell], data[PATERNAL][anccell], numSites * sizeof(Geno));
+                memcpy (data[MATERNAL][cl], data[MATERNAL][anccell], numSites * sizeof(Geno));
+                memcpy (data[PATERNAL][cl], data[PATERNAL][anccell], numSites * sizeof(Geno));
                 }
              }
         else /* binary alphabet */
             for (site=0; site<numSites; site++)
-                SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, 0));
+                SetG(MATERNAL, cl, site, SetG(PATERNAL, cl, site, 0));
 
         InitializeGenomes (p->left, seed);
         InitializeGenomes (p->right, seed);
@@ -85,7 +85,7 @@ void InitializeGenomes (TreeNode *p, long int *seed)
 	 and so on.
 */
 
-void SimulateTriNucFreqGenome (int cell, long int *seed)
+void SimulateTriNucFreqGenome (int cl, long int *seed)
 	{
 	int 		chosenTriNucleotide, nextNucleotide;
 	int			k, n1, n2, n3, rest, site;
@@ -105,11 +105,11 @@ void SimulateTriNucFreqGenome (int cell, long int *seed)
 	//fprintf (stderr, "\n%2d %c%c%c ", chosenTriNucleotide, WhichNuc(n1), WhichNuc(n2), WhichNuc(n3));
 
 	site = 0;
-	SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = n1));
+	SetG(MATERNAL, cl, site, SetG(PATERNAL, cl, site, allSites[site].referenceAllele = n1));
 	site++;
-	SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = n2));
+	SetG(MATERNAL, cl, site, SetG(PATERNAL, cl, site, allSites[site].referenceAllele = n2));
 	site++;
-	SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = n3));
+	SetG(MATERNAL, cl, site, SetG(PATERNAL, cl, site, allSites[site].referenceAllele = n3));
 	
 	/* fill the rest of the genome */
 	/* choose next nucleotide given the last two bases of the previous trinucleotide  */
@@ -123,7 +123,7 @@ void SimulateTriNucFreqGenome (int cell, long int *seed)
 			prob4[k] = triNucFreq[trinuc(n2,n3,k)] / sum;
 		
 		nextNucleotide = ChooseUniformState(prob4, seed);
-		SetG(MATERNAL, cell, site, SetG(PATERNAL, cell, site, allSites[site].referenceAllele = nextNucleotide));
+		SetG(MATERNAL, cl, site, SetG(PATERNAL, cl, site, allSites[site].referenceAllele = nextNucleotide));
 
 		/* move downstream one position */
 		n1 = n2;
@@ -287,8 +287,8 @@ void SparseAllelicDropout (long int *seed)
    probability a^2/G and only the maternal (or only the paternal) one with probability a(1-a)/G each. */
 void SparseGenotypeError (long int *seed)
 	{
-	int		i, j, cell, site, k, ns;
-	double	normEij[4][4], rowSum, ss, shape1, shape2, g, a, u, pBoth, pOne, g1, g2, N, idx, logq;
+	int		i, j, cl, site, k, ns;
+	double	normEij[4][4], rowSum, ss, shape1, shape2, g, a, u, pBoth, pOne, g1, g2, popN, idx, logq;
 	int		newAllele[2];
 
 	for (i=0; i<4; i++)
@@ -310,16 +310,16 @@ void SparseGenotypeError (long int *seed)
 		exit (-1);
 		}
 
-	N = (double)(numCells + 1) * (double) numSites;
+	popN = (double)(numCells + 1) * (double) numSites;
 	logq = log1p (-meanGenotypingError);
 	idx = -1.0;
 	while (1)
 		{
 		idx += floor (log (RandomUniform (seed)) / logq) + 1.0;	/* geometric skip to the next genotype with an error */
-		if (idx >= N)
+		if (idx >= popN)
 			break;
-		cell = (int)(idx / numSites);
-		site = (int)(idx - (double) cell * numSites);
+		cl = (int)(idx / numSites);
+		site = (int)(idx - (double) cl * numSites);
 
 		if (ss > 0.0)
 			{
@@ -340,7 +340,7 @@ void SparseGenotypeError (long int *seed)
 			Geno b;
 			if (!change)
 				continue;
-			b = GetG ((k == 0) ? MATERNAL : PATERNAL, cell, site);	/* true allele (the layer is not active yet) */
+			b = GetG ((k == 0) ? MATERNAL : PATERNAL, cl, site);	/* true allele (the layer is not active yet) */
 			if (b == DELETION)
 				continue;
 			if (alphabet == DNA)
@@ -361,7 +361,7 @@ void SparseGenotypeError (long int *seed)
 				exit (-1);
 				}
 			}
-		errEv[site][errCount[site]].cell = cell;
+		errEv[site][errCount[site]].cell = cl;
 		errEv[site][errCount[site]].m = (signed char) newAllele[0];
 		errEv[site][errCount[site]].p = (signed char) newAllele[1];
 		errCount[site]++;
@@ -467,18 +467,18 @@ Geno *NewSparseColumn (int site)
 /* Copy the genomes of the healthy root (with germline variation) to all its descendants */
 void InheritRootGenome (TreeNode *p)
     {
-    int cell, anccell, site;
+    int cl, anccell, site;
 
     if (p == NULL || sparseMode == YES)
         return;	/* in sparse mode all nodes inherit the root genome implicitly */
     if (p->isHealthyRoot == NO)
         {
-        cell = p->label;
+        cl = p->label;
         anccell = p->anc->label;
         for (site=0; site<numSites; site++)
             {
-            SetG(MATERNAL, cell, site, GetG(MATERNAL, anccell, site));
-            SetG(PATERNAL, cell, site, GetG(PATERNAL, anccell, site));
+            SetG(MATERNAL, cl, site, GetG(MATERNAL, anccell, site));
+            SetG(PATERNAL, cl, site, GetG(PATERNAL, anccell, site));
             }
         }
     InheritRootGenome (p->left);
@@ -722,11 +722,11 @@ void SimulateISM (TreeNode *p, int genome, int doISMhaploid, long int *seed)
 void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, long int *seed)
     {
     static double	cumBranchLength, uniform;
-    int             cell, anccell;
+    int             cl, anccell;
 		
 	if (p != NULL)
         {
-        cell = p->label;
+        cl = p->label;
 			
         if (p->isHealthyRoot == YES)
             {
@@ -743,25 +743,25 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
                 ((doISMhaploid == YES) && (genome == MATERNAL) && (allSites[site].numMutationsMaternal > 0)) ||
                 ((doISMhaploid == YES) && (genome == PATERNAL) && (allSites[site].numMutationsPaternal > 0)))
                 {
-                SetG(genome, cell, site, GetG(genome, anccell, site));
+                SetG(genome, cl, site, GetG(genome, anccell, site));
                 }
             else /* => there will be change */
                 {
                 if (GetG(genome, anccell, site) == 0)  /* checking all this might be excessive */
-                    SetG(genome, cell, site, 1);
+                    SetG(genome, cl, site, 1);
 				else if (GetG(genome, anccell, site) == 1)
                     {
 					if (allSites[site].isSNP == YES) // this is a germline mutation
-						SetG(genome, cell, site, 0);
+						SetG(genome, cl, site, 0);
 					else
 						{
-						fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d cannot mutate twice under the ISM model", site, genome, cell);
+						fprintf (stderr, "\n\nERROR: site %d in genome %d of cl %d cannot mutate twice under the ISM model", site, genome, cl);
                     	exit(-1);
 						}
 					}
                 else
                     {
-                    fprintf (stderr, "\n\nERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model", site, genome, anccell, GetG(genome, anccell, site));
+                    fprintf (stderr, "\n\nERROR: site %d in genome %d of cl %d has an unknow state %d under the ISM model", site, genome, anccell, GetG(genome, anccell, site));
                     exit(-1);
                     }
 					
@@ -789,11 +789,11 @@ void SimulateISMforSite (TreeNode *p, int genome, int site, int doISMhaploid, lo
 void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid, long int *seed)
 	{
     static double	cumBranchLength, uniform, ran;
-    int             j, cell, anccell, ancstate;
+    int             j, cl, anccell, ancstate;
 	
     if (p != NULL)
         {
-        cell = p->label;
+        cl = p->label;
 			
         if (p->isHealthyRoot == YES)
             {
@@ -811,7 +811,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
                 ((doISMhaploid == YES) && (genome == MATERNAL) && (allSites[site].numMutationsMaternal > 0)) ||
                 ((doISMhaploid == YES) && (genome == PATERNAL) && (allSites[site].numMutationsPaternal > 0)))
                 {
-                SetG(genome, cell, site, ancstate);
+                SetG(genome, cl, site, ancstate);
                 }
             else /* => there will be change */
                 {
@@ -820,7 +820,7 @@ void SimulateISMDNAforSite (TreeNode *p, int genome, int site, int doISMhaploid,
                     {
                     if (ran <= cumMij[ancstate][j])
                         {
-                        SetG(genome, cell, site, j);
+                        SetG(genome, cl, site, j);
                         break;
                         }
 					}
@@ -1166,11 +1166,11 @@ int ChooseSignatureSiteInRange (long int *seed, int *newState, int genome, int a
 void SimulateSignatureISMforSite (TreeNode *p, int genome, int site, int newState, long int *seed)
 	{
     static double	cumBranchLength, uniform;
-    int             cell, anccell, ancState;
+    int             cl, anccell, ancState;
 	
     if (p != NULL)
         {
-        cell = p->label;
+        cl = p->label;
 			
         if (p->isHealthyRoot == YES)
             {
@@ -1186,12 +1186,12 @@ void SimulateSignatureISMforSite (TreeNode *p, int genome, int site, int newStat
 				
             if (cumBranchLength < uniform || allSites[site].numMutations > 0)/* => there will be no change; forcing ISM diploid */
                 {
-                SetG(genome, cell, site, ancState);
+                SetG(genome, cl, site, ancState);
  				//fprintf (stderr, "\ncopying ancstate %c", WhichNuc(ancstate));
                }
             else /* => there will be change */
                 {
-				SetG(genome, cell, site, newState);
+				SetG(genome, cl, site, newState);
                 if (genome == MATERNAL)
                     allSites[site].numMutationsMaternal++;
                 else if (genome == PATERNAL)
@@ -1261,13 +1261,13 @@ void SimulateMk2 (TreeNode *p, int genome, long int *seed)
 void SimulateMk2forSite (TreeNode *p, int genome, int site, long int *seed)
     {
     double	probOfChange, uniform, branchLength;
-    int     cell, anccell;
+    int     cl, anccell;
 		
     if (p != NULL)
 		{
 		if (p->isHealthyRoot == NO)
 			{
-			cell = p->label;
+			cl = p->label;
 			anccell = p->anc->label;
 			
 			if (doUserTree == YES)
@@ -1284,13 +1284,13 @@ void SimulateMk2forSite (TreeNode *p, int genome, int site, long int *seed)
 
 			uniform = RandomUniform(seed);
 			if (uniform >= probOfChange) /* => no change */
-				SetG(genome, cell, site, GetG(genome, anccell, site));
+				SetG(genome, cl, site, GetG(genome, anccell, site));
 			else /* => there will be change */
 				{
 				if (GetG(genome, anccell, site) == 0)
-					SetG(genome, cell, site, 1);
+					SetG(genome, cl, site, 1);
 				else
-					SetG(genome, cell, site, 0);
+					SetG(genome, cl, site, 0);
 					
 				if (genome == MATERNAL)
 					allSites[site].numMutationsMaternal++;
@@ -1393,13 +1393,13 @@ void SimulateFiniteDNA (TreeNode *p, int genome, long int *seed)
 void SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed)
 	{
     double	branchLength, Pij[4][4];
-    int     cell, anccell, ancstate, newstate;
+    int     cl, anccell, ancstate, newstate;
 		
     if (p != NULL)
         {
 		if (p->isHealthyRoot == NO)
 			{
-			cell = p->label;
+			cl = p->label;
 			anccell = p->anc->label;
 			ancstate = GetG(genome, anccell, site);
 	
@@ -1414,7 +1414,7 @@ void SimulateFiniteDNAforSite (TreeNode *p, int genome, int site, long int *seed
 				}
 				
 			FillSubstitutionMatrix (Pij, branchLength);
-			newstate = SetG(genome, cell, site, ChooseUniformState (Pij[ancstate], seed));
+			newstate = SetG(genome, cl, site, ChooseUniformState (Pij[ancstate], seed));
 			
 			if (newstate != ancstate)
 				{
@@ -1552,26 +1552,26 @@ void GTRmodel (double Pij[4][4], double branchLength)
 */
 void EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed)
 	{
-    int		i, trials, numCNLOH, CNLOHsoFar;
+    int		i, trials, nCnloh, CNLOHsoFar;
     double	totalCNLOHbranchSum;
 
 	totalCNLOHbranchSum = numSites * totalTreeLength / mutationRate * CNLOHrate;
-	numCNLOH = RandomPoisson (totalCNLOHbranchSum, seed); /* the number of CNLOH events will be distributed as a Poisson with parameter totalCNLOHbranchSum */
+	nCnloh = RandomPoisson (totalCNLOHbranchSum, seed); /* the number of CNLOH events will be distributed as a Poisson with parameter totalCNLOHbranchSum */
 	
      /* if the number of CNLOH events is bigger than the number of sites quit the program and warn the user about violation of ISM */
-     if (numISMCNLOH + numCNLOH > (2*numSites))
+     if (numISMCNLOH + nCnloh > (2*numSites))
         {
         fprintf (stderr, "\n\nERROR: The haploid infinite sites model (ISM) for CNLOH events has been violated. There will be");
-        fprintf (stderr, "\nmore CNLOH events (%d existing + %d proposed]) than available sites under this model (%d).", numISMCNLOH, numCNLOH, 2*numSites);
+        fprintf (stderr, "\nmore CNLOH events (%d existing + %d proposed]) than available sites under this model (%d).", numISMCNLOH, nCnloh, 2*numSites);
         fprintf (stderr, "\nTry using a smaller deletion rate.");
         fprintf (stderr, "\nIf using a user tree, try introducing smaller branch lengths.\n");
         exit (-1);
         }
 	
-    numISMCNLOH += numCNLOH;
+    numISMCNLOH += nCnloh;
     trials = 0;
     CNLOHsoFar = 0;
-    while (CNLOHsoFar < numCNLOH)
+    while (CNLOHsoFar < nCnloh)
         {
         i = RandomUniformTo(numSites, seed);  /* choose a site at random */
         while ((genome == MATERNAL && allSites[i].numCNLOHmaternal != 0) ||
@@ -1581,7 +1581,7 @@ void EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed)
             if (trials++ > 100*numSites)
                 {
                 fprintf (stderr, "\n\n ERROR: after %d trials cannot find a site without CNLOH",100*numSites);
-                fprintf (stderr, "\nCNLOH = %d  CNLOH so far = %d\n\n",numCNLOH, CNLOHsoFar);
+                fprintf (stderr, "\nCNLOH = %d  CNLOH so far = %d\n\n",nCnloh, CNLOHsoFar);
                 for (i=0; i<numSites; i++)
                     fprintf (stderr, "\nsite %d has %d CNLOHs",i+1, allSites[i].numCNLOH);
                  fprintf (stderr, "\n");
@@ -1605,11 +1605,11 @@ void EvolveCNLOHonTree (TreeNode *p, int genome, long int *seed)
 void SimulateCNLOHforSite (TreeNode *p, int genome, int site, long int *seed)
     {
     static double	cumCNLOHbranchLength, uniform;
-    int             cell, anccell;
+    int             cl, anccell;
 		
 	if (p != NULL)
         {
-        cell = p->label;
+        cl = p->label;
 			
         if (p->isHealthyRoot == YES)
             {
@@ -1625,18 +1625,18 @@ void SimulateCNLOHforSite (TreeNode *p, int genome, int site, long int *seed)
                 ((genome == MATERNAL) && (allSites[site].numCNLOHmaternal > 0)) ||
                 ((genome == PATERNAL) && (allSites[site].numCNLOHpaternal > 0)))
                 {
-                SetG(genome, cell, site, GetG(genome, anccell, site));
+                SetG(genome, cl, site, GetG(genome, anccell, site));
                 }
 			else /* => there will be a CN_LOH event */
                 {
 				if (genome == MATERNAL)
 					{
-					SetG(genome, cell, site, GetG(PATERNAL, cell, site));
+					SetG(genome, cl, site, GetG(PATERNAL, cl, site));
 					allSites[site].numCNLOHmaternal++;
 					}
 				else
 					{
-					SetG(genome, cell, site, GetG(MATERNAL, cell, site));
+					SetG(genome, cl, site, GetG(MATERNAL, cl, site));
 					allSites[site].numCNLOHpaternal++;
 					}
 
@@ -1718,11 +1718,11 @@ void EvolveDeletionsOnTree (TreeNode *p, int genome, long int *seed)
 void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
     {
     static double	cumDeletionBranchLength, uniform;
-    int             cell, anccell;
+    int             cl, anccell;
 		
 	if (p != NULL)
         {
-        cell = p->label;
+        cl = p->label;
 			
         if (p->isHealthyRoot == YES)
             {
@@ -1739,20 +1739,20 @@ void SimulateDeletionforSite (TreeNode *p, int genome, int site, long int *seed)
                 ((genome == MATERNAL) && (allSites[site].numDeletionsMaternal > 0)) ||
                 ((genome == PATERNAL) && (allSites[site].numDeletionsPaternal > 0)))
                 {
-                SetG(genome, cell, site, GetG(genome, anccell, site));
+                SetG(genome, cl, site, GetG(genome, anccell, site));
                 }
 			else /* => there will be a deletion */
                 {
                 if (GetG(genome, anccell, site) != DELETION)  /* checking all this might be excessive */
-                    SetG(genome, cell, site, DELETION);
+                    SetG(genome, cl, site, DELETION);
                 else if (GetG(genome, anccell, site) == DELETION)
                     {
-                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cell %d cannot be deleted twice under the ISM model\n", site, genome, cell);
+                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cl %d cannot be deleted twice under the ISM model\n", site, genome, cl);
                     exit(-1);
                     }
                 else
                     {
-                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cell %d has an unknow state %d under the ISM model\n", site, genome, anccell, GetG(genome, anccell, site));
+                    fprintf (stderr, "\n\n ERROR: site %d in genome %d of cl %d has an unknow state %d under the ISM model\n", site, genome, anccell, GetG(genome, anccell, site));
                     exit(-1);
                     }
 					

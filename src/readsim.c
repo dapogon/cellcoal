@@ -1237,12 +1237,12 @@ void WriteTruthVcf (int dataSetNum)
 	started = 1;
 	for (j=0; j<numSites; j++)
 		{
-		int		mr = data[MATERNAL][OUTGROUP_ROOT][j], ref = mr, pr = data[PATERNAL][OUTGROUP_ROOT][j], var, nc = 0, nalt = 0, altBase[4] = {-1,-1,-1,-1}, g[2];
+		int		mrate = data[MATERNAL][OUTGROUP_ROOT][j], ref = mrate, pr = data[PATERNAL][OUTGROUP_ROOT][j], var, nc = 0, nalt = 0, altBase[4] = {-1,-1,-1,-1}, g[2];
 		char	gt[8];
 
 		if (refUserGenome != NULL)	/* the reference is the FASTA; the healthy genome may carry germline alleles */
 			ref = (int) (strchr (BASES, refUserGenome[j]) - BASES);
-		var = (pr != ref || mr != ref);
+		var = (pr != ref || mrate != ref);
 		if (ref < 0 || ref > 3)
 			continue;
 		if (sparseMode == YES && sparseCols[j] == NULL && !var)
@@ -1269,7 +1269,7 @@ void WriteTruthVcf (int dataSetNum)
 			}
 		for (h=0; h<2; h++)
 			{
-			int k, gh = (h == 0) ? mr : pr;
+			int k, gh = (h == 0) ? mrate : pr;
 
 			if (gh >= 0 && gh < 4 && gh != ref)
 				{
