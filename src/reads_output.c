@@ -589,7 +589,7 @@ static void PrintVCFHeader (FILE *fp)
 	fprintf (fp,"\n##INFO=<ID=AF,Number=R,Type=Float,Description=\"True alternate/s allele frequency (ignores doublets)\">");
 	fprintf (fp,"\n##INFO=<ID=SOMATIC,Number=0,Type=Flag,Description=\"Somatic SNV flag\">");
 	if (blocksOn && germFlag != NULL)
-		fprintf (fp,"\n##INFO=<ID=GERMLINE,Number=0,Type=Flag,Description=\"Germline SNV of --germline-vcf\">");
+		fprintf (fp,"\n##INFO=<ID=GERMLINE,Number=0,Type=Flag,Description=\"Germline SNV of --germline-vcf or --germline-pop\">");
 	fprintf (fp,"\n##FILTER=<ID=s50,Description=\"Less than half of samples have data\">");
 	fprintf (fp,"\n##FORMAT=<ID=GT,Number=1,Type=String,Description=\"Called ML genotype\">");
 	fprintf (fp,"\n##FORMAT=<ID=DP,Number=1,Type=Integer,Description=\"Read depth\">");

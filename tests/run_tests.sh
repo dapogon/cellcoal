@@ -1439,6 +1439,44 @@ a=$(zcat TL1/reads_1/cell0002.R1.fastq.gz | paste - - - - | sort | md5sum); b=$(
 rm -rf TL1 TL2 TL3
 cd "$ROOT"
 
+echo "2g60. --germline-pop: genotypes of an individual sampled from allele frequencies (Hardy-Weinberg)"
+cd "$TMP"
+python3 - <<'P'
+import random
+random.seed(7)
+seq = ''.join(random.choice('ACGT') for _ in range(24000))
+open('gp.fa', 'w').write('>chrT\n' + '\n'.join(seq[i:i+60] for i in range(0, len(seq), 60)) + '\n')
+out = ['##fileformat=VCFv4.2', '#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO']
+for p in range(5, len(seq) - 5, 12):
+    r = seq[p-1]; a = random.choice([x for x in 'ACGT' if x != r])
+    out.append("chrT\t%d\t.\t%s\t%s\t.\tPASS\tDP=10;AF=%s;AC=3" % (p, r, a, '0.3' if (p // 12) % 2 == 0 else '0.02'))
+out.append("chrT\t100\t.\tA\tC,G\t.\tPASS\tAF=0.2,0.1")
+open('gp.vcf', 'w').write('\n'.join(out) + '\n')
+P
+: > gp_gt.txt
+for sd in 1 2 3 4 5 6 7 8; do
+  rm -rf GP; "$BIN" -n1 -s4 -#$sd -l6000 --fasta gp.fa --blocks 4 -u1e-9 -e10000 -C10 -E0.001 --germline-pop gp.vcf --bam -oGP >/dev/null 2>&1
+  grep -v "^#" GP/reads_1/truth.vcf | grep GERMLINE | awk '{split($10,g,":"); print int((($2-1)/12)%2), g[1]}' >> gp_gt.txt
+done
+python3 - <<'P' && ok "the genotypes follow Hardy-Weinberg for AF 0.3 and 0.02, the heterozygous alleles are in both haplotypes" || bad "germline-pop genotypes"
+import collections
+c = collections.Counter(tuple(l.split()) for l in open('gp_gt.txt'))
+tot = 8 * 1000
+hi = sum(v for (g, x), v in c.items() if g == '0'); lo = sum(v for (g, x), v in c.items() if g == '1')
+assert abs(hi / tot - 0.51) < 0.04, hi / tot            # 1 - 0.7^2
+assert abs(lo / tot - 0.0396) < 0.012, lo / tot          # 1 - 0.98^2
+het = c[('0', '0|1')] + c[('0', '1|0')]
+assert abs(het / hi - 0.824) < 0.05, het / hi
+assert 0.4 < c[('0', '0|1')] / het < 0.6
+assert abs(c[('0', '1|1')] / hi - 0.176) < 0.05
+P
+"$BIN" -n1 -s4 -#1 -l6000 --fasta gp.fa --blocks 4 -c1e-3 --germline-pop gp.vcf -C10 --bam -oGPX > gpx.out 2>&1
+grep -q "cannot be combined" gpx.out && ok "--germline-pop with -c is an error" || bad "--germline-pop with -c accepted"
+"$BIN" -n1 -s4 -#1 -l6000 --blocks 4 --germline-pop gp.vcf -C10 --bam -oGPY > gpy.out 2>&1
+grep -q "need --fasta" gpy.out && ok "--germline-pop without --fasta is an error" || bad "--germline-pop without --fasta accepted"
+rm -rf GP GPX GPY
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

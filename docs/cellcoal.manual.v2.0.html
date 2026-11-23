@@ -793,7 +793,8 @@ optional healthy <code>normal.bam</code></td>
 </tr>
 <tr class="odd">
 <td><code>--blocks</code>, <code>--fasta</code>, <code>--region</code>,
-<code>--germline-vcf</code>, <code>--region-rates</code></td>
+<code>--germline-vcf</code>, <code>--germline-pop</code>,
+<code>--region-rates</code></td>
 <td>no</td>
 <td>yes</td>
 <td>yes</td>
@@ -1132,7 +1133,30 @@ genome is the reference with its germline SNPs:</p>
 individual (GT <code>0|1</code>, <code>1|0</code>, <code>1|1</code>)
 into the healthy genome; those sites are flagged <code>GERMLINE</code>
 instead of <code>SOMATIC</code> in the VCF. It is used with
-<code>--fasta</code>, and not together with <code>-c</code>.</li>
+<code>--fasta</code>, and not together with <code>-c</code>;</li>
+<li><code>--germline-pop FILE</code> gives the germline variation of a
+<strong>population</strong> and samples one individual from it:
+<code>FILE</code> is a VCF of sites with the allele frequency in
+<code>INFO/AF</code> (gnomAD, 1000 Genomes or any other: only the first
+8 columns are used; plain or <code>.gz</code>). At every biallelic SNV
+of the chromosome the genotype of the individual is drawn with
+Hardy-Weinberg proportions: homozygous reference with probability
+(1-f)^2, heterozygous with 2f(1-f) (the alternative allele on a random
+haplotype) and homozygous alternative with f^2, where f is the
+frequency. So a human chromosome gets the density and the frequency
+spectrum of the population (most of the variants are rare and absent in
+the individual; the common ones are heterozygous in about half of the
+individuals), instead of the SNVs of one real person. The sites are
+sampled independently, so there is <strong>no linkage
+disequilibrium</strong> between them, and a new individual is drawn in
+every replicate. Sites with several alternative alleles, without
+<code>AF</code> or fixed (<code>AF</code> 0 or 1) are skipped. It is
+used with <code>--fasta</code>, not together with <code>-c</code> or
+with <code>--germline-vcf</code>; the sites carry the flag
+<code>GERMLINE</code>. Its use: the common germline SNPs are what makes
+a somatic caller call false SNVs when the allelic dropout or the
+coverage hides one of the two alleles, and with a population VCF you can
+test the filters that use a list of known polymorphisms.</li>
 </ul>
 <p><strong>Which human genome?</strong> CellCoal does not include a
 human reference: you give it the FASTA of the assembly that you prefer,
@@ -1441,7 +1465,11 @@ reference base is the REF of the VCF.</p>
 healthy genome (SNVs only; GT 0|1, 1|0, 1|1, 0/1, 1/1; unphased
 heterozygous genotypes are phased at random; it cannot be used with
 <code>-c</code>). Those sites carry the flag <code>GERMLINE</code>
-instead of <code>SOMATIC</code> in the VCF.</p>
+instead of <code>SOMATIC</code> in the VCF.
+<code>--germline-pop FILE</code> takes the sites of a population VCF
+with their allele frequency (<code>INFO/AF</code>) and samples the
+genotypes of one individual with Hardy-Weinberg proportions (section
+5.2.1).</p>
 <p><strong>Blocks and reads.</strong> <code>--blocks</code> or
 <code>--fasta</code> together with
 <code>--bam</code>/<code>--fastq</code> simulates the reads of a whole
@@ -2633,12 +2661,19 @@ tree</td>
 <td>region of the FASTA (1-based, inclusive)</td>
 </tr>
 <tr class="even">
+<td><code>--germline-pop FILE</code></td>
+<td><code>germline-pop</code></td>
+<td>germline SNVs of a population (VCF with <code>INFO/AF</code>): the
+genotype of the individual is sampled (not with <code>-c</code>,
+<code>--germline-vcf</code>)</td>
+</tr>
+<tr class="odd">
 <td><code>--germline-vcf FILE</code></td>
 <td><code>germline-vcf</code></td>
 <td>germline SNVs of the healthy genome (SNVs only, not with
 <code>-c</code>)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>--region-rates FILE</code></td>
 <td><code>region-rates</code></td>
 <td>relative mutation rate of regions (BED: chromosome, start, end,

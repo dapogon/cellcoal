@@ -15,6 +15,7 @@
 	X(fasta,          "--fasta",          '\213', 3, fastaFile,   0)      \
 	X(region,         "--region",         '\214', 3, regionSpec,  0)      \
 	X(germline_vcf,   "--germline-vcf",   '\215', 3, germlineVcf, 0)      \
+	X(germline_pop,   "--germline-pop",   '\234', 3, germlinePop, 0)      \
 	X(qual_sd,        "--qual-sd",        '\216', 2, qualSd,     0)      \
 	X(qual_slope,     "--qual-slope",     '\217', 2, qualSlope,  0)      \
 	X(strand_bias,    "--strand-bias",    '\220', 2, strandBias, 0)    \

@@ -118,6 +118,7 @@ static const GroupKey groupKeys[] =
 	{"chromosome", "fasta",        'S', "--fasta", "reference FASTA (plain or .gz)"},
 	{"chromosome", "region",       'S', "--region", "region of the FASTA, chr:start-end"},
 	{"chromosome", "germline-vcf", 'S', "--germline-vcf", "germline SNVs to put in the healthy genome"},
+	{"chromosome", "germline-pop", 'S', "--germline-pop", "germline SNVs of a population with INFO AF: the genotype of the individual is sampled"},
 	{"chromosome", "region-rates", 'S', "--region-rates", "relative mutation rate of regions (BED: chrom start end multiplier); needs --blocks or --fasta"},
 
 	{"output", "dir",              'T', "-o", "results folder"},

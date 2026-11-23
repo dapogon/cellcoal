@@ -6,20 +6,22 @@
 
    With --fasta the reference is a real sequence (plain or gzip FASTA, several lines per sequence): the sites that are not A, C, G or T are left
    out (they are not simulated, not in the VCF and not in the invariant counts) and the positions of the VCF are the real ones.
-   --germline-vcf gives the germline SNVs (maternal/paternal alleles of the healthy genome); unphased heterozygous genotypes are phased at random. */
+   --germline-vcf gives the germline SNVs (maternal/paternal alleles of the healthy genome); unphased heterozygous genotypes are phased at random.
+   --germline-pop gives the SNVs of a population with their allele frequencies (INFO AF): the genotype of the individual at every site is sampled
+   with Hardy-Weinberg proportions (the sites are independent, there is no linkage disequilibrium). */
 
 #include "cellcoal.h"
 #include <ctype.h>
 #include <errno.h>
 
 int			blocksN = 0, blockIndex = 0, blocksOn = 0;
-char		*fastaFile = "", *regionSpec = "", *germlineVcf = "";
+char		*fastaFile = "", *regionSpec = "", *germlineVcf = "", *germlinePop = "";
 long		blockOffset = 0, blockSize = 0, chromLength = 0, maskedSites = 0, germlineUsed = 0, germlineRefMismatch = 0;
 int			*posMap = NULL;
 char		*refUserGenome = NULL;	/* reference base of every site of the block (the maternal genome may carry the germline allele) */
 char		*germFlag = NULL;		/* the site of the block is a germline SNV */
 
-typedef struct { long pos; char ref, alt; char gt[4]; } GermSnv;
+typedef struct { long pos; char ref, alt; char gt[4]; double af; } GermSnv;		/* af > 0: a site of a population (--germline-pop), the genotype is sampled */
 
 static char		*regSeq = NULL;
 static long		regStart = 1, regLen = 0, nBlocksTotal = 0;
@@ -103,7 +105,7 @@ static int CmpGerm (const void *a, const void *b)
 	return (x > y) - (x < y);
 	}
 
-static void LoadGermline (void)
+static void LoadGermline (const char *file, int pop)
 	{
 	FILE	*fp;
 	int		isPipe;
@@ -111,19 +113,20 @@ static void LoadGermline (void)
 	size_t	cap = 0;
 	long	cnt = 0, alloc = 0;
 
-	fp = OpenText (germlineVcf, &isPipe);
+	fp = OpenText (file, &isPipe);
 	while (getline (&line, &cap, fp) > 0)
 		{
-		char	*f[10], *p = line, *gt;
-		int		k;
+		char	*f[10], *p = line, *gt = NULL;
+		int		k, nf = pop ? 7 : 9;
 		long	pos;
+		double	af = 0.0;
 
 		if (line[0] == '#')
 			continue;
 		for (k=0; k<10; k++)
 			{
 			f[k] = p;
-			if (k < 9)
+			if (k < nf)
 				{
 				p = strchr (p, '\t');
 				if (p == NULL)
@@ -131,7 +134,7 @@ static void LoadGermline (void)
 				*p++ = '\0';
 				}
 			}
-		if (k < 9)
+		if (k < nf)
 			continue;
 		if (!SameChrom (f[0], chromName))
 			continue;
@@ -140,11 +143,27 @@ static void LoadGermline (void)
 			continue;
 		if (strlen (f[3]) != 1 || strlen (f[4]) != 1 || !strchr ("ACGT", f[3][0]) || !strchr ("ACGT", f[4][0]))
 			continue;
-		gt = f[9];
-		if (!((gt[0] == '0' || gt[0] == '1') && (gt[1] == '|' || gt[1] == '/') && (gt[2] == '0' || gt[2] == '1')))
-			continue;
-		if (gt[0] == '0' && gt[2] == '0')
-			continue;
+		if (pop)
+			{
+			char	*q, *e;
+
+			q = strstr (f[7], "AF=");
+			while (q != NULL && q != f[7] && q[-1] != ';')
+				q = strstr (q + 1, "AF=");
+			if (q == NULL)
+				continue;
+			af = strtod (q + 3, &e);
+			if (e == q + 3 || (*e != ';' && *e != '\0' && *e != '\t' && *e != '\n') || !(af > 0.0 && af < 1.0))
+				continue;		/* no frequency, several alleles (a comma) or a fixed site */
+			}
+		else
+			{
+			gt = f[9];
+			if (!((gt[0] == '0' || gt[0] == '1') && (gt[1] == '|' || gt[1] == '/') && (gt[2] == '0' || gt[2] == '1')))
+				continue;
+			if (gt[0] == '0' && gt[2] == '0')
+				continue;
+			}
 		if (cnt == alloc)
 			{
 			alloc = alloc ? alloc * 2 : 1024;
@@ -153,8 +172,10 @@ static void LoadGermline (void)
 		germ[cnt].pos = pos;
 		germ[cnt].ref = f[3][0];
 		germ[cnt].alt = f[4][0];
-		memcpy (germ[cnt].gt, gt, 3);
+		if (gt != NULL)
+			memcpy (germ[cnt].gt, gt, 3);
 		germ[cnt].gt[3] = '\0';
+		germ[cnt].af = af;
 		cnt++;
 		}
 	free (line);
@@ -259,14 +280,21 @@ void BlocksSetup (void)
 			nBlocksTotal = blocksN;
 		blocksN = (int) nBlocksTotal;
 		chromLength = regStart + regLen - 1;
+		if (strlen (germlineVcf) > 0 && strlen (germlinePop) > 0)
+			{
+			fprintf (stderr, "\nERROR: --germline-vcf (an individual) and --germline-pop (a population) cannot be used together\n");
+			exit (-1);
+			}
 		if (strlen (germlineVcf) > 0)
-			LoadGermline ();
+			LoadGermline (germlineVcf, 0);
+		if (strlen (germlinePop) > 0)
+			LoadGermline (germlinePop, 1);
 		}
 	else
 		{
-		if (strlen (germlineVcf) > 0 || strlen (regionSpec) > 0)
+		if (strlen (germlineVcf) > 0 || strlen (germlinePop) > 0 || strlen (regionSpec) > 0)
 			{
-			fprintf (stderr, "\nERROR: --region and --germline-vcf need --fasta\n");
+			fprintf (stderr, "\nERROR: --region, --germline-vcf and --germline-pop need --fasta\n");
 			exit (-1);
 			}
 		chromLength = (long) blocksN * blockSize;
@@ -323,7 +351,23 @@ int BlockPrepare (int b, long int *seed)
 				const char *gt = germ[g].gt;
 				int a, c;
 
-				if (gt[1] == '|')
+				if (germ[g].af > 0.0)		/* a population: the genotype of the individual, with Hardy-Weinberg proportions */
+					{
+					double	f = germ[g].af, u = RandomUniform (seed);
+
+					if (u < (1.0 - f) * (1.0 - f))
+						goto noGerm;
+					if (u < 1.0 - f * f)		/* heterozygous: the alternative allele goes to a random haplotype */
+						{
+						if (RandomUniform (seed) < 0.5)
+							{ a = 1; c = 0; }
+						else
+							{ a = 0; c = 1; }
+						}
+					else
+						a = c = 1;
+					}
+				else if (gt[1] == '|')
 					{ a = (gt[0] == '1'); c = (gt[2] == '1'); }
 				else if (gt[0] == '1' && gt[2] == '1')
 					{ a = c = 1; }
@@ -337,6 +381,7 @@ int BlockPrepare (int b, long int *seed)
 				germlineUsed++;
 				}
 			}
+noGerm:
 		mat[kept] = m;
 		pat[kept] = q;
 		refUserGenome[kept] = ch;
@@ -370,7 +415,7 @@ void BlocksInfo (FILE *fp)
 		{
 		fprintf (fp, "reference: %s %s:%ld-%ld (%ld bp)\n", fastaFile, chromName, regStart, regStart + regLen - 1, regLen);
 		fprintf (fp, "sites that are not A, C, G or T (left out): %ld\n", maskedSites);
-		if (strlen (germlineVcf) > 0)
+		if (strlen (germlineVcf) > 0 || strlen (germlinePop) > 0)
 			fprintf (fp, "germline SNVs in the region: %ld; used: %ld; REF different from the reference (ignored): %ld\n", numGerm, germlineUsed, germlineRefMismatch);
 		}
 	}

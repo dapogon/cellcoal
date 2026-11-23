@@ -403,7 +403,7 @@ void				WriteTruthVcf (int dataSetNum);
 void				FinishReadLevel (void);
 /* chromosome in blocks (blocks.c) */
 extern int			blocksN, blockIndex, blocksOn, *posMap;
-extern char			*fastaFile, *regionSpec, *germlineVcf, *refUserGenome, *germFlag;
+extern char			*fastaFile, *regionSpec, *germlineVcf, *germlinePop, *refUserGenome, *germFlag;
 extern long			blockOffset, blockSize, chromLength;
 int					ExtraOptionGiven (const char *opt);
 int					RunMode (void);	/* 0 genotypes, 1 read counts, 2 reads */
