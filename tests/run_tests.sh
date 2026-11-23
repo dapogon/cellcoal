@@ -1427,6 +1427,18 @@ grep -q "different ones" dm4.out && ok "a wrong --damage item is reported" || ba
 rm -rf DM1 DM3 DM4
 cd "$ROOT"
 
+echo "2g59. Reads in tiles: the BAM files do not depend on the size of the tile, the reads of a FASTQ are the same"
+cd "$TMP"
+A="-n1 -s6 -#4 -l60000 -u1e-7 -e10000 -C15 -E0.002 -A0.01 0.0001 0 --damage G>T:0.01 -B0.3 0.01 --bam --fastq"
+CELLCOAL_READ_TILE=1000 "$BIN" $A -oTL1 >/dev/null 2>&1; CELLCOAL_READ_TILE=262144 "$BIN" $A -oTL2 >/dev/null 2>&1; CELLCOAL_READ_TILE=1000000000 "$BIN" $A -oTL3 >/dev/null 2>&1
+same=1
+for f in cell0001.bam cell0003.bam cell0006.bam cell0003.bam.bai; do cmp -s TL1/reads_1/$f TL2/reads_1/$f && cmp -s TL1/reads_1/$f TL3/reads_1/$f || { same=0; echo "    differs: $f"; }; done
+[ $same = 1 ] && ok "the BAM files (with doublets, amplification errors and damage) are the same for tiles of 1000, 262144 and 1e9 bases" || bad "the BAM files depend on the size of the tile"
+a=$(zcat TL1/reads_1/cell0002.R1.fastq.gz | paste - - - - | sort | md5sum); b=$(zcat TL2/reads_1/cell0002.R1.fastq.gz | paste - - - - | sort | md5sum)
+[ "$a" = "$b" ] && ok "the FASTQ files have the same reads (in another order)" || bad "the reads of the FASTQ depend on the size of the tile"
+rm -rf TL1 TL2 TL3
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

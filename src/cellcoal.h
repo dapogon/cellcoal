@@ -364,7 +364,7 @@ extern FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplot
 
 
 /* per-cell, per-site data are needed for NGS reads and for the haplotype, full-genotype and ancestor outputs (see main) */
-#define NEED_CELL_SITES (doNGS == YES || doPrintSNVhaplotypes == YES || doPrintTrueHaplotypes == YES || \
+#define NEED_CELL_SITES ((doNGS == YES && doBam == NO && doFastq == NO) || doPrintSNVhaplotypes == YES || doPrintTrueHaplotypes == YES || \
                          doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || \
                          doPrintCATG == YES || doPrintPILEUP == YES || doPrintBulk == YES || doPrintAncestors == YES)
 

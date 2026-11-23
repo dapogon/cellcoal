@@ -576,9 +576,8 @@ taken from the clock and is written in <code>log</code> and
 <li><strong>Threads.</strong>
 <code>OMP_NUM_THREADS=4 cellcoal ...</code> chooses the number of
 threads for the read counts, the VCF and the reads (one cell per thread
-in the reads mode; the memory grows with the threads, because every cell
-is built in memory before it is written); by default all the cores are
-used.</li>
+in the reads mode; the memory grows a little with the threads, see
+section 5.5); by default all the cores are used.</li>
 <li><strong>Size.</strong> The VCF is by far the largest file (for
 example, 770 MB for 2 replicates of 100 cells with 30,000 sites). For
 many cells or sites use <code>-z</code> (compressed),
@@ -1932,6 +1931,21 @@ are independent in each read. Reads are 150 bp
 (<code>--read-len</code>), flags 99/147/83/163, duplicates marked 1024,
 tags <code>RG</code>, <code>HP</code> (haplotype 1/2) and
 <code>MI</code> (molecule).</p>
+<p><strong>Memory.</strong> The genome of every cell is simulated in
+tiles of 262,144 bases, and the BAM records that are complete after each
+tile are written at once, so the memory of the reads does not depend on
+the length of the genome or on the depth (a few tens of MB per thread).
+What is left is the memory of the simulation itself (about 240 bytes per
+site for 4 cells, and more for more cells): a chromosome in blocks
+(section 5.3) needs only that of one block (4 Mb in 20 blocks, 8 cells,
+30X: 87 MB), and without blocks 4 Mb need about 1 GB. Every cell and
+haplotype has its own random stream that goes on from tile to tile, so
+the BAM files are the same for any size of tile (environment variable
+<code>CELLCOAL_READ_TILE</code>, for tests) and for any number of
+threads; only the order of the records of the FASTQ files depends on the
+size of the tile. The molecules are numbered (<code>MI</code> tag) in an
+order that depends on the haplotype, not in the order of the
+positions.</p>
 <p>Truth: <code>reads_&lt;n&gt;/truth.vcf</code> has the true genotype
 of every cell (before dropout and genotyping errors; GT
 maternal|paternal, INFO <code>NC</code> cells carrying the allele,

@@ -28,7 +28,7 @@ void AllocateCellStructure(void)
 	glBudget = (size_t) (limitMB * 1048576.0);
 	glUsed = 0;
 	siteGL = NULL;
-	if (doNGS == YES)
+	if (doNGS == YES && doBam == NO && doFastq == NO)
 		{
 		siteGL = (double**) Checked (calloc(numSites, sizeof(double*)), "Could not allocate the siteGL structure\n");
 		}

@@ -6,13 +6,14 @@
    sequencing errors (-E) are drawn independently in every read. Output: one BAM (+ BAI) and/or FASTQ.gz pair per cellIdx, the reference (ref.fa)
    and, with --bulk-depth, the BAM of the healthy genome. The BAM flag 0x400 marks the PCR duplicates, the tag MI is the molecule and HP the haplotype. */
 
+#include <limits.h>
 #include "cellcoal.h"
 #include "bgzf.h"
 #include <sys/stat.h>
 #include <math.h>
 #include <string.h>
 
-typedef struct { long pos; size_t off; int len; } RecIdx;
+typedef struct { long pos; size_t off; int len; int key; } RecIdx;
 
 typedef struct
 	{
@@ -20,6 +21,7 @@ typedef struct
 	size_t			n, cap;
 	RecIdx			*idx;
 	long			ni, capi;
+	int				key;		/* source genome and haplotype of the records being added: ties in the position are sorted by it */
 	} RecSet;
 
 typedef struct { long site; int alt; double f; int strand; } AmpEvent;	/* strand: -1 both, 0 forward, 1 reverse */
@@ -116,6 +118,7 @@ static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mp
 	rs->idx[rs->ni].pos = pos;
 	rs->idx[rs->ni].off = rs->n;
 	rs->idx[rs->ni].len = (int) o;
+	rs->idx[rs->ni].key = rs->key;
 	rs->ni++;
 	rs->n += o;
 	}
@@ -126,6 +129,8 @@ static int CmpIdx (const void *a, const void *b)
 
 	if (x->pos != y->pos)
 		return x->pos < y->pos ? -1 : 1;
+	if (x->key != y->key)
+		return x->key < y->key ? -1 : 1;
 	return x->off < y->off ? -1 : (x->off > y->off);
 	}
 
@@ -189,20 +194,26 @@ static void BamOpen (BamOut *bo, const char *path, const char *rg)
 	}
 
 /* appends the records of rs (sorted here; their positions have to follow those already written) */
-static void BamAppend (BamOut *bo, RecSet *rs)
+/* Writes the records of the set that start before limit (all of them if limit is LONG_MAX), sorted, and keeps the others for the next call. The records
+   that start at or after the limit are those of the molecules that have not been simulated yet or the second reads of molecules that have. */
+static void BamFlush (BamOut *bo, RecSet *rs, long limit)
 	{
 	unsigned char *buf = rs->buf;
-	long		k;
+	long		k, nw = 0;
 
 	qsort (rs->idx, rs->ni, sizeof(RecIdx), CmpIdx);
 	for (k=0; k<rs->ni; k++)
 		{
 		RecIdx	*r = &rs->idx[k];
-		uint64_t b0 = BgzfTell (&bo->bz), b1;
-		long	end = r->pos + (long) (buf[r->off+20] | (buf[r->off+21]<<8) | (buf[r->off+22]<<16) | ((long)buf[r->off+23]<<24));
-		int		bin = Reg2Bin (r->pos, end);
-		long	w;
+		uint64_t b0, b1;
+		long	end, w;
+		int		bin;
 
+		if (r->pos >= limit)
+			break;
+		b0 = BgzfTell (&bo->bz);
+		end = r->pos + (long) (buf[r->off+20] | (buf[r->off+21]<<8) | (buf[r->off+22]<<16) | ((long)buf[r->off+23]<<24));
+		bin = Reg2Bin (r->pos, end);
 		BgzfWrite (&bo->bz, buf + r->off, r->len);
 		b1 = BgzfTell (&bo->bz);
 		if (bo->ni == 0)
@@ -215,7 +226,34 @@ static void BamAppend (BamOut *bo, RecSet *rs)
 		for (w = r->pos >> 14; w <= (end - 1) >> 14; w++)
 			if (bo->lin[w] == 0)
 				bo->lin[w] = b0;
+		nw++;
 		}
+	if (nw == rs->ni)
+		{
+		rs->n = 0;
+		rs->ni = 0;
+		return;
+		}
+	{							/* the records that stay move to the start of the buffer */
+	size_t	keep = 0, o = 0;
+	unsigned char *tmp;
+	long	m = rs->ni - nw;
+
+	for (k=nw; k<rs->ni; k++)
+		keep += rs->idx[k].len;
+	tmp = (unsigned char*) malloc (keep);
+	for (k=nw; k<rs->ni; k++)
+		{
+		memcpy (tmp + o, buf + rs->idx[k].off, rs->idx[k].len);
+		rs->idx[k].off = o;
+		o += rs->idx[k].len;
+		}
+	memcpy (buf, tmp, keep);
+	free (tmp);
+	memmove (rs->idx, rs->idx + nw, m * sizeof(RecIdx));
+	rs->ni = m;
+	rs->n = keep;
+	}
 	}
 
 static void BamClose (BamOut *bo)
@@ -789,12 +827,14 @@ static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, i
 	}
 
 /* Reads of one cell (cellIdx >= 0) or of the healthy genome (cellIdx = -1). Returns the number of read pairs. */
+static long		readTile = 262144;		/* bases of a tile (CELLCOAL_READ_TILE) */
+
 static long SimulateGenome (int cellIdx0, double depth, int amplified, const char *rg, long int *seed, ReadOut *ro, int donor)
 	{
 	RecSet	rs;
 	FastqOut *fq = &ro->fq;
-	AmpEvent *ev[2] = {NULL, NULL};
-	long	nev[2] = {0, 0}, pairs = 0, molecule = ro->molecule, pos;
+	AmpEvent *ev[2][2] = {{NULL, NULL}, {NULL, NULL}};
+	long	nev[2][2] = {{0, 0}, {0, 0}}, pairs = 0, molecule = ro->molecule, pos;
 	int		hap, q, L = readLen, i;
 	char	*ta, *tb, *ra, *rb, name[96];
 	unsigned char qa[512], qb[512];
@@ -811,94 +851,125 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 		QualSetup (L, seed);
 	ta = (char*) malloc (4 * (size_t) (L + 2));
 	tb = ta + L + 2; ra = tb + L + 2; rb = ra + L + 2;
-	/* a doublet (a cell captured together with its donor) has the reads of both genomes in the same files, in one sorted set of records */
-	for (si=0; si<nsrc; si++)
+	/* A doublet (a cell captured together with its donor) has the reads of both genomes in the same files, in one sorted set of records.
+	   The genome is simulated in tiles of CELLCOAL_READ_TILE bases (262144 by default) and the BAM records that are complete after each tile
+	   are written, so the memory does not depend on the length of the genome. Every source genome and haplotype has its own random stream, which
+	   goes on from tile to tile, so the reads do not depend on the size of the tile (or on the number of threads). */
 	{
-	int		cellIdx = srcs[si];
-	double	cm = (cellIdx >= 0 && cellCovMult != NULL) ? cellCovMult[cellIdx] : 1.0;
+	int			ns = nsrc * 2, k;
+	uint64_t	st[4];
+	long		cnt[4] = {0, 0, 0, 0}, tile0, tile1, maxcnt = 0;
+	double		cmv[2];
 
-	nev[0] = nev[1] = 0;
-	for (hap=0; hap<2; hap++)
+	for (si=0; si<nsrc; si++)
 		{
-		if (amplified)
-			ev[hap] = BuildAmpEvents (cellIdx, hap, seed, &nev[hap]);
+		int cellIdx = srcs[si];
+
+		cmv[si] = (cellIdx >= 0 && cellCovMult != NULL) ? cellCovMult[cellIdx] : 1.0;
+		for (hap=0; hap<2; hap++)
+			ev[si][hap] = amplified ? BuildAmpEvents (cellIdx, hap, seed, &nev[si][hap]) : NULL;
 		}
-
-	for (hap=0; hap<2; hap++)
+	for (k=0; k<ns; k++)
 		{
-		for (pos = 0; pos < numSites; pos += W)
+		uint64_t x = streamState + (uint64_t) (k + 1) * 0xA24BAED4963EE407ULL;
+
+		st[k] = SplitMix64 (&x);
+		}
+	for (tile0 = 0; tile0 < numSites; tile0 += readTile)
+		{
+		tile1 = (tile0 + readTile < numSites) ? tile0 + readTile : numSites;
+		for (si=0; si<nsrc; si++)
+		for (hap=0; hap<2; hap++)
 			{
-			double	g = 1.0, lambda;
-			int		nfrag, f;
+			int		cellIdx = srcs[si], sk = si * 2 + hap;
+			double	cm = cmv[si];
 
-			if (amplified)
+			streamState = st[sk];
+			rs.key = sk;
+			for (pos = tile0; pos < tile1; pos += W)
 				{
-				if (gainOn == YES && cellIdx >= 0)
-					g = GainAt (cellIdx, hap, pos + W/2);
-				if (copyGainOn == YES && cellIdx >= 0)
-					{
-					Geno	ex[MAX_COPIES];
+				double	g = 1.0, lambda;
+				int		nfrag, f;
 
-					g *= 1.0 + ExtraCopies (cellIdx, hap, pos + W/2, ex);	/* the extra copies (--seg-gain-rate) add fragments */
+				if (amplified)
+					{
+					if (gainOn == YES && cellIdx >= 0)
+						g = GainAt (cellIdx, hap, pos + W/2);
+					if (copyGainOn == YES && cellIdx >= 0)
+						{
+						Geno	ex[MAX_COPIES];
+
+						g *= 1.0 + ExtraCopies (cellIdx, hap, pos + W/2, ex);	/* the extra copies (--seg-gain-rate) add fragments */
+						}
+					}
+				lambda = depth * cm * 0.5 * g / (2.0 * L * (1.0 + dupMean)) * (double) W;
+				nfrag = RandomPoisson (lambda, seed);
+				for (f=0; f<nfrag; f++)
+					{
+					long	s = pos + (long) (RandomUniform (seed) * W), ins;
+					int		copies, c, fwdFrag, copyRank = 0;
+					long	mol;
+
+					ins = (long) (insertMean + insertSd * Normal (seed) + 0.5);
+					if (ins < L)
+						ins = L;
+					if (s + ins > numSites)
+						continue;
+					if (posMap != NULL && CP (s + ins - 1) - CP (s) != ins - 1)
+						continue;	/* the fragment would span masked sites (N) */
+					if (copyGainOn == YES && cellIdx >= 0)
+						{
+						Geno	ex[MAX_COPIES];
+
+						copyRank = RandomUniformTo (1 + ExtraCopies (cellIdx, hap, s, ex), seed);	/* the fragment comes from one of the copies */
+						}
+					if (LoadTemplates (hap, cellIdx, s, ins, L, ta, tb, copyRank))
+						continue;
+					if (nev[si][hap] > 0)
+						ApplyAmpErrors (ev[si][hap], nev[si][hap], s, ins, L, ta, tb, seed);
+					if (ndmg > 0)
+						ApplyDamage (L, ta, tb, seed);
+					copies = DuplicateCopies (seed);
+					fwdFrag = (RandomUniform (seed) < 0.5);
+					mol = molecule + 1 + 4 * cnt[sk] + sk;		/* unique in the cell, and the same for any size of tile */
+					cnt[sk]++;
+					for (c=0; c<copies; c++)
+						{
+						memcpy (ra, ta, L); memcpy (rb, tb, L);
+						if (qualOn)
+							{
+							SeqErrorsQ (ra, L, 0, qa, qerr, seed);
+							SeqErrorsQ (rb, L, 1, qb, qerr, seed);
+							}
+						else
+							{
+							SeqErrors (ra, L, seed);
+							SeqErrors (rb, L, seed);
+							}
+						snprintf (name, sizeof(name), "%s:%ld", rg, mol);
+						EmitPair (&rs, fq, name, fwdFrag, c, s, ins, ra, rb, q, qualOn ? qa : NULL, qualOn ? qb : NULL, rg, hap, mol);
+						pairs++;
+						}
 					}
 				}
-			lambda = depth * cm * 0.5 * g / (2.0 * L * (1.0 + dupMean)) * (double) W;
-			nfrag = RandomPoisson (lambda, seed);
-			for (f=0; f<nfrag; f++)
-				{
-				long	s = pos + (long) (RandomUniform (seed) * W), ins;
-				int		copies, c, fwdFrag, copyRank = 0;
-
-				ins = (long) (insertMean + insertSd * Normal (seed) + 0.5);
-				if (ins < L)
-					ins = L;
-				if (s + ins > numSites)
-					continue;
-				if (posMap != NULL && CP (s + ins - 1) - CP (s) != ins - 1)
-					continue;	/* the fragment would span masked sites (N) */
-				if (copyGainOn == YES && cellIdx >= 0)
-					{
-					Geno	ex[MAX_COPIES];
-
-					copyRank = RandomUniformTo (1 + ExtraCopies (cellIdx, hap, s, ex), seed);	/* the fragment comes from one of the copies */
-					}
-				if (LoadTemplates (hap, cellIdx, s, ins, L, ta, tb, copyRank))
-					continue;
-				if (nev[hap] > 0)
-					ApplyAmpErrors (ev[hap], nev[hap], s, ins, L, ta, tb, seed);
-				if (ndmg > 0)
-					ApplyDamage (L, ta, tb, seed);
-				copies = DuplicateCopies (seed);
-				fwdFrag = (RandomUniform (seed) < 0.5);
-				molecule++;
-				for (c=0; c<copies; c++)
-					{
-					memcpy (ra, ta, L); memcpy (rb, tb, L);
-					if (qualOn)
-						{
-						SeqErrorsQ (ra, L, 0, qa, qerr, seed);
-						SeqErrorsQ (rb, L, 1, qb, qerr, seed);
-						}
-					else
-						{
-						SeqErrors (ra, L, seed);
-						SeqErrors (rb, L, seed);
-						}
-					snprintf (name, sizeof(name), "%s:%ld", rg, molecule);
-					EmitPair (&rs, fq, name, fwdFrag, c, s, ins, ra, rb, q, qualOn ? qa : NULL, qualOn ? qb : NULL, rg, hap, molecule);
-					pairs++;
-					}
-				}
+			st[sk] = streamState;
 			}
+		if (doBam)
+			BamFlush (&ro->bo, &rs, (tile1 < numSites) ? CP (tile1) : LONG_MAX);
 		}
-	for (i=0; i<2; i++)
-		{
-		free (ev[i]);
-		ev[i] = NULL;
-		}
+	for (k=0; k<ns; k++)
+		if (cnt[k] > maxcnt)
+			maxcnt = cnt[k];
+	molecule += 4 * maxcnt + 4;
+	for (si=0; si<2; si++)
+		for (i=0; i<2; i++)
+			{
+			free (ev[si][i]);
+			ev[si][i] = NULL;
+			}
 	}
 	if (doBam)
-		BamAppend (&ro->bo, &rs);
+		BamFlush (&ro->bo, &rs, LONG_MAX);
 	ro->molecule = molecule;
 	free (ta);
 	free (rs.buf);
@@ -1085,6 +1156,12 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 	uint64_t	base;
 	long		s1, s2;
 
+	{
+	const char *env = getenv ("CELLCOAL_READ_TILE");
+
+	if (env != NULL && atol (env) > 0)
+		readTile = ((atol (env) + 255) / 256) * 256;
+	}
 	if (strlen (damageSpec) > 0 && ndmg == 0)
 		LoadDamage ();
 	if (strlen (seqContextFile) > 0 && !ctxOn)
