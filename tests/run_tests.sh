@@ -1395,6 +1395,38 @@ grep -q "line 1" sc5.out && ok "a wrong line of the context file is reported wit
 rm -rf SC0 SC1 SC3 SC4 SC5
 cd "$ROOT"
 
+echo "2g58. --damage: G>T in the forward reads and C>A in the reverse reads (orientation bias), same files for any number of threads"
+cd "$TMP"
+A="-n1 -s6 -#3 -l30000 -u1e-7 -e10000 -C20 -E0.0005 --bam"
+OMP_NUM_THREADS=1 "$BIN" $A --damage "G>T:0.03" -oDM1 >/dev/null 2>&1; OMP_NUM_THREADS=3 "$BIN" $A --damage "G>T:0.03" -oDM3 >/dev/null 2>&1
+cmp -s DM1/reads_1/cell0002.bam DM3/reads_1/cell0002.bam && ok "1 and 3 threads give identical BAM files" || bad "--damage depends on the number of threads"
+if command -v python3 >/dev/null; then
+python3 - "$ROOT" <<'P' && ok "G>T is about 0.03 in the forward reads and C>A in the reverse reads, and the other substitutions stay at the baseline" || bad "orientation bias of --damage"
+import sys, glob, collections
+sys.path.insert(0, sys.argv[1] + "/tools")
+import bamcheck as b
+name, ref = b.read_fasta("DM1/reads_1/ref.fa")
+c = collections.Counter(); t = collections.Counter()
+for f in sorted(glob.glob("DM1/reads_1/cell*.bam")):
+    _, _, recs = b.parse_bam(f)
+    for r in recs:
+        o = 'R' if r['flag'] & 16 else 'F'
+        for i, x in enumerate(r['bases']):
+            g = ref[r['pos'] + i]
+            if g == 'N': continue
+            t[o, g] += 1
+            if x != g: c[o, g, x] += 1
+r = lambda o, g, x: c[o, g, x] / t[o, g]
+assert 0.022 < r('F', 'G', 'T') < 0.038, r('F', 'G', 'T')
+assert 0.022 < r('R', 'C', 'A') < 0.038, r('R', 'C', 'A')
+assert r('R', 'G', 'T') < 0.003 and r('F', 'C', 'A') < 0.003 and r('F', 'A', 'C') < 0.003
+P
+else echo "  skip (python3 not installed)"; fi
+"$BIN" $A --damage "G>G:0.1" -oDM4 > dm4.out 2>&1
+grep -q "different ones" dm4.out && ok "a wrong --damage item is reported" || bad "bad --damage item accepted"
+rm -rf DM1 DM3 DM4
+cd "$ROOT"
+
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"
 if command -v python3 >/dev/null; then

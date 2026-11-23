@@ -236,7 +236,7 @@ CellCoal produces data in one of three ways, and each option belongs to one or m
 | `-G` genotyping error | yes | no | no |
 | `-C`, `-J`, `-A`, `-E`, `-X`, `--gain-sd/--gain-len`, `--amp-signature`, `--amp-cell-var`, `--cov-ado-corr` | no | yes | yes |
 | `-V`, `-O`, `-R`, `-I`, `-B`, `--cov-doublet-corr`, `--ado-doublet-corr`, `--min-alt-reads`, `--min-alt-vaf`, `-M`, `--coverage`, `--fast`, `-8`, `-9`, `-0`, `--bcf`, `-z`, `-Z` | no | yes | no |
-| `--bam`, `--fastq`, `--read-len`, `--insert-mean`, `--insert-sd`, `--dup-mean`, `--bulk-depth`, `--qual-sd`, `--qual-slope`, `--strand-bias`, `--seq-context` | no | no | yes |
+| `--bam`, `--fastq`, `--read-len`, `--insert-mean`, `--insert-sd`, `--dup-mean`, `--bulk-depth`, `--qual-sd`, `--qual-slope`, `--strand-bias`, `--seq-context`, `--damage` | no | no | yes |
 | `--blocks`, `--fasta`, `--region`, `--germline-vcf`, `--region-rates` | no | yes | yes |
 
 Where two options look alike they do different things: `-M` keeps the sites whose **pooled** VAF (all the cells together) is at least M, whereas `--min-alt-reads` and `--min-alt-vaf` keep the sites where some **cell** has a call supported by enough reads; `-D/-P/-Q` set how much allelic dropout there is and `--ado-block` how it is spread along the genome (in contiguous segments). `-F` (parameter file) and `-U` (diploid genome in FASTA) are older: `--config` reads the options from a JSON or YAML file, and `--fasta` with `--region` and `--germline-vcf` gives a real reference.
@@ -680,6 +680,8 @@ GGG  3
 
 The contexts that no line mentions have multiplier 1. The multipliers are divided by their mean over the trinucleotides of the reference, so `-E` is still the mean error of the reads and only its distribution along the sequence changes (with the example, `GGC` has an error of about 7 times `-E`). The second read of a pair is read in the opposite direction, so its context is the reverse complement of the genome (it is read in its own direction, as the sequencer does). It combines with `--qual-sd` and `--qual-slope` (the factors multiply), needs `-E` greater than 0, and the qualities written are calibrated, so a quality-aware caller sees the low qualities of the risky contexts. The substitutions follow the error matrix (`-X`). It works in the reads mode only. Without the option the data are identical to before.
 
+**Damage of the library (`--damage SPEC`).** Oxidation (G>T) and deamination (C>T) damage the DNA before the PCR and create false SNVs with a signature that callers use to filter them: the change is seen in only one orientation of the reads (the *orientation bias*, F1R2 against F2R1). `SPEC` is a list of items `FROM>TO:RATE` separated by commas, for example `G>T:0.002,C>T:0.001`, where RATE is the probability that a FROM base of a strand of the molecule is damaged. A damaged G of the top strand is a T in the read that sequences that strand (the forward read); a damaged G of the bottom strand is a C of the genome that is seen as an A in the reverse read. The damage happens in the molecule, **before the PCR duplicates**, so the duplicates inherit it (unlike the sequencing errors, which are independent in each read), and it also happens in the healthy bulk sample (which a caller can use to remove it). It works in the reads mode only; without the option the data are identical to before.
+
 **`--strand-bias P`** makes a fraction P of the errors of the amplification strand specific: the molecule that carries the error shows it only in the reads of one strand (the left read of the pair is the forward strand, the right read the reverse strand). In real data many artifacts (damage, copy errors of one strand) have this signature and callers filter them with the alternative reads on each strand. `benchmark.py pileup --both-strands` adds the baseline that requires alternative reads on both strands: with `--strand-bias 0.8` (20 cells, 8X) the false positives of the baseline fall from 1229 (duplicates out) to 407 and its recall from 0.74 to 0.58. Default 0.
 
 In reads mode allelic dropout has to be given in segments (`--ado-block`); with `-D` alone (independent at every site) almost no fragment of 300 bp survives, and CellCoal now says so instead of writing empty BAM files.
@@ -1052,6 +1054,7 @@ These options need read counts (`-C`) and diploid DNA, and are described in sect
 | `--contig NAME` | `contig` | name of the contig (`chr1`) |
 | `--qual-sd S`, `--qual-slope B` | `qual-sd`, `qual-slope` | variation of the base quality among bases and along the read (0, 0: constant) |
 | `--seq-context FILE` | `seq-context` | error multiplier of trinucleotide contexts in the direction of the sequencing (e.g. `GGC 8`) |
+| `--damage SPEC` | `damage` | damage of the library before the PCR, `FROM>TO:RATE` items (e.g. `G>T:0.002,C>T:0.001`) |
 | `--strand-bias P` | `strand-bias` | fraction of the amplification errors seen on one strand only (0) |
 | `--bulk-depth D` | `bulk-depth` | also simulate a healthy bulk sample (`normal.bam`) at depth D |
 

@@ -396,6 +396,7 @@ void ResetSegments (void);
 void WriteCnvEvents (int replicate);
 extern int					compressLevel;
 extern char					*seqContextFile;
+extern char					*damageSpec;
 extern double				insertMean, insertSd, bulkDepth, dupMean, qualSd, qualSlope, strandBias;
 void				GenerateReadLevel (long int *seed, int dataSetNum);
 void				WriteTruthVcf (int dataSetNum);

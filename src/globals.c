@@ -91,6 +91,7 @@ FILE				*fpCoverage = NULL;
 int					doBam = 0, doFastq = 0, readLen = 150;	/* read-level simulator (--bam, --fastq, --read-len) */
 int					compressLevel = 6;		/* zlib level of the BGZF files: BAM, BCF and FASTQ.gz (--compress-level) */
 char				*seqContextFile = "";
+char				*damageSpec = "";
 double				insertMean = 400.0, insertSd = 60.0, bulkDepth = 0.0, dupMean = 0.3, qualSd = 0.0, qualSlope = 0.0, strandBias = 0.0;
 char				*contigName = "chr1";
 double				gainSd = 0.0;	/* --gain-sd: standard deviation of the log amplification gain of a haplotype (0 = off) */

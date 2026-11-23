@@ -786,7 +786,8 @@ optional healthy <code>normal.bam</code></td>
 <code>--insert-mean</code>, <code>--insert-sd</code>,
 <code>--dup-mean</code>, <code>--bulk-depth</code>,
 <code>--qual-sd</code>, <code>--qual-slope</code>,
-<code>--strand-bias</code>, <code>--seq-context</code></td>
+<code>--strand-bias</code>, <code>--seq-context</code>,
+<code>--damage</code></td>
 <td>no</td>
 <td>no</td>
 <td>yes</td>
@@ -1992,6 +1993,22 @@ written are calibrated, so a quality-aware caller sees the low qualities
 of the risky contexts. The substitutions follow the error matrix
 (<code>-X</code>). It works in the reads mode only. Without the option
 the data are identical to before.</p>
+<p><strong>Damage of the library (<code>--damage SPEC</code>).</strong>
+Oxidation (G&gt;T) and deamination (C&gt;T) damage the DNA before the
+PCR and create false SNVs with a signature that callers use to filter
+them: the change is seen in only one orientation of the reads (the
+<em>orientation bias</em>, F1R2 against F2R1). <code>SPEC</code> is a
+list of items <code>FROM&gt;TO:RATE</code> separated by commas, for
+example <code>G&gt;T:0.002,C&gt;T:0.001</code>, where RATE is the
+probability that a FROM base of a strand of the molecule is damaged. A
+damaged G of the top strand is a T in the read that sequences that
+strand (the forward read); a damaged G of the bottom strand is a C of
+the genome that is seen as an A in the reverse read. The damage happens
+in the molecule, <strong>before the PCR duplicates</strong>, so the
+duplicates inherit it (unlike the sequencing errors, which are
+independent in each read), and it also happens in the healthy bulk
+sample (which a caller can use to remove it). It works in the reads mode
+only; without the option the data are identical to before.</p>
 <p><strong><code>--strand-bias P</code></strong> makes a fraction P of
 the errors of the amplification strand specific: the molecule that
 carries the error shows it only in the reads of one strand (the left
@@ -2550,12 +2567,18 @@ constant)</td>
 sequencing (e.g. <code>GGC 8</code>)</td>
 </tr>
 <tr class="even">
+<td><code>--damage SPEC</code></td>
+<td><code>damage</code></td>
+<td>damage of the library before the PCR, <code>FROM&gt;TO:RATE</code>
+items (e.g. <code>G&gt;T:0.002,C&gt;T:0.001</code>)</td>
+</tr>
+<tr class="odd">
 <td><code>--strand-bias P</code></td>
 <td><code>strand-bias</code></td>
 <td>fraction of the amplification errors seen on one strand only
 (0)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>--bulk-depth D</code></td>
 <td><code>bulk-depth</code></td>
 <td>also simulate a healthy bulk sample (<code>normal.bam</code>) at

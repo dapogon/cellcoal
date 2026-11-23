@@ -669,6 +669,79 @@ static void ApplyAmpErrors (const AmpEvent *ev, long nev, long s, long ins, int 
 		}
 	}
 
+/* Damage of the library (--damage "G>T:0.002,C>T:0.001"): a base of one strand of the molecule changes before the PCR, so the PCR duplicates
+   inherit it, and it is seen only in the read that sequences that strand (the orientation bias of the oxidation, G>T, and of the deamination,
+   C>T). Every item is FROM>TO:RATE, with RATE the probability that a FROM base of a strand is damaged. A damaged G of the top strand is a T of
+   the first read; a damaged G of the bottom strand is a C of the genome that is seen as an A in the second read. */
+typedef struct { char from, to; double rate; } DamageItem;
+static DamageItem	dmg[16];
+static int			ndmg = 0;
+
+static char Comp (char c)
+	{
+	return (c == 'A') ? 'T' : (c == 'C') ? 'G' : (c == 'G') ? 'C' : (c == 'T') ? 'A' : c;
+	}
+
+static void LoadDamage (void)
+	{
+	char	*copy = strdup (damageSpec), *tok, *save = NULL;
+
+	for (tok = strtok_r (copy, ",", &save); tok; tok = strtok_r (NULL, ",", &save))
+		{
+		char	f, t;
+		double	r;
+		int		n = 0;
+
+		if (sscanf (tok, " %c>%c:%lf%n", &f, &t, &r, &n) != 3 || tok[n] != '\0')
+			{
+			fprintf (stderr, "\nERROR: --damage: \"%s\" is not FROM>TO:RATE (for example G>T:0.002)\n", tok);
+			exit (-1);
+			}
+		f = toupper ((unsigned char) f); t = toupper ((unsigned char) t);
+		if (!strchr ("ACGT", f) || !strchr ("ACGT", t) || f == t || r < 0.0 || r > 1.0)
+			{
+			fprintf (stderr, "\nERROR: --damage: \"%s\": the bases are A, C, G or T (different ones) and the rate is between 0 and 1\n", tok);
+			exit (-1);
+			}
+		if (ndmg == 16)
+			{
+			fprintf (stderr, "\nERROR: --damage: at most 16 items\n");
+			exit (-1);
+			}
+		dmg[ndmg].from = f; dmg[ndmg].to = t; dmg[ndmg].rate = r;
+		ndmg++;
+		}
+	free (copy);
+	if (ndmg == 0)
+		{
+		fprintf (stderr, "\nERROR: --damage: no items (for example G>T:0.002)\n");
+		exit (-1);
+		}
+	}
+
+static void ApplyDamage (int L, char *ta, char *tb, long int *seed)
+	{
+	int		k, i, n, p;
+
+	for (k=0; k<ndmg; k++)
+		{
+		n = RandomPoisson (dmg[k].rate * L, seed);		/* every position is a candidate with probability rate, and changes if it is a FROM base */
+		for (i=0; i<n; i++)
+			{
+			p = RandomUniformTo (L, seed);
+			if (ta[p] == dmg[k].from)
+				ta[p] = dmg[k].to;
+			}
+		n = RandomPoisson (dmg[k].rate * L, seed);
+		for (i=0; i<n; i++)
+			{
+			p = RandomUniformTo (L, seed);
+			if (tb[p] == Comp (dmg[k].from))
+				tb[p] = Comp (dmg[k].to);
+			}
+		}
+	}
+
 /* number of copies of a molecule after PCR duplication (geometric, mean 1 + dupMean) */
 static int DuplicateCopies (long int *seed)
 	{
@@ -793,6 +866,8 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 					continue;
 				if (nev[hap] > 0)
 					ApplyAmpErrors (ev[hap], nev[hap], s, ins, L, ta, tb, seed);
+				if (ndmg > 0)
+					ApplyDamage (L, ta, tb, seed);
 				copies = DuplicateCopies (seed);
 				fwdFrag = (RandomUniform (seed) < 0.5);
 				molecule++;
@@ -1010,6 +1085,8 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 	uint64_t	base;
 	long		s1, s2;
 
+	if (strlen (damageSpec) > 0 && ndmg == 0)
+		LoadDamage ();
 	if (strlen (seqContextFile) > 0 && !ctxOn)
 		LoadSeqContext ();		/* before the threads start; the table is read only */
 	if (qualSd > 0.0 || qualSlope != 0.0 || ctxOn)

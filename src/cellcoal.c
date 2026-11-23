@@ -382,6 +382,7 @@ static void CheckModeOptions (void)
 		{"--qual-slope", ExtraOptionGiven ("--qual-slope")},
 		{"--strand-bias", ExtraOptionGiven ("--strand-bias")},
 		{"--seq-context", ExtraOptionGiven ("--seq-context")},
+		{"--damage", ExtraOptionGiven ("--damage")},
 		{NULL, 0}
 		};
 	int		k;
