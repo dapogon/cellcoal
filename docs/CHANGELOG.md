@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.6.2
+`--damage` (library damage with orientation bias) and a reads mode that works in tiles of the genome: the memory does not depend on the length of the genome (4 Mb, 4 cells, 30X: 0.96 GB instead of 2.4 GB; a chromosome in blocks, 87 MB). The reads of a given seed change (same statistics).
+
 ## 2.6.1
 Doublets (`-B`) in reads mode, `--region-rates` (mutation rate that changes along the chromosome, needs `--blocks` or `--fasta`), `--seq-context` (sequencing errors that depend on the sequence), faster `cnv_segments` with sparse genomes, suggestions for mistyped options, `tests/manual_check.py`; the data are identical to 2.6.0.
 
