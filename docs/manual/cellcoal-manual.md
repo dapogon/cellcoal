@@ -275,7 +275,9 @@ The main steps of CellCoal are:
 
 ![Fig. 1. Main flow of CellCoal 2: the genealogy (with tumor regions if wanted), the genome, the somatic variation on the branches, and the three ways of observing the cells: genotypes, read counts or reads.](media/fig_flow.png){width=90%}
 
-Fig. 1. Main flow of CellCoal 2: the genealogy (with tumor regions if wanted), the genome, the somatic variation on the branches, and the three ways of observing the cells: genotypes, read counts or reads.
+::: caption
+**Fig. 1.** Main flow of CellCoal 2: the genealogy (with tumor regions if wanted), the genome, the somatic variation on the branches, and the three ways of observing the cells: genotypes, read counts or reads.
+:::
 
 ## 5.1 Coalescent genealogy
 
@@ -291,7 +293,9 @@ CellCoal also implements the coalescent parameterization of Ohtsuki and Innan (2
 
 ![Fig. 2. A random coalescent genealogy for a sample of 4 cells under constant (left), and growing population size (middle) and demographic periods (right). The effective population size is indicated as blue background. In the right, from Period 0 to Period 1 the population size experiences a severe bottleneck.](media/7bab3a898e62b667b11e9ad6adcb93dbce7ef449.png){width=100%}
 
-Fig. 2. A random coalescent genealogy for a sample of 4 cells under constant (left), and growing population size (middle) and demographic periods (right). The effective population size is indicated as blue background. In the right, from Period 0 to Period 1 the population size experiences a severe bottleneck.
+::: caption
+**Fig. 2.** A random coalescent genealogy for a sample of 4 cells under constant (left), and growing population size (middle) and demographic periods (right). The effective population size is indicated as blue background. In the right, from Period 0 to Period 1 the population size experiences a severe bottleneck.
+:::
 
 ### 5.1.1 Adding an outgroup
 
@@ -299,13 +303,17 @@ After the sample genealogy is simulated, two additional branches are added: a **
 
 ![Fig. 3. Outgroup addition. The length of the root branch will be controlled by the user with the parameter -k, which specifies the length of this branch as a proportion of the sample MRCA mean depth. The length of the outgroup branch depends on the parameter -q, which is the length of this branch as a proportion of the sample/outgroup most recent common ancestor (MRCA) mean depth. In this example, the corresponding values were -k0.5 -q1.0.](media/0a83248cc75664682df36acb5776a3601b863974.png){width=60%}
 
-Fig. 3. Outgroup addition. The length of the root branch will be controlled by the user with the parameter -k, which specifies the length of this branch as a proportion of the sample MRCA mean depth. The length of the outgroup branch depends on the parameter -q, which is the length of this branch as a proportion of the sample/outgroup most recent common ancestor (MRCA) mean depth. In this example, the corresponding values were -k0.5 -q1.0.
+::: caption
+**Fig. 3.** Outgroup addition. The length of the root branch will be controlled by the user with the parameter -k, which specifies the length of this branch as a proportion of the sample MRCA mean depth. The length of the outgroup branch depends on the parameter -q, which is the length of this branch as a proportion of the sample/outgroup most recent common ancestor (MRCA) mean depth. In this example, the corresponding values were -k0.5 -q1.0.
+:::
 
 In a tumor scenario, the outgroup cell will be naturally a healthy cell (Fig. 4)
 
 ![Fig. 4. Addition of a healthy cell in a tumor scenario. In this case we expect that the healthy cell has evolved much slower than the tumoral cells, so a small (or zero) outgroup might make more sense. In this example, the corresponding values where -k0.5 -q0.05.](media/876204ed7770579f7c2526fc4932a4631867168b.png){width=70%}
 
-Fig. 4. Addition of a healthy cell in a tumor scenario. In this case we expect that the healthy cell has evolved much slower than the tumoral cells, so a small (or zero) outgroup might make more sense. In this example, the corresponding values where -k0.5 -q0.05.
+::: caption
+**Fig. 4.** Addition of a healthy cell in a tumor scenario. In this case we expect that the healthy cell has evolved much slower than the tumoral cells, so a small (or zero) outgroup might make more sense. In this example, the corresponding values where -k0.5 -q0.05.
+:::
 
 **Tumour only.** With `--no-outgroup` only the tumour cells are reported. The healthy cell is still simulated (it defines the reference, the healthy root genome with all the alleles 0, and the trunk of `-k` is kept, so the truncal mutations are variants in every cell), but it is not in the outputs:
 
@@ -319,7 +327,9 @@ The standard coalescent results in an ultrametric tree, where all the tips are a
 
 ![Fig. 5. Rate variation among branches. Rate variation among lineages can be a product for example of changes in the mutation rate.](media/37c7177e8f5f3be0b26c714fee3404add52e12f9.png){width=60%}
 
-Fig. 5. Rate variation among branches. Rate variation among lineages can be a product for example of changes in the mutation rate.
+::: caption
+**Fig. 5.** Rate variation among branches. Rate variation among lineages can be a product for example of changes in the mutation rate.
+:::
 
 ### 5.1.3 Rate switches along the genealogy
 
@@ -345,7 +355,9 @@ Looking back in time, the cells of a deme coalesce among themselves until the co
 
 ![Fig. 6. Structured coalescent with colonizations (`--demes`). **a**, the model: the primary tumor (deme 1) and metastases that are founded by colonization from a source deme, at a time, by one or a few cells; there is no exchange of cells afterwards. **b**, a genealogy of 17 cells from a real run (`--demes n=6:5:6,size=1:0.5:2,time=1.5:0.5,source=1:2,founders=1:1`), with the cells coloured by deme and the colonization times (in the time scale of the tree, from the root) as dashed lines: with one founder the cells of deme 3 are a clade, nested in the clade of the cells that descend from deme 2. **c**, a run with three founders of deme 3 (`founders=1:3`): the cells of the deme descend from several cells of deme 2 and are not a clade.](media/fig_demes.png){width=100%}
 
-Fig. 6. Structured coalescent with colonizations (`--demes`). **a**, the model: the primary tumor (deme 1) and metastases that are founded by colonization from a source deme, at a time, by one or a few cells; there is no exchange of cells afterwards. **b**, a genealogy of 17 cells from a real run (`--demes n=6:5:6,size=1:0.5:2,time=1.5:0.5,source=1:2,founders=1:1`), with the cells coloured by deme and the colonization times (in the time scale of the tree, from the root) as dashed lines: with one founder the cells of deme 3 are a clade, nested in the clade of the cells that descend from deme 2. **c**, a run with three founders of deme 3 (`founders=1:3`): the cells of the deme descend from several cells of deme 2 and are not a clade.
+::: caption
+**Fig. 6.** Structured coalescent with colonizations (`--demes`). **a**, the model: the primary tumor (deme 1) and metastases that are founded by colonization from a source deme, at a time, by one or a few cells; there is no exchange of cells afterwards. **b**, a genealogy of 17 cells from a real run (`--demes n=6:5:6,size=1:0.5:2,time=1.5:0.5,source=1:2,founders=1:1`), with the cells coloured by deme and the colonization times (in the time scale of the tree, from the root) as dashed lines: with one founder the cells of deme 3 are a clade, nested in the clade of the cells that descend from deme 2. **c**, a run with three founders of deme 3 (`founders=1:3`): the cells of the deme descend from several cells of deme 2 and are not a clade.
+:::
 
 This model cannot be combined with growth, demographic periods or a user tree (the sizes of the demes are constant), and all the other options (mutation models, copy number, reads, doublets...) work as usual on the genealogy that it produces. The doublets (`-B`) choose their donor among all the cells, not within the deme.
 
@@ -494,7 +506,9 @@ It works with every model of sites (infinite sites, finite sites and mixtures), 
 
 ![Fig. 7. A chromosome in blocks and the regional mutation rates. **a**, `--blocks` simulates the chromosome in blocks of `-l` sites on one genealogy, so the memory is that of one block. **b**, `--region-rates` with multipliers 4 (positions 0 to 10,000) and 0.25 (10,000 to 25,000), from real runs: the number of SNVs of every block follows the multiplier of its region, and the total does not change.](media/fig_blocks.png){width=100%}
 
-Fig. 7. A chromosome in blocks and the regional mutation rates. **a**, `--blocks` simulates the chromosome in blocks of `-l` sites on one genealogy, so the memory is that of one block. **b**, `--region-rates` with multipliers 4 (positions 0 to 10,000) and 0.25 (10,000 to 25,000), from real runs: the number of SNVs of every block follows the multiplier of its region, and the total does not change.
+::: caption
+**Fig. 7.** A chromosome in blocks and the regional mutation rates. **a**, `--blocks` simulates the chromosome in blocks of `-l` sites on one genealogy, so the memory is that of one block. **b**, `--region-rates` with multipliers 4 (positions 0 to 10,000) and 0.25 (10,000 to 25,000), from real runs: the number of SNVs of every block follows the multiplier of its region, and the total does not change.
+:::
 
 ## 5.4 Single-cell genomics
 
@@ -518,7 +532,9 @@ During the amplification of single-cells, one or both alleles at a single site c
 
 ![Fig. 8. Examples of probability densities for three different Beta distributions.](media/5df860c941c0e4f31bae57d3cdb6c43e8ca73898.png){width=40%}
 
-Fig. 8. Examples of probability densities for three different *Beta* distributions.
+::: caption
+**Fig. 8.** Examples of probability densities for three different *Beta* distributions.
+:::
 
 The ADO rate of every cell (`-P`) is written to the file `ado_cells` (`ado_cells_dir/ado_cells.NNNN` with `-v`): one section `[#replicate]` per replicate with the columns `cell` and `ado_rate`, including the outgroup (healthy) cell. It is the rate of the cell itself; the dropout probability of a genotype also combines it with the rate of its site (`-Q`).
 
@@ -544,13 +560,17 @@ In order to obtain enough DNA material from single-cells for sequencing library 
 
 ![Fig. 9. Four-template model for amplification (\\gamma) and sequencing (\\varepsilon) error.](media/f4aa34719a21c151cd0446301ccc6cdd6858e38c.png){width=55%}
 
-Fig. 9. Four-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
+::: caption
+**Fig. 9.** Four-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
+:::
 
 **Two-template model**: In this case only the original base and a single alternative can be present, due to a *single* amplification error, in the set of amplified templates (Fig. 10).
 
 ![Fig. 10. Two-template model for amplification (\\gamma) and sequencing ($\varepsilon$) error.](media/087fa2b22cc58e3d654b2ef5745f224457060808.png){width=50%}
 
-Fig. 10. Two-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
+::: caption
+**Fig. 10.** Two-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
+:::
 
 **Amplification error that varies among cells (`--amp-cell-var`).** With `-A MEAN VAR MODEL` the fraction of wrong templates of every cell, site and haplotype comes from the same beta distribution in all the cells. In real data some cells amplify much worse than others. `--amp-cell-var V` (or `amplification_error_cell_variance: V` in a configuration file) first draws, for every cell and replicate, its own mean amplification error from a beta distribution with mean `MEAN` (from `-A`) and variance `V`; then the fraction of wrong templates of every site and haplotype of that cell is drawn from a beta distribution with that mean and a variance that keeps the concentration of `-A`, that is `VAR * m_i (1 - m_i) / (MEAN (1 - MEAN))` for a cell with mean `m_i`. It needs `-A`, and `V` has to be smaller than `MEAN (1 - MEAN)`. The mean of every cell is written to `cell_params` (new column `amplification_error`). The per-cell means are drawn from the main random stream after the other per-cell parameters, so the rest of the simulation (genealogy, mutations, coverage and ADO of the cells) is the same with and without the option; stored and streamed read counts give the same files. Without the option the output is identical to the previous version.
 
@@ -741,7 +761,9 @@ The contexts that no line mentions have multiplier 1. The multipliers are divide
 
 ![Fig. 11. Indels in the reads mode. **a**, an indel is an event of the genealogy that changes the haplotype of the cells below its branch; the reads that overlap it carry it, and the CIGAR has `D` and `I` operations (the reference and haplotype rows are aligned; `-` marks a deleted or an inserted base). **b**, an indel in a repeat has equivalent placements; CellCoal reports the leftmost one, as a variant caller does. **c**, `--homopolymer-error`: a run of equal bases of a read gets one base more or less (an error of the read, not of the genome). **d**, lengths of the indels from real runs (`--indel-len 2` and `4`, `--indel-max 10`): geometric, with the excess at the maximum.](media/fig_indels.png){width=100%}
 
-Fig. 11. Indels in the reads mode. **a**, an indel is an event of the genealogy that changes the haplotype of the cells below its branch; the reads that overlap it carry it, and the CIGAR has `D` and `I` operations (the reference and haplotype rows are aligned; `-` marks a deleted or an inserted base). **b**, an indel in a repeat has equivalent placements; CellCoal reports the leftmost one, as a variant caller does. **c**, `--homopolymer-error`: a run of equal bases of a read gets one base more or less (an error of the read, not of the genome). **d**, lengths of the indels from real runs (`--indel-len 2` and `4`, `--indel-max 10`): geometric, with the excess at the maximum.
+::: caption
+**Fig. 11.** Indels in the reads mode. **a**, an indel is an event of the genealogy that changes the haplotype of the cells below its branch; the reads that overlap it carry it, and the CIGAR has `D` and `I` operations (the reference and haplotype rows are aligned; `-` marks a deleted or an inserted base). **b**, an indel in a repeat has equivalent placements; CellCoal reports the leftmost one, as a variant caller does. **c**, `--homopolymer-error`: a run of equal bases of a read gets one base more or less (an error of the read, not of the genome). **d**, lengths of the indels from real runs (`--indel-len 2` and `4`, `--indel-max 10`): geometric, with the excess at the maximum.
+:::
 
 **`--strand-bias P`** makes a fraction P of the errors of the amplification strand specific: the molecule that carries the error shows it only in the reads of one strand (the left read of the pair is the forward strand, the right read the reverse strand). In real data many artifacts (damage, copy errors of one strand) have this signature and callers filter them with the alternative reads on each strand. `benchmark.py pileup --both-strands` adds the baseline that requires alternative reads on both strands: with `--strand-bias 0.8` (20 cells, 8X) the false positives of the baseline fall from 1229 (duplicates out) to 407 and its recall from 0.74 to 0.58. Default 0.
 

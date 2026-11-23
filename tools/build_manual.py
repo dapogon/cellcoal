@@ -17,7 +17,9 @@ body { font-family: -apple-system, 'Segoe UI', Helvetica, Arial, sans-serif; lin
 h1, h2, h3, h4 { line-height: 1.25; } h1 { border-bottom: 1px solid #ddd; padding-bottom: .3rem; margin-top: 2.2rem; }
 code { background: #f3f3f3; padding: 0 .25em; border-radius: 3px; font-size: 92%; } pre { background: #f6f6f6; padding: .8rem; overflow-x: auto; }
 pre code { background: none; padding: 0; } table { border-collapse: collapse; } td, th { border: 1px solid #ccc; padding: .3rem .6rem; }
-img { max-width: 100%; height: auto; } nav#TOC { background: #fafafa; border: 1px solid #eee; padding: .5rem 1.5rem; margin-bottom: 2rem; }
+img { max-width: 100%; height: auto; }
+div.caption { font-size: 85%; line-height: 1.4; color: #444; background: #f7f7f9; border-left: 3px solid #999; padding: .4rem .8rem; margin: .3rem 0 1.4rem; }
+div.caption p { margin: 0; } nav#TOC { background: #fafafa; border: 1px solid #eee; padding: .5rem 1.5rem; margin-bottom: 2rem; }
 @media print { body { max-width: none; margin: 0; } h1 { page-break-before: auto; } img { page-break-inside: avoid; } }
 """
 with tempfile.NamedTemporaryFile("w", suffix=".css", delete=False) as f:
