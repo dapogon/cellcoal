@@ -114,6 +114,7 @@ static const GroupKey groupKeys[] =
 	{"reads", "indel-ins",  'S', "--indel-ins", "fraction of the indels that are insertions (default 0.5)"},
 	{"reads", "indel-len",  'S', "--indel-len", "mean length of the indels (default 2)"},
 	{"reads", "indel-max",  'S', "--indel-max", "maximum length of an indel (default 10, up to 32)"},
+	{"reads", "homopolymer-error", 'S', "--homopolymer-error", "sequencing indel errors: probability that a homopolymer of 3 or more bases changes by one base, per base over 2 (e.g. 0.001)"},
 	{"reads", "damage", 'S', "--damage", "damage of the library before the PCR, FROM>TO:RATE (e.g. G>T:0.002,C>T:0.001)"},
 	{"reads", "seq-context", 'S', "--seq-context", "file with the error multiplier of trinucleotide contexts (e.g. GGC 4)"},
 	{"reads", "strand-bias",'S', "--strand-bias", "fraction of the amplification errors seen on one strand only (0 to 1)"},

@@ -5,7 +5,7 @@
    indels_truth.vcf. Every indel is left-aligned against the reference, as a variant caller would report it. */
 #include "cellcoal.h"
 
-double		indelRate = 0.0, indelIns = 0.5, indelLen = 2.0;
+double		indelRate = 0.0, indelIns = 0.5, indelLen = 2.0, homoError = 0.0;
 int			indelMax = 10;
 
 static IndelEv	*master = NULL;			/* all the events of the block */
@@ -14,6 +14,7 @@ static IndelEv	**cellEv[2] = {NULL, NULL};	/* resolved events of every cell and 
 static long		*cellN[2] = {NULL, NULL};
 static int		nCellsAlloc = 0;
 static long		nextId = 0;
+static double	blockRel = 1.0;			/* mean relative rate of the block (--region-rates) */
 
 static char RefAt (long j)
 	{
@@ -58,7 +59,9 @@ static int NewEvent (IndelEv *e, long int *seed)
 		len++;
 	e->type = (RandomUniform (seed) < indelIns) ? 0 : 1;
 	e->len = len;
-	p = (long) (RandomUniform (seed) * (numSites - 1));
+	do
+		p = (long) (RandomUniform (seed) * (numSites - 1));
+	while (regionRatesOn == YES && RandomUniform (seed) * regionRmax >= RegionRel ((int) p));
 	for (i=0; i<len; i++)
 		e->seq[i] = "ACGT"[(int) (RandomUniform (seed) * 4.0) & 3];
 	e->seq[len] = '\0';
@@ -128,7 +131,7 @@ static void Walk (TreeNode *p, IndelEv *par[2], long npar[2], long int *seed)
 		long m = 0, k;
 
 		if (own)
-			m = RandomPoisson (p->branchLength * (double) numSites * indelRate, seed);
+			m = RandomPoisson (p->branchLength * (double) numSites * indelRate * blockRel, seed);
 		cap[h] = npar[h] + m + 1;
 		cur[h] = (IndelEv*) Checked (malloc (cap[h] * sizeof(IndelEv)), "Could not allocate the indels\n");
 		if (npar[h] > 0)
@@ -208,6 +211,16 @@ void IndelsGenerate (long int *seed)
 	RandomUniform (seed);
 	s1 = *seed;
 	nextId = 0;
+	blockRel = 1.0;
+	if (regionRatesOn == YES)
+		{
+		long	step = (numSites > 20000) ? numSites / 20000 : 1, j, c = 0;
+		double	sum = 0.0;
+
+		for (j=0; j<numSites; j+=step, c++)
+			sum += RegionRel ((int) j);
+		blockRel = sum / (double) c;
+		}
 	{
 	long int sd = s1;
 

@@ -822,9 +822,12 @@ static int DuplicateCopies (long int *seed)
 
 /* The reads of a fragment that carries indels: the haplotype of the fragment (the sites s .. s+ins-1 with its insertions and deletions) is built, the first
    and the last L bases are the reads, and every base remembers its site (-1 for an inserted base), which gives the CIGAR and the positions. */
+#define EXT 8		/* extra bases of the templates: a deletion error of the sequencer takes bases that follow the read */
 typedef struct
 	{
-	long		ma[512], mb[512];			/* site of every base of the two reads (-1: inserted base) */
+	long		ma[520], mb[520];			/* site of every base of the templates of the two reads (-1: inserted base); the template of the second read has extB bases before it */
+	int			la, lb, extB;				/* length of the templates, and bases of the second template before its read */
+	long		mra[512], mrb[512];			/* site of every base of the reads */
 	uint32_t	ca[64], cb[64];				/* CIGAR of the reads */
 	int			nca, ncb;
 	long		posA, endA, posB, endB;		/* first and last site aligned by every read */
@@ -886,13 +889,24 @@ static int MakeCigar (const long *pm, int L, uint32_t *cig, long *first, long *l
 	return n;
 	}
 
-/* 1 when some indel falls in the fragment; then the templates and the alignment are built (return 2) or the fragment is lost (return 3) */
-static int IndelTemplates (const IndelEv *ie, long nie, int hap, int cellIdx, long s, long ins, int L, int copyRank, char *ta, char *tb, Aln *aln)
+/* The CIGARs and positions of the reads from the sites of their bases; 0 when they can be aligned */
+static int FinishAln (Aln *aln, int L)
+	{
+	aln->nca = MakeCigar (aln->mra, L, aln->ca, &aln->posA, &aln->endA);
+	aln->ncb = MakeCigar (aln->mrb, L, aln->cb, &aln->posB, &aln->endB);
+	return (aln->nca < 0 || aln->ncb < 0) ? -1 : 0;
+	}
+
+/* Templates of a fragment from the haplotype of the cell with its indels (the sites s .. s+ins-1 with the insertions and deletions that fall in it);
+   with force (sequencing indel errors) the template is built even if no indel falls in the fragment. The template of the first read is the first
+   L bases (and up to EXT more) and that of the second read the last L bases (with up to EXT before them). Returns 0 when there is nothing to do
+   (no indel), 2 when the templates and their maps were built, and 3 when the fragment is lost (a site lost by deletion or dropout in the reads). */
+static int IndelTemplates (const IndelEv *ie, long nie, int hap, int cellIdx, long s, long ins, int L, int copyRank, char *ta, char *tb, Aln *aln, int force)
 	{
 	long	lo = 0, hi = nie, mid, k, j, n = 0, cap;
 	int		*hb;
 	long	*hp;
-	int		i, ok = 1;
+	int		i, ok = 1, ext;
 
 	while (lo < hi)
 		{
@@ -902,7 +916,7 @@ static int IndelTemplates (const IndelEv *ie, long nie, int hap, int cellIdx, lo
 		else
 			hi = mid;
 		}
-	if (lo >= nie || ie[lo].pos >= s + ins - 1)
+	if (!force && (lo >= nie || ie[lo].pos >= s + ins - 1))
 		return 0;
 	cap = ins + 64 * (indelMax + 1) + 8;
 	hb = (int*) Checked (malloc (cap * (sizeof(int) + sizeof(long))), "Could not allocate the reads\n");
@@ -934,24 +948,108 @@ static int IndelTemplates (const IndelEv *ie, long nie, int hap, int cellIdx, lo
 		}
 	if (n < L)
 		ok = 0;
-	for (i=0; ok && i<L; i++)
+	ext = (homoError > 0.0 && ok) ? (int) ((n - L < EXT) ? n - L : EXT) : 0;
+	aln->la = L + ext;
+	aln->lb = L + ext;
+	aln->extB = ext;
+	for (i=0; ok && i<L + ext; i++)
 		{
-		if (hb[i] < 0 || hb[n - L + i] < 0)
+		int ia = i, ib = (int) (n - L - ext + i);
+
+		if (hb[ia] < 0 && i < L)
 			ok = 0;
-		else
-			{
-			ta[i] = BASES[hb[i]];
-			tb[i] = BASES[hb[n - L + i]];
-			aln->ma[i] = hp[i];
-			aln->mb[i] = hp[n - L + i];
-			}
+		if (hb[ib] < 0 && i >= ext)
+			ok = 0;
+		ta[i] = (hb[ia] >= 0) ? BASES[hb[ia]] : 'N';
+		tb[i] = (hb[ib] >= 0) ? BASES[hb[ib]] : 'N';
+		aln->ma[i] = hp[ia];
+		aln->mb[i] = hp[ib];
 		}
 	free (hb);
 	if (!ok)
 		return 3;
-	aln->nca = MakeCigar (aln->ma, L, aln->ca, &aln->posA, &aln->endA);
-	aln->ncb = MakeCigar (aln->mb, L, aln->cb, &aln->posB, &aln->endB);
-	return (aln->nca < 0 || aln->ncb < 0) ? 3 : 2;
+	for (i=0; i<L; i++)
+		{
+		aln->mra[i] = aln->ma[i];
+		aln->mrb[i] = aln->mb[ext + i];
+		}
+	return (FinishAln (aln, L) < 0) ? 3 : 2;
+	}
+
+/* Sequencing indel errors in homopolymers (--homopolymer-error P): a run of 3 or more equal bases of a read gets one base more or less with
+   probability P times (length - 2). The deleted base is the first of the run and the inserted one follows it (left-aligned). The templates are
+   slipped and the reads are their first L bases (first read) and last L bases (second read); the sites of the bases give the CIGAR. */
+static int Slip (const char *t, const long *m, int n, char *out, long *mo, long int *seed)
+	{
+	int		i = 0, o = 0, j, c;
+
+	while (i < n)
+		{
+		int len, kind = 0;
+
+		for (j=i; j<n && t[j] == t[i]; j++)
+			;
+		len = j - i;
+		if (len >= 3 && t[i] != 'N' && m[i] >= 0)
+			{
+			double p = homoError * (len - 2);
+
+			if (p > 0.5)
+				p = 0.5;
+			if (RandomUniform (seed) < p)
+				kind = (RandomUniform (seed) < 0.5) ? 1 : 2;
+			}
+		for (c=i; c<j; c++)
+			{
+			if (kind == 1 && c == i)
+				continue;
+			out[o] = t[c];
+			mo[o++] = m[c];
+			if (kind == 2 && c == i)
+				{
+				out[o] = t[c];
+				mo[o++] = -1;
+				}
+			}
+		i = j;
+		}
+	return o;
+	}
+
+/* the reads of a copy of the molecule from the templates (with or without sequencing indel errors); -1 when the reads cannot be aligned */
+static int SlipReads (Aln *aln, const char *ta, const char *tb, int L, char *ra, char *rb, long int *seed)
+	{
+	char	oa[2*(512+EXT)+8], ob[2*(512+EXT)+8];
+	long	ma[2*(512+EXT)+8], mb[2*(512+EXT)+8];
+	int		i, na = 0, nb = 0, ok = 0;
+
+	memcpy (ra, ta, L);
+	memcpy (rb, tb + aln->extB, L);
+	for (i=0; i<L; i++)
+		{
+		aln->mra[i] = aln->ma[i];
+		aln->mrb[i] = aln->mb[aln->extB + i];
+		}
+	if (homoError > 0.0)
+		{
+		na = Slip (ta, aln->ma, aln->la, oa, ma, seed);
+		nb = Slip (tb, aln->mb, aln->lb, ob, mb, seed);
+		ok = (na >= L && nb >= L);
+		for (i=0; ok && i<L; i++)
+			if (oa[i] == 'N' || ob[nb - L + i] == 'N')
+				ok = 0;
+		}
+	if (ok)
+		{
+		memcpy (ra, oa, L);
+		memcpy (rb, ob + nb - L, L);
+		for (i=0; i<L; i++)
+			{
+			aln->mra[i] = ma[i];
+			aln->mrb[i] = mb[nb - L + i];
+			}
+		}
+	return FinishAln (aln, L);
 	}
 
 /* writes one read pair (copy c of a molecule) to the BAM records and/or the FASTQ files; ra and rb are the first and last reads of the fragment */
@@ -1013,7 +1111,8 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 	int		qualOn = (qualSd > 0.0 || qualSlope != 0.0 || ctxOn);
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
-	const int indelsOn = (indelRate > 0.0);
+	const int indelsOn = (indelRate > 0.0 || homoError > 0.0);
+	const int homoOn = (homoError > 0.0);
 	int		srcs[2] = {cellIdx0, donor}, nsrc = (donor >= 0) ? 2 : 1, si;
 	Aln		aln;
 	int		indelAln = 0;
@@ -1024,8 +1123,8 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 	if (q < 2) q = 2;
 	if (qualOn)
 		QualSetup (L, seed);
-	ta = (char*) malloc (4 * (size_t) (L + 2));
-	tb = ta + L + 2; ra = tb + L + 2; rb = ra + L + 2;
+	ta = (char*) malloc (4 * (size_t) (L + EXT + 2));
+	tb = ta + L + EXT + 2; ra = tb + L + EXT + 2; rb = ra + L + EXT + 2;
 	/* A doublet (a cell captured together with its donor) has the reads of both genomes in the same files, in one sorted set of records.
 	   The genome is simulated in tiles of CELLCOAL_READ_TILE bases (262144 by default) and the BAM records that are complete after each tile
 	   are written, so the memory does not depend on the length of the genome. Every source genome and haplotype has its own random stream, which
@@ -1103,7 +1202,7 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 						{
 						long		nie;
 						const IndelEv *ie = IndelsOf (cellIdx, hap, &nie);
-						int			r = (nie > 0) ? IndelTemplates (ie, nie, hap, cellIdx, s, ins, L, copyRank, ta, tb, &aln) : 0;
+						int			r = (nie > 0 || homoOn) ? IndelTemplates (ie, nie, hap, cellIdx, s, ins, L, copyRank, ta, tb, &aln, homoOn) : 0;
 
 						if (r == 3)
 							continue;
@@ -1112,16 +1211,24 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 					if (!indelAln && LoadTemplates (hap, cellIdx, s, ins, L, ta, tb, copyRank))
 						continue;
 					if (nev[si][hap] > 0)
-						ApplyAmpErrors (ev[si][hap], nev[si][hap], s, ins, L, ta, tb, seed, indelAln ? aln.ma : NULL, aln.mb);
+						ApplyAmpErrors (ev[si][hap], nev[si][hap], s, ins, L, ta, tb + (indelAln ? aln.extB : 0), seed, indelAln ? aln.ma : NULL, indelAln ? aln.mb + aln.extB : NULL);
 					if (ndmg > 0)
-						ApplyDamage (L, ta, tb, seed);
+						ApplyDamage (L, ta, tb + (indelAln ? aln.extB : 0), seed);
 					copies = DuplicateCopies (seed);
 					fwdFrag = (RandomUniform (seed) < 0.5);
 					mol = molecule + 1 + 4 * cnt[sk] + sk;		/* unique in the cell, and the same for any size of tile */
 					cnt[sk]++;
 					for (c=0; c<copies; c++)
 						{
-						memcpy (ra, ta, L); memcpy (rb, tb, L);
+						if (indelAln)
+							{
+							if (SlipReads (&aln, ta, tb, L, ra, rb, seed) < 0)
+								continue;
+							}
+						else
+							{
+							memcpy (ra, ta, L); memcpy (rb, tb, L);
+							}
 						if (qualOn)
 							{
 							SeqErrorsQ (ra, L, 0, qa, qerr, seed);

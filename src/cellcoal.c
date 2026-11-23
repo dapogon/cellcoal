@@ -387,6 +387,7 @@ static void CheckModeOptions (void)
 		{"--indel-ins", ExtraOptionGiven ("--indel-ins")},
 		{"--indel-len", ExtraOptionGiven ("--indel-len")},
 		{"--indel-max", ExtraOptionGiven ("--indel-max")},
+		{"--homopolymer-error", ExtraOptionGiven ("--homopolymer-error")},
 		{NULL, 0}
 		};
 	int		k;
@@ -1188,9 +1189,9 @@ static void CheckReadOptions (void)
 			fprintf (stderr, "\nERROR: bad --indel-rate (0 or more), --indel-ins (0 to 1), --indel-len (1 or more) or --indel-max (1 to 32)\n");
 			exit (-1);
 			}
-		if (indelRate > 0.0 && (lossRate > 0.0 || gainRate > 0.0))
+		if (homoError < 0.0 || homoError > 0.1)
 			{
-			fprintf (stderr, "\nERROR: --indel-rate cannot be combined with segment losses and gains (--seg-loss-rate, --seg-gain-rate) yet\n");
+			fprintf (stderr, "\nERROR: bad --homopolymer-error (0 to 0.1)\n");
 			exit (-1);
 			}
 		/* the VCF of read counts and genotype likelihoods does not exist in this mode */

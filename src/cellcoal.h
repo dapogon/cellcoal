@@ -423,7 +423,7 @@ void				CloseText (FILE *fp, int isPipe);
 
 /* indels in the reads (--indel-rate): events of the genealogy applied to the reads (indels.c) */
 typedef struct { long pos; long id; int type, len, hap; char seq[40]; } IndelEv;	/* type 0 = insertion after the site pos, 1 = deletion of the sites pos+1 .. pos+len */
-extern double		indelRate, indelIns, indelLen;
+extern double		indelRate, indelIns, indelLen, homoError;
 extern int			indelMax;
 void				IndelsGenerate (long int *seed);
 void				IndelsFree (void);

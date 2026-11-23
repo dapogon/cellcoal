@@ -788,7 +788,7 @@ optional healthy <code>normal.bam</code></td>
 <code>--strand-bias</code>, <code>--seq-context</code>,
 <code>--damage</code>, <code>--indel-rate</code>,
 <code>--indel-ins</code>, <code>--indel-len</code>,
-<code>--indel-max</code></td>
+<code>--indel-max</code>, <code>--homopolymer-error</code></td>
 <td>no</td>
 <td>no</td>
 <td>yes</td>
@@ -2128,28 +2128,48 @@ for every ten substitutions, a realistic proportion.
 <code>--indel-ins F</code> is the fraction of insertions (default 0.5),
 <code>--indel-len M</code> the mean length (default 2, a geometric
 distribution) and <code>--indel-max N</code> the maximum length (default
-10, up to 32). The indels are placed at random over the chromosome (not
-following <code>--region-rates</code>) and are
-<strong>left-aligned</strong> against the reference, as a variant caller
-reports them (the same indel in a homopolymer or a repeat always has the
-same position). The inserted bases are random. If an indel falls inside
-a deletion of the same haplotype it is lost with it. A substitution
-inside a deleted segment is not seen. The truth is
-<code>reads_&lt;n&gt;/indels_truth.vcf</code>: one line for each indel
-(VCF representation: <code>POS</code> is the base before the indel, a
-deletion has the deleted bases in <code>REF</code>, an insertion has the
-new bases in <code>ALT</code>), with <code>TYPE</code>,
-<code>LEN</code>, <code>NC</code> (cells that carry it) and the true
-genotype <code>GT</code> of every cell (maternal|paternal, 1 when the
-haplotype carries the indel). <code>truth.vcf</code> keeps the
-substitutions only. Indels work with
+10, up to 32). The indels are placed at random over the chromosome,
+following <code>--region-rates</code> if it is given (the number of
+indels of a block and their positions follow the multipliers of the
+regions, as the substitutions do), and are <strong>left-aligned</strong>
+against the reference, as a variant caller reports them (the same indel
+in a homopolymer or a repeat always has the same position). The inserted
+bases are random. If an indel falls inside a deletion of the same
+haplotype it is lost with it. A substitution inside a deleted segment is
+not seen. The truth is <code>reads_&lt;n&gt;/indels_truth.vcf</code>:
+one line for each indel (VCF representation: <code>POS</code> is the
+base before the indel, a deletion has the deleted bases in
+<code>REF</code>, an insertion has the new bases in <code>ALT</code>),
+with <code>TYPE</code>, <code>LEN</code>, <code>NC</code> (cells that
+carry it) and the true genotype <code>GT</code> of every cell
+(maternal|paternal, 1 when the haplotype carries the indel).
+<code>truth.vcf</code> keeps the substitutions only. Indels work with
 <code>--blocks</code>/<code>--fasta</code> and with the doublets (the
 reads of the donor carry the donor’s indels), and give the same BAM for
-any tile size and number of threads; for now they cannot be combined
-with segment losses and gains (<code>--seg-loss-rate</code>,
-<code>--seg-gain-rate</code>), and there are no sequencing or PCR errors
-that are indels. It works in the reads mode only; without the option the
-data are identical to before.</p>
+any tile size and number of threads; they combine with segment losses
+and gains (the extra copies of a haplotype carry its indels; the reads
+of a lost segment do not exist). The indels of the genealogy are somatic
+(there are no germline indels), and the sequencing indel errors are made
+with <code>--homopolymer-error</code>. It works in the reads mode only;
+without the option the data are identical to before.</p>
+<p><strong>Indel errors of the sequencer
+(<code>--homopolymer-error P</code>).</strong> The most common false
+indels of real data are made in homopolymers: the polymerase or the
+sequencer adds or loses a base of a run of equal bases. With this option
+every run of 3 or more equal bases of a read, at the time of the
+sequencing, gets one base more or one base less (equal probability) with
+probability <code>P</code> times (length - 2), up to 0.5 (a run of 3
+bases changes with probability <code>P</code>, one of 6 with
+<code>4P</code>; a typical value is 0.001). The errors are independent
+in each read, also in the PCR duplicates, and they are indels of the
+read, not of the genome: the CIGAR has the <code>I</code> or
+<code>D</code> (the deleted base is the first of the run and the
+inserted one follows it, left-aligned), the rest of the read is aligned
+as usual, and <code>indels_truth.vcf</code> does not list them. It works
+with or without <code>--indel-rate</code>, in the BAM and the FASTQ and
+in the healthy bulk sample, and it gives the same BAM for any tile size
+and number of threads. Reads mode only; without the option the data are
+identical to before.</p>
 <p><strong><code>--strand-bias P</code></strong> makes a fraction P of
 the errors of the amplification strand specific: the molecule that
 carries the error shows it only in the reads of one strand (the left
@@ -2748,12 +2768,18 @@ items (e.g. <code>G&gt;T:0.002,C&gt;T:0.001</code>)</td>
 (10) length; truth in <code>indels_truth.vcf</code></td>
 </tr>
 <tr class="even">
+<td><code>--homopolymer-error P</code></td>
+<td><code>homopolymer-error</code></td>
+<td>sequencing indel errors in homopolymers of 3 or more bases:
+probability P times (length - 2) per run, per read (0; e.g. 0.001)</td>
+</tr>
+<tr class="odd">
 <td><code>--strand-bias P</code></td>
 <td><code>strand-bias</code></td>
 <td>fraction of the amplification errors seen on one strand only
 (0)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>--bulk-depth D</code></td>
 <td><code>bulk-depth</code></td>
 <td>also simulate a healthy bulk sample (<code>normal.bam</code>) at

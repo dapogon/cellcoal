@@ -38,5 +38,6 @@
 	X(indel_rate,     "--indel-rate",     '\242', 2, indelRate,  0)      \
 	X(indel_ins,      "--indel-ins",      '\243', 2, indelIns,   0.5)    \
 	X(indel_len,      "--indel-len",      '\244', 2, indelLen,   2)      \
-	X(indel_max,      "--indel-max",      '\245', 1, indelMax,   10)
+	X(indel_max,      "--indel-max",      '\245', 1, indelMax,   10)      \
+	X(homopolymer_error, "--homopolymer-error", '\246', 2, homoError, 0)
 #endif

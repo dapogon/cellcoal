@@ -1589,7 +1589,60 @@ CELLCOAL_READ_TILE=1024 "$BIN" -n1 -s8 -l30000 -u1e-9 -e1000 -b1 -C20 -E0 -D0 --
 grep -q "bad --indel-rate" id1.out && ok "a bad --indel-max is an error" || bad "bad indel option accepted"
 "$BIN" -n1 -s5 -l500 -u1e-6 -C10 --indel-rate 0.1 > id2.out 2>&1
 grep -q "needs --bam" id2.out && ok "--indel-rate without reads mode is an error" || bad "--indel-rate accepted in the genotypes mode"
-rm -rf ID1 ID2
+"$BIN" -n1 -s6 -l30000 -u1e-8 -e1000 -b1 -C20 -E0 -D0 --bam --indel-rate 30 --seg-gain-rate 20 --seg-gain-len 3000 -#2 -oID3 >/dev/null 2>&1
+python3 indelchk.py ID3/reads_1 >/dev/null 2>&1 && ok "indels with segment gains (copies of the haplotype) are in the reads as in the truth" || bad "indels with segment gains"
+cat > homochk.py <<'PYEOF'
+import gzip,struct,sys,re,glob
+d=sys.argv[1]
+ref=''.join(l.strip() for l in open(d+'/ref.fa') if not l.startswith('>'))
+def run_len(p):  # homopolymer run containing 0-based p in the reference
+    a=p
+    while a>0 and ref[a-1]==ref[p]: a-=1
+    b=p
+    while b+1<len(ref) and ref[b+1]==ref[p]: b+=1
+    return a,b
+nr=nI=nD=nmis=bad=0
+for fn in sorted(glob.glob(d+'/cell*.bam')):
+    data=gzip.open(fn,'rb').read()
+    lt=struct.unpack('<i',data[4:8])[0]; o=8+lt; nref=struct.unpack('<i',data[o:o+4])[0]; o+=4
+    for _ in range(nref):
+        l2=struct.unpack('<i',data[o:o+4])[0]; o+=4+l2+4
+    while o<len(data):
+        ln=struct.unpack('<i',data[o:o+4])[0]; o+=4
+        rid,pos,lrn,mq,bn,nc,fl,lseq,nrid,npos,tl=struct.unpack('<iiBBHHHiiii',data[o:o+32])
+        p=o+32+lrn
+        cg=struct.unpack('<%dI'%nc,data[p:p+4*nc]); p+=4*nc
+        sq=data[p:p+(lseq+1)//2]
+        seq=''.join('=ACMGRSVTWYHKDBN'[(sq[i//2]>>(4 if i%2==0 else 0))&15] for i in range(lseq))
+        o+=ln; nr+=1
+        rp=pos; qp=0
+        for x in cg:
+            L,op=x>>4,x&15
+            if op==0:
+                for i in range(L):
+                    if seq[qp+i]!=ref[rp+i]: nmis+=1
+                rp+=L; qp+=L
+            elif op==1:
+                nI+=1; a,b=run_len(rp-1)
+                if b-a+1<3 or seq[qp:qp+L]!=ref[rp-1]*L: bad+=1
+                qp+=L
+            elif op==2:
+                nD+=1; a,b=run_len(rp)
+                if b-a+1<3 or rp!=a+1 and rp!=a: pass
+                if b-a+1<3: bad+=1
+                rp+=L
+            elif op==4: qp+=L
+assert nI > 20 and nD > 20 and bad == 0 and nmis == 0, (nI, nD, bad, nmis)
+
+PYEOF
+"$BIN" -n1 -s6 -l30000 -u1e-9 -e1000 -b1 -C20 -E0 -D0 --bam --fastq --homopolymer-error 0.01 -#2 -oID4 >/dev/null 2>&1
+python3 homochk.py ID4/reads_1 >/dev/null 2>&1 && ok "--homopolymer-error: insertions and deletions of one base only in homopolymers of 3 or more bases, the rest of the read matches the reference" || bad "homopolymer indel errors"
+CELLCOAL_READ_TILE=1024 "$BIN" -n1 -s6 -l30000 -u1e-9 -e1000 -b1 -C20 -E0 -D0 --bam --fastq --homopolymer-error 0.01 -#2 -oID5 >/dev/null 2>&1
+[ "$(zcat ID4/reads_1/cell0002.bam | md5sum)" = "$(zcat ID5/reads_1/cell0002.bam | md5sum)" ] && ok "the BAM with homopolymer errors does not depend on the size of the tile" || bad "homopolymer BAM depends on tile"
+printf "chr1 1 15000 0.05\nchr1 15001 30000 4\n" > idrr.bed
+"$BIN" -n1 -s6 -u1e-9 -e1000 -b1 -C10 -E0 -D0 -l15000 --blocks 2 --contig 1 --bam --indel-rate 300 --region-rates idrr.bed -#2 -oID6 >/dev/null 2>&1
+awk '!/^#/{if($2<=15000)a++;else b++}END{exit !(b > 10 * (a + 1))}' ID6/reads_1/indels_truth.vcf && ok "--region-rates: the indels follow the regional multipliers" || bad "indels do not follow --region-rates"
+rm -rf ID1 ID2 ID3 ID4 ID5 ID6
 cd "$ROOT"
 
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
