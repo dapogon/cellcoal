@@ -25,7 +25,7 @@ static const struct { const char *name, *what; } groupInfo[] =
 	{"cell-corr",     "correlations between the parameters of the cells (-1 to 1)"},
 	{"call-filter",   "which sites are written to the VCF, CATG and PILEUP files (read counts)"},
 	{"reads",         "paired-end read simulator (needs coverage; at least bam or fastq)"},
-	{"demes",         "structured coalescent: tumor regions (demes) founded by colonization from a source deme, without migration"},
+	{"demes",         "structured coalescent: tumor regions (demes) founded by colonization from a source deme (no continuous migration)"},
 	{"chromosome",    "a real or long chromosome in blocks"},
 	{"output",        "results folder and files"},
 	{NULL, NULL}

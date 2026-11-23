@@ -6,7 +6,7 @@ date: "November, 2026 (CellCoal 2.7.0)"
 
 # 1. About CellCoal
 
-CellCoal simulates the somatic evolution of single-cells including genotypes resulting from single-cell DNA sequencing. CellCoal generates a coalescent tree and can simulate a sample of diploid genomes from somatic cells –no recombination– from a growing population, together with another genome as outgroup. A typical example would be a sample of single-cell genotypes from a growing tumor population together with a healthy cell used as outgroup. CellCoal implements multiple mutation models for single-nucleotide variants (0/1, DNA, infinite and finite site models, point deletions, copy-neutral LOH, cancer mutational signatures) and is able to generate a .VCF file with NGS read counts and genotype likelihoods considering technical artifacts like allelic imbalance, allelic dropout, sequencing error, amplification error, plus doublet cells. It also simulates copy-number losses and gains of chromosome segments on the tree, and it works at three levels of detail (section 4.2): genotypes, read counts (the number of reads of each nucleotide in each cell and site) and, optionally, paired-end reads (BAM and FASTQ files) of the amplified cells. A chromosome can be simulated in blocks, from a real reference.
+CellCoal simulates the somatic evolution of single-cells including genotypes resulting from single-cell DNA sequencing. CellCoal generates a coalescent tree and can simulate a sample of diploid genomes from somatic cells –no recombination– from a growing population, together with another genome as outgroup. A typical example would be a sample of single-cell genotypes from a growing tumor population together with a healthy cell used as outgroup. CellCoal implements multiple mutation models for single-nucleotide variants (0/1, DNA, infinite and finite site models, single-nucleotide deletions, copy-neutral LOH, cancer mutational signatures) and is able to generate a .VCF file with NGS read counts and genotype likelihoods considering technical artifacts like allelic imbalance, allelic dropout, sequencing error, amplification error, plus doublet cells. It also simulates copy-number losses and gains of chromosome segments on the tree, and it works at three levels of detail (section 4.2): genotypes, read counts (the number of reads of each nucleotide in each cell and site) and, optionally, paired-end reads (BAM and FASTQ files) of the amplified cells. A chromosome can be simulated in blocks, from a real reference.
 
 ## 1.1 Development of CellCoal 2
 
@@ -263,7 +263,7 @@ The main steps of CellCoal are:
 
 3.  Simulation of a reference and an ancestral genome, with or without germline variation, or reading of a real reference.
 
-4.  Addition of mutations along the tree in order to obtain the true genotypes: SNVs, point deletions, copy-neutral LOH, and losses and gains of segments (copy-number events).
+4.  Addition of mutations along the tree in order to obtain the true genotypes: SNVs, single-nucleotide deletions, copy-neutral LOH, and losses and gains of segments (copy-number events).
 
 5.  Addition of technical errors without generating read counts (ADO + genotype errors) OR addition of technical errors while generating read counts (ADO + amplification error + sequencing error) OR simulation of the paired-end reads of the amplified cells.
 
@@ -273,9 +273,9 @@ The main steps of CellCoal are:
 
 8.  Print summary statistics.
 
-![Fig. 1. Main flow of CellCoal.](media/c0b7f0aec10eec9e306cbf655bad216190f530fc.png){width=100%}
+![Fig. 1. Main flow of CellCoal 2: the genealogy (with tumor regions if wanted), the genome, the somatic variation on the branches, and the three ways of observing the cells: genotypes, read counts or reads.](media/fig_flow.png){width=90%}
 
-Fig. 1. Main flow of CellCoal.
+Fig. 1. Main flow of CellCoal 2: the genealogy (with tumor regions if wanted), the genome, the somatic variation on the branches, and the three ways of observing the cells: genotypes, read counts or reads.
 
 ## 5.1 Coalescent genealogy
 
@@ -327,7 +327,7 @@ Alternatively to the gamma rate variation, a few *rate switches* can be introduc
 
 ### 5.1.4 Tumor regions: the structured coalescent with colonizations
 
-By default the cells are a random sample of one panmictic population. A tumor is not like that: the primary tumor and its metastases are different regions whose cells are related inside each region more than between regions, and the SNVs shared by the cells of a region but not by the others are what spatial studies work with. The structured coalescent samples the cells from **demes** (regions). **There is no exchange of cells between the demes**: a metastasis is not fed continuously by the primary tumor, it is *founded* once, at a time, by one or a few cells of its source deme, and then grows apart. It is a model of colonization, not of migration.
+By default the cells are a random sample of one panmictic population. A tumor is not like that: the primary tumor and its metastases are different regions whose cells are related inside each region more than between regions, and the SNVs shared by the cells of a region but not by the others are what spatial studies work with. The structured coalescent samples the cells from **demes** (regions). The model is one of **colonization, not of continuous migration**: the demes do not exchange cells; each metastasis is *founded* at a time by one or a few cells of its source deme and then grows apart. This assumes that the seeding happened in a single event (monoclonal, or polyclonal with several founders at the same time). It is an idealization: in a real tumor a metastasis can receive cells again later, or seed the primary tumor, and those later events are not part of the model (the cells that arrive late would make the metastasis look less like a clade of its source, as the polyclonal case does).
 
 ```
 cellcoal -l1000 -u1e-7 --demes n=20:10:10,size=1:0.5:0.2,time=2:0.5,source=1:2,founders=1:3
@@ -343,6 +343,10 @@ Deme 1 is the primary tumor, and the other demes are colonized from another deme
 
 Looking back in time, the cells of a deme coalesce among themselves until the colonization; there they go through the bottleneck of the founders (they coalesce until at most the founders remain) and continue in the source deme, where they can coalesce with the cells of the source. With one founder the mean coalescence time of two cells of a deme of size *s* founded at *T* is *s*(1 - exp(-*T*/*s*)), and between a cell of the primary tumor (size 1) and a cell of that deme it is *T* + 1; the simulation reproduces both (*s* = 0.5, *T* = 1: 0.43 and 2.0).
 
+![Fig. 6. Structured coalescent with colonizations (`--demes`). **a**, the model: the primary tumor (deme 1) and metastases that are founded by colonization from a source deme, at a time, by one or a few cells; there is no exchange of cells afterwards. **b**, a genealogy of 19 cells from a real run (`--demes n=7:6:6,size=1:0.5:0.3,time=1.5:0.6,source=1:2,founders=1:1`), with the cells coloured by deme and the colonization times as dashed lines: with one founder each metastasis is a clade of its source. **c**, the same with four founders of deme 3: the cells of the deme come from several cells of deme 2 and are not a clade.](media/fig_demes.png){width=100%}
+
+Fig. 6. Structured coalescent with colonizations (`--demes`). **a**, the model: the primary tumor (deme 1) and metastases that are founded by colonization from a source deme, at a time, by one or a few cells; there is no exchange of cells afterwards. **b**, a genealogy of 19 cells from a real run (`--demes n=7:6:6,size=1:0.5:0.3,time=1.5:0.6,source=1:2,founders=1:1`), with the cells coloured by deme and the colonization times as dashed lines: with one founder each metastasis is a clade of its source. **c**, the same with four founders of deme 3: the cells of the deme come from several cells of deme 2 and are not a clade.
+
 This model cannot be combined with growth, demographic periods or a user tree (the sizes of the demes are constant), and all the other options (mutation models, copy number, reads, doublets...) work as usual on the genealogy that it produces. The doublets (`-B`) choose their donor among all the cells, not within the deme.
 
 ## 5.2 Somatic mutation models
@@ -352,7 +356,7 @@ CellCoal simulates the evolution of the genotypes along the genealogy by adding 
 | Event | Option | Effect on the genotype of a site |
 |---|---|---|
 | **SNV** (single-nucleotide variant) | `-u` (rate) or `-j` (fixed number) | the allele of one copy of one haplotype changes |
-| **Point deletion** | `-d` | one haplotype loses the site (`-`) |
+| **Single-nucleotide deletion** | `-d` | one haplotype loses the site (`-`): one nucleotide, not a segment |
 | **Copy-neutral LOH** (cnLOH) | `-H` | one haplotype takes the allele of the other (A/G becomes A/A or G/G) |
 | **Segment loss** | `--seg-loss-rate` | a random copy of a haplotype is lost over a segment of sites |
 | **Segment gain** | `--seg-gain-rate` | a random copy of a haplotype is duplicated over a segment of sites |
@@ -361,9 +365,9 @@ The first three are the original events of CellCoal; copy-number losses and gain
 
 > The default SNV model is a diploid infinite site model (ISM), with no deletions, cnLOH or copy-number events.
 
-> CellCoal does not simulate other structural variants (inversions, translocations, insertions): the copy-number alterations are the point deletions (`-d`), cnLOH (`-H`) and the losses and gains of segments (`--seg-loss-rate`, `--seg-gain-rate`).
+> CellCoal does not simulate other structural variants (inversions, translocations): the copy-number alterations are the single-nucleotide deletions (`-d`), cnLOH (`-H`) and the losses and gains of segments (`--seg-loss-rate`, `--seg-gain-rate`). **Small insertions and deletions** (indels of 1 to `--indel-max` bases, 10 by default and 32 at most) are a different thing: they exist only in the reads mode (`--indel-rate`, section 5.5), as events of the genealogy that change the sequence of the reads, not the genotypes of the sites.
 
-**Two ways of adding the events.** When no loss or gain of segments is requested, SNVs, cnLOH and point deletions are added one kind after another, as in the earlier versions of CellCoal. When the loss or the gain rate is above zero, all the kinds of events are planned together and applied branch by branch in random order (section 5.2.8), because the order matters when the copy number changes.
+**Two ways of adding the events.** When no loss or gain of segments is requested, SNVs, cnLOH and single-nucleotide deletions are added one kind after another, as in the earlier versions of CellCoal. When the loss or the gain rate is above zero, all the kinds of events are planned together and applied branch by branch in random order (section 5.2.8), because the order matters when the copy number changes.
 
 ### 5.2.1 The starting genome: simulated or a real chromosome
 
@@ -424,7 +428,7 @@ Both ISM and FSM for SNVs can be incorporated by setting up a **proportion of si
 
 ### 5.2.6 Single-nucleotide deletions
 
-**Single-nucleotide deletions (option -d)** (e.g., N/N -\> –/N, or N/N -\> N/–) can be added also assuming a haploid ISM. As for SNVs, the number of point deletions will be distributed as a *Poisson* according to the total deletion tree length (which in this case is a function of the deletion rate and time). The specific sites where the deletions occur are selected uniformly along the genome. The particular branches of the cell genealogy where deletions are located are selected according to their (deletion) lengths.
+**Single-nucleotide deletions (option -d)** (e.g., N/N -\> –/N, or N/N -\> N/–) can be added also assuming a haploid ISM. As for SNVs, the number of single-nucleotide deletions will be distributed as a *Poisson* according to the total deletion tree length (which in this case is a function of the deletion rate and time). The specific sites where the deletions occur are selected uniformly along the genome. The particular branches of the cell genealogy where deletions are located are selected according to their (deletion) lengths.
 
 ### 5.2.7 Copy-neutral LOH
 
@@ -434,9 +438,9 @@ Both ISM and FSM for SNVs can be incorporated by setting up a **proportion of si
 
 A **loss** removes one copy of a haplotype over a segment of sites, and a **gain** adds one extra copy. They are controlled by a rate per haplotype and generation, like the other mutations (`--seg-loss-rate`, `--seg-gain-rate`; group `--mutation loss-rate=...,gain-rate=...`), by the mean length of the segments (`--seg-len`, default 1000 sites; `--seg-loss-len` and `--seg-gain-len` set it separately for losses and gains) and by the maximum number of copies of a site (`--seg-max-copies`, default 4 in the two haplotypes together; the code allows up to 16). A segment starts at a uniform site, has a geometric length and is clipped at the end of the genome.
 
-**Haplotypes are sets of copies.** Every haplotype (maternal and paternal) is a set of copies, and the phase of every copy is known. A cell starts with one copy of each haplotype. A loss falls on a random copy of the haplotype; if it was the last copy, the haplotype is deleted over the segment (a point deletion is the loss of one site). A gain copies the alleles that a random copy has at that moment, so the new copy is identical to the copy it came from, and the two copies then accumulate their own mutations.
+**Haplotypes are sets of copies.** Every haplotype (maternal and paternal) is a set of copies, and the phase of every copy is known. A cell starts with one copy of each haplotype. A loss falls on a random copy of the haplotype; if it was the last copy, the haplotype is deleted over the segment (a single-nucleotide deletion is the loss of one site). A gain copies the alleles that a random copy has at that moment, so the new copy is identical to the copy it came from, and the two copies then accumulate their own mutations.
 
-**Everything is interleaved, in a random order.** The events of every kind (SNVs, point deletions, cnLOH, losses and gains) are planned for every branch of the tree and applied in the order in which they happen along the branch, so the order matters and the result is what the process would have made in a cell:
+**Everything is interleaved, in a random order.** The events of every kind (SNVs, single-nucleotide deletions, cnLOH, losses and gains) are planned for every branch of the tree and applied in the order in which they happen along the branch, so the order matters and the result is what the process would have made in a cell:
 
 - an SNV before a gain is in both copies, an SNV after it in one only;
 - an SNV inside a segment that is lost later is lost: the cells that carry the loss do not have it (with `-j` the number of SNVs is the number planned, not the number that survive; the log and `summary.tsv` report how many were lost, in `segment_losses`, `snv_lost_segments` and `segment_gains`, which appear only when the option is used);
@@ -488,6 +492,10 @@ It works with every model of sites (infinite sites, finite sites and mixtures), 
 
 > Example: `cellcoal -s20 -u2e-7 -l5000 --blocks 4 --region-rates hot.bed -1 -oHot` (four blocks of 5000 sites; with a file that gives multiplier 4 to the first 5000 positions, the first block has about 2.5 times the SNVs of the plain run, and the others fewer).
 
+![Fig. 7. A chromosome in blocks and the regional mutation rates. **a**, `--blocks` simulates the chromosome in blocks of `-l` sites on one genealogy, so the memory is that of one block. **b**, `--region-rates` with multipliers 4 (positions 0 to 10,000) and 0.25 (10,000 to 25,000), from real runs: the number of SNVs of every block follows the multiplier of its region, and the total does not change.](media/fig_blocks.png){width=100%}
+
+Fig. 7. A chromosome in blocks and the regional mutation rates. **a**, `--blocks` simulates the chromosome in blocks of `-l` sites on one genealogy, so the memory is that of one block. **b**, `--region-rates` with multipliers 4 (positions 0 to 10,000) and 0.25 (10,000 to 25,000), from real runs: the number of SNVs of every block follows the multiplier of its region, and the total does not change.
+
 ## 5.4 Single-cell genomics
 
 CellCoal can simulate the technical artifacts resulting from single-cell genomics, like allelic dropout (ADO), allelic imbalance, sequencing error, amplification error, plus doublet cells. For this, CellCoal implements three different strategies (section 4.2):
@@ -506,11 +514,11 @@ During the amplification of single-cells, one or both alleles at a single site c
 
 `totalADO = ADOcell + ADOsite - (ADOcell * ADOsite)`
 
-> CellCoal uses a *Beta-binomial* distribution (<https://en.wikipedia.org/wiki/Beta-binomial_distribution>) to add flexibility in the specification of different parameters, in particular to model variations across cells and sites. CellCoal uses a *Beta* parameterization based on mean and variance (see Fig. 6 for a few examples).
+> CellCoal uses a *Beta-binomial* distribution (<https://en.wikipedia.org/wiki/Beta-binomial_distribution>) to add flexibility in the specification of different parameters, in particular to model variations across cells and sites. CellCoal uses a *Beta* parameterization based on mean and variance (see Fig. 8 for a few examples).
 
-![Fig. 6. Examples of probability densities for three different Beta distributions.](media/5df860c941c0e4f31bae57d3cdb6c43e8ca73898.png){width=40%}
+![Fig. 8. Examples of probability densities for three different Beta distributions.](media/5df860c941c0e4f31bae57d3cdb6c43e8ca73898.png){width=40%}
 
-Fig. 6. Examples of probability densities for three different *Beta* distributions.
+Fig. 8. Examples of probability densities for three different *Beta* distributions.
 
 The ADO rate of every cell (`-P`) is written to the file `ado_cells` (`ado_cells_dir/ado_cells.NNNN` with `-v`): one section `[#replicate]` per replicate with the columns `cell` and `ado_rate`, including the outgroup (healthy) cell. It is the rate of the cell itself; the dropout probability of a genotype also combines it with the rate of its site (`-Q`).
 
@@ -532,17 +540,17 @@ For each individual genotype the program will generate read counts at a certain 
 
 In order to obtain enough DNA material from single-cells for sequencing library construction, the genomes of single cells are most often amplified. During this amplification step, the DNA polymerase can introduce nucleotide errors that can appear in a high proportion of the resulting templates for that site if occurring during the first amplification cycles. If many templates contain an error, many reads will be also be wrong for the specific site. The **amplification error (option -A)** for a given maternal/paternal site follows a *Beta-binomial* distribution with mean and variance specified by the user. The probability of the different types of errors (e.g., A=\>C, A=\>G, A=\>T ,etc.) can be indicated using an **4x4 error matrix (option – X)**. CellCoal considers two different amplification error models:
 
-**Four-template model**: In this case all four bases can be present, due to *multiple* amplification errors, in the set of amplified templates (Fig. 7).
+**Four-template model**: In this case all four bases can be present, due to *multiple* amplification errors, in the set of amplified templates (Fig. 9).
 
-![Fig. 7. Four-template model for amplification (\\gamma) and sequencing (\\varepsilon) error.](media/f4aa34719a21c151cd0446301ccc6cdd6858e38c.png){width=55%}
+![Fig. 9. Four-template model for amplification (\\gamma) and sequencing (\\varepsilon) error.](media/f4aa34719a21c151cd0446301ccc6cdd6858e38c.png){width=55%}
 
-Fig. 7. Four-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
+Fig. 9. Four-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
 
-**Two-template model**: In this case only the original base and a single alternative can be present, due to a *single* amplification error, in the set of amplified templates (Fig. 8).
+**Two-template model**: In this case only the original base and a single alternative can be present, due to a *single* amplification error, in the set of amplified templates (Fig. 10).
 
-![Fig. 8. Two-template model for amplification (\\gamma) and sequencing ($\varepsilon$) error.](media/087fa2b22cc58e3d654b2ef5745f224457060808.png){width=50%}
+![Fig. 10. Two-template model for amplification (\\gamma) and sequencing ($\varepsilon$) error.](media/087fa2b22cc58e3d654b2ef5745f224457060808.png){width=50%}
 
-Fig. 8. Two-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
+Fig. 10. Two-template model for amplification ($\gamma$) and sequencing ($\varepsilon$) error.
 
 **Amplification error that varies among cells (`--amp-cell-var`).** With `-A MEAN VAR MODEL` the fraction of wrong templates of every cell, site and haplotype comes from the same beta distribution in all the cells. In real data some cells amplify much worse than others. `--amp-cell-var V` (or `amplification_error_cell_variance: V` in a configuration file) first draws, for every cell and replicate, its own mean amplification error from a beta distribution with mean `MEAN` (from `-A`) and variance `V`; then the fraction of wrong templates of every site and haplotype of that cell is drawn from a beta distribution with that mean and a variance that keeps the concentration of `-A`, that is `VAR * m_i (1 - m_i) / (MEAN (1 - MEAN))` for a cell with mean `m_i`. It needs `-A`, and `V` has to be smaller than `MEAN (1 - MEAN)`. The mean of every cell is written to `cell_params` (new column `amplification_error`). The per-cell means are drawn from the main random stream after the other per-cell parameters, so the rest of the simulation (genealogy, mutations, coverage and ADO of the cells) is the same with and without the option; stored and streamed read counts give the same files. Without the option the output is identical to the previous version.
 
@@ -621,7 +629,7 @@ $\varepsilon$ = probability of sequencing error per site
 
 #### 5.4.8.2 Four-template amplification error model
 
-This model extends the previous one in order to consider the amplification error, which, together with the sequencing error, can be different for distinct bases **(option – X**) and that is sampled for each site from a *Beta-binomial* distribution with mean and variance specified by the user **(option -A)**. It allows for multiple amplification errors at a single site, and therefore that all four templates are possible (the correct one and the other three; see Fig. 6 above). In this case, *p(b\|A)* is:
+This model extends the previous one in order to consider the amplification error, which, together with the sequencing error, can be different for distinct bases **(option – X**) and that is sampled for each site from a *Beta-binomial* distribution with mean and variance specified by the user **(option -A)**. It allows for multiple amplification errors at a single site, and therefore that all four templates are possible (the correct one and the other three; see Fig. 8 above). In this case, *p(b\|A)* is:
 
 $$ p\left(b|A\right) = \sum_{j = 1}^{4}{p\left( t_{j} \middle| A \right)\ p\left( b|t_{j} \right)} = \sum_{j = 1}^{4}\gamma_{A \rightarrow t_{j}}\varepsilon_{t_{j} \rightarrow b} $$
 
@@ -656,7 +664,7 @@ $$ p\left( b \middle| A \right) = \left\{ \begin{matrix} \left( 1 - \gamma \righ
 
 #### 5.4.8.3 Two-template amplification error model
 
-This model is very similar to the previous one, but it assumes that only a single amplification error can occur at a single site, and that therefore only two templates (the “correct” one and a wrong one) are possible (see Fig. 7 above). In this case *p(b\|A)* is:
+This model is very similar to the previous one, but it assumes that only a single amplification error can occur at a single site, and that therefore only two templates (the “correct” one and a wrong one) are possible (see Fig. 9 above). In this case *p(b\|A)* is:
 
 $$ p\left(b|A\right) = \sum_{\substack{j = 1 \\ j \neq A}}^{4}{p\left( t_{j} \middle| A \right)\ p\left( b|t_{j} \right)} = \sum_{\substack{j = 1 \\ j \neq A}}^{4}e_{A \rightarrow t_{j}} \ [(1-\gamma) \ \varepsilon_{A \rightarrow b} + \gamma \ \varepsilon_{t_j \rightarrow b}] $$
 
@@ -708,6 +716,10 @@ The contexts that no line mentions have multiplier 1. The multipliers are divide
 **Insertions and deletions (`--indel-rate R`).** Without this option the reads have substitutions only (CIGAR `150M`). With it, small insertions and deletions happen on the branches of the genealogy, on one haplotype, and every cell below the branch inherits them; the reads that overlap an indel carry it and their CIGAR has `I` and `D` operations (an inserted base at the end of a read is soft-clipped, `S`). It is the way to evaluate indel callers and the realignment, and the false SNVs that an aligner leaves around an indel. `R` is the rate of indels relative to the substitution rate (`-u`): `--indel-rate 0.1` gives one indel for every ten substitutions, a realistic proportion. `--indel-ins F` is the fraction of insertions (default 0.5), `--indel-len M` the mean length (default 2, a geometric distribution) and `--indel-max N` the maximum length (default 10, up to 32). The indels are placed at random over the chromosome, following `--region-rates` if it is given (the number of indels of a block and their positions follow the multipliers of the regions, as the substitutions do), and are **left-aligned** against the reference, as a variant caller reports them (the same indel in a homopolymer or a repeat always has the same position). The inserted bases are random. If an indel falls inside a deletion of the same haplotype it is lost with it. A substitution inside a deleted segment is not seen. The truth is `reads_<n>/indels_truth.vcf`: one line for each indel (VCF representation: `POS` is the base before the indel, a deletion has the deleted bases in `REF`, an insertion has the new bases in `ALT`), with `TYPE`, `LEN`, `NC` (cells that carry it) and the true genotype `GT` of every cell (maternal|paternal, 1 when the haplotype carries the indel). `truth.vcf` keeps the substitutions only. Indels work with `--blocks`/`--fasta` and with the doublets (the reads of the donor carry the donor's indels), and give the same BAM for any tile size and number of threads; they combine with segment losses and gains (the extra copies of a haplotype carry its indels; the reads of a lost segment do not exist). The indels of the genealogy are somatic (there are no germline indels), and the sequencing indel errors are made with `--homopolymer-error`. It works in the reads mode only; without the option the data are identical to before.
 
 **Indel errors of the sequencer (`--homopolymer-error P`).** The most common false indels of real data are made in homopolymers: the polymerase or the sequencer adds or loses a base of a run of equal bases. With this option every run of 3 or more equal bases of a read, at the time of the sequencing, gets one base more or one base less (equal probability) with probability `P` times (length - 2), up to 0.5 (a run of 3 bases changes with probability `P`, one of 6 with `4P`; a typical value is 0.001). The errors are independent in each read, also in the PCR duplicates, and they are indels of the read, not of the genome: the CIGAR has the `I` or `D` (the deleted base is the first of the run and the inserted one follows it, left-aligned), the rest of the read is aligned as usual, and `indels_truth.vcf` does not list them. It works with or without `--indel-rate`, in the BAM and the FASTQ and in the healthy bulk sample, and it gives the same BAM for any tile size and number of threads. Reads mode only; without the option the data are identical to before.
+
+![Fig. 11. Indels in the reads mode. **a**, an indel is an event of the genealogy that changes the haplotype of the cells below its branch; the reads that overlap it carry it, and the CIGAR has `D` and `I` operations (the reference and haplotype rows are aligned; `-` marks a deleted or an inserted base). **b**, an indel in a repeat has equivalent placements; CellCoal reports the leftmost one, as a variant caller does. **c**, `--homopolymer-error`: a run of equal bases of a read gets one base more or less (an error of the read, not of the genome). **d**, lengths of the indels from real runs (`--indel-len 2` and `4`, `--indel-max 10`): geometric, with the excess at the maximum.](media/fig_indels.png){width=100%}
+
+Fig. 11. Indels in the reads mode. **a**, an indel is an event of the genealogy that changes the haplotype of the cells below its branch; the reads that overlap it carry it, and the CIGAR has `D` and `I` operations (the reference and haplotype rows are aligned; `-` marks a deleted or an inserted base). **b**, an indel in a repeat has equivalent placements; CellCoal reports the leftmost one, as a variant caller does. **c**, `--homopolymer-error`: a run of equal bases of a read gets one base more or less (an error of the read, not of the genome). **d**, lengths of the indels from real runs (`--indel-len 2` and `4`, `--indel-max 10`): geometric, with the excess at the maximum.
 
 **`--strand-bias P`** makes a fraction P of the errors of the amplification strand specific: the molecule that carries the error shows it only in the reads of one strand (the left read of the pair is the forward strand, the right read the reverse strand). In real data many artifacts (damage, copy errors of one strand) have this signature and callers filter them with the alternative reads on each strand. `benchmark.py pileup --both-strands` adds the baseline that requires alternative reads on both strands: with `--strand-bias 0.8` (20 cells, 8X) the false positives of the baseline fall from 1229 (duplicates out) to 407 and its recall from 0.74 to 0.58. Default 0.
 
