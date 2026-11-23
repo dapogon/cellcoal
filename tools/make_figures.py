@@ -121,8 +121,31 @@ def tree_panel(ax, d, N, u, times, title, labels):
 def fig_demes():
     N, u = 10000, 1e-7
     base = ["-l200", "-u1e-7", "-e10000", "-6", "-7"]
-    dm = run(*base, "-#4", "--demes", "n=7:6:6,size=1:0.5:0.3,time=1.5:0.6,source=1:2,founders=1:1", out="dA")
-    dp = run(*base, "-#4", "--demes", "n=7:6:6,size=1:0.5:0.3,time=1.5:0.6,source=1:2,founders=1:4", out="dB")
+    spec = "n=6:5:6,size=1:0.5:2,time=1.5:0.5,source=1:2,founders=1:%d"
+
+    def monophyletic(d, k):		# are the cells of the deme k a clade of the genealogy?
+        deme = demes_of(d)
+        tr = parse(open(os.path.join(d, "trees")).read().split("\n")[0].strip().rstrip(";"))
+        want = {c for c, v in deme.items() if v == k}
+
+        def rec(n):
+            names = {x["name"] for x in tips(n)}
+            if names == want:
+                return True
+            return any(rec(c) for c in n["ch"])
+        return rec(tr)
+    dm = dp = None
+    for sd in range(1, 60):
+        if dm is None:
+            d = run(*base, "-#%d" % sd, "--demes", spec % 1, out="dA%d" % sd)
+            if monophyletic(d, 3) and not monophyletic(d, 2):
+                dm = d
+        if dp is None:
+            d = run(*base, "-#%d" % sd, "--demes", spec % 3, out="dB%d" % sd)
+            if not monophyletic(d, 3):
+                dp = d
+        if dm and dp:
+            break
     fig = plt.figure(figsize=(11, 4.6))
     ax0 = fig.add_axes([0.01, 0.06, 0.27, 0.84]); ax0.axis("off"); ax0.set_xlim(0, 10); ax0.set_ylim(0, 10)
     ax0.set_title("a  The model", fontsize=9, loc="left", fontweight="bold")
@@ -136,8 +159,8 @@ def fig_demes():
     ax0.text(5.2, 4.0, "no exchange of cells\nafter the colonization", fontsize=8, ha="left", style="italic", color="#555555")
     axb = fig.add_axes([0.35, 0.16, 0.30, 0.66]); axc = fig.add_axes([0.70, 0.16, 0.28, 0.66])
     lab = ["deme 2 founded", "deme 3 founded"]
-    tree_panel(axb, dm, N, u, [1.5, 0.6], "b  One founder: every metastasis is a clade", lab)
-    tree_panel(axc, dp, N, u, [1.5, 0.6], "c  Four founders of deme 3: polyclonal seeding", lab)
+    tree_panel(axb, dm, N, u, [1.5, 0.6], "b  One founder: deme 3 is a clade (nested in deme 2)", lab)
+    tree_panel(axc, dp, N, u, [1.5, 0.6], "c  Three founders of deme 3: polyclonal, not a clade", lab)
     for a in (axb, axc):
         a.title.set_fontweight("normal")
     fig.savefig(os.path.join(media, "fig_demes.png"), dpi=170)
