@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.7.0
+Tumor regions (`--demes`: a structured coalescent with colonizations, without migration), small indels in the reads (`--indel-rate`, with CIGAR, `indels_truth.vcf` and left-alignment), sequencing indel errors in homopolymers (`--homopolymer-error`), population germline variation (`--germline-pop`) and a cleaner code (no `-Wshadow` warnings). Details in [CHANGES-2.7.0.md](CHANGES-2.7.0.md).
+
 ## 2.6.2
 `--damage` (library damage with orientation bias) and a reads mode that works in tiles of the genome: the memory does not depend on the length of the genome (4 Mb, 4 cells, 30X: 0.96 GB instead of 2.4 GB; a chromosome in blocks, 87 MB). The reads of a given seed change (same statistics).
 

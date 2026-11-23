@@ -8,11 +8,11 @@ of sites for each genotype of the healthy root (inv_AA ... inv_TT in the summary
 block mode and writes the files of earlier versions.
 
 Usage (random sequence):
-  python3 tools/chrom.py --exe bin/cellcoal-2.6.2 --blocks 50 --block-size 200000 --out chr1 [--seed 7] [--gzip]
+  python3 tools/chrom.py --exe bin/cellcoal-2.7.0 --blocks 50 --block-size 200000 --out chr1 [--seed 7] [--gzip]
                          -- <CellCoal options: -s -u -e -g -C -D -E --min-alt-reads ...>
 
 Usage (real reference sequence):
-  python3 tools/chrom.py --exe bin/cellcoal-2.6.2 --fasta hg38.fa.gz --region chr1:10000001-20000000 --out chr1 -- <options>
+  python3 tools/chrom.py --exe bin/cellcoal-2.7.0 --fasta hg38.fa.gz --region chr1:10000001-20000000 --out chr1 -- <options>
 
   --fasta FILE      reference in standard FASTA (plain or .gz, several lines per sequence, upper or lower case).  Sites that are not
                     A, C, G or T (N...) are left out of the simulation: they are not in the VCF and not in the invariant counts.
