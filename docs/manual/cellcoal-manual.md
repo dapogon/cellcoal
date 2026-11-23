@@ -687,6 +687,28 @@ $\varepsilon_{i \rightarrow j}$ = probability of sequencing error from template 
 $e_{i \rightarrow j}$ = relative probability of amplification/sequencing error from base *i* to base *j*\
 \
 
+### 5.4.9 How the dropout, the coverage and the amplification fit together, and how to simulate MDA and PTA
+
+The options of the amplification act in a fixed order, from what happens to the alleles to what the sequencer reads:
+
+1. **Allelic dropout** (`-D`, `-P`, `-Q`, `--ado-block`): some alleles are lost. It is decided for every allele of every cell, before there are reads, and it is all or nothing (a heterozygous site looks like a homozygote).
+2. **Amplification gain** (`--gain-sd`, `--gain-len`): every allele that was not lost gets a multiplier of its depth, smooth along the genome. It is the *continuous* version of the dropout: where the gain is very low the depth is close to zero and the allele is practically lost, where it is high the allele is over-represented. The two are independent mechanisms and can be combined: the dropout removes alleles completely, and the gain varies the depth of the others.
+3. **Genotype errors** (`-G`), in the modes that use them.
+4. **Coverage and reads**: the depth of every site is drawn around `-C` (`-V` dispersion, `-O` variation among sites, `-J` variation among cells), multiplied by the gain of the allele; an allele without a partner after dropout gets the haploid reduction `-R` in the read counts mode. Then come the amplification error (`-A`, `--amp-signature`) and the sequencing error (`-E`).
+
+So the dropout *is* part of the coverage: an allele that dropped out has no reads whatever `-C` is, and the gain changes how many reads the others have. There is no double counting if the options are read as different causes. **`-D` is the probability that an allele disappears; `--gain-sd` is how unevenly the surviving alleles are amplified; `-V`, `-O` and `-J` are the sampling noise of the sequencing on top of that.** If you have measured coverage profiles of your cells, `--coverage` writes the depth along the genome of the simulated ones to compare, and a sensible way to calibrate is: choose `--gain-sd` and `--gain-len` so that the autocorrelation and the spread of the depth look like those of the real cells, and then `-D` or `--ado-block` so that the fraction of heterozygous sites with one allele lost matches the real one.
+
+**MDA and PTA.** CellCoal has no option that says "MDA" or "PTA", because what distinguishes the methods is quantitative and depends on the protocol, the polymerase, the cell and the pipeline. The methods differ in which of these properties they have, and each property is one option:
+
+| Property | MDA | PTA | Options |
+|---|---|---|---|
+| Evenness of the coverage along the genome | low: large smooth changes of the depth | high | `--gain-sd` (larger for MDA), `--gain-len` |
+| Allelic imbalance and dropout | frequent | much less | `-D`, `-P`, `--ado-block`, and the gain |
+| Errors made in the amplification, and how much they spread | the errors of the early cycles are copied to many templates | the amplification is quasilinear from the primary template and the errors do not propagate | `-A` (mean and variance; smaller for PTA), `--amp-signature` |
+| Variation of the depth among cells | large | smaller | `-J` / `-P` |
+
+`examples/config.mda.yaml` and `examples/config.pta.yaml` are two complete configurations (read counts mode) that differ in those options. **Their numbers are illustrative, not measured**: the published comparisons (for example Gonzalez-Pena et al. 2021, *PNAS* 118: e2024176118) give the order of the differences (PTA covers more of the genome, more uniformly, with less dropout and fewer false positives than MDA), not parameters for a model like this one, so the values have to be taken from your own data. With the two examples, `cellcoal --config examples/config.pta.yaml` and the same with `mda`, the effect of the method on the calling can be compared with the same genealogy (same seed).
+
 ## 5.5 Reads of single-cell genomes (BAM and FASTQ)
 
 With `--bam` and/or `--fastq` (and `-C`, diploid DNA) CellCoal does not simulate read counts but paired-end reads of the amplified genome of every cell, for benchmarking any single-cell caller (SCAN2, PTATO, SCcaller, Monovar...). Output in `<results>/reads_<n>/`: `cellNNNN.bam` (+ `.bai`, sorted, one read group per cell), `cellNNNN.R1.fastq.gz` and `.R2.fastq.gz`, `ref.fa` and `ref.fa.fai` (the healthy root genome, contig `--contig`, default `chr1`) and, with `--bulk-depth D`, `normal.bam`/FASTQ of the healthy genome (no amplification).

@@ -1,0 +1,17 @@
+# Single cells amplified by MDA (multiple displacement amplification), as a starting point: bin/cellcoal-x.y.z --config examples/config.mda.yaml
+# MDA amplifies unevenly (large smooth changes of the depth along the genome, frequent dropout of one allele, errors that propagate).
+# The numbers are ILLUSTRATIVE, to show which options describe the method and in which direction; calibrate them with your own data
+# (for example with the per-cell coverage of --coverage), see section 5.4.9 of the manual.
+replicates: 2
+cells: 20
+sites: 200000
+population_size: 10000
+mutation_rate: 1e-7
+coverage: 30
+coverage_dispersion_cells: 0.5     # cells sequenced at different depths
+gain_sd: 0.8                       # strong variation of the depth along the genome ...
+gain_len: 100000                   # ... in segments of 100 kb (autocorrelated coverage and allelic imbalance)
+ado: 0.2                           # allelic dropout of 20% of the alleles (also wherever the gain is low)
+amplification_error: [0.05, 0.01, 0]
+sequencing_error: 0.001
+seed: 1

@@ -2026,6 +2026,113 @@ base <em>j</em></p>
 <em>i</em> to base <em>j</em><br />
 <br />
 </p>
+<h3 id="how-the-dropout-the-coverage-and-the-amplification-fit-together-and-how-to-simulate-mda-and-pta">5.4.9
+How the dropout, the coverage and the amplification fit together, and
+how to simulate MDA and PTA</h3>
+<p>The options of the amplification act in a fixed order, from what
+happens to the alleles to what the sequencer reads:</p>
+<ol type="1">
+<li><strong>Allelic dropout</strong> (<code>-D</code>, <code>-P</code>,
+<code>-Q</code>, <code>--ado-block</code>): some alleles are lost. It is
+decided for every allele of every cell, before there are reads, and it
+is all or nothing (a heterozygous site looks like a homozygote).</li>
+<li><strong>Amplification gain</strong> (<code>--gain-sd</code>,
+<code>--gain-len</code>): every allele that was not lost gets a
+multiplier of its depth, smooth along the genome. It is the
+<em>continuous</em> version of the dropout: where the gain is very low
+the depth is close to zero and the allele is practically lost, where it
+is high the allele is over-represented. The two are independent
+mechanisms and can be combined: the dropout removes alleles completely,
+and the gain varies the depth of the others.</li>
+<li><strong>Genotype errors</strong> (<code>-G</code>), in the modes
+that use them.</li>
+<li><strong>Coverage and reads</strong>: the depth of every site is
+drawn around <code>-C</code> (<code>-V</code> dispersion,
+<code>-O</code> variation among sites, <code>-J</code> variation among
+cells), multiplied by the gain of the allele; an allele without a
+partner after dropout gets the haploid reduction <code>-R</code> in the
+read counts mode. Then come the amplification error (<code>-A</code>,
+<code>--amp-signature</code>) and the sequencing error
+(<code>-E</code>).</li>
+</ol>
+<p>So the dropout <em>is</em> part of the coverage: an allele that
+dropped out has no reads whatever <code>-C</code> is, and the gain
+changes how many reads the others have. There is no double counting if
+the options are read as different causes. <strong><code>-D</code> is the
+probability that an allele disappears; <code>--gain-sd</code> is how
+unevenly the surviving alleles are amplified; <code>-V</code>,
+<code>-O</code> and <code>-J</code> are the sampling noise of the
+sequencing on top of that.</strong> If you have measured coverage
+profiles of your cells, <code>--coverage</code> writes the depth along
+the genome of the simulated ones to compare, and a sensible way to
+calibrate is: choose <code>--gain-sd</code> and <code>--gain-len</code>
+so that the autocorrelation and the spread of the depth look like those
+of the real cells, and then <code>-D</code> or <code>--ado-block</code>
+so that the fraction of heterozygous sites with one allele lost matches
+the real one.</p>
+<p><strong>MDA and PTA.</strong> CellCoal has no option that says “MDA”
+or “PTA”, because what distinguishes the methods is quantitative and
+depends on the protocol, the polymerase, the cell and the pipeline. The
+methods differ in which of these properties they have, and each property
+is one option:</p>
+<table>
+<colgroup>
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+<col style="width: 25%" />
+</colgroup>
+<thead>
+<tr class="header">
+<th>Property</th>
+<th>MDA</th>
+<th>PTA</th>
+<th>Options</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>Evenness of the coverage along the genome</td>
+<td>low: large smooth changes of the depth</td>
+<td>high</td>
+<td><code>--gain-sd</code> (larger for MDA),
+<code>--gain-len</code></td>
+</tr>
+<tr class="even">
+<td>Allelic imbalance and dropout</td>
+<td>frequent</td>
+<td>much less</td>
+<td><code>-D</code>, <code>-P</code>, <code>--ado-block</code>, and the
+gain</td>
+</tr>
+<tr class="odd">
+<td>Errors made in the amplification, and how much they spread</td>
+<td>the errors of the early cycles are copied to many templates</td>
+<td>the amplification is quasilinear from the primary template and the
+errors do not propagate</td>
+<td><code>-A</code> (mean and variance; smaller for PTA),
+<code>--amp-signature</code></td>
+</tr>
+<tr class="even">
+<td>Variation of the depth among cells</td>
+<td>large</td>
+<td>smaller</td>
+<td><code>-J</code> / <code>-P</code></td>
+</tr>
+</tbody>
+</table>
+<p><code>examples/config.mda.yaml</code> and
+<code>examples/config.pta.yaml</code> are two complete configurations
+(read counts mode) that differ in those options. <strong>Their numbers
+are illustrative, not measured</strong>: the published comparisons (for
+example Gonzalez-Pena et al. 2021, <em>PNAS</em> 118: e2024176118) give
+the order of the differences (PTA covers more of the genome, more
+uniformly, with less dropout and fewer false positives than MDA), not
+parameters for a model like this one, so the values have to be taken
+from your own data. With the two examples,
+<code>cellcoal --config examples/config.pta.yaml</code> and the same
+with <code>mda</code>, the effect of the method on the calling can be
+compared with the same genealogy (same seed).</p>
 <h2 id="reads-of-single-cell-genomes-bam-and-fastq">5.5 Reads of
 single-cell genomes (BAM and FASTQ)</h2>
 <p>With <code>--bam</code> and/or <code>--fastq</code> (and

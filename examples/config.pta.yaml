@@ -1,0 +1,17 @@
+# Single cells amplified by PTA (primary template-directed amplification), as a starting point: bin/cellcoal-x.y.z --config examples/config.pta.yaml
+# PTA amplifies more evenly than MDA (smaller changes of the depth along the genome, less dropout, fewer propagated errors).
+# The numbers are ILLUSTRATIVE, to show which options describe the method and in which direction; calibrate them with your own data
+# (for example with the per-cell coverage of --coverage), see section 5.4.9 of the manual.
+replicates: 2
+cells: 20
+sites: 200000
+population_size: 10000
+mutation_rate: 1e-7
+coverage: 30
+coverage_dispersion_cells: 0.2
+gain_sd: 0.2
+gain_len: 20000
+ado: 0.05
+amplification_error: [0.01, 0.002, 0]
+sequencing_error: 0.001
+seed: 1
