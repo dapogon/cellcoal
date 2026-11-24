@@ -989,7 +989,7 @@ Maximum number of copies of a site, the two haplotypes together. Default 4.
 
 **--compress-level N: compression of BAM, BCF and FASTQ.gz: integer \[1-9\]**
 
-zlib level of the BGZF files (BAM, BCF and the FASTQ.gz of the reads mode). The default, 6, writes the same files as the earlier versions. Level 1 is about 40% faster in the reads mode (the compression is more than half of its time) and the files are about 20% larger; the content is the same. Group `--output compress-level`.
+zlib level of the BGZF files (BAM, BCF and the FASTQ.gz of the reads mode). The default, 6, writes the same files as the earlier versions. In the reads mode the compression is a large part of the time: with 10 cells of 1 Mb at 30X (two threads) the default level takes 8.3 s and writes 97 MB, level 3 takes 5.2 s (37% less) and writes 113 MB, and level 1 takes 4.7 s and writes 120 MB; the content is the same. Group `--output compress-level`.
 
 **--phase: show the phase**
 

@@ -26,12 +26,16 @@ void CrcInit (void)
 
 uint32_t Crc32 (const unsigned char *d, size_t n)
 	{
+#ifdef HAVE_ZLIB
+	return (uint32_t) crc32 (0L, (const Bytef*) d, (uInt) n);
+#else
 	uint32_t c = 0xFFFFFFFFu;
 	size_t i;
 
 	for (i=0; i<n; i++)
 		c = crcTable[(c ^ d[i]) & 0xFF] ^ (c >> 8);
 	return c ^ 0xFFFFFFFFu;
+#endif
 	}
 
 void Put32le (unsigned char *p, uint32_t v)
@@ -49,10 +53,25 @@ void BgzfBlock (FILE *fp, const unsigned char *d, int n)
 #ifdef HAVE_ZLIB
 	if (n > 0)
 		{
-		z_stream zs;
+		/* one deflate stream for every thread, reset for each block: making and freeing the 256 kB state of zlib for every block of 64 kB
+		   costs as much as a part of the compression itself, and the bytes that are written are the same */
+		static __thread z_stream zs;
+		static __thread int zsOk = 0, zsLevel = 0;
 
-		memset (&zs, 0, sizeof(zs));
-		if (deflateInit2 (&zs, compressLevel, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY) == Z_OK)
+		if (zsOk && zsLevel != compressLevel)
+			{
+			deflateEnd (&zs);
+			zsOk = 0;
+			}
+		if (!zsOk)
+			{
+			memset (&zs, 0, sizeof(zs));
+			zsOk = (deflateInit2 (&zs, compressLevel, Z_DEFLATED, -15, 8, Z_DEFAULT_STRATEGY) == Z_OK);
+			zsLevel = compressLevel;
+			}
+		else
+			zsOk = (deflateReset (&zs) == Z_OK);
+		if (zsOk)
 			{
 			zs.next_in = (Bytef*) d;
 			zs.avail_in = n;
@@ -60,7 +79,6 @@ void BgzfBlock (FILE *fp, const unsigned char *d, int n)
 			zs.avail_out = 0x10000 - 26;
 			if (deflate (&zs, Z_FINISH) == Z_STREAM_END)
 				clen = (int) zs.total_out;
-			deflateEnd (&zs);
 			}
 		}
 #endif
