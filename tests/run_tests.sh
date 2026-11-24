@@ -1507,7 +1507,7 @@ assert abs(s[(0, 0)] / c[(0, 0)] - 1.0) < 0.1, s[(0, 0)] / c[(0, 0)]
 assert abs(s[(1, 1)] / c[(1, 1)] - 0.432) < 0.06, s[(1, 1)] / c[(1, 1)]
 assert abs(s[(0, 1)] / c[(0, 1)] - 2.0) < 0.15, s[(0, 1)] / c[(0, 1)]
 P
-[ "$(cut -f2 DT/demes.tsv | tail -n +2 | tr '\n' ' ')" = "1 1 1 2 2 2 " ] && ok "demes.tsv lists the deme of every cell" || bad "demes.tsv"
+[ "$(cut -f2 DT/demes.tsv | tr -d '\r' | tail -n +2 | tr '\n' ' ')" = "1 1 1 2 2 2 " ] && ok "demes.tsv lists the deme of every cell" || bad "demes.tsv"
 "$BIN" -n1 -#1 -l100 -u1e-6 --deme-n 3:3 > dm1.out 2>&1
 grep -q "deme-time is needed" dm1.out && ok "--deme-n without colonization times is an error" || bad "missing --deme-time accepted"
 "$BIN" -n1 -#1 -l100 -u1e-6 --deme-n 3:3:3 --deme-time 1:2 --deme-source 1:3 > dm2.out 2>&1

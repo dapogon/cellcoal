@@ -7,7 +7,7 @@ import os, re, shlex, subprocess, sys, tempfile
 
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 binary = os.path.abspath(sys.argv[1]) if len(sys.argv) > 1 else sys.exit(__doc__)
-docs = {"manual": open(os.path.join(root, "docs/manual/cellcoal-manual.md")).read(), "README": open(os.path.join(root, "README.md")).read()}
+docs = {"manual": open(os.path.join(root, "docs/manual/cellcoal-manual.md"), encoding="utf-8").read(), "README": open(os.path.join(root, "README.md"), encoding="utf-8").read()}
 SKIP = ("hg38", "chr21.fa", "chr1.fa", ".fa.gz")          # examples that need a real genome that is not in the repository
 bad = 0
 

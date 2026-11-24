@@ -1355,6 +1355,12 @@ int main (int argc, char **argv)
         RandomUniform(&seed);
         }
 
+	if (coverage > 1e6)
+		{
+		fprintf (stderr, "\nERROR: the mean coverage -C (%g) is too large: the maximum is 1000000\n", coverage);
+		exit (-1);
+		}
+
 	/* single-nucleotide deletions (-d) are a model of isolated sites: with a chromosome (blocks, real reference) or reads, deletions are small indels */
 	if (deletionRate > 0.0 && (blocksN > 0 || strlen (fastaFile) > 0 || doBam == YES || doFastq == YES))
 		{
