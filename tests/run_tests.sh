@@ -1653,6 +1653,11 @@ else echo "  skip (python3 not installed)"; fi
 cd "$TMP"
 "$BIN" -n1 -s4 -l100 --seg-lenn 5 2>&1 | grep -q "did you mean --seg-len?" && ok "unknown long option: suggests the closest one" || bad "no suggestion for a mistyped option"
 "$BIN" --check -n3 -s10 -l500 -u1e-6 --sweep "C=2,5" >Chk.txt 2>&1 && grep -q "not run" Chk.txt && ok "--check with --sweep checks the options and does not run the grid" || bad "--check --sweep"
+cd "$TMP" && mkdir -p dd && cd dd
+"$BIN" -n1 -s5 -l100 -u1e-7 -e1000 -d1e-7 --blocks 2 >D1.txt 2>&1; r1=$?
+"$BIN" -n1 -s5 -l200 -u1e-7 -e1000 -d1e-7 --bam >D2.txt 2>&1; r2=$?
+"$BIN" -n1 -s5 -l100 -u1e-7 -e1000 -d1e-7 >D3.txt 2>&1; r3=$?
+[ $r1 -ne 0 ] && [ $r2 -ne 0 ] && [ $r3 -eq 0 ] && grep -q "indel-rate" D1.txt && ok "-d is refused with blocks and with reads (it points to --indel-rate), and works for isolated sites" || bad "-d with blocks or reads"
 cd "$ROOT"
 
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"

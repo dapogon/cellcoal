@@ -1355,6 +1355,14 @@ int main (int argc, char **argv)
         RandomUniform(&seed);
         }
 
+	/* single-nucleotide deletions (-d) are a model of isolated sites: with a chromosome (blocks, real reference) or reads, deletions are small indels */
+	if (deletionRate > 0.0 && (blocksN > 0 || strlen (fastaFile) > 0 || doBam == YES || doFastq == YES))
+		{
+		fprintf (stderr, "\nERROR: -d (single-nucleotide deletions of the sites) cannot be used with a chromosome in blocks, a reference (--fasta) or reads.\n");
+		fprintf (stderr, "Use --indel-rate (with --indel-ins, --indel-len, --indel-max) to simulate small insertions and deletions along the chromosome.\n");
+		exit (-1);
+		}
+
 	/* regional mutation rates need a chromosome with coordinates: a simulated one in blocks or a real one (--blocks, --fasta) */
 	if (strlen (regionRatesFile) > 0)
 		{

@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Makes the figures of the manual (docs/manual/media/fig_*.png) with matplotlib. The panels with data come from real runs of CellCoal.
 
-Usage: python3 tools/make_figures.py [--exe bin/cellcoal-2.7.0]   (from the root of the repository)
+Usage: python3 tools/make_figures.py [--exe bin/cellcoal-2.7.1]   (from the root of the repository)
 """
 import argparse, os, re, subprocess, tempfile, collections
 import matplotlib, matplotlib.ticker
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, FancyArrowPatch, Rectangle
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--exe", default="bin/cellcoal-2.7.0")
+ap.add_argument("--exe", default="bin/cellcoal-2.7.1")
 args = ap.parse_args()
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 exe = os.path.join(root, args.exe)
@@ -108,7 +108,7 @@ def tree_panel(ax, d, N, u, times, title, labels):
     for k, T in enumerate(times):
         x = H - T * N * u
         ax.axvline(x, color=COL[k + 1], ls="--", lw=0.9)
-        ax.text(x, n - 0.2 + (0.0 if k == 0 else 1.1), labels[k], color=COL[k + 1], ha="center", va="bottom", fontsize=7.5)
+        ax.text(x, n - 0.2 + (0.0 if k == 0 else 1.1), labels[k], color=COL[k + 1], ha="center", va="bottom", fontsize=7.5, bbox=dict(facecolor="white", edgecolor="none", pad=0.6))
     ax.set_title(title, fontsize=9, loc="left", pad=22)
     ax.set_yticks([]); ax.set_xlabel("substitutions per site (x 1000) from the tumor root")
     ax.xaxis.set_major_formatter(matplotlib.ticker.FuncFormatter(lambda v, p: "%g" % (v * 1000)))
@@ -159,8 +159,8 @@ def fig_demes():
     ax0.text(5.2, 4.0, "no exchange of cells\nafter the colonization", fontsize=8, ha="left", style="italic", color="#555555")
     axb = fig.add_axes([0.35, 0.16, 0.30, 0.66]); axc = fig.add_axes([0.70, 0.16, 0.28, 0.66])
     lab = ["deme 2 founded", "deme 3 founded"]
-    tree_panel(axb, dm, N, u, [1.5, 0.6], "b  One founder: deme 3 is a clade (nested in deme 2)", lab)
-    tree_panel(axc, dp, N, u, [1.5, 0.6], "c  Three founders of deme 3: polyclonal, not a clade", lab)
+    tree_panel(axb, dm, N, u, [1.5, 0.5], "b  One founder: deme 3 is a clade (nested in deme 2)", lab)
+    tree_panel(axc, dp, N, u, [1.5, 0.5], "c  Three founders of deme 3: polyclonal, not a clade", lab)
     for a in (axb, axc):
         a.title.set_fontweight("normal")
     fig.savefig(os.path.join(media, "fig_demes.png"), dpi=170)

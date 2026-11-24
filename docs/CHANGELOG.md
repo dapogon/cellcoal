@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.7.1
+Bug-fix and documentation release: `-d` (single-nucleotide deletions of isolated sites) is refused with a chromosome in blocks, a reference or reads, and the error points to `--indel-rate`; manual with section 5.4.9 (how ADO, gain and coverage fit together, MDA and PTA), new figures (main flow, tumor regions, blocks and regional rates, indels), every figure numbered and with a caption, page numbers in the PDF; MDA and PTA examples.
+
 ## 2.7.0
 Tumor regions (`--demes`: a structured coalescent with colonizations, without migration), small indels in the reads (`--indel-rate`, with CIGAR, `indels_truth.vcf` and left-alignment), sequencing indel errors in homopolymers (`--homopolymer-error`), population germline variation (`--germline-pop`) and a cleaner code (no `-Wshadow` warnings). Details in [CHANGES-2.7.0.md](CHANGES-2.7.0.md).
 
