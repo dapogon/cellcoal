@@ -1131,6 +1131,42 @@ printf 'cells: 2\nsites: 800\nseed: 7\nmutation: rate=1e-6\n' > c.yaml
 "$BIN" --config c.yaml -n2 -l800 -s7 -u1e-6 -oC >/dev/null 2>&1 && ok "config accepts group keys" || bad "config group key"
 cd "$ROOT"
 
+echo "2g65. Mappability (--mappability, --map-drop): MAPQ of the reads, pairs left out of the BAM"
+cd "$TMP"
+cat > mapq.py <<'PY'
+import gzip, struct, sys, collections
+f = sys.argv[1]
+data = gzip.open(f, 'rb').read(); o = 4; lt = struct.unpack_from('<i', data, o)[0]; o += 4 + lt
+nref = struct.unpack_from('<i', data, o)[0]; o += 4
+for _ in range(nref):
+    ln = struct.unpack_from('<i', data, o)[0]; o += 4 + ln + 4
+c = collections.defaultdict(list)
+while o < len(data):
+    bs = struct.unpack_from('<i', data, o)[0]; ref, pos, lrn, mq, bn, nc, fl, ls = struct.unpack_from('<iiBBHHHi', data, o + 4)
+    reg = 'low' if 10300 <= pos < 13700 else ('mid' if 30300 <= pos < 35700 else ('normal' if pos < 9700 or 14300 <= pos < 29700 or pos >= 36300 else 'edge'))
+    c[reg].append(mq); o += 4 + bs
+m = lambda r: sum(c[r]) / max(1, len(c[r]))
+what = sys.argv[2]
+if what == 'mapq':   # low 0.25 -> MAPQ 0; mid 0.75 -> MAPQ 30; elsewhere 60
+    sys.exit(0 if len(c['low']) > 100 and m('low') == 0 and abs(m('mid') - 30) < 1 and abs(m('normal') - 60) < 0.01 else 1)
+if what == 'drop':   # no read of the low region is left, the other regions are as before
+    sys.exit(0 if len(c['low']) == 0 and len(c['mid']) > 100 and len(c['normal']) > 1000 else 1)
+PY
+printf "1\t10000\t14000\t0.25\n1\t30000\t36000\t0.75\n" > map.bed
+if command -v python3 >/dev/null; then
+  A="-n1 -s4 -#5 -l50000 -u1e-8 -e1000 -C20 -E0 --bam --fastq --mappability map.bed"
+  "$BIN" $A -oMP0 >/dev/null 2>&1
+  "$BIN" $A --map-drop 1 -oMP1 >/dev/null 2>&1
+  python3 mapq.py MP0/reads_1/cell0001.bam mapq && ok "--mappability: MAPQ 0 where the score is 0.25, 30 at 0.75 and 60 elsewhere" || bad "mappability MAPQ"
+  python3 mapq.py MP1/reads_1/cell0001.bam drop && ok "--map-drop 1: the ambiguous reads (MAPQ 0) are left out of the BAM" || bad "map-drop"
+  [ "$(zcat MP0/reads_1/cell0001.R1.fastq.gz | md5sum)" = "$(zcat MP1/reads_1/cell0001.R1.fastq.gz | md5sum)" ] && ok "--map-drop does not change the FASTQ files (reads before the alignment)" || bad "map-drop changes the FASTQ"
+else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --map-drop 0.5 -oME >/dev/null 2>&1 && bad "--map-drop without --mappability accepted" || ok "--map-drop needs --mappability"
+printf "1\t10\t20\t1.5\n" > badmap.bed
+"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --mappability badmap.bed -oME >/dev/null 2>&1 && bad "score above 1 accepted" || ok "a mappability score above 1 is rejected"
+rm -rf MP0 MP1 ME
+cd "$ROOT"
+
 echo "2g63. Copy number in the reads: the depth of the BAM follows the true copies of every segment"
 cd "$TMP"
 cat > cnchk.py <<'PY'

@@ -114,6 +114,8 @@ static const GroupKey groupKeys[] =
 	{"reads", "indel-ins",  'S', "--indel-ins", "fraction of the indels that are insertions (default 0.5)"},
 	{"reads", "indel-len",  'S', "--indel-len", "mean length of the indels (default 2)"},
 	{"reads", "indel-max",  'S', "--indel-max", "maximum length of an indel (default 10, up to 100)"},
+	{"reads", "mappability", 'S', "--mappability", "mappability of regions (BED: chrom start end score from 0 to 1): the MAPQ of the reads follows it"},
+	{"reads", "map-drop", 'S', "--map-drop", "fraction of the reads pairs with MAPQ 0 that are left out of the BAM, as the aligners and filters do (default 0)"},
 	{"reads", "indel-tail", 'S', "--indel-tail", "fraction of the indels whose length follows a power law (long tail, default 0)"},
 	{"reads", "indel-tail-exp", 'S', "--indel-tail-exp", "exponent A of the power law of the lengths, k^-A (default 2)"},
 	{"reads", "indel-repeat", 'S', "--indel-repeat", "relative rate of the indels in homopolymers and short tandem repeats; above 1 they are slippages of one unit (default 1)"},

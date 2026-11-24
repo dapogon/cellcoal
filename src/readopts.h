@@ -43,5 +43,7 @@
 	X(indel_tail,     "--indel-tail",     '\247', 2, indelTail,  0)      \
 	X(indel_tail_exp, "--indel-tail-exp", '\250', 2, indelTailExp, 2)    \
 	X(indel_repeat,   "--indel-repeat",   '\251', 2, indelRepeat, 1)      \
-	X(germline_indel_rate, "--germline-indel-rate", '\252', 2, germIndelRate, 0)
+	X(germline_indel_rate, "--germline-indel-rate", '\252', 2, germIndelRate, 0) \
+	X(mappability,    "--mappability",    '\253', 3, mappabilityFile, 0) \
+	X(map_drop,       "--map-drop",       '\254', 2, mapDrop,    0)
 #endif

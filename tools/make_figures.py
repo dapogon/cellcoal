@@ -358,7 +358,7 @@ def fig_flow():
     plt.close(fig)
 
 
-def bam_depth(path, L):
+def bam_depth(path, L, minq=0):
     import gzip, struct
     data = gzip.open(path, "rb").read()
     o = 4; lt = struct.unpack_from("<i", data, o)[0]; o += 4 + lt
@@ -373,7 +373,8 @@ def bam_depth(path, L):
         for k in range(ncig):
             v = struct.unpack_from("<I", data, co + 4 * k)[0]; n = v >> 4; op = v & 15
             if op in (0, 7, 8):
-                for q in range(p, min(p + n, L)): dep[q] += 1
+                if mapq >= minq:
+                    for q in range(p, min(p + n, L)): dep[q] += 1
                 p += n
             elif op in (2, 3): p += n
         o += 4 + bs
@@ -424,9 +425,44 @@ def fig_copynumber():
     plt.close(fig)
 
 
+def fig_mappability():
+    L, C = 60000, 30
+    bed = os.path.join(TMP, "map.bed")
+    regs = [(8000, 14000, 0.25), (24000, 30000, 0.6), (42000, 48000, 0.9)]
+    open(bed, "w").write("".join("1\t%d\t%d\t%s\n" % r for r in regs))
+    d = run("-n1", "-s4", "-#5", "-l%d" % L, "-u1e-8", "-e1000", "-C%d" % C, "-E0", "--bam", "--mappability", bed, out="mp")
+    p = os.path.join(d, "reads_1", "cell0001.bam")
+    alld, good = bam_depth(p, L), bam_depth(p, L, 20)
+    B = 300
+    xs = [b * B + B / 2 for b in range(L // B)]
+    sm = lambda v: [sum(v[b * B:(b + 1) * B]) / B for b in range(L // B)]
+    fig = plt.figure(figsize=(11, 5.4))
+    gs = fig.add_gridspec(2, 1, height_ratios=[1, 2.6], hspace=0.25, left=0.07, right=0.98, top=0.92, bottom=0.11)
+    ax = fig.add_subplot(gs[0])
+    sx, sy = [0], [1]
+    for a, b, m in regs:
+        sx += [a, a, b, b]; sy += [1, m, m, 1]
+    sx.append(L); sy.append(1)
+    ax.fill_between(sx, sy, step=None, color="#7570b3", alpha=0.35); ax.plot(sx, sy, color="#7570b3", lw=1.4)
+    ax.set_ylim(0, 1.15); ax.set_xlim(0, L); ax.set_ylabel("mappability"); ax.set_xticklabels([])
+    for a, b, m in regs:
+        mq = 60 if m >= 1 else (0 if m <= 0.5 else int(60 * (m - 0.5) / 0.5 + 0.5))
+        ax.text((a + b) / 2, 0.55 * m, "score %s\nMAPQ %d" % (m, mq), ha="center", va="center", fontsize=8)
+    ax.set_title("a  Mappability of the genome (--mappability): the score of each region gives the MAPQ of the reads that cover it", fontsize=9, loc="left", fontweight="bold")
+    ax = fig.add_subplot(gs[1])
+    ax.plot(xs, sm(alld), color="#999999", lw=1.2, label="all the reads")
+    ax.plot(xs, sm(good), color="#d95f02", lw=1.6, label="reads with MAPQ of 20 or more (a usual filter)")
+    ax.set_xlim(0, L); ax.set_ylim(0, 1.5 * C); ax.set_xlabel("position (bp)"); ax.set_ylabel("depth")
+    ax.legend(fontsize=8, loc="upper right", frameon=False, ncol=2)
+    ax.set_title("b  The depth does not change, but a caller that filters by MAPQ loses the reads of the repeated regions", fontsize=9, loc="left", fontweight="bold")
+    fig.savefig(os.path.join(media, "fig_mappability.png"), dpi=170)
+    plt.close(fig)
+
+
 fig_flow()
 fig_demes()
 fig_blocks()
 fig_indels()
 fig_copynumber()
+fig_mappability()
 print("figures in", media)

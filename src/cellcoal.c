@@ -391,6 +391,8 @@ static void CheckModeOptions (void)
 		{"--indel-tail-exp", ExtraOptionGiven ("--indel-tail-exp")},
 		{"--indel-repeat", ExtraOptionGiven ("--indel-repeat")},
 		{"--germline-indel-rate", ExtraOptionGiven ("--germline-indel-rate")},
+		{"--mappability", ExtraOptionGiven ("--mappability")},
+		{"--map-drop", ExtraOptionGiven ("--map-drop")},
 		{"--homopolymer-error", ExtraOptionGiven ("--homopolymer-error")},
 		{NULL, 0}
 		};
@@ -1191,6 +1193,11 @@ static void CheckReadOptions (void)
 		if (indelRate < 0.0 || indelIns < 0.0 || indelIns > 1.0 || indelLen < 1.0 || indelMax < 1 || indelMax > 100 || indelTail < 0.0 || indelTail > 1.0 || indelTailExp < 0.0 || indelRepeat < 0.0 || germIndelRate < 0.0)
 			{
 			fprintf (stderr, "\nERROR: bad --indel-rate (0 or more), --indel-ins (0 to 1), --indel-len (1 or more), --indel-max (1 to 100), --indel-tail (0 to 1), --indel-tail-exp, --indel-repeat (0 or more) or --germline-indel-rate (0 or more)\n");
+			exit (-1);
+			}
+		if (mapDrop < 0.0 || mapDrop > 1.0 || (mapDrop > 0.0 && strlen (mappabilityFile) == 0) || (mapDrop > 0.0 && doBam == NO))
+			{
+			fprintf (stderr, "\nERROR: --map-drop has to be from 0 to 1 and needs --mappability and --bam (the FASTQ files are the reads before the alignment)\n");
 			exit (-1);
 			}
 		if (homoError < 0.0 || homoError > 0.1)

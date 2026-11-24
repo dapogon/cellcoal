@@ -72,7 +72,7 @@ static int Reg2Bin (long beg, long end)
 static void Put16 (unsigned char *p, int v) { p[0] = v & 0xFF; p[1] = (v >> 8) & 0xFF; }
 
 /* BAM record of one read (sequence in the orientation of the reference) */
-static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mpos, long tlen, const char *seq, int len, int q, const unsigned char *qv, const char *rg, int hap, int mol, const uint32_t *cig, int ncig, int reflen)
+static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mpos, long tlen, const char *seq, int len, int q, const unsigned char *qv, const char *rg, int hap, int mol, const uint32_t *cig, int ncig, int reflen, int mapq)
 	{
 	size_t	need, o;
 	int		nl = (int) strlen (name) + 1, rgl = (int) strlen (rg) + 1, i;
@@ -89,7 +89,7 @@ static void AddRecord (RecSet *rs, const char *name, int flag, long pos, long mp
 	o = 4;
 	Put32le (p + o, 0); o += 4;												/* refID */
 	Put32le (p + o, (uint32_t) pos); o += 4;
-	p[o++] = (unsigned char) nl; p[o++] = 60;								/* l_read_name, mapq */
+	p[o++] = (unsigned char) nl; p[o++] = (unsigned char) mapq;								/* l_read_name, mapq */
 	Put16 (p + o, Reg2Bin (pos, pos + reflen)); o += 2;
 	Put16 (p + o, ncig > 0 ? ncig : 1); o += 2;												/* n_cigar_op */
 	Put16 (p + o, flag); o += 2;
@@ -1054,6 +1054,8 @@ static int SlipReads (Aln *aln, const char *ta, const char *tb, int L, char *ra,
 	}
 
 /* writes one read pair (copy c of a molecule) to the BAM records and/or the FASTQ files; ra and rb are the first and last reads of the fragment */
+static int		mappabilityOn = 0;		/* --mappability: the MAPQ of the reads follows the mappability of the genome */
+
 static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, int c, long s, long ins, const char *ra, const char *rb, int q,
 					  const unsigned char *qa, const unsigned char *qb, const char *rg, int hap, long molecule, const Aln *aln)
 	{
@@ -1068,19 +1070,45 @@ static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, i
 		{ fa |= 1024; fb |= 1024; }
 	if (doBam)
 		{
+		int	mqa = 60, mqb = 60;
+
+		if (mappabilityOn)
+			{
+			if (aln != NULL)
+				{
+				mqa = MapQual (CP (aln->posA), CP (aln->endA));
+				mqb = MapQual (CP (aln->posB), CP (aln->endB));
+				}
+			else
+				{
+				mqa = MapQual (CP (s), CP (s) + L - 1);
+				mqb = MapQual (CP (s) + ins - L, CP (s) + ins - 1);
+				}
+			/* ambiguous pairs (MAPQ 0) are left out of the BAM with probability --map-drop; the decision depends on the molecule, so the
+			   PCR duplicates of a read go together */
+			if (mapDrop > 0.0 && (mqa == 0 || mqb == 0))
+				{
+				unsigned long h = (unsigned long) molecule * 2654435761UL + (unsigned long) hap * 40503UL + 12345UL;
+
+				h ^= h >> 15; h *= 2246822519UL; h ^= h >> 13;
+				if ((double) (h % 1000003UL) / 1000003.0 < mapDrop)
+					goto fastq;
+				}
+			}
 		if (aln != NULL)
 			{
 			long pa = CP (aln->posA), pb = CP (aln->posB), tl = CP (aln->endB) - pa + 1;
 
-			AddRecord (rs, name, fa, pa, pb, tl, ra, L, q, qa, rg, hap + 1, (int) molecule, aln->ca, aln->nca, (int) (aln->endA - aln->posA + 1));
-			AddRecord (rs, name, fb, pb, pa, -tl, rb, L, q, qb, rg, hap + 1, (int) molecule, aln->cb, aln->ncb, (int) (aln->endB - aln->posB + 1));
+			AddRecord (rs, name, fa, pa, pb, tl, ra, L, q, qa, rg, hap + 1, (int) molecule, aln->ca, aln->nca, (int) (aln->endA - aln->posA + 1), mqa);
+			AddRecord (rs, name, fb, pb, pa, -tl, rb, L, q, qb, rg, hap + 1, (int) molecule, aln->cb, aln->ncb, (int) (aln->endB - aln->posB + 1), mqb);
 			}
 		else
 			{
-			AddRecord (rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, qa, rg, hap + 1, (int) molecule, NULL, 0, L);
-			AddRecord (rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, qb, rg, hap + 1, (int) molecule, NULL, 0, L);
+			AddRecord (rs, name, fa, CP (s), CP (s) + ins - L, ins, ra, L, q, qa, rg, hap + 1, (int) molecule, NULL, 0, L, mqa);
+			AddRecord (rs, name, fb, CP (s) + ins - L, CP (s), -ins, rb, L, q, qb, rg, hap + 1, (int) molecule, NULL, 0, L, mqb);
 			}
 		}
+fastq:
 	if (doFastq)
 		{
 		RevComp (rb, rc, L);
@@ -1444,6 +1472,8 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 		RefPut (c);
 		}
 
+	MappabilitySetup ();
+	mappabilityOn = (strlen (mappabilityFile) > 0);
 	if (indelRate > 0.0 || germIndelRate > 0.0)
 		{
 		IndelsGenerate (seed);
