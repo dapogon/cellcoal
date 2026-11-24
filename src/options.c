@@ -972,3 +972,106 @@ void ReadParametersFromFile (void)
 		}
 	ReadParametersFromCommandLine (argc, argv);
 	}
+
+/* default values of all the options */
+void SetDefaultOptions (void)
+	{
+    numDataSets = 50;			/* the number of samples to simulate */
+    numCells = 20;				/* number of ingroup cells in each data set */
+    ploidy = 2;                 /* we assume diploid genomes */
+    numSites = 1000;			/* number of sites to simulate = length of the genome */
+    N = 10000;					/* effective population size */
+    numPeriods = 0;				/* number of distinct demographic periods */
+    doDemographics = NO;		/* whether to implement demographics */
+    doExponential = NO;			/* whether to do exponential growth */
+    growthRate = 1.0e-3;		/* rate for the exponential population growth */
+	birthRate = 1;				/* birth rate in the Ohtuski and Innan 2017 coalescent model*/
+	deathRate = 0;				/* death rate in the Ohtuski and Innan 2017 coalescent model*/
+   	mutationRate = 1.0e-7;		/* nucleotide mutation rate per site per generation */
+	SNPrate = 0.0;				/* germline variation rate for rooth healthy genome */
+	rateVarAmongLineages = NO;	/* modify rate variation among branches (to non-clock) */
+	doTreeRateSwitches = NO;	/* do rate switches along the tree */
+	numTreeRateSwitches = 0;	/* number of rate switches along the tree */
+	alphabet = DNA;          	/* alphabet 0/1 or DNA */
+    altModel = 0;				/* by default the alternative model will be ISM haploid */
+    propAltModelSites = 0;		/* proportion of sites that will mutate according to alternative model */
+    nonISMRelMutRate = 1.0;		/* relative rate alternative/default model for sites */
+    equalBaseFreq = YES;        /* DNA base frequencies */
+	freq[0] = freq[1] = freq[2] = freq[3] = 0.25;
+	titv = 0.5;					/* transition/transversion rate ratio */
+	thereIsMij = NO;			/* mutation rate matrix*/
+	Mij[0][0] = Mij[1][1] = Mij[2][2] = Mij[3][3] = 0;  /* mutation probabilities */
+	Mij[0][1] = Mij[0][2] = Mij[0][3] = 1.0;
+	Mij[1][0] = Mij[1][2] = Mij[1][3] = 1.0;
+	Mij[2][0] = Mij[2][1] = Mij[2][3] = 1.0;
+	Mij[3][0] = Mij[3][1] = Mij[3][2] = 1.0;
+	thereIsEij = NO;			/* error rate matrix*/
+	Eij[0][0] = Eij[1][1] = Eij[2][2] = Eij[3][3] = 0;  /* sequencing error probabilities */
+	Eij[0][1] = Eij[0][2] = Eij[0][3] = 1.0;
+	Eij[1][0] = Eij[1][2] = Eij[1][3] = 1.0;
+	Eij[2][0] = Eij[2][1] = Eij[2][3] = 1.0;
+	Eij[3][0] = Eij[3][1] = Eij[3][2] = 1.0;
+	doJC = YES;
+	doHKY = NO;
+	doGTR = NO;
+	doGTnR = NO;
+	rateVarAmongSites = NO;     	/* rate variation among different sites along the genome */
+    alphaSites = infinity;      	/* alpha shape of the gamma distribution for rate variation among sites */
+    alphaBranches = infinity;   	/* alpha shape of the gamma distribution for rate variation among lineages */
+    alphaCellCoverage = 0;			/* between-cell coverage dispersion (-J): 0 = none */
+    alphaSiteCoverage = 0;			/* between-site coverage dispersion (-O): 0 = none */
+    alphaCoverage = infinity;   	/* alpha shape of the gamma distribution for coverage */
+	doSimulateFixedNumMutations = NO;	/* whether to simulate a fixed number of mutations */
+	doUserTree = NO;				/* whether to assume a user tree instead od making the coalescent */
+	doUserGenome = NO;				/* whether to use a user genome instead of a simulated one */
+    doPrintSNVgenotypes = NO;		/* whether to print SNVs */
+    doPrintSNVhaplotypes = NO;  	/* whether to print haplotypes */
+    doPrintTrueHaplotypes = NO;  	/* whether to print the true haplotypes s */
+    doPrintFullHaplotypes = NO;		/* whether to print sequences */
+    doPrintFullGenotypes = NO;		/* whether to print all genotypes (variable + invariable) */
+    doPrintTree = NO;				/* whether to print the coalescent tree */
+    doPrintTimes = NO;				/* whether to print coalescent times */
+	doPrintAncestors = NO;      	/* whether to print data for ancestral cells */
+	doNGS = NO;  					/* produce reads by default */
+	doTumorNames = NO;				/* use specific name for taxa in the tumor scenario */
+	stringPrecision = 12;			/* precision for taxa names */
+	doPrintCATG = NO;				/* whether to print read counts for SNVs in CATG format*/
+	doPrintPILEUP = NO;				/* whether to print read counts for SNVs in PILEUP format*/
+	doPrintBulk = NO;				/* whether to print pooled (bulk) read counts and VAF per site */
+	doPrintVCF = YES;				/* whether to print the VCF file when reads are simulated */
+	doZipVCF = NO;					/* whether the VCF is written compressed with gzip */
+	minVAFvcf = 0.0;				/* minimum pooled VAF of the sites in the VCF */
+	doSimulateData = YES;			/* whether to simulate any data (or just look at the expectations; useful for debugging) */
+	doPrintSeparateReplicates = NO; /* whether to put every replica in its own file */
+	doPrintIUPAChaplotypes = NO;	/* whether to print IUPAC halotypes */
+	doGeneticSignatures = NO;		/* whether to use a genetic signature to model trinucleotide mutations */
+	numUserSignatures = 0;			/* by default we do not use a genetic signature */
+	transformingBranchLengthRatio = 0.5; /* ratio of the transforming branch length compare to the tumor MRCA length */
+	healthyTipBranchLengthRatio = 1.0; 	/* ratio the branch leading to the healthy cell to the (tumor MRCA + transfoming branch) length*/
+ 	coverage = 5;					/* NGS  depth for read counts */
+	rateVarCoverage = NO;			/* there is coverage dispersion */
+	fixedADOrate = 0;				/* allelic dropout */
+	thereisADO = NO;				/* allelic dropout flag */
+	doADOcell = NO;					/* ADO does not change per cell by default */
+	doADOsite = NO;					/* ADO does not change per site by default */
+	meanADOcell = 0;     			/* mean of beta distribution for ADO expected for a cell */
+	varADOcell = 1.0e-06;     		/* var of beta distribution for ADO expected for a cell */
+	meanADOsite = 0;				/* mean of beta distribution for ADO expected for a site */
+	varADOsite = 1.0e-06; ;			/* var of beta distribution for ADO expected for a site */
+	sequencingError = 0;			/* NGS error rate */
+	meanGenotypingError = 0;		/* mean of beta distribution for errors added directly in the genotypes */
+	varGenotypingError = 1.0e-06;   /* variance of beta distribution for genotype errors */
+	meanAmplificationError = 0; 	/* mean of beta distribution for WGA errors */
+	varAmplificationError = 1.0e-06; /* variance of beta distribution for WGA errors */
+	simulateOnlyTwoTemplates = NO;	/* whether simulating maximum of two templates after single-cell amplification, or there can be all four */
+	haploidCoverageReduction = 0.5; /* proportion of reads produced when a single allele is present */
+	doAllelicImbalance = NO;		/* by default there is no allelic imbalance */
+	meanAllelicImbalance = 0.5;		/* beta mean proportion of maternal/ paternal reads */
+	varAllelicImbalance = 1.0e-06;	/* beta var proportion of maternal/ paternal reads */
+	meanDoubletRate = 0;			/* mean of beta distribution for doublet errors */
+	varDoubletRate = 1.0e-06;		/* variance of beta distribution for doublet errors */
+	numNodes = 1000;            	/* initial number of nodes allocated to build the coalescent trees */
+	doSpecificParameterFile = NO;	/* by default do not use a custom parameter file */
+	userSeed = 0;					/* seed entered by the user */
+	noisy = 1;						/* level of information to be printed in the screen (see below) */
+	}

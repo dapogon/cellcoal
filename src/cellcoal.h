@@ -368,6 +368,21 @@ extern FILE			*fpSNVgenotypes, *fpFullGenotypes, *fpSNVhaplotypes, *fpTrueHaplot
                          doPrintFullHaplotypes == YES || doPrintFullGenotypes == YES || \
                          doPrintCATG == YES || doPrintPILEUP == YES || doPrintBulk == YES || doPrintAncestors == YES)
 
+
+/* validate.c, replicate_output.c, options.c */
+void		SetDefaultOptions (void);
+void		CheckOptionCombinations (void);
+void		CheckModeOptions (void);
+void		CheckReadOptions (void);
+void		CheckChromosomeOptions (void);
+void		RepMarker (FILE *fp, int dataSetNum);
+void		PrintReplicateOutputs (int dataSetNum);
+void		StoreBlockRow (int mu, int del, int cnloh, int snvTrue, int snvObs, const double *metric, const long long *inv);
+void		WriteBlocksTotal (void);
+void		ReportProgress (int dataSetNum);
+void		WriteSummaryRow (int dataSetNum);
+void		ComputeSummaryStatistics (void);
+
 #endif /* coaltumor_h */
 
 /* Independent random streams for the read-count simulation.
