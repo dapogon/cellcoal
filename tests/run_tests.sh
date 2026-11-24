@@ -255,6 +255,28 @@ if python3 -c "import numpy" 2>/dev/null; then
 else echo "  skip (numpy not installed)"; fi
 if "$BIN" --cov-ado-corr 0.5 -s5 2>&1 | grep -q 'needs coverage variation among cells (--depth cells) and ADO variation'; then ok "--cov-ado-corr needs -J and -P"; else bad "cov-ado validation"; fi
 
+echo "2g10c. Pileup has every read (also errors to bases that are in no genotype)"
+mkdir -p "$TMP/pu"
+(cd "$TMP/pu" && "$BIN" -n1 -s20 -l2000 -j200 -q0 -D0.2 -C10 -E0.02 -A0.05 0.002 0 -9 -#5 >/dev/null 2>&1)
+if python3 -c "
+import sys
+b = 0; n = 0; vcf = {}
+for l in open('$TMP/pu/Results/vcf'):
+    p = l.rstrip('\n').split('\t')
+    if l[0] == '#' or len(p) < 10: continue
+    k = p[8].split(':').index('RC')
+    vcf[p[1]] = [list(map(int, c.split(':')[k].split(','))) for c in p[9:]]
+for l in open('$TMP/pu/Results/pileup'):
+    p = l.rstrip('\n').split('\t')
+    if len(p) < 6: continue
+    for i in range((len(p) - 3) // 3):
+        d = int(p[3 + 3 * i]); s = p[4 + 3 * i]; n += 1
+        rc = vcf[p[1]][i]; ref = 'ACGT'.index(p[2])
+        cnt = [s.count(x) for x in 'ACGT']; cnt[ref] = s.count('.')
+        if len(s) != d or cnt != rc: b += 1
+sys.exit(0 if n > 0 and b == 0 else 1)
+"; then ok "pileup bases = depth and = VCF read counts"; else bad "pileup reads"; fi
+
 echo "2g10b. Amplification error that varies among cells (--amp-cell-var)"
 cat > "$TMP/ampcell.py" <<'PY'
 import sys, numpy as np

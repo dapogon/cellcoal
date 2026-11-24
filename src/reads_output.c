@@ -156,45 +156,17 @@ static void PileupSite (FILE *fp, int j)
 		fprintf (fp, "\t%d\t", CS(i,j).numReads);
 		
 		/* PILEUP: READ BASES */
-		if (allSites[j].countA > 0)
-			{
-			if (referenceAllele != A)
-				for (k=0; k<CS(i,j).readCount[A]; k++)
-					fprintf (fp, "A");
-			else
-				for (k=0; k<CS(i,j).readCount[A]; k++)
-					fprintf (fp, ".");
-			}
-		
-		if (allSites[j].countC > 0)
-			{
-			if (referenceAllele != C)
-				for (k=0; k<CS(i,j).readCount[C]; k++)
-					fprintf (fp, "C");
-			else
-				for (k=0; k<CS(i,j).readCount[C]; k++)
-					fprintf (fp, ".");
-			}
-
-		if (allSites[j].countG > 0)
-			{
-			if (referenceAllele != G)
-				for (k=0; k<CS(i,j).readCount[G]; k++)
-					fprintf (fp, "G");
-			else
-				for (k=0; k<CS(i,j).readCount[G]; k++)
-					fprintf (fp, ".");
-			}
-
-		if (allSites[j].countT > 0)
-			{
-			if (referenceAllele != T)
-				for (k=0; k<CS(i,j).readCount[T]; k++)
-					fprintf (fp, "T");
-			else
-				for (k=0; k<CS(i,j).readCount[T]; k++)
-					fprintf (fp, ".");
-			}
+		/* every read is written, also the reads (errors) of bases that are not in
+		   any genotype of the site; earlier versions left them out, so the bases
+		   column could be shorter than the depth */
+		for (k=0; k<CS(i,j).readCount[A]; k++)
+			fprintf (fp, "%c", referenceAllele == A ? '.' : 'A');
+		for (k=0; k<CS(i,j).readCount[C]; k++)
+			fprintf (fp, "%c", referenceAllele == C ? '.' : 'C');
+		for (k=0; k<CS(i,j).readCount[G]; k++)
+			fprintf (fp, "%c", referenceAllele == G ? '.' : 'G');
+		for (k=0; k<CS(i,j).readCount[T]; k++)
+			fprintf (fp, "%c", referenceAllele == T ? '.' : 'T');
 
 		fprintf (fp, "\t");
 		
