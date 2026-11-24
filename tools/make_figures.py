@@ -358,8 +358,75 @@ def fig_flow():
     plt.close(fig)
 
 
+def bam_depth(path, L):
+    import gzip, struct
+    data = gzip.open(path, "rb").read()
+    o = 4; lt = struct.unpack_from("<i", data, o)[0]; o += 4 + lt
+    nref = struct.unpack_from("<i", data, o)[0]; o += 4
+    for _ in range(nref):
+        ln = struct.unpack_from("<i", data, o)[0]; o += 4 + ln + 4
+    dep = [0] * (L + 2)
+    while o < len(data):
+        bs = struct.unpack_from("<i", data, o)[0]
+        ref, pos, lrn, mapq, bn, ncig, flag, lseq = struct.unpack_from("<iiBBHHHi", data, o + 4)
+        co = o + 4 + 32 + lrn; p = pos
+        for k in range(ncig):
+            v = struct.unpack_from("<I", data, co + 4 * k)[0]; n = v >> 4; op = v & 15
+            if op in (0, 7, 8):
+                for q in range(p, min(p + n, L)): dep[q] += 1
+                p += n
+            elif op in (2, 3): p += n
+        o += 4 + bs
+    return dep
+
+
+def fig_copynumber():
+    L, C = 60000, 20
+    d = run("-n1", "-s12", "-#3", "-l%d" % L, "-u1e-8", "-e1000", "-C%d" % C, "-E0.001", "--seg-loss-rate", "3e-4", "--seg-gain-rate", "3e-4", "--seg-len", "5000", "--bam", out="cn")
+    seg = collections.defaultdict(list)
+    for l in open(os.path.join(d, "cnv_segments")):
+        p = l.rstrip("\n").split("\t")
+        if len(p) == 6 and p[1] != "start": seg[p[0]].append((int(p[1]), int(p[2]), int(p[5])))
+    dep = {c: bam_depth(os.path.join(d, "reads_1", c + ".bam"), L) for c in seg}
+    fig = plt.figure(figsize=(11, 6.2))
+    gs = fig.add_gridspec(3, 2, width_ratios=[2.2, 1], hspace=0.55, wspace=0.28, left=0.07, right=0.98, top=0.92, bottom=0.1)
+    # three cells with the most altered genome
+    cells = sorted(seg, key=lambda c: -sum(1 for s in seg[c] if s[2] != 2))[:3]
+    B = 400
+    for i, c in enumerate(cells):
+        ax = fig.add_subplot(gs[i, 0])
+        xs = [b * B + B / 2 for b in range(L // B)]
+        ys = [sum(dep[c][b * B:(b + 1) * B]) / B for b in range(L // B)]
+        ax.plot(xs, ys, color="#555555", lw=0.9, label="mean depth of the reads (400 bp)")
+        tx, ty = [], []
+        for a, b, cn in seg[c]:
+            tx += [a, b]; ty += [cn * C / 2.0] * 2
+        ax.plot(tx, ty, color="#d95f02", lw=1.6, label="true copies x C/2")
+        ax.set_ylim(0, 2.4 * C); ax.set_xlim(0, L); ax.set_ylabel("depth")
+        ax.text(0.005, 0.86, c, transform=ax.transAxes, fontsize=8, fontweight="bold")
+        if i == 0:
+            ax.set_title("a  Depth along the chromosome follows the true number of copies of every segment", fontsize=9, loc="left", fontweight="bold")
+            ax.legend(fontsize=7.5, loc="upper right", frameon=False, ncol=2)
+        if i == 2: ax.set_xlabel("position (bp)")
+    ax = fig.add_subplot(gs[:, 1])
+    pts = collections.defaultdict(list)
+    for c, ss in seg.items():
+        for a, b, cn in ss:
+            if b - a < 1500: continue
+            pts[cn].append(sum(dep[c][a + 200:b - 200]) / max(1, b - a - 400))
+    for cn in sorted(pts):
+        ax.scatter([cn] * len(pts[cn]), pts[cn], s=14, color="#1b9e77", alpha=0.7)
+    ax.plot([0, max(pts) + 0.3], [0, (max(pts) + 0.3) * C / 2.0], color="#d95f02", lw=1.4)
+    ax.set_xlabel("true number of copies (cnv_segments)"); ax.set_ylabel("mean depth of the segment")
+    ax.set_title("b  Every segment", fontsize=9, loc="left", fontweight="bold")
+    ax.xaxis.set_major_locator(matplotlib.ticker.MaxNLocator(integer=True))
+    fig.savefig(os.path.join(media, "fig_copynumber.png"), dpi=170)
+    plt.close(fig)
+
+
 fig_flow()
 fig_demes()
 fig_blocks()
 fig_indels()
+fig_copynumber()
 print("figures in", media)

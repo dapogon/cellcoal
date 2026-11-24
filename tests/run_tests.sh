@@ -1131,6 +1131,54 @@ printf 'cells: 2\nsites: 800\nseed: 7\nmutation: rate=1e-6\n' > c.yaml
 "$BIN" --config c.yaml -n2 -l800 -s7 -u1e-6 -oC >/dev/null 2>&1 && ok "config accepts group keys" || bad "config group key"
 cd "$ROOT"
 
+echo "2g63. Copy number in the reads: the depth of the BAM follows the true copies of every segment"
+cd "$TMP"
+cat > cnchk.py <<'PY'
+import gzip, struct, sys, collections
+def depth(path, L):
+    data = gzip.open(path, 'rb').read()
+    o = 4; lt = struct.unpack_from('<i', data, o)[0]; o += 4 + lt
+    nref = struct.unpack_from('<i', data, o)[0]; o += 4
+    for _ in range(nref):
+        ln = struct.unpack_from('<i', data, o)[0]; o += 4 + ln + 4
+    dep = [0] * (L + 2)
+    while o < len(data):
+        bs = struct.unpack_from('<i', data, o)[0]
+        ref, pos, lrn, mapq, bn, ncig, flag, lseq = struct.unpack_from('<iiBBHHHi', data, o + 4)
+        co = o + 4 + 32 + lrn; p = pos
+        for k in range(ncig):
+            v = struct.unpack_from('<I', data, co + 4 * k)[0]; n = v >> 4; op = v & 15
+            if op in (0, 7, 8):
+                for q in range(p, min(p + n, L)): dep[q] += 1
+                p += n
+            elif op in (2, 3): p += n
+        o += 4 + bs
+    return dep
+d, L, C = sys.argv[1], int(sys.argv[2]), float(sys.argv[3])
+seg = collections.defaultdict(list)
+for l in open(d + '/cnv_segments'):
+    p = l.rstrip('\n').split('\t')
+    if len(p) == 6 and p[1] != 'start': seg[p[0]].append((int(p[1]), int(p[2]), int(p[5])))
+acc = collections.defaultdict(list)
+for cell, ss in seg.items():
+    dep = depth('%s/reads_1/%s.bam' % (d, cell), L)
+    for a, b, cn in ss:
+        if b - a >= 1500: acc[cn].append(sum(dep[a + 200:b - 200]) / (b - a - 400))
+bad = 0; seen = 0
+for cn, v in acc.items():
+    m = sum(v) / len(v)
+    if cn == 0 and m > 0.01: bad += 1
+    if cn > 0 and abs(m - cn * C / 2) > 0.12 * cn * C / 2 + 1: bad += 1
+    if len(v) >= 3: seen += 1
+print('copy classes', sorted(acc), 'bad', bad)
+sys.exit(0 if bad == 0 and seen >= 3 else 1)
+PY
+if command -v python3 >/dev/null; then
+  "$BIN" -n1 -s12 -#3 -l60000 -u1e-8 -e1000 -C20 -E0.001 --seg-loss-rate 3e-4 --seg-gain-rate 3e-4 --seg-len 5000 --bam -ocn63 >/dev/null 2>&1
+  python3 cnchk.py cn63 60000 20 && ok "BAM depth is proportional to the true number of copies (1 to 4 copies)" || bad "copy number in reads"
+else echo "  skip (python3 not installed)"; fi
+cd "$ROOT"
+
 echo "2g46. Copy-number losses of segments (--seg-loss-rate, --seg-len)"
 mkdir -p "$TMP/loss" && cd "$TMP/loss" && rm -rf ./*
 "$BIN" -n1 -s20 -l5000 -u1e-6 -e1000 -b1 -j200 --summary -#5 >/dev/null 2>&1; a=$(cut -f6 Results/summary.tsv | tail -1)

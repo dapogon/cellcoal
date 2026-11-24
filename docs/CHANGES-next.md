@@ -1,0 +1,1 @@
+- Manual: copy number in the reads mode (new Fig. 15) and test 2g63: the depth of the BAM is proportional to the true number of copies of every segment.
