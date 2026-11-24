@@ -41,6 +41,6 @@ with sync_playwright() as p:
     pg = b.new_page(viewport={"width": 1100, "height": 900})
     pg.goto("file://" + html)
     pg.wait_for_timeout(1500)
-    pg.pdf(path=pdf, format="A4", print_background=True, margin={"top": "15mm", "bottom": "15mm", "left": "12mm", "right": "12mm"})
+    pg.pdf(path=pdf, format="A4", print_background=True, display_header_footer=True, header_template="<span></span>", footer_template='<div style="font-size:8px;color:#666;width:100%;text-align:center;font-family:Helvetica,Arial,sans-serif">CellCoal manual &#8212; <span class="pageNumber"></span> / <span class="totalPages"></span></div>', margin={"top": "15mm", "bottom": "18mm", "left": "12mm", "right": "12mm"})
     b.close()
 print("wrote", pdf)
