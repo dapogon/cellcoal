@@ -6,6 +6,13 @@ A small release: one behaviour change and the documentation.
 
 - `-d` (single-nucleotide deletions of the sites) is now an error when it is used with a chromosome in blocks (`--blocks`), with a reference (`--fasta`) or in the reads mode (`--bam`, `--fastq`). With a chromosome the deletions are small indels: the message points to `--indel-rate` (with `--indel-ins`, `--indel-len`, `--indel-max`). `-d` keeps working for isolated sites, as before, and the golden outputs do not change.
 
+## Fixes
+
+- A misaligned buffer in the indel templates of the reads mode (found with UBSan; no visible effect on x86-64, golden outputs unchanged).
+- `-C` above 1000000 is an error (it overflowed an integer; found by the fuzzer).
+- Windows: the shift in `blocks.c` no longer warns on 32-bit `long`.
+- Tests: portable on macOS (`wc`, `stat`) and Windows (UTF-8, CRLF).
+
 ## Manual
 
 - New section 5.4.9: in which order ADO, the gain along the genome and the coverage act, and how to simulate MDA and PTA (comparison table).
