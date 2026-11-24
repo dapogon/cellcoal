@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.7.2
+Fixes: the pileup (`-9`) wrote only the reads of bases present in some genotype of the site, so the bases column could be shorter than the depth; now every read is written and the counts match the `RC` field of the VCF. Windows builds now find zlib, so BAM, BCF and FASTQ.gz are compressed and `--compress-level` has an effect. `-C` above 1000000 is an error. Tests and CI: portable on macOS and Windows, sanitizers pass.
+
 ## 2.7.1
 Bug-fix and documentation release: `-d` (single-nucleotide deletions of isolated sites) is refused with a chromosome in blocks, a reference or reads, and the error points to `--indel-rate`; manual with section 5.4.9 (how ADO, gain and coverage fit together, MDA and PTA), new figures (main flow, tumor regions, blocks and regional rates, indels), every figure numbered and with a caption, page numbers in the PDF; MDA and PTA examples.
 

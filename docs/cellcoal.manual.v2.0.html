@@ -36,7 +36,7 @@ div.caption p { margin: 0; } nav#TOC { background: #fafafa; border: 1px solid #e
 <header id="title-block-header">
 <h1 class="title">CellCoal manual v2.0</h1>
 <p class="author">David Posada</p>
-<p class="date">November, 2026 (CellCoal 2.7.1)</p>
+<p class="date">November, 2026 (CellCoal 2.7.2)</p>
 </header>
 <nav id="TOC" role="doc-toc">
 <ul>
@@ -3858,13 +3858,20 @@ caption, page numbers in the PDF</td>
 <td>5.2.6, 5.4.9</td>
 </tr>
 <tr class="odd">
+<td>2.7.2</td>
+<td>Pileup (<code>-9</code>): every read is written, also the errors to
+bases that are in no genotype; Windows: <code>--compress-level</code>
+works (zlib was not detected)</td>
+<td>6.9</td>
+</tr>
+<tr class="even">
 <td>2.6.2</td>
 <td><code>--damage</code> (library damage with orientation bias); reads
 mode in tiles (memory independent of the genome length; the reads of a
 given seed change)</td>
 <td>5.5</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>2.5</td>
 <td>Copy-number losses and gains interleaved with SNVs, deletions and
 cnLOH; <code>--phase</code>, haplotypes per copy,
@@ -3872,7 +3879,7 @@ cnLOH; <code>--phase</code>, haplotypes per copy,
 build; 2.5.2: README and manual)</td>
 <td>5.2.8, 5.2.9</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>2.4</td>
 <td>Reads (<code>--bam</code>, <code>--fastq</code>) with duplicates,
 qualities and strand bias; chromosome in blocks, real references,
@@ -3880,13 +3887,13 @@ germline VCF; dropout in segments, amplification gain, signature
 profiles from files; the three modes are explicit</td>
 <td>5.5, 5.3, 5.4.1, 5.4.3, 5.4.4</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>2.3</td>
 <td>Tumour only (<code>--no-outgroup</code>);
 <code>--min-alt-reads</code> and <code>--min-alt-vaf</code></td>
 <td>5.1.1, 5.6</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>2.2</td>
 <td><code>--fast</code>, ADO per cell and correlations among the
 parameters of the cells, BCF, <code>--summary</code>,
@@ -3895,14 +3902,14 @@ quickstart, Windows, fuzzing, sanitizers and validation against
 theory</td>
 <td>6.11.4, 5.4.7, 7.1, 8.1</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td>2.1</td>
 <td>Sparse genomes, streamed read counts, bulk read counts,
 <code>-Z</code>, <code>-z</code>, <code>-M</code>, <code>-O</code>,
 <code>-J</code>, modules, configuration files, run record, plots</td>
 <td>4.3, 7.2, 6.11.2</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td>2.0</td>
 <td>Bug fixes, faster, lighter, parallel (OpenMP) read counts</td>
 <td>4.1</td>
