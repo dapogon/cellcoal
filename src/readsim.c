@@ -919,6 +919,7 @@ static int IndelTemplates (const IndelEv *ie, long nie, int hap, int cellIdx, lo
 	if (!force && (lo >= nie || ie[lo].pos >= s + ins - 1))
 		return 0;
 	cap = ins + 64 * (indelMax + 1) + 8;
+	cap += cap & 1;						/* even, so that the long values that follow the ints are aligned */
 	hb = (int*) Checked (malloc (cap * (sizeof(int) + sizeof(long))), "Could not allocate the reads\n");
 	hp = (long*) (hb + cap);
 	k = lo;

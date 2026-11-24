@@ -8,6 +8,9 @@
 BIN=${1:-$(ls -t "$(dirname "$0")"/../bin/cellcoal-* | head -1)}
 BIN=$(cd "$(dirname "$BIN")" && pwd)/$(basename "$BIN")
 ROOT=$(cd "$(dirname "$0")/.." && pwd)
+# portability (macOS): wc pads its numbers with spaces and stat has no -c
+wc() { command wc "$@" | sed 's/^ *//'; }
+stat() { if [ "$1" = "-c" ] && [ "$2" = "%s" ] && ! command stat -c %s / >/dev/null 2>&1; then shift 2; command stat -f %z "$@"; else command stat "$@"; fi; }
 TMP=$(mktemp -d); trap 'rm -rf "$TMP"' EXIT
 fail=0
 ok()  { echo "  ok   $1"; }

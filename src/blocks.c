@@ -13,6 +13,7 @@
 #include "cellcoal.h"
 #include <ctype.h>
 #include <errno.h>
+#include <limits.h>
 
 int			blocksN = 0, blockIndex = 0, blocksOn = 0;
 char		*fastaFile = "", *regionSpec = "", *germlineVcf = "", *germlinePop = "";
@@ -239,7 +240,7 @@ void BlocksSetup (void)
 					pos = h0;
 					snprintf (chromName, sizeof(chromName), "%s", name);
 					if (!haveRegion)
-						{ s = h0; e = (long) 1 << 40; }
+						{ s = h0; e = LONG_MAX; }
 					}
 				continue;
 				}
