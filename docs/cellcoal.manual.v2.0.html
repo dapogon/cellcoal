@@ -2316,7 +2316,7 @@ for every ten substitutions, a realistic proportion.
 <code>--indel-ins F</code> is the fraction of insertions (default 0.5),
 <code>--indel-len M</code> the mean length (default 2, a geometric
 distribution) and <code>--indel-max N</code> the maximum length (default
-10, up to 32). The indels are placed at random over the chromosome,
+10, up to 100). The indels are placed at random over the chromosome,
 following <code>--region-rates</code> if it is given (the number of
 indels of a block and their positions follow the multipliers of the
 regions, as the substitutions do), and are <strong>left-aligned</strong>
@@ -2336,10 +2336,41 @@ carry it) and the true genotype <code>GT</code> of every cell
 reads of the donor carry the donor’s indels), and give the same BAM for
 any tile size and number of threads; they combine with segment losses
 and gains (the extra copies of a haplotype carry its indels; the reads
-of a lost segment do not exist). The indels of the genealogy are somatic
-(there are no germline indels), and the sequencing indel errors are made
+of a lost segment do not exist). The sequencing indel errors are made
 with <code>--homopolymer-error</code>. It works in the reads mode only;
 without the option the data are identical to before.</p>
+<p><strong>Long indels (<code>--indel-tail F</code>,
+<code>--indel-tail-exp A</code>).</strong> The lengths of real indels
+have a long tail: most are 1 or 2 bases, but there are many more long
+ones than a geometric distribution gives. With
+<code>--indel-tail F</code> a fraction F of the indels (0 to 1; default
+0) takes its length from a power law, P(length = k) proportional to k^-A
+for k = 1 to <code>--indel-max</code> (<code>--indel-tail-exp A</code>,
+default 2), and the other ones keep the geometric distribution;
+e.g. <code>--indel-max 80 --indel-tail 0.3</code>.</p>
+<p><strong>Repeats (<code>--indel-repeat X</code>).</strong> In real
+genomes most indels are polymerase slippages in homopolymers (4 or more
+equal bases) and in short tandem repeats (a unit of 2 to 4 bases with 3
+or more copies). <code>--indel-repeat X</code> multiplies by X the rate
+of the indels at the sites that belong to such a repeat (default 1, no
+enrichment; it multiplies with <code>--region-rates</code>), and with X
+above 1 an indel in a repeat is a <strong>slippage</strong>: one copy of
+the unit is gained or lost (the length is the length of the unit). With
+<code>--indel-repeat 20</code> about 60% of the indels fall in repeats,
+in a random genome, where the repeats are 7% of the sites. The repeats
+are those of the reference (<code>--fasta</code> or the simulated
+one).</p>
+<p><strong>Germline indels
+(<code>--germline-indel-rate R</code>).</strong> The indels of the
+genealogy are somatic. With <code>--germline-indel-rate R</code> the
+healthy genome also has R indels per site (e.g. 0.0001, one every 10 kb;
+the lengths follow the same options, and 40% are homozygous, the others
+heterozygous on a random haplotype): all the cells inherit them, the BAM
+of the bulk (<code>--bulk-depth</code>) carries them, and they have the
+flag <code>GERMLINE</code> in <code>indels_truth.vcf</code> (with
+<code>NC</code> equal to the number of cells). They are the indels that
+a caller must find in the bulk and that a somatic caller must not
+report.</p>
 <p><strong>Indel errors of the sequencer
 (<code>--homopolymer-error P</code>).</strong> The most common false
 indels of real data are made in homopolymers: the polymerase or the
@@ -2991,21 +3022,38 @@ items (e.g. <code>G&gt;T:0.002,C&gt;T:0.001</code>)</td>
 <code>indel-len</code>, <code>indel-max</code></td>
 <td>small insertions and deletions in the reads: rate relative to
 <code>-u</code> (0), fraction of insertions (0.5), mean (2) and maximum
-(10) length; truth in <code>indels_truth.vcf</code></td>
+(10, up to 100) length; truth in <code>indels_truth.vcf</code></td>
 </tr>
 <tr class="even">
+<td><code>--indel-tail F</code>, <code>--indel-tail-exp A</code></td>
+<td><code>indel-tail</code>, <code>indel-tail-exp</code></td>
+<td>fraction of the indels with a power-law length k^-A (0, 2)</td>
+</tr>
+<tr class="odd">
+<td><code>--indel-repeat X</code></td>
+<td><code>indel-repeat</code></td>
+<td>relative rate of the indels in homopolymers and short tandem
+repeats; above 1 they are slippages (1)</td>
+</tr>
+<tr class="even">
+<td><code>--germline-indel-rate R</code></td>
+<td><code>germline-indel-rate</code></td>
+<td>germline indels of the healthy genome per site (0); 40%
+homozygous</td>
+</tr>
+<tr class="odd">
 <td><code>--homopolymer-error P</code></td>
 <td><code>homopolymer-error</code></td>
 <td>sequencing indel errors in homopolymers of 3 or more bases:
 probability P times (length - 2) per run, per read (0; e.g. 0.001)</td>
 </tr>
-<tr class="odd">
+<tr class="even">
 <td><code>--strand-bias P</code></td>
 <td><code>strand-bias</code></td>
 <td>fraction of the amplification errors seen on one strand only
 (0)</td>
 </tr>
-<tr class="even">
+<tr class="odd">
 <td><code>--bulk-depth D</code></td>
 <td><code>bulk-depth</code></td>
 <td>also simulate a healthy bulk sample (<code>normal.bam</code>) at

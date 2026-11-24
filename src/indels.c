@@ -5,7 +5,7 @@
    indels_truth.vcf. Every indel is left-aligned against the reference, as a variant caller would report it. */
 #include "cellcoal.h"
 
-double		indelRate = 0.0, indelIns = 0.5, indelLen = 2.0, homoError = 0.0;
+double		indelRate = 0.0, indelIns = 0.5, indelLen = 2.0, homoError = 0.0, indelTail = 0.0, indelTailExp = 2.0, indelRepeat = 1.0, germIndelRate = 0.0;
 int			indelMax = 10;
 
 static IndelEv	*master = NULL;			/* all the events of the block */
@@ -14,7 +14,10 @@ static IndelEv	**cellEv[2] = {NULL, NULL};	/* resolved events of every cell and 
 static long		*cellN[2] = {NULL, NULL};
 static int		nCellsAlloc = 0;
 static long		nextId = 0;
-static double	blockRel = 1.0;			/* mean relative rate of the block (--region-rates) */
+static double	blockRel = 1.0;			/* mean relative rate of the block (--region-rates, --indel-repeat) */
+static double	relMax = 1.0;			/* maximum relative rate of a site */
+static IndelEv	*germ[2] = {NULL, NULL};	/* germline indels of the healthy genome (--germline-indel-rate) */
+static long		germN[2] = {0, 0};
 
 static char RefAt (long j)
 	{
@@ -47,24 +50,107 @@ static int CmpEv (const void *a, const void *b)
 	return (x->id < y->id) ? -1 : (x->id > y->id);
 	}
 
+/* the tandem repeat that holds the site p: a homopolymer of 4 or more bases, or a repeat of a unit of 2 to 4 bases with 3 or more copies.
+   Returns the length of the unit (0 when the site is not in a repeat) and the first site of the repeat in *start */
+static int RepeatAt (long p, long *start)
+	{
+	int		k;
+
+#define MATCH(j,k) ((j) >= (k) && (j) < numSites && ValidBase (RefAt (j)) && RefAt (j) == RefAt ((j) - (k)))
+	for (k=1; k<=4; k++)
+		{
+		long	j0, jl, jr;
+
+		if (MATCH (p, k))
+			j0 = p;
+		else if (MATCH (p + k, k))
+			j0 = p + k;
+		else
+			continue;
+		for (jl=j0; MATCH (jl - 1, k); jl--)
+			;
+		for (jr=j0; MATCH (jr + 1, k); jr++)
+			;
+		if ((jr - jl + 1) + k >= (k == 1 ? 4 : 3 * k))
+			{
+			*start = jl - k;
+			return k;
+			}
+		}
+#undef MATCH
+	return 0;
+	}
+
+/* relative rate of the indels at a site: regions (--region-rates) times the enrichment in repeats (--indel-repeat) */
+static double SiteRel (long p)
+	{
+	double	r = 1.0;
+	long	s;
+
+	if (regionRatesOn == YES)
+		r = RegionRel ((int) p);
+	if (indelRepeat != 1.0 && RepeatAt (p, &s) > 0)
+		r *= indelRepeat;
+	return r;
+	}
+
+/* length of an indel: truncated geometric (mean --indel-len) or, with probability --indel-tail, a power law k^-A on 1 .. --indel-max */
+static int DrawLen (long int *seed)
+	{
+	int		len = 1, k;
+	double	q = (indelLen > 1.0) ? 1.0 - 1.0 / indelLen : 0.0;
+
+	if (indelTail > 0.0 && RandomUniform (seed) < indelTail)
+		{
+		double	tot = 0.0, u;
+
+		for (k=1; k<=indelMax; k++)
+			tot += pow ((double) k, -indelTailExp);
+		u = RandomUniform (seed) * tot;
+		for (k=1; k<indelMax; k++)
+			{
+			u -= pow ((double) k, -indelTailExp);
+			if (u <= 0.0)
+				break;
+			}
+		return k;
+		}
+	while (len < indelMax && RandomUniform (seed) < q)
+		len++;
+	return len;
+	}
+
 /* one new event on a branch; returns 1 when it was made */
 static int NewEvent (IndelEv *e, long int *seed)
 	{
-	long	p, k;
-	int		i, len;
-	double	q = (indelLen > 1.0) ? 1.0 - 1.0 / indelLen : 0.0;
+	long	p, k, rs = 0;
+	int		i, len, tries = 0, unit = 0;
 
-	len = 1;
-	while (len < indelMax && RandomUniform (seed) < q)
-		len++;
+	len = DrawLen (seed);
 	e->type = (RandomUniform (seed) < indelIns) ? 0 : 1;
 	e->len = len;
+	e->germ = 0;
 	do
+		{
 		p = (long) (RandomUniform (seed) * (numSites - 1));
-	while (regionRatesOn == YES && RandomUniform (seed) * regionRmax >= RegionRel ((int) p));
+		if (++tries > 100000)
+			return 0;
+		}
+	while ((regionRatesOn == YES || indelRepeat != 1.0) && RandomUniform (seed) * relMax >= SiteRel (p));
 	for (i=0; i<len; i++)
 		e->seq[i] = "ACGT"[(int) (RandomUniform (seed) * 4.0) & 3];
 	e->seq[len] = '\0';
+	/* in a repeat (with --indel-repeat above 1) the indel is a slippage: one copy of the unit more or less */
+	if (indelRepeat > 1.0 && p >= 0 && p < numSites - 1 && (unit = RepeatAt (p, &rs)) > 0)
+		{
+		if (rs < 1)
+			return 0;
+		p = rs - 1;
+		len = e->len = unit;
+		for (i=0; i<len; i++)
+			e->seq[i] = RefAt (rs + i);
+		e->seq[len] = '\0';
+		}
 	if (p < 0 || p >= numSites - 1 || (e->type == 1 && p + len >= numSites))
 		return 0;
 	/* left-align: the same indel is described by the leftmost position (a deletion in a repeat, an insertion in a homopolymer) */
@@ -185,6 +271,12 @@ void IndelsFree (void)
 		cellEv[h] = NULL;
 		cellN[h] = NULL;
 		}
+	for (h=0; h<2; h++)
+		{
+		free (germ[h]);
+		germ[h] = NULL;
+		germN[h] = 0;
+		}
 	free (master);
 	master = NULL;
 	nMaster = capMaster = 0;
@@ -195,12 +287,10 @@ void IndelsFree (void)
 void IndelsGenerate (long int *seed)
 	{
 	int		h;
-	IndelEv	*none[2] = {NULL, NULL};
-	long	nn[2] = {0, 0};
 	long	s1;
 
 	IndelsFree ();
-	if (indelRate <= 0.0 || numSites < 3)
+	if ((indelRate <= 0.0 && germIndelRate <= 0.0) || numSites < 3)
 		return;
 	nCellsAlloc = numCells;
 	for (h=0; h<2; h++)
@@ -212,25 +302,62 @@ void IndelsGenerate (long int *seed)
 	s1 = *seed;
 	nextId = 0;
 	blockRel = 1.0;
-	if (regionRatesOn == YES)
+	relMax = ((regionRatesOn == YES) ? regionRmax : 1.0) * ((indelRepeat > 1.0) ? indelRepeat : 1.0);
+	if (regionRatesOn == YES || indelRepeat != 1.0)
 		{
 		long	step = (numSites > 20000) ? numSites / 20000 : 1, j, c = 0;
 		double	sum = 0.0;
 
 		for (j=0; j<numSites; j+=step, c++)
-			sum += RegionRel ((int) j);
+			sum += SiteRel (j);
 		blockRel = sum / (double) c;
 		}
 	{
 	long int sd = s1;
 
-	Walk (healthyRoot, none, nn, &sd);
+	/* germline indels: on the healthy genome, before the genealogy; a fraction (0.4) is homozygous */
+	if (germIndelRate > 0.0)
+		{
+		long	m = RandomPoisson (germIndelRate * (double) numSites, &sd), k;
+		IndelEv	ev;
+
+		for (h=0; h<2; h++)
+			germ[h] = (IndelEv*) Checked (malloc ((m + 1) * sizeof(IndelEv)), "Could not allocate the indels\n");
+		for (k=0; k<m; k++)
+			if (NewEvent (&ev, &sd))
+				{
+				int	hom = (RandomUniform (&sd) < 0.4), hh = (RandomUniform (&sd) < 0.5);
+
+				ev.germ = 1;
+				if (nMaster == capMaster)
+					{
+					capMaster = capMaster ? 2 * capMaster : 1024;
+					master = (IndelEv*) Checked (realloc (master, capMaster * sizeof(IndelEv)), "Could not allocate the indels\n");
+					}
+				ev.hap = hom ? 0 : hh;
+				master[nMaster++] = ev;
+				for (h=0; h<2; h++)
+					if (hom || h == hh)
+						{
+						ev.hap = h;
+						germ[h][germN[h]++] = ev;
+						}
+				}
+		for (h=0; h<2; h++)
+			germN[h] = Resolve (germ[h], germN[h]);
+		}
+	Walk (healthyRoot, germ, germN, &sd);
 	}
 	qsort (master, nMaster, sizeof(IndelEv), CmpEv);
 	}
 
 const IndelEv *IndelsOf (int cellIdx, int hap, long *n)
 	{
+	if (cellIdx < 0 && germ[hap] != NULL)
+		{
+		*n = germN[hap];
+		return germ[hap];
+		}
 	if (cellIdx < 0 || cellEv[hap] == NULL || cellIdx >= nCellsAlloc)
 		{
 		*n = 0;
@@ -259,6 +386,7 @@ void IndelsWriteVcf (const char *dir)
 		fprintf (fp, "##fileformat=VCFv4.2\n##source=cellcoal indels truth\n##contig=<ID=%s,length=%ld>\n", ReadContig (), ReadRefLen ());
 		fprintf (fp, "##INFO=<ID=NC,Number=1,Type=Integer,Description=\"Cells that carry the indel\">\n");
 		fprintf (fp, "##INFO=<ID=TYPE,Number=1,Type=String,Description=\"INS or DEL\">\n");
+		fprintf (fp, "##INFO=<ID=GERMLINE,Number=0,Type=Flag,Description=\"Germline indel (--germline-indel-rate): in the healthy genome\">\n");
 		fprintf (fp, "##INFO=<ID=LEN,Number=1,Type=Integer,Description=\"Length of the indel\">\n");
 		fprintf (fp, "##FORMAT=<ID=GT,Number=1,Type=String,Description=\"True genotype (maternal|paternal): 1 when the haplotype carries the indel\">\n");
 		fprintf (fp, "#CHROM\tPOS\tID\tREF\tALT\tQUAL\tFILTER\tINFO\tFORMAT");
@@ -300,7 +428,7 @@ void IndelsWriteVcf (const char *dir)
 			nc += (has[0] || has[1]);
 			g += sprintf (g, "\t%d|%d", has[0], has[1]);
 			}
-		fprintf (fp, "\t.\tPASS\tNC=%d;TYPE=%s;LEN=%d\tGT%s\n", nc, ev->type == 1 ? "DEL" : "INS", ev->len, gts);
+		fprintf (fp, "\t.\tPASS\tNC=%d;TYPE=%s;LEN=%d%s\tGT%s\n", nc, ev->type == 1 ? "DEL" : "INS", ev->len, ev->germ ? ";GERMLINE" : "", gts);
 		free (gts);
 		}
 	for (h=0; h<2; h++)

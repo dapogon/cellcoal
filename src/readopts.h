@@ -39,5 +39,9 @@
 	X(indel_ins,      "--indel-ins",      '\243', 2, indelIns,   0.5)    \
 	X(indel_len,      "--indel-len",      '\244', 2, indelLen,   2)      \
 	X(indel_max,      "--indel-max",      '\245', 1, indelMax,   10)      \
-	X(homopolymer_error, "--homopolymer-error", '\246', 2, homoError, 0)
+	X(homopolymer_error, "--homopolymer-error", '\246', 2, homoError, 0) \
+	X(indel_tail,     "--indel-tail",     '\247', 2, indelTail,  0)      \
+	X(indel_tail_exp, "--indel-tail-exp", '\250', 2, indelTailExp, 2)    \
+	X(indel_repeat,   "--indel-repeat",   '\251', 2, indelRepeat, 1)      \
+	X(germline_indel_rate, "--germline-indel-rate", '\252', 2, germIndelRate, 0)
 #endif

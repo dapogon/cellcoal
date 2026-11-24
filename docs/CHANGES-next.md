@@ -1,1 +1,2 @@
 - Manual: copy number in the reads mode (new Fig. 15) and test 2g63: the depth of the BAM is proportional to the true number of copies of every segment.
+- Indels in the reads mode: `--indel-max` up to 100; `--indel-tail` and `--indel-tail-exp` (power-law lengths, long tail); `--indel-repeat` (indels enriched in homopolymers and short tandem repeats, as slippages of one unit); `--germline-indel-rate` (germline indels of the healthy genome, in all the cells and in the bulk, flag `GERMLINE` in `indels_truth.vcf`). Tests 2g64.

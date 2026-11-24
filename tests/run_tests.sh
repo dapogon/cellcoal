@@ -1658,7 +1658,7 @@ python3 indelchk.py ID1/reads_1 >/dev/null 2>&1 && ok "every indel of a read is 
 grep -q "DEL" ID1/reads_1/indels_truth.vcf && grep -q "INS" ID1/reads_1/indels_truth.vcf && ok "indels_truth.vcf has insertions and deletions" || bad "indels_truth.vcf"
 CELLCOAL_READ_TILE=1024 "$BIN" -n1 -s8 -l30000 -u1e-9 -e1000 -b1 -C20 -E0 -D0 --bam --fastq --indel-rate 300 -#3 -oID2 >/dev/null 2>&1
 [ "$(zcat ID1/reads_1/cell0003.bam | md5sum)" = "$(zcat ID2/reads_1/cell0003.bam | md5sum)" ] && ok "the BAM with indels does not depend on the size of the tile" || bad "indel BAM depends on tile"
-"$BIN" -n1 -s5 -l500 -u1e-6 -C10 -E0.01 --bam --indel-rate 0.1 --indel-max 40 > id1.out 2>&1
+"$BIN" -n1 -s5 -l500 -u1e-6 -C10 -E0.01 --bam --indel-rate 0.1 --indel-max 140 > id1.out 2>&1
 grep -q "bad --indel-rate" id1.out && ok "a bad --indel-max is an error" || bad "bad indel option accepted"
 "$BIN" -n1 -s5 -l500 -u1e-6 -C10 --indel-rate 0.1 > id2.out 2>&1
 grep -q "needs --bam" id2.out && ok "--indel-rate without reads mode is an error" || bad "--indel-rate accepted in the genotypes mode"
@@ -1717,6 +1717,49 @@ printf "chr1 1 15000 0.05\nchr1 15001 30000 4\n" > idrr.bed
 awk '!/^#/{if($2<=15000)a++;else b++}END{exit !(b > 10 * (a + 1))}' ID6/reads_1/indels_truth.vcf && ok "--region-rates: the indels follow the regional multipliers" || bad "indels do not follow --region-rates"
 rm -rf ID1 ID2 ID3 ID4 ID5 ID6
 cd "$ROOT"
+
+echo "2g64. Indels: long tail (--indel-tail), repeats (--indel-repeat) and germline (--germline-indel-rate)"
+cd "$TMP"
+cat > replen.py <<'PY'
+import sys
+d = sys.argv[1]; mode = sys.argv[2]
+ref = ''.join(l.strip() for l in open(d + '/ref.fa') if not l.startswith('>'))
+def inrep(p):
+    for k in range(1, 5):
+        m = lambda j: 0 <= j - k and j < len(ref) and ref[j] == ref[j - k]
+        j0 = p + 1 if m(p + 1) else (p + 1 + k if m(p + 1 + k) else None)
+        if j0 is None: continue
+        jl = j0
+        while m(jl - 1): jl -= 1
+        jr = j0
+        while m(jr + 1): jr += 1
+        if (jr - jl + 1) + k >= (4 if k == 1 else 3 * k): return True
+    return False
+n = r = longest = germ = allc = 0
+for l in open(d + '/indels_truth.vcf'):
+    if l[0] == '#': continue
+    f = l.split('\t'); n += 1; r += inrep(int(f[1]) - 1)
+    info = dict(kv.split('=') if '=' in kv else (kv, 1) for kv in f[7].split(';'))
+    longest = max(longest, int(info['LEN'])); germ += 'GERMLINE' in info; allc += int(info['NC']) == len(f) - 9
+if mode == 'tail': sys.exit(0 if n > 30 and 20 <= longest <= 80 else 1)
+if mode == 'repeat': sys.exit(0 if n > 60 and r / n > 0.35 else 1)
+if mode == 'base': sys.exit(0 if n > 60 and r / n < 0.2 else 1)
+if mode == 'germline': sys.exit(0 if n > 10 and germ == n and allc == n else 1)
+PY
+if command -v python3 >/dev/null; then
+  "$BIN" -n1 -s6 -#4 -l40000 -u1e-8 -e1000 -C15 -E0 --bam --indel-rate 20 --indel-max 80 --indel-tail 0.5 -oIT >/dev/null 2>&1
+  python3 replen.py IT/reads_1 tail && python3 indelchk.py IT/reads_1 >/dev/null 2>&1 && ok "--indel-tail: long indels (up to --indel-max 80) in the truth and the reads" || bad "indel tail"
+  "$BIN" -n1 -s6 -#4 -l60000 -u1e-8 -e1000 -C8 -E0 --bam --indel-rate 12 --indel-repeat 25 -oIR >/dev/null 2>&1
+  "$BIN" -n1 -s6 -#4 -l60000 -u1e-8 -e1000 -C8 -E0 --bam --indel-rate 12 -oIB >/dev/null 2>&1
+  python3 replen.py IR/reads_1 repeat && python3 replen.py IB/reads_1 base && python3 indelchk.py IR/reads_1 >/dev/null 2>&1 && ok "--indel-repeat 25: most indels are slippages in repeats (and a few without it), reads agree with the truth" || bad "indel repeat"
+  "$BIN" -n1 -s6 -#4 -l40000 -u1e-8 -e1000 -C15 -E0 --bulk-depth 15 --bam --germline-indel-rate 1e-3 -oIG >/dev/null 2>&1
+  python3 replen.py IG/reads_1 germline && python3 indelchk.py IG/reads_1 >/dev/null 2>&1 && ok "--germline-indel-rate: germline indels (flag GERMLINE) in all the cells, reads agree with the truth" || bad "germline indels"
+else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --indel-rate 1 --indel-max 101 -oIE >/dev/null 2>&1 && bad "--indel-max 101 accepted" || ok "--indel-max above 100 is rejected"
+"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --indel-rate 1 --indel-tail 2 -oIE >/dev/null 2>&1 && bad "--indel-tail 2 accepted" || ok "--indel-tail outside 0 to 1 is rejected"
+rm -rf IT IR IB IG IE
+cd "$ROOT"
+
 
 echo "2g54. Documentation: the commands of the manual and README work, every long option is in the manual; a mistyped option gets a suggestion"
 cd "$ROOT"

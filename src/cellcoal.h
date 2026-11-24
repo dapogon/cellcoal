@@ -422,8 +422,8 @@ FILE				*OpenText (const char *path, int *isPipe);
 void				CloseText (FILE *fp, int isPipe);
 
 /* indels in the reads (--indel-rate): events of the genealogy applied to the reads (indels.c) */
-typedef struct { long pos; long id; int type, len, hap; char seq[40]; } IndelEv;	/* type 0 = insertion after the site pos, 1 = deletion of the sites pos+1 .. pos+len */
-extern double		indelRate, indelIns, indelLen, homoError;
+typedef struct { long pos; long id; int type, len, hap, germ; char seq[104]; } IndelEv;	/* type 0 = insertion after the site pos, 1 = deletion of the sites pos+1 .. pos+len */
+extern double		indelRate, indelIns, indelLen, homoError, indelTail, indelTailExp, indelRepeat, germIndelRate;
 extern int			indelMax;
 void				IndelsGenerate (long int *seed);
 void				IndelsFree (void);

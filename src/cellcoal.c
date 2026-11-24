@@ -387,6 +387,10 @@ static void CheckModeOptions (void)
 		{"--indel-ins", ExtraOptionGiven ("--indel-ins")},
 		{"--indel-len", ExtraOptionGiven ("--indel-len")},
 		{"--indel-max", ExtraOptionGiven ("--indel-max")},
+		{"--indel-tail", ExtraOptionGiven ("--indel-tail")},
+		{"--indel-tail-exp", ExtraOptionGiven ("--indel-tail-exp")},
+		{"--indel-repeat", ExtraOptionGiven ("--indel-repeat")},
+		{"--germline-indel-rate", ExtraOptionGiven ("--germline-indel-rate")},
 		{"--homopolymer-error", ExtraOptionGiven ("--homopolymer-error")},
 		{NULL, 0}
 		};
@@ -1184,9 +1188,9 @@ static void CheckReadOptions (void)
 			fprintf (stderr, "\nERROR: --seq-context needs a sequencing error (-E) greater than 0\n");
 			exit (-1);
 			}
-		if (indelRate < 0.0 || indelIns < 0.0 || indelIns > 1.0 || indelLen < 1.0 || indelMax < 1 || indelMax > 32)
+		if (indelRate < 0.0 || indelIns < 0.0 || indelIns > 1.0 || indelLen < 1.0 || indelMax < 1 || indelMax > 100 || indelTail < 0.0 || indelTail > 1.0 || indelTailExp < 0.0 || indelRepeat < 0.0 || germIndelRate < 0.0)
 			{
-			fprintf (stderr, "\nERROR: bad --indel-rate (0 or more), --indel-ins (0 to 1), --indel-len (1 or more) or --indel-max (1 to 32)\n");
+			fprintf (stderr, "\nERROR: bad --indel-rate (0 or more), --indel-ins (0 to 1), --indel-len (1 or more), --indel-max (1 to 100), --indel-tail (0 to 1), --indel-tail-exp, --indel-repeat (0 or more) or --germline-indel-rate (0 or more)\n");
 			exit (-1);
 			}
 		if (homoError < 0.0 || homoError > 0.1)

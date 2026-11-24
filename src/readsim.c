@@ -1112,7 +1112,7 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 	int		qualOn = (qualSd > 0.0 || qualSlope != 0.0 || ctxOn);
 	double	qerr = (sequencingError > 0.0) ? sequencingError : 1e-4;
 	const long W = 256;
-	const int indelsOn = (indelRate > 0.0 || homoError > 0.0);
+	const int indelsOn = (indelRate > 0.0 || homoError > 0.0 || germIndelRate > 0.0);
 	const int homoOn = (homoError > 0.0);
 	int		srcs[2] = {cellIdx0, donor}, nsrc = (donor >= 0) ? 2 : 1, si;
 	Aln		aln;
@@ -1444,7 +1444,7 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 		RefPut (c);
 		}
 
-	if (indelRate > 0.0)
+	if (indelRate > 0.0 || germIndelRate > 0.0)
 		{
 		IndelsGenerate (seed);
 		IndelsWriteVcf (readDir);
