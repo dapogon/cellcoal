@@ -53,7 +53,7 @@ CFLAGS ?= -Wall $(PROFILING) -O3 -ffp-contract=off -fno-math-errno $(OMP_CFLAGS)
 LIBS = -lm
 
 # zlib compresses the BGZF blocks of the BCF output (--bcf); without it the BCF is written uncompressed
-ifneq ($(shell printf '\043include <zlib.h>\nint main(void){return 0;}\n' | $(CC) -x c - -lz -o /dev/null 2>/dev/null && echo yes),)
+ifneq ($(shell printf '\043include <zlib.h>\nint main(void){return 0;}\n' | $(CC) -x c - -lz -o zlibcheck.tmp 2>/dev/null && rm -f zlibcheck.tmp zlibcheck.tmp.exe && echo yes),)
 CPPFLAGS += -DHAVE_ZLIB
 LIBS += -lz
 endif
