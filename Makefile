@@ -7,7 +7,7 @@ BINDIR = bin
 
 CC ?= gcc
 
-_OBJS = cellcoal.o globals.o tree.o mutation.o cnv.o observation.o reads.o reads_output.o output.o rng.o options.o config.o groups.o sweep.o winexe.o bcf.o bgzf.o readsim.o blocks.o regionrates.o indels.o mappability.o validate.o replicate_output.o runlog.o eigen.o signatures.o
+_OBJS = cellcoal.o globals.o tree.o mutation.o cnv.o observation.o reads.o reads_output.o output.o rng.o options.o config.o groups.o sweep.o winexe.o bcf.o bgzf.o readsim.o bam.o blocks.o regionrates.o indels.o mappability.o validate.o replicate_output.o runlog.o eigen.o signatures.o
 OBJS=$(patsubst %,$(OBJDIR)/%,$(_OBJS))
 
 # -ffp-contract=off keeps floating-point results bit-identical to the original code
