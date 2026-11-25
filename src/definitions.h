@@ -16,7 +16,7 @@
 #define PROGRAM_NAME_LOWERCASE	"cellcoal"
 #define VERSION_NUMBER          "version 2.7.2"
 
-#define	MAX_NAME                120
+#define	MAX_NAME                1024
 #define	MAX_LINE                500000
 #define	MAX_GENOME              1000000
 #define	NO                      0
