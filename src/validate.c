@@ -210,6 +210,11 @@ void CheckReadOptions (void)
 			fprintf (stderr, "\nERROR: --map-drop has to be from 0 to 1 and needs --mappability and --bam (the FASTQ files are the reads before the alignment)\n");
 			exit (-1);
 			}
+		if (strlen (targetsFile) > 0 && strlen (fastaFile) == 0)
+			{
+			fprintf (stderr, "\nERROR: --targets needs a real chromosome (--fasta, with --region for a part of it): the targets are regions of the genome with coordinates\n");
+			exit (-1);
+			}
 		if (offTarget < 0.0 || offTarget > 1.0 || (ExtraOptionGiven ("--off-target") && strlen (targetsFile) == 0))
 			{
 			fprintf (stderr, "\nERROR: --off-target has to be from 0 to 1 and needs --targets\n");

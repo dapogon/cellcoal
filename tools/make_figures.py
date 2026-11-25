@@ -463,8 +463,12 @@ def fig_targets():
     L, C = 60000, 30
     bed = os.path.join(TMP, "targets.bed")
     tg = [(8000, 10000), (20000, 21500), (31000, 34000), (44000, 45000), (52000, 55000)]
-    open(bed, "w").write("".join("1\t%d\t%d\n" % t for t in tg))
-    args = ["-n1", "-s4", "-#5", "-l%d" % L, "-u1e-8", "-e1000", "-C%d" % C, "-E0", "--bam"]
+    open(bed, "w").write("".join("chrT\t%d\t%d\n" % t for t in tg))
+    import random
+    r = random.Random(5); sq = "".join(r.choice("ACGT") for _ in range(L))
+    fa = os.path.join(TMP, "t.fa")
+    open(fa, "w").write(">chrT\n" + "\n".join(sq[i:i + 70] for i in range(0, L, 70)) + "\n")
+    args = ["-n1", "-s4", "-#5", "-l%d" % L, "--fasta", fa, "--region", "chrT:1-%d" % L, "-u1e-8", "-e1000", "-C%d" % C, "-E0", "--bam"]
     dw = run(*args, out="wgs")
     de = run(*args, "--targets", bed, out="wes")
     B = 250

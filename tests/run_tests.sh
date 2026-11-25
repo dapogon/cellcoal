@@ -1187,17 +1187,23 @@ what = sys.argv[2]
 if what == 'default': sys.exit(0 if on > 1000 and 0.03 < r < 0.08 else 1)
 if what == 'zero': sys.exit(0 if on > 1000 and off == 0 else 1)
 PY
-printf "1\t10000\t14000\n1\t30000\t36000\n" > targets.bed
+python3 - <<'PY'
+import random
+r = random.Random(5); s = "".join(r.choice("ACGT") for _ in range(50000))
+open("t.fa", "w").write(">chrT\n" + "\n".join(s[i:i+70] for i in range(0, len(s), 70)) + "\n")
+PY
+printf "chrT\t10000\t14000\nchrT\t30000\t36000\nchr2\t0\t50000\n" > targets.bed	# the lines of another chromosome are ignored
 if command -v python3 >/dev/null; then
-  A="-n1 -s4 -#5 -l50000 -u1e-8 -e1000 -C30 -E0 --bam --targets targets.bed"
+  A="-n1 -s4 -#5 -l50000 --fasta t.fa --region chrT:1-50000 -u1e-8 -e1000 -C30 -E0 --bam --targets targets.bed"
   "$BIN" $A -oTG0 >/dev/null 2>&1
   "$BIN" $A --off-target 0 -oTG1 >/dev/null 2>&1
-  python3 tgchk.py TG0/reads_1/cell0001.bam default && ok "--targets: the depth off target is 5% of the depth on target (default --off-target)" || bad "targets default off-target"
+  python3 tgchk.py TG0/reads_1/cell0001.bam default && ok "--targets: the depth off target is 5% of the depth on target (default --off-target); other chromosomes of the BED are ignored" || bad "targets default off-target"
   python3 tgchk.py TG1/reads_1/cell0001.bam zero && ok "--off-target 0: no reads away from the targets" || bad "targets off-target 0"
 else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --targets targets.bed -oTE >/dev/null 2>&1 && bad "--targets without --fasta accepted" || ok "--targets needs a real chromosome (--fasta)"
 "$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --off-target 0.1 -oTE >/dev/null 2>&1 && bad "--off-target without --targets accepted" || ok "--off-target needs --targets"
-printf "1\t20\t10\n" > badtg.bed
-"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --targets badtg.bed -oTE >/dev/null 2>&1 && bad "start after end accepted" || ok "a target with the start after the end is rejected"
+printf "chrT\t20\t10\n" > badtg.bed
+"$BIN" -n1 -s3 -l1000 --fasta t.fa --region chrT:1-5000 -u1e-7 -e1000 -C5 --bam --targets badtg.bed -oTE >/dev/null 2>&1 && bad "start after end accepted" || ok "a target with the start after the end is rejected"
 rm -rf TG0 TG1 TE
 cd "$ROOT"
 
