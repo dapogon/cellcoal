@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.7.3
+Reads mode: long indels, indels in repeats, germline indels, depth proportional to the copy number, `--mappability` and `--map-drop`; about 23% faster; names of folders and files up to 1023 characters; the source is split into more files. See CHANGES-2.7.3.
+
 ## 2.7.2
 Fixes: the pileup (`-9`) wrote only the reads of bases present in some genotype of the site, so the bases column could be shorter than the depth; now every read is written and the counts match the `RC` field of the VCF. Windows builds now find zlib, so BAM, BCF and FASTQ.gz are compressed and `--compress-level` has an effect. `-C` above 1000000 is an error. Tests and CI: portable on macOS and Windows, sanitizers pass.
 
