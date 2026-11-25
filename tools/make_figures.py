@@ -459,10 +459,38 @@ def fig_mappability():
     plt.close(fig)
 
 
+def fig_targets():
+    L, C = 60000, 30
+    bed = os.path.join(TMP, "targets.bed")
+    tg = [(8000, 10000), (20000, 21500), (31000, 34000), (44000, 45000), (52000, 55000)]
+    open(bed, "w").write("".join("1\t%d\t%d\n" % t for t in tg))
+    args = ["-n1", "-s4", "-#5", "-l%d" % L, "-u1e-8", "-e1000", "-C%d" % C, "-E0", "--bam"]
+    dw = run(*args, out="wgs")
+    de = run(*args, "--targets", bed, out="wes")
+    B = 250
+    xs = [b * B + B / 2 for b in range(L // B)]
+    sm = lambda v: [sum(v[b * B:(b + 1) * B]) / B for b in range(L // B)]
+    w = bam_depth(os.path.join(dw, "reads_1", "cell0001.bam"), L)
+    e = bam_depth(os.path.join(de, "reads_1", "cell0001.bam"), L)
+    fig, axs = plt.subplots(2, 1, figsize=(11, 5.4), sharex=True)
+    fig.subplots_adjust(left=0.07, right=0.98, top=0.92, bottom=0.11, hspace=0.3)
+    for ax, v, col, t in ((axs[0], w, "#999999", "a  Whole genome (scWGS): the depth is even along the chromosome"),
+                          (axs[1], e, "#1b9e77", "b  Targeted sequencing (scWES, --targets): the depth is at the targets and at their edges, and 5% elsewhere (--off-target)")):
+        ax.plot(xs, sm(v), color=col, lw=1.4)
+        ax.set_xlim(0, L); ax.set_ylim(0, 1.5 * C); ax.set_ylabel("depth")
+        ax.set_title(t, fontsize=9, loc="left", fontweight="bold")
+    for a, b in tg:
+        axs[1].axvspan(a, b, color="#1b9e77", alpha=0.15, lw=0)
+    axs[1].set_xlabel("position (bp)")
+    fig.savefig(os.path.join(media, "fig_targets.png"), dpi=170)
+    plt.close(fig)
+
+
 fig_flow()
 fig_demes()
 fig_blocks()
 fig_indels()
 fig_copynumber()
 fig_mappability()
+fig_targets()
 print("figures in", media)

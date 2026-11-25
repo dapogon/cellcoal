@@ -102,6 +102,8 @@ void CheckModeOptions (void)
 		{"--germline-indel-rate", ExtraOptionGiven ("--germline-indel-rate")},
 		{"--mappability", ExtraOptionGiven ("--mappability")},
 		{"--map-drop", ExtraOptionGiven ("--map-drop")},
+		{"--targets", ExtraOptionGiven ("--targets")},
+		{"--off-target", ExtraOptionGiven ("--off-target")},
 		{"--homopolymer-error", ExtraOptionGiven ("--homopolymer-error")},
 		{NULL, 0}
 		};
@@ -206,6 +208,11 @@ void CheckReadOptions (void)
 		if (mapDrop < 0.0 || mapDrop > 1.0 || (mapDrop > 0.0 && strlen (mappabilityFile) == 0) || (mapDrop > 0.0 && doBam == NO))
 			{
 			fprintf (stderr, "\nERROR: --map-drop has to be from 0 to 1 and needs --mappability and --bam (the FASTQ files are the reads before the alignment)\n");
+			exit (-1);
+			}
+		if (offTarget < 0.0 || offTarget > 1.0 || (ExtraOptionGiven ("--off-target") && strlen (targetsFile) == 0))
+			{
+			fprintf (stderr, "\nERROR: --off-target has to be from 0 to 1 and needs --targets\n");
 			exit (-1);
 			}
 		if (homoError < 0.0 || homoError > 0.1)

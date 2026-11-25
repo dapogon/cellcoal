@@ -1167,6 +1167,40 @@ printf "1\t10\t20\t1.5\n" > badmap.bed
 rm -rf MP0 MP1 ME
 cd "$ROOT"
 
+echo "2g66. Targeted sequencing (--targets, --off-target): depth on and off target"
+cd "$TMP"
+cat > tgchk.py <<'PY'
+import gzip, struct, sys
+data = gzip.open(sys.argv[1], 'rb').read(); o = 4; lt = struct.unpack_from('<i', data, o)[0]; o += 4 + lt
+nref = struct.unpack_from('<i', data, o)[0]; o += 4
+for _ in range(nref):
+    ln = struct.unpack_from('<i', data, o)[0]; o += 4 + ln + 4
+on = off = 0
+while o < len(data):
+    bs = struct.unpack_from('<i', data, o)[0]; ref, pos = struct.unpack_from('<ii', data, o + 4)
+    if 10500 <= pos < 13500 or 30500 <= pos < 35500: on += 1
+    elif pos < 8000 or 15000 <= pos < 29000 or pos >= 38000: off += 1
+    o += 4 + bs
+lon = 3000 + 5000; loff = 8000 + 14000 + 12000
+r = (off / loff) / (on / lon) if on else 9
+what = sys.argv[2]
+if what == 'default': sys.exit(0 if on > 1000 and 0.03 < r < 0.08 else 1)
+if what == 'zero': sys.exit(0 if on > 1000 and off == 0 else 1)
+PY
+printf "1\t10000\t14000\n1\t30000\t36000\n" > targets.bed
+if command -v python3 >/dev/null; then
+  A="-n1 -s4 -#5 -l50000 -u1e-8 -e1000 -C30 -E0 --bam --targets targets.bed"
+  "$BIN" $A -oTG0 >/dev/null 2>&1
+  "$BIN" $A --off-target 0 -oTG1 >/dev/null 2>&1
+  python3 tgchk.py TG0/reads_1/cell0001.bam default && ok "--targets: the depth off target is 5% of the depth on target (default --off-target)" || bad "targets default off-target"
+  python3 tgchk.py TG1/reads_1/cell0001.bam zero && ok "--off-target 0: no reads away from the targets" || bad "targets off-target 0"
+else echo "  skip (python3 not installed)"; fi
+"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --off-target 0.1 -oTE >/dev/null 2>&1 && bad "--off-target without --targets accepted" || ok "--off-target needs --targets"
+printf "1\t20\t10\n" > badtg.bed
+"$BIN" -n1 -s3 -l1000 -u1e-7 -e1000 -C5 --bam --targets badtg.bed -oTE >/dev/null 2>&1 && bad "start after end accepted" || ok "a target with the start after the end is rejected"
+rm -rf TG0 TG1 TE
+cd "$ROOT"
+
 echo "2g63. Copy number in the reads: the depth of the BAM follows the true copies of every segment"
 cd "$TMP"
 cat > cnchk.py <<'PY'

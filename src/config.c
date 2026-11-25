@@ -57,7 +57,7 @@ static int ExtraBoolFlag (int flag)
 /* options of the table whose value may be 0 (the range is checked later), and the one that may be negative */
 static int ExtraZeroAllowed (const char *opt)
 	{
-	static const char *zero[] = {"--bulk-depth", "--seg-loss-rate", "--seg-gain-rate", "--qual-sd", "--strand-bias", "--dup-mean", NULL};
+	static const char *zero[] = {"--bulk-depth", "--seg-loss-rate", "--seg-gain-rate", "--qual-sd", "--strand-bias", "--dup-mean", "--off-target", NULL};
 	int	k;
 
 	for (k=0; zero[k]; k++)

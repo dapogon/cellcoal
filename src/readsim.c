@@ -766,6 +766,7 @@ static int SlipReads (Aln *aln, const char *ta, const char *tb, int L, char *ra,
 	}
 
 /* writes one read pair (copy c of a molecule) to the BAM records and/or the FASTQ files; ra and rb are the first and last reads of the fragment */
+static int		targetsOn = 0;			/* --targets: only the fragments that overlap a target (and a fraction of the others) are sequenced */
 static int		mappabilityOn = 0;		/* --mappability: the MAPQ of the reads follows the mappability of the genome */
 
 static void EmitPair (RecSet *rs, FastqOut *fq, const char *name, int fwdFrag, int c, long s, long ins, const char *ra, const char *rb, int q,
@@ -904,7 +905,7 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 			for (pos = tile0; pos < tile1; pos += W)
 				{
 				double	g = 1.0, lambda;
-				int		nfrag, f;
+				int		nfrag, f, near;
 
 				if (amplified)
 					{
@@ -918,6 +919,13 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 						}
 					}
 				lambda = depth * cm * 0.5 * g / (2.0 * L * (1.0 + dupMean)) * (double) W;
+				near = 1;
+				if (targetsOn)
+					{
+					near = TargetNear (CP (pos), CP (pos + W - 1 < numSites ? pos + W - 1 : numSites - 1));
+					if (!near)
+						lambda *= offTarget;
+					}
 				nfrag = RandomPoisson (lambda, seed);
 				for (f=0; f<nfrag; f++)
 					{
@@ -930,6 +938,8 @@ static long SimulateGenome (int cellIdx0, double depth, int amplified, const cha
 						ins = L;
 					if (s + ins > numSites)
 						continue;
+					if (near && targetsOn && !TargetHit (CP (s), CP (s + ins - 1)) && RandomUniform (seed) >= offTarget)
+						continue;	/* the fragment is not captured */
 					if (posMap != NULL && CP (s + ins - 1) - CP (s) != ins - 1)
 						continue;	/* the fragment would span masked sites (N) */
 					if (copyGainOn == YES && cellIdx >= 0)
@@ -1185,6 +1195,8 @@ void GenerateReadLevel (long int *seed, int dataSetNum)
 		}
 
 	MappabilitySetup ();
+	TargetsSetup ();
+	targetsOn = (strlen (targetsFile) > 0);
 	mappabilityOn = (strlen (mappabilityFile) > 0);
 	if (indelRate > 0.0 || germIndelRate > 0.0)
 		{

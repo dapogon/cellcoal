@@ -45,5 +45,7 @@
 	X(indel_repeat,   "--indel-repeat",   '\251', 2, indelRepeat, 1)      \
 	X(germline_indel_rate, "--germline-indel-rate", '\252', 2, germIndelRate, 0) \
 	X(mappability,    "--mappability",    '\253', 3, mappabilityFile, 0) \
-	X(map_drop,       "--map-drop",       '\254', 2, mapDrop,    0)
+	X(map_drop,       "--map-drop",       '\254', 2, mapDrop,    0)       \
+	X(targets,        "--targets",        '\255', 3, targetsFile, 0)    \
+	X(off_target,     "--off-target",     '\256', 2, offTarget,  0.05)
 #endif
