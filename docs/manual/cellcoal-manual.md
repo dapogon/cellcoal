@@ -1,7 +1,7 @@
 ---
 title: "CellCoal manual v2.0"
 author: "David Posada"
-date: "November, 2026 (CellCoal 2.7.3)"
+date: "November, 2026 (CellCoal 2.7.4)"
 ---
 
 # 1. About CellCoal
@@ -1549,7 +1549,7 @@ Every release has a file with all its details (`docs/CHANGES-X.Y.Z.md`), and `do
 | 2.7.1 | `-d` is refused with blocks, `--fasta` and reads (use `--indel-rate`); manual: section 5.4.9 (ADO, gain and coverage; MDA and PTA), new figures, every figure numbered with a caption, page numbers in the PDF | 5.2.6, 5.4.9 |
 | 2.7.2 | Pileup (`-9`): every read is written, also the errors to bases that are in no genotype; Windows: `--compress-level` works (zlib was not detected) | 6.9 |
 | 2.7.3 | Reads mode: indel lengths with a long tail (`--indel-tail`, `--indel-tail-exp`, `--indel-max` up to 100), indels in repeats (`--indel-repeat`), germline indels (`--germline-indel-rate`); depth proportional to the copy number; `--mappability` and `--map-drop`; reads mode about 23% faster (identical files); `cellcoal.c` split into `validate.c`, `replicate_output.c` and `runlog.c` | 5.5 |
-| next | Targeted sequencing in the reads mode (`--targets`, `--off-target`): scWES and panels, also for chosen chromosome fragments | 5.5 |
+| 2.7.4 | Targeted sequencing in the reads mode (`--targets`, `--off-target`): scWES and panels, also for chosen chromosome fragments | 5.5 |
 | 2.6.2 | `--damage` (library damage with orientation bias); reads mode in tiles (memory independent of the genome length; the reads of a given seed change) | 5.5 |
 | 2.5 | Copy-number losses and gains interleaved with SNVs, deletions and cnLOH; `--phase`, haplotypes per copy, `cnv_segments`; all the substitution models (2.5.1: Windows build; 2.5.2: README and manual) | 5.2.8, 5.2.9 |
 | 2.4 | Reads (`--bam`, `--fastq`) with duplicates, qualities and strand bias; chromosome in blocks, real references, germline VCF; dropout in segments, amplification gain, signature profiles from files; the three modes are explicit | 5.5, 5.3, 5.4.1, 5.4.3, 5.4.4 |

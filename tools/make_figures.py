@@ -1,7 +1,7 @@
 #!/usr/bin/env python3
 """Makes the figures of the manual (docs/manual/media/fig_*.png) with matplotlib. The panels with data come from real runs of CellCoal.
 
-Usage: python3 tools/make_figures.py [--exe bin/cellcoal-2.7.3]   (from the root of the repository)
+Usage: python3 tools/make_figures.py [--exe bin/cellcoal-2.7.4]   (from the root of the repository)
 """
 import argparse, os, re, subprocess, tempfile, collections
 import matplotlib, matplotlib.ticker
@@ -10,7 +10,7 @@ import matplotlib.pyplot as plt
 from matplotlib.patches import Ellipse, FancyArrowPatch, Rectangle
 
 ap = argparse.ArgumentParser()
-ap.add_argument("--exe", default="bin/cellcoal-2.7.3")
+ap.add_argument("--exe", default="bin/cellcoal-2.7.4")
 args = ap.parse_args()
 root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 exe = os.path.join(root, args.exe)

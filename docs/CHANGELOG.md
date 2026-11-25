@@ -2,6 +2,9 @@
 
 Every release has its own file with all the details (`docs/CHANGES-X.Y.Z.md`); this page lists them, newest first. The README has a short summary of each series.
 
+## 2.7.4
+Targeted sequencing in the reads mode (`--targets`, `--off-target`): scWES, panels and chosen fragments of a real chromosome. See CHANGES-2.7.4.
+
 ## 2.7.3
 Reads mode: long indels, indels in repeats, germline indels, depth proportional to the copy number, `--mappability` and `--map-drop`; about 23% faster; names of folders and files up to 1023 characters; the source is split into more files. See CHANGES-2.7.3.
 
