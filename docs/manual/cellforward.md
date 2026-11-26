@@ -55,6 +55,8 @@ cellcoal -n100 -s30 -l10000 -Tfwd/trees.nwk
 | `summary.tsv` | per replicate: attempts (tumors that died out or were too small before this one), time, cells, clones, maximum number of drivers, time to the MRCA of the sample (generations before the end) |
 | `log.txt` | the command and the seed |
 
+The format of `trees.nwk` and of the tables is the exchange format of the section 5.1.5 of the manual of CellCoal (Newick, one tree per line, branch lengths in expected mutations per site, cells `cell0001`, ...); it is a contract that does not change without a note in the changes of the version.
+
 ## What is checked
 
 `python3 tests/forward_check.py bin/cellforward-X bin/cellcoal-X` compares neutral tumors of 1000 cells (3000 replicates, samples of 10 cells) with the coalescent of CellCoal under the model of Ohtsuki and Innan (`-K` birth, `-L` death, `-e` the number of cells): the mean time to the MRCA is 64.1 generations in `cellforward` and 66.4 in CellCoal for birth 0.1 and death 0, and 15.3 and 16.0 for birth 0.5 and death 0.1; the coalescent is 3 to 5% deeper because it leaves out the first, stochastic, generations of the tumor. The number of drivers in a pure birth tumor is `2 P (N - 1)` (19.9 against 20.0 in the test). The test suite also checks the outputs, the seed, `--time`, the errors and that CellCoal reads the trees.

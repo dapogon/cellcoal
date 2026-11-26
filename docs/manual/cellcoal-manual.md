@@ -416,6 +416,18 @@ CellCoal simulates the genealogy of a sample of cells **backward in time**, with
 
 In a Wright-Fisher population a generation is one round of reproduction, so the time and the divisions of a lineage are the same and one mutation rate is enough (`-u`). In a birth-death process the cells divide at random, so the time and the number of divisions of a lineage are different, and `cellforward` has a rate per generation and another per division, which are added. The coalescent and the forward program agree for neutral tumors and for clones of different fitness (sections 5.1.4 and `docs/manual/cellforward.md`, with the numbers of the comparison); use the coalescent when the tumor is very large or thousands of replicates are needed, and the forward program when the model needs what the coalescent cannot do. The manual of `cellforward` is `docs/manual/cellforward.md`.
 
+**The exchange format between the programs.** What a program that makes trees gives to CellCoal (`-T`, `--tree file=`) is a contract, and it is the same for `cellforward` and for any other source of trees (a program of yours, or trees inferred from data):
+
+| Part | Rule |
+|---|---|
+| Trees file | Newick, one tree per line, each ending in `;` and a new line. The replicate *i* uses the tree *i*; a file with one tree is used by all the replicates, and a file with several needs at least as many trees as replicates |
+| Tree | rooted and binary, with the tumor cells only (CellCoal adds the healthy cell as outgroup; `--no-outgroup` removes it). All the trees have the same number of cells, and `-s` is ignored (the cells are the leaves) |
+| Cell names | letters and numbers (`cell0001`, `cell0002`, ...); they are the names in the outputs |
+| Branch lengths | **expected number of mutations per site**, not time: CellCoal does not multiply them by `-u`. A program that works in generations multiplies them by its mutation rate (`--mutation-rate` in `cellforward`) |
+| Clones table (optional) | `clones.tsv` with the columns `replicate`, `cell`, `clone`, ... (the names of the cells are those of the tree). `cellcoal -T` does not read it yet; it is for the analysis of the results |
+
+This format will not change without a note in the changes of the version.
+
 ## 5.2 Somatic mutation models
 
 CellCoal simulates the evolution of the genotypes along the genealogy by adding somatic events to an ancestral genome at the *sample/outgroup MRCA*. There are five kinds of events, which differ in what they do to the genome of a cell:
