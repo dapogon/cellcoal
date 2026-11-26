@@ -1,0 +1,24 @@
+# Single cells amplified by MDA (REPLI-g) and sequenced at low depth, with the MEASURED values of the posadalab HDF data next to the options.
+# Run:  bin/cellcoal-x.y.z --config examples/config.hdf-repli-g.yaml
+#
+# IMPORTANT: the options below are the THEORETICAL MDA starting values (--wga mda), NOT calibrated. The measured values are given as
+# comments for comparison only. They come from 4 cells of that kit (data/wga/hdf_kits.tsv; Estevez-Gomez et al. 2025), sequenced at
+# 0.2-0.8x, so a large part of the measured ADO/LDO is loss of coverage and not dropout of the amplification. Reported by the same
+# tools for a simulation at the same depth, they can be compared; to fit the options, simulate at the depth of the data and compare
+# the same summaries (tools/seq_summary.py, tools/gcov_summary.py).
+#
+# Measured, REPLI-g, mean of 4 cells: breadth at 0.15x 7.6%, breadth at 7.78x 66.2%, disuniformity (KL) 2.07, ADO 61.9%,
+# LDO 44.5%, false SNV rate 6.8e-4, indel sensitivity 80.5%.
+replicates: 2
+cells: 4
+sites: 200000
+population_size: 10000
+mutation_rate: 1e-7
+coverage: 0.5                      # about the depth of the low-pass data (0.2-0.8x)
+coverage_dispersion_cells: 0.5
+gain_sd: 0.8
+gain_len: 100000
+ado: 0.2
+amplification_error: [0.05, 0.01, 0]
+sequencing_error: 0.001
+seed: 1

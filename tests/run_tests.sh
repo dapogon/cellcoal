@@ -1941,5 +1941,15 @@ cd "$TMP" && mkdir -p dd && cd dd
 [ $r1 -ne 0 ] && [ $r2 -ne 0 ] && [ $r3 -eq 0 ] && grep -q "indel-rate" D1.txt && ok "-d is refused with blocks and with reads (it points to --indel-rate), and works for isolated sites" || bad "-d with blocks or reads"
 cd "$ROOT"
 
+echo "2g69. --wga mda|pta: hidden shortcut with theoretical starting values; explicit options are kept"
+cd "$TMP" && mkdir -p wga && cd wga
+"$BIN" -n1 -s4 -l20000 -e1000 -u1e-7 -C10 -#1 --wga mda -ow1 >W1.txt 2>&1 && grep -q "gain-sd 0.8" W1.txt && grep -q -- "-D0.2" W1.txt && ok "--wga mda sets the starting options" || bad "--wga mda"
+"$BIN" -n1 -s4 -l20000 -e1000 -u1e-7 -C10 -#1 --wga pta -D0.4 --gain-sd 0.1 -ow2 >W2.txt 2>&1 && ! grep -q -- "-D0.05" W2.txt && ! grep -q "gain-sd 0.2" W2.txt && grep -q "gain-len 20000" W2.txt && ok "options given by the user are not replaced" || bad "--wga with explicit options"
+printf 'replicates: 1\ncells: 4\nsites: 20000\npopulation_size: 1000\nmutation_rate: 1e-7\ncoverage: 10\nwga: mda\nseed: 1\n' > w.yaml
+"$BIN" --config w.yaml -ow3 >W3.txt 2>&1 && grep -q "^--wga mda" W3.txt && ok "wga: key in a configuration file" || bad "wga key"
+"$BIN" -n1 -s4 -l1000 -e1000 -u1e-7 --wga foo >W4.txt 2>&1; [ $? -ne 0 ] && grep -q "mda, pta or none" W4.txt && ok "--wga with an unknown method is refused" || bad "--wga foo"
+"$BIN" --help 2>&1 | grep -q -- "--wga" && bad "--wga must stay hidden in --help" || ok "--wga is not shown in --help"
+cd "$ROOT"
+
 [ $fail -eq 0 ] && echo "All tests passed" || echo "Some tests FAILED"
 exit $fail

@@ -164,7 +164,7 @@ static const struct { const char *name; char flag; } optionNames[] =
 	{"verbosity",'y'}, {"seed",'#'}, {"fast",'\1'}, {"bcf",'\3'}, {"cov_ado_correlation",'\2'},
 	{"cov_doublet_correlation",'\4'}, {"ado_doublet_correlation",'\5'}, {"summary",'\6'},
 	{"sweep",'\7'}, {"sweep_keep",'\16'}, {"sweep_jobs",'\17'}, {"sweep_resume",'\20'},
-	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {"min_alt_reads",'\23'}, {"coverage_window",'\24'}, {"min_alt_vaf",'\25'}, {"ado_block",'\26'}, {"ado_origin",'\27'}, {"ado_seed",'\30'}, {"signature_file",'\31'}, {"amp_signature",'\32'}, {"gain_sd",'\33'}, READ_OPTS(X_NAMES) {"gain_len",'\34'}, {NULL,0}
+	{"amplification_error_cell_variance",'\21'}, {"no_outgroup",'\22'}, {"min_alt_reads",'\23'}, {"coverage_window",'\24'}, {"min_alt_vaf",'\25'}, {"ado_block",'\26'}, {"ado_origin",'\27'}, {"ado_seed",'\30'}, {"signature_file",'\31'}, {"amp_signature",'\32'}, {"gain_sd",'\33'}, READ_OPTS(X_NAMES) {"gain_len",'\34'}, {"wga",'\35'}, {NULL,0}
 	};
 
 #define CFG_MAX_TOKENS 4096
@@ -637,6 +637,7 @@ static const char *LongValueOption (int flag)
 	if (flag == '\32') return "--amp-signature";
 	if (flag == '\33') return "--gain-sd";
 	if (flag == '\34') return "--gain-len";
+	if (flag == '\35') return "--wga";
 	{
 	int e;
 	for (e=0; extraOpts[e].key; e++)
@@ -644,6 +645,111 @@ static const char *LongValueOption (int flag)
 			return extraOpts[e].opt;
 	}
 	return NULL;
+	}
+
+/* --wga mda|pta: a hidden shortcut for the options that describe an amplification method. The values are THEORETICAL starting points
+   (qualitative: MDA amplifies unevenly, PTA more evenly), not measured ones, and they are printed to the screen. An option given by
+   the user (by its letter or its name) is never replaced; "--wga none" does nothing. */
+static int WgaOptionGiven (char **a, int n, const char *prefix)
+	{
+	int i;
+
+	for (i=1; i<n; i++)
+		if (strncmp (a[i], prefix, strlen (prefix)) == 0)
+			return 1;
+	return 0;
+	}
+
+static int ExpandWga (char **a, int n)
+	{
+	/* option, is it a prefix of the several-letter family (ADO: -D -P -Q), values */
+	static const struct { const char *method; const char *tokens; } preset[] =
+		{
+		{"mda", "-J0.5|--gain-sd|0.8|--gain-len|100000|-D0.2|-A0.05|0.01|0"},
+		{"pta", "-J0.2|--gain-sd|0.2|--gain-len|20000|-D0.05|-A0.01|0.002|0"},
+		{NULL, NULL}
+		};
+	static const char *ado[] = {"-D", "-P", "-Q", NULL};
+	int i, k, p = -1, m = 0, j, nOrig;
+	char *method = NULL, *copy, *tok;
+	char **b;
+
+	for (i=1; i<n; i++)
+		if (strcmp (a[i], "--wga") == 0)
+			{
+			if (i + 1 >= n)
+				CfgError ("the command line", "--wga needs a method (mda, pta or none)", NULL);
+			method = a[i+1];
+			break;
+			}
+	if (method == NULL)
+		return n;
+	if (strcmp (method, "none") != 0)
+		{
+		for (k=0; preset[k].method; k++)
+			if (strcmp (preset[k].method, method) == 0)
+				p = k;
+		if (p < 0)
+			CfgError ("the command line", "--wga must be mda, pta or none", method);
+		}
+	/* the option and its value are removed */
+	b = (char**) Checked (calloc(n + 32, sizeof(char*)), "Could not allocate the expanded arguments\n");
+	for (j=0; j<n; j++)
+		{
+		if (j == i)
+			{
+			j++;
+			continue;
+			}
+		b[m++] = a[j];
+		}
+	nOrig = m;
+	if (p >= 0)
+		{
+		copy = strdup (preset[p].tokens);
+		tok = strtok (copy, "|");
+		while (tok)
+			{
+			int skip = 0, ko = 0, nv = 0;
+			char *next;
+
+			/* an option and its values: the values follow it until the next token that starts with '-' and a letter */
+			if (strncmp (tok, "-A", 2) == 0)
+				skip = WgaOptionGiven (b, m, "-A");
+			else if (strncmp (tok, "-J", 2) == 0)
+				skip = WgaOptionGiven (b, m, "-J");
+			else if (strncmp (tok, "-D", 2) == 0)
+				{
+				for (ko=0; ado[ko]; ko++)
+					if (WgaOptionGiven (b, m, ado[ko]))
+						skip = 1;
+				}
+			else
+				skip = WgaOptionGiven (b, m, tok);
+			if (strncmp (tok, "-A", 2) == 0)
+				nv = 2;
+			else if (strncmp (tok, "--", 2) == 0)
+				nv = 1;
+			if (!skip)
+				b[m++] = strdup (tok);
+			for (ko=0; ko<nv; ko++)
+				{
+				next = strtok (NULL, "|");
+				if (next && !skip)
+					b[m++] = strdup (next);
+				}
+			tok = strtok (NULL, "|");
+			}
+		free (copy);
+		fprintf (stderr, "--wga %s (theoretical starting values; options you give are kept):", method);
+		for (j=nOrig; j<m; j++)
+			fprintf (stderr, " %s", b[j]);
+		fprintf (stderr, "\n");
+		}
+	for (j=0; j<m; j++)
+		a[j] = b[j];
+	a[m] = NULL;
+	return m;
 	}
 
 /* the keys of the configuration file with the option each one stands for (end of --help-all) */
@@ -656,6 +762,8 @@ void PrintConfigKeys (FILE *fp)
 	fprintf (fp, "\nEvery option can be written in the file by its letter or by its name; e.g. in YAML:  cells: 20   ado: 0.1   amplification_error: [0.05, 0.01, 0]");
 	for (i=0; optionNames[i].name; i++)
 		{
+		if (optionNames[i].flag == '\35')		/* --wga is hidden */
+			continue;
 		if (optionNames[i].flag >= 33 && optionNames[i].flag < 127)
 			snprintf (what, sizeof(what), "-%c", optionNames[i].flag);
 		else if (LongValueOption (optionNames[i].flag) != NULL)
@@ -925,7 +1033,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 		if (strcmp (argv[i], "--check") == 0 || strcmp (argv[i], "--config") == 0 || strcmp (argv[i], "--fast") == 0 || strcmp (argv[i], "--no-outgroup") == 0 || strcmp (argv[i], "--cov-ado-corr") == 0 || strcmp (argv[i], "--bcf") == 0 ||
 			strcmp (argv[i], "--cov-doublet-corr") == 0 || strcmp (argv[i], "--ado-doublet-corr") == 0 || strcmp (argv[i], "--summary") == 0 ||
 			strcmp (argv[i], "--sweep") == 0 || strcmp (argv[i], "--sweep-keep") == 0 ||
-			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0 || strcmp (argv[i], "--coverage") == 0 || strcmp (argv[i], "--min-alt-vaf") == 0 || strcmp (argv[i], "--ado-block") == 0 || strcmp (argv[i], "--ado-origin") == 0 || strcmp (argv[i], "--ado-seed") == 0 || strcmp (argv[i], "--signature-file") == 0 || strcmp (argv[i], "--amp-signature") == 0 || strcmp (argv[i], "--gain-sd") == 0 || strcmp (argv[i], "--gain-len") == 0 || IsExtraOpt (argv[i]))
+			strcmp (argv[i], "--sweep-jobs") == 0 || strcmp (argv[i], "--sweep-resume") == 0 || strcmp (argv[i], "--amp-cell-var") == 0 || strcmp (argv[i], "--min-alt-reads") == 0 || strcmp (argv[i], "--coverage") == 0 || strcmp (argv[i], "--min-alt-vaf") == 0 || strcmp (argv[i], "--ado-block") == 0 || strcmp (argv[i], "--ado-origin") == 0 || strcmp (argv[i], "--ado-seed") == 0 || strcmp (argv[i], "--signature-file") == 0 || strcmp (argv[i], "--amp-signature") == 0 || strcmp (argv[i], "--gain-sd") == 0 || strcmp (argv[i], "--gain-len") == 0 || strcmp (argv[i], "--wga") == 0 || IsExtraOpt (argv[i]))
 			found = YES;
 	for (i=1; i<*argc; i++)
 		if (argv[i][0] == '-' && argv[i][1] == '-' && IsGroupName (argv[i] + 2))
@@ -954,6 +1062,7 @@ char **ExpandConfigArgs (int *argc, char **argv)
 
 	n = ExpandGroups (out, n, expanded);
 	out = expanded;
+	n = ExpandWga (out, n);
 	}
 	/* --sweep SPEC: the program runs itself once per combination and exits */
 	{
