@@ -1702,6 +1702,27 @@ awk -v a="$vr" -v b="$vf" 'BEGIN{exit !(a>1.3*b)}' && ok "--clones: with random 
 rm -rf CL
 cd "$ROOT"
 
+echo "2g68. cellforward: the tumor simulated forward in time, trees for CellCoal"
+FWD=$(ls "$(dirname "$BIN")"/cellforward-* 2>/dev/null | head -1)
+if [ -z "$FWD" ]; then bad "cellforward is not built (make)"; else
+cd "$TMP"
+python3 "$ROOT/tests/forward_check.py" "$FWD" "$BIN" 2000 > fwd_check.out 2>&1 && ok "cellforward: neutral birth-death tumors agree with the coalescent of CellCoal (time to the MRCA), and the drivers have the expected number" || { cat fwd_check.out; bad "cellforward check"; }
+rm -rf FW; "$FWD" --birth 0.5 --death 0.1 --size 5000 --driver-rate 1e-4 --driver-effect 0.1 -s 12 -n 7 --mutation-rate 1e-5 --seed 3 -o FW > fw.out 2>&1
+[ "$(wc -l < FW/trees.nwk | tr -d ' ')" = "7" ] && [ "$(head -1 FW/trees.nwk | tr -cd 'c' | wc -c | tr -d ' ')" -ge "12" ] && [ "$(tail -n +2 FW/clones.tsv | wc -l | tr -d ' ')" = "84" ] && ok "cellforward writes one tree per replicate, and the clone of every sampled cell (7 replicates x 12 cells)" || bad "cellforward outputs"
+rm -rf FW2; "$FWD" --birth 0.5 --death 0.1 --size 5000 --driver-rate 1e-4 --driver-effect 0.1 -s 12 -n 7 --mutation-rate 1e-5 --seed 3 -o FW2 > /dev/null 2>&1
+cmp -s FW/trees.nwk FW2/trees.nwk && ok "cellforward: the same seed gives the same trees" || bad "cellforward is not reproducible"
+rm -rf FC; "$BIN" -n7 -s12 -l5000 -u1e-6 -TFW/trees.nwk -1 -#4 -oFC > fc.out 2>&1
+[ "$(grep -c '^\[#' FC/snv_gen)" = "7" ] && ok "CellCoal reads the trees of cellforward, one per replicate (-T)" || bad "CellCoal with the trees of cellforward"
+rm -rf FT; "$FWD" --birth 0.3 --time 30 -s 10 -n 3 --seed 2 -o FT > ft.out 2>&1
+awk 'NR>1 && $3!=30{bad=1} END{exit bad}' FT/summary.tsv && ok "cellforward --time stops at the time asked" || bad "cellforward --time"
+"$FWD" --size 100 --time 10 --birth 0.5 > fe1.out 2>&1; grep -q "exactly one of --size" fe1.out && ok "cellforward: --size and --time together are an error" || bad "cellforward --size with --time"
+"$FWD" --size 100 > fe2.out 2>&1; grep -q "\-\-birth is needed" fe2.out && ok "cellforward: --birth is needed" || bad "cellforward without --birth"
+"$FWD" --birth 0.5 --size 10 -s 20 > fe3.out 2>&1; grep -q "sample (-s) is larger" fe3.out && ok "cellforward: a sample larger than the tumor is an error" || bad "cellforward sample > tumor"
+"$FWD" --birth 0.5 --size 100 --driver-rate 0.01 > fe4.out 2>&1; grep -q "driver-effect is needed" fe4.out && ok "cellforward: drivers need an effect" || bad "cellforward drivers without effect"
+rm -rf FW FW2 FC FT
+cd "$ROOT"
+fi
+
 echo "2g62. Indels in the reads (--indel-rate): CIGAR with insertions and deletions, truth in indels_truth.vcf"
 cd "$TMP"
 cat > indelchk.py <<'PYEOF'

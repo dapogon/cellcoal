@@ -1,6 +1,8 @@
 PROG = cellcoal
 DASH = -
 VERSION = 2.7.4
+FWD = cellforward
+FWDVERSION = 0.1.0
 SRCDIR = src
 OBJDIR = out
 BINDIR = bin
@@ -63,7 +65,12 @@ ifeq ($(shell uname -s),Darwin)
 CPPFLAGS += -D_DARWIN_C_SOURCE
 endif
 
-all: $(BINDIR)/$(PROG)-$(VERSION)
+all: $(BINDIR)/$(PROG)-$(VERSION) $(BINDIR)/$(FWD)-$(FWDVERSION)
+
+# cellforward: the tumor simulated forward in time (one program, one source file), it gives its trees to CellCoal
+$(BINDIR)/$(FWD)-$(FWDVERSION) : forward/cellforward.c
+	mkdir -p $(BINDIR)
+	$(CC) -Wall -O2 -o $@ $< -lm
 
 $(BINDIR)/$(PROG)-$(VERSION) : $(OBJS)
 	mkdir -p $(BINDIR)
@@ -81,6 +88,7 @@ PREFIX ?= /usr/local
 install: all
 	install -d $(DESTDIR)$(PREFIX)/bin $(DESTDIR)$(PREFIX)/share/doc/cellcoal $(DESTDIR)$(PREFIX)/share/cellcoal
 	install -m 755 $(BINDIR)/$(PROG)-$(VERSION) $(DESTDIR)$(PREFIX)/bin/$(PROG)
+	install -m 755 $(BINDIR)/$(FWD)-$(FWDVERSION) $(DESTDIR)$(PREFIX)/bin/$(FWD)
 	install -m 755 tools/bulk_vaf.py $(DESTDIR)$(PREFIX)/bin/cellcoal-bulk-vaf
 	install -m 755 tools/cellcoal_plots.py $(DESTDIR)$(PREFIX)/bin/cellcoal-plots
 	install -m 644 README.md $(wildcard docs/CHANGES-$(VERSION).md) $(DESTDIR)$(PREFIX)/share/doc/cellcoal
