@@ -1675,6 +1675,8 @@ cd "$ROOT"
 echo "2g67. Clones of different fitness (--clones): growth rate by clone, sample at random from the tumor"
 cd "$TMP"
 python3 "$ROOT/tests/clones_check.py" "$BIN" 3000 > clones_check.out 2>&1 && ok "--clones: the times to coalescence of pairs of cells agree with a forward simulation of the whole tumor, and the clone frequencies are those of the sizes" || { cat clones_check.out; bad "--clones genealogy"; }
+FWDX=$(ls "$(dirname "$BIN")"/cellforward-* 2>/dev/null | head -1)
+[ -n "$FWDX" ] && { python3 "$ROOT/tests/clones_check.py" "$BIN" 3000 yule "$FWDX" > clones_check2.out 2>&1 && ok "--clones: a pure birth tumor with random sizes agrees with the tumors simulated forward by cellforward (frequencies and times of pairs of cells)" || { cat clones_check2.out; bad "--clones against cellforward"; }; }
 rm -rf CL; "$BIN" -n3 -s12 -l50 -u1e-6 --clones n=3,cells=10000,birth=1e-3,time=5000:2000,parent=1:2,fitness=1.5:2 -oCL > cl1.out 2>&1
 [ "$(head -1 CL/clones.tsv)" = "$(printf 'replicate\tcell\tclone')" ] && [ "$(tail -n +2 CL/clones.tsv | wc -l | tr -d ' ')" = "36" ] && ok "clones.tsv lists replicate, cell and clone (n=3 replicates x 12 cells)" || bad "clones.tsv"
 grep -q "Clone 2: born 5000 generations ago from clone 1" CL/log* && grep -q "Clone 3: .*fitness 2 " CL/log* && ok "the log lists the clones with their size and frequency" || bad "clones in the log"

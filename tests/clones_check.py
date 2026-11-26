@@ -11,11 +11,13 @@ for every pair of clones, over many replicates. Two forward models are used:
 
   wf    non-overlapping generations (a Wright-Fisher population whose size in every clone is N_k(t)): the coalescence rate of two cells is 1/N_k(t),
         which is -K0.5 -L0.496 here (2 b = 1); it checks the genealogy of the clones, the births and the numerical solution of the times;
-  yule  a tumor in which the cells divide and none dies (a pure birth process, birth=g, death=0): every cell divides with probability g_k per
-        generation, the sizes of the clones are random (as in a real tumor; only the tumors of the size given to CellCoal are kept) and the coalescence rate of two cells is 2 g_k / N_k(t).
+  yule  a tumor in which the cells divide and none dies (a pure birth process, birth=g, death=0), simulated by cellforward, the forward program of
+        CellCoal: every cell divides with probability g_k per generation, the sizes of the clones are random (as in a real tumor; only the tumors of the
+        size given to CellCoal are kept) and the coalescence rate of two cells is 2 g_k / N_k(t).
 
-usage: clones_check.py BIN [replicates] [wf|yule]
+usage: clones_check.py BIN [replicates] [wf|yule] [CELLFORWARD]  (the yule mode finds cellforward in the folder of BIN)
 """
+import glob
 import itertools
 import math
 import os
@@ -132,56 +134,80 @@ def forward(rng, gr, cells):
     return clones, times
 
 
-def forward_yule(rng, gr, cells):
-    """a tumor in which every cell divides with probability g_k per generation and none dies (pure birth); the clone 1 starts from one cell"""
-    tb = [0] + [int(round(t * N)) for t in TIMES]
-    start = int(math.log(cells[0]) / gr[0]) + 1
-    first = [0] + [start - tb[k] for k in (1, 2)]
-    par = [[None] * (start + 1) for _ in range(K)]
-    cur = [1, 0, 0]
-    for g in range(1, start + 1):
-        new = cur[:]
-        for k in range(K):
-            if k > 0 and g < first[k]:
-                continue
-            if k > 0 and g == first[k]:
-                par[k][g] = np.array([rng.integers(cur[PARENT[k - 1]])])
-                new[k] = 1
-                continue
-            nk = cur[k]
-            b = rng.binomial(nk, gr[k])
-            mothers = rng.choice(nk, b, replace=False) if b > 0 else np.zeros(0, dtype=int)
-            par[k][g] = np.concatenate([np.arange(nk), mothers]).astype(int)
-            new[k] = nk + b
-        cur = new
-    total = sum(cur)
-    if abs(total - sum(cells)) > 0.1 * sum(cells):      # the tumor of CellCoal has a given size (cells=): keep the forward tumors of that size
-        return None
-    pick = rng.choice(total, size=S, replace=False)
-    edges = np.cumsum(cur)
-    lin = []
-    for x in pick:
-        k = int(np.searchsorted(edges, x, side='right'))
-        lin.append((k, int(x - (edges[k - 1] if k else 0))))
-    clones = [l[0] for l in lin]
-    curm = {lin[i]: {i} for i in range(S)}
+def newick_pair_times(nwk, n):
+    """time to the coalescence of every pair of cells (cell0001 ... celln) of a tree in Newick with branch lengths in generations"""
+    parent, length, name = [-1], [0.0], [None]
+    cur, i = 0, 0
+    while i < len(nwk) and nwk[i] != ";":
+        c = nwk[i]
+        if c == "(":
+            parent.append(cur); length.append(0.0); name.append(None)
+            cur = len(parent) - 1
+        elif c == ",":
+            parent.append(parent[cur]); length.append(0.0); name.append(None)
+            cur = len(parent) - 1
+        elif c == ")":
+            cur = parent[cur]
+        elif c == ":":
+            j = i + 1
+            while nwk[j] not in ",);":
+                j += 1
+            length[cur] = float(nwk[i + 1:j])
+            i = j - 1
+        else:
+            j = i
+            while nwk[j] not in ",):":
+                j += 1
+            name[cur] = nwk[i:j]
+            i = j - 1
+        i += 1
+    depth = [0.0] * len(parent)             # distance to the root
+    for v in range(1, len(parent)):         # parents are numbered before their children
+        depth[v] = depth[parent[v]] + length[v]
+    leaf = {int(name[v][4:]) - 1: v for v in range(len(parent)) if name[v]}
+    anc = {}
+    for c, v in leaf.items():
+        chain = []
+        while v >= 0:
+            chain.append(v)
+            v = parent[v]
+        anc[c] = chain
     times = {}
-    g = start
-    while len(curm) > 1 and g > 0:
-        nxt = {}
-        for (k, idx), cs in curm.items():
-            kk = PARENT[k - 1] if (k > 0 and g == first[k]) else k
-            key = (kk, int(par[k][g][idx]))
-            if key in nxt:
-                for a in nxt[key]:
-                    for b_ in cs:
-                        times[(min(a, b_), max(a, b_))] = start - (g - 1)
-                nxt[key] = nxt[key] | cs
-            else:
-                nxt[key] = set(cs)
-        curm = nxt
-        g -= 1
-    return clones, times
+    end = max(depth[v] for v in leaf.values())
+    for x in range(n):
+        for y in range(x + 1, n):
+            sx = set(anc[x])
+            m = next(v for v in anc[y] if v in sx)      # the nearest common ancestor
+            times[(x, y)] = end - depth[m]
+    return times
+
+
+def forward_replicates(tmp, gr, cells):
+    """tumors simulated forward by cellforward (pure birth, clones started at the times of CellCoal); only the tumors of the size given to CellCoal are kept"""
+    fwd = sys.argv[4] if len(sys.argv) > 4 else sorted(glob.glob(os.path.join(os.path.dirname(os.path.abspath(BIN)), "cellforward-*")))[0]
+    tend = math.log(N) / G                  # the clone 1 has N cells on average at the end
+    out = os.path.join(tmp, "fwd")
+    cmd = [fwd, "--birth", "%g" % G, "--time", "%.6f" % tend, "--clone-time", ":".join("%.6f" % (tend - t * N) for t in TIMES),
+           "--clone-fitness", ":".join(map(str, FIT)), "--clone-parent", ":".join(map(str, PARENT)), "-s", str(S), "-n", str(40 * REPS),
+           "--seed", "11", "-o", out]
+    subprocess.run(cmd, check=True, stderr=subprocess.DEVNULL)
+    tot = sum(cells)
+    keep = {}
+    for line in open(os.path.join(out, "summary.tsv")).read().splitlines()[1:]:
+        f = line.split("\t")
+        if abs(float(f[3]) - tot) <= 0.1 * tot:
+            keep[int(f[0])] = None
+    clones = {}
+    for line in open(os.path.join(out, "clones.tsv")).read().splitlines()[1:]:
+        r, c, k = line.split("\t")[:3]
+        if int(r) in keep:
+            clones.setdefault(int(r), {})[int(c[4:]) - 1] = int(k)
+    trees = open(os.path.join(out, "trees.nwk")).read().splitlines()
+    res = []
+    for r in sorted(clones)[:REPS]:
+        lab = [clones[r][i] for i in range(S)]
+        res.append((lab, newick_pair_times(trees[r - 1], S)))
+    return res
 
 
 def main():
@@ -195,14 +221,18 @@ def main():
     rng = np.random.default_rng(11)
     b = {}
     cnt = np.zeros(K)
-    done = tries = 0
-    while done < REPS and tries < 60 * REPS:
-        tries += 1
-        res = (forward if MODE == "wf" else forward_yule)(rng, gr, cells)
-        if res is None:
-            continue
-        done += 1
-        clones, times = res
+    if MODE == "wf":
+        results = []
+        tries = 0
+        while len(results) < REPS and tries < 60 * REPS:
+            tries += 1
+            res = forward(rng, gr, cells)
+            if res is not None:
+                results.append(res)
+    else:
+        with tempfile.TemporaryDirectory() as tmp:
+            results = forward_replicates(tmp, gr, cells)
+    for clones, times in results:
         for k in clones:
             cnt[k] += 1
         for (i, j), t in times.items():
@@ -217,14 +247,13 @@ def main():
         se = math.sqrt(np.var(a[key]) / len(a[key]) + np.var(b[key]) / len(b[key]))
         print("pair of clones %s: CellCoal %8.1f (%d pairs)  forward %8.1f (%d pairs)  ratio %.3f  z %.1f" % (
             (key[0] + 1, key[1] + 1), ma, len(a[key]), mb, len(b[key]), ma / mb, (ma - mb) / se))
-        if len(a[key]) >= 300 and len(b[key]) >= 300 and abs(ma / mb - 1.0) > (0.12 if MODE == "wf" else 0.20):
+        if len(a[key]) >= 300 and len(b[key]) >= 300 and abs(ma / mb - 1.0) > (0.12 if MODE == "wf" else 0.15):
             ok = False
     for k in range(K):
-        if abs(freqA[k] - cells[k] / tot) > 0.03 or abs(cnt[k] / cnt.sum() - cells[k] / tot) > (0.03 if MODE == "wf" else 0.06):
+        if abs(freqA[k] - cells[k] / tot) > 0.03 or abs(cnt[k] / cnt.sum() - cells[k] / tot) > 0.03:
             ok = False
     if MODE != "wf":
-        print("INFO: pure birth tumor, random sizes, forward tumors of the size of cells= only: the model leaves out the stochastic first generations of every clone; not a pass/fail test")
-        sys.exit(0)
+        print("INFO: pure birth tumor with random sizes: the model leaves out the stochastic first generations of every clone, so the times are a few percent deeper in CellCoal")
     print("OK" if ok else "FAILED")
     sys.exit(0 if ok else 1)
 
