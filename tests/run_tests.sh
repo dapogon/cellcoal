@@ -1725,7 +1725,11 @@ rm -rf FP; "$FWD" --birth 0.2 --death 0.1 --time 80 --clone-time 30:50 --clone-f
 awk -F'\t' 'NR>1 && $2==1{n++; if ($5!=30 || $6!=1.5 || $3!=0) bad=1} NR>1 && $2==2{m++; if ($5!=50 || $6!=1.25 || $3!=1) bad=1} END{exit (bad || n==0)}' FP/drivers.tsv && ok "cellforward: clones started by the user (--clone-time, --clone-fitness, --clone-parent) have their time, parent and birth rate death + F (birth - death)" || bad "cellforward clones of the user"
 "$FWD" --birth 0.2 --time 80 --clone-time 30:50 --clone-fitness 2 > fe5.out 2>&1; grep -q "same number of values" fe5.out && ok "cellforward: the lists of the clones need the same number of values" || bad "cellforward clone lists"
 "$FWD" --birth 0.2 --time 40 --clone-time 50 --clone-fitness 2 > fe6.out 2>&1; grep -q "after the end of the tumor" fe6.out && ok "cellforward: a clone that starts after the end is an error" || bad "cellforward clone after the end"
-rm -rf FW FW2 FC FT FP
+rm -rf FD; "$FWD" --birth 0.5 --death 0.1 --size 2000 --mutation-rate 0 --division-mutation-rate 1 -s 6 -n 5 --seed 1 -o FD > fd.out 2>&1
+tr ':,();' '\n\n\n\n\n' < FD/trees.nwk | grep -E '^[0-9.e+-]+$' | awk '$1!=int($1){bad=1} $1<1{bad=1} END{exit (bad || NR<10)}' && ok "cellforward --division-mutation-rate: the branch lengths are whole numbers of divisions" || bad "cellforward branch lengths in divisions"
+for w in growth birth; do rm -rf FG; "$FWD" --birth 0.5 --death 0.1 --size 3000 -s 6 -n 40 --driver-rate 0.02 --driver-dist fixed --driver-effect 0.5 --driver-acts-on $w --seed 2 -o FG > /dev/null 2>&1; eval "r_$w=\$(awk -F'\t' 'NR>1 && \$4==1{print \$6}' FG/drivers.tsv | sort -u | head -1)"; done
+[ "$r_growth" = "1.4" ] && [ "$r_birth" = "1.5" ] && ok "cellforward --driver-acts-on: a driver of effect 0.5 gives the relative birth rate 1.4 (net growth x 1.5) or 1.5 (birth x 1.5)" || bad "cellforward driver action (growth $r_growth, birth $r_birth)"
+rm -rf FW FW2 FC FT FP FD FG
 cd "$ROOT"
 fi
 

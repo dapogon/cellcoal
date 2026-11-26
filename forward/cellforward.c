@@ -80,8 +80,8 @@ static double Exponential (double rate)
 
 static int		replicates = 1, sampleSize = 20;
 static double	birthRate = -1.0, deathRate = 0.0, stopSize = 0.0, stopTime = 0.0;
-static double	driverRate = 0.0, driverEffect = -1.0, mutationRate = 1.0;
-static int		driverExponential = 1;
+static double	driverRate = 0.0, driverEffect = -1.0, mutationRate = 1.0, divisionMutationRate = 0.0;
+static int		driverExponential = 1, driverOnGrowth = 1;
 #define MAX_PRESET 64
 static int		presetN = 0, presetParent[MAX_PRESET];			/* clones that the user starts at a given time (clone 1, 2, ...; the first clone, without drivers, is 0) */
 static double	presetTime[MAX_PRESET], presetFitness[MAX_PRESET];
@@ -117,7 +117,9 @@ static void Usage (FILE *fp)
 "driver mutations (they raise the birth rate; the fitness of a clone is not an input but the result of its drivers)\n"
 "  --driver-rate P     probability that a daughter cell of a division gets a new driver (default 0: no drivers)\n"
 "  --driver-effect S   effect of a driver on the birth rate: the rate of the cell is multiplied by 1 + S (needed with --driver-rate)\n"
-"  --driver-dist D     exponential (default: S is the mean of an exponential variable) or fixed (every driver has the effect S)\n\n"
+"  --driver-dist D     exponential (default: S is the mean of an exponential variable) or fixed (every driver has the effect S)\n"
+"  --driver-acts-on W  growth (default): the net growth rate (birth - death) is multiplied by 1 + S, as the fitness of --clone-fitness;\n"
+"                      birth: the birth rate is multiplied by 1 + S and the death rate does not change (the gain in growth is then larger than S)\n\n"
 "clones started by the user (a cell of the parent clone gets a growth advantage at a time; the size and the frequency of the clone are a result)\n"
 "  --clone-time T1:T2:...   generations after the start of the tumor at which each clone starts (increasing; at most %d clones)\n"
 "  --clone-fitness F1:F2:.. growth rate of each clone relative to the first clone, as in CellCoal --clones: the birth rate of the clone\n"
@@ -127,8 +129,11 @@ static void Usage (FILE *fp)
 "sample and output\n"
 "  -s, --sample K      number of cells sampled at random from the tumor (default 20)\n"
 "  -n, --replicates R  number of tumors, each with its own tree (default 1)\n"
-"  --mutation-rate U   the branch lengths are the generations times U, the expected mutations per site (CellCoal reads the\n"
-"                      branch lengths of a user tree as such); default 1 (the lengths are generations)\n"
+"  --mutation-rate U   mutations per site and generation: the branch length is the generations times U plus the divisions times V\n"
+"                      (CellCoal reads the branch lengths of a user tree as expected mutations per site); default 1, which gives generations\n"
+"  --division-mutation-rate V  mutations per site and cell division (those linked to the replication of the DNA; default 0). With V the number of\n"
+"                      mutations of a branch depends on the divisions of the lineage and not only on the time, so a clone that divides more\n"
+"                      accumulates more mutations. Use --mutation-rate 0 for divisions only\n"
 "  --seed X            seed of the random numbers (default: from the clock; it is written in log.txt)\n"
 "  -o, --output DIR    folder of the results (default cellforward_out)\n"
 "  -h, --help          this help\n\n"
@@ -229,6 +234,17 @@ static void ReadOptions (int argc, char **argv)
 			replicates = (int) Number (opt, val);
 		else if (strcmp (opt, "--mutation-rate") == 0)
 			mutationRate = Number (opt, val);
+		else if (strcmp (opt, "--division-mutation-rate") == 0)
+			divisionMutationRate = Number (opt, val);
+		else if (strcmp (opt, "--driver-acts-on") == 0)
+			{
+			if (strcmp (val, "growth") == 0)
+				driverOnGrowth = 1;
+			else if (strcmp (val, "birth") == 0)
+				driverOnGrowth = 0;
+			else
+				Fail ("--driver-acts-on is growth or birth (not %s)", val);
+			}
 		else if (strcmp (opt, "--seed") == 0)
 			{
 			seed = (uint64_t) Number (opt, val);
@@ -261,8 +277,10 @@ static void ReadOptions (int argc, char **argv)
 		Fail ("--driver-effect is needed with --driver-rate (the birth rate is multiplied by 1 + S, so S > -1)%s", "");
 	if (driverRate > 0.0 && driverExponential && !(driverEffect > 0.0))
 		Fail ("with --driver-dist exponential the effect --driver-effect (the mean) has to be greater than 0%s", "");
-	if (!(mutationRate > 0.0))
-		Fail ("--mutation-rate has to be greater than 0%s", "");
+	if (mutationRate < 0.0 || divisionMutationRate < 0.0 || (mutationRate == 0.0 && divisionMutationRate == 0.0))
+		Fail ("--mutation-rate and --division-mutation-rate cannot be negative, and one of them has to be greater than 0%s", "");
+	if (driverRate > 0.0 && driverOnGrowth && !(birthRate > deathRate))
+		Fail ("--driver-acts-on growth needs a tumor that grows (--birth greater than --death); use --driver-acts-on birth%s", "");
 	presetN = nTime;
 	if (nTime != nFit || (nPar > 0 && nPar != nTime))
 		Fail ("--clone-time, --clone-fitness and --clone-parent need the same number of values (--clone-parent is optional)%s", "");
@@ -289,6 +307,7 @@ static void ReadOptions (int argc, char **argv)
 /* the lineages of all the cells ever born: a binary tree of divisions. A node is born at the time of the division of its parent. */
 static int32_t	*nodeParent = NULL;
 static double	*nodeTime = NULL;
+static int32_t	*nodeDivs = NULL;			/* divisions of the lineage from the start of the tumor */
 static long		numNodes = 0, capNodes = 0;
 
 /* the cells that are alive */
@@ -312,6 +331,7 @@ static void GrowNodes (void)
 			Fail ("the tumor needs more than 2e9 divisions: lower --size or --time%s", "");
 		nodeParent = (int32_t*) Checked (realloc (nodeParent, capNodes * sizeof (int32_t)));
 		nodeTime = (double*) Checked (realloc (nodeTime, capNodes * sizeof (double)));
+		nodeDivs = (int32_t*) Checked (realloc (nodeDivs, capNodes * sizeof (int32_t)));
 		}
 	}
 
@@ -350,7 +370,10 @@ static int NewClone (int parent, double t)
 		{
 		s = driverExponential ? driverEffect * Exponential (1.0) : driverEffect;
 		cloneDepth[numClones] = cloneDepth[parent] + 1;
-		cloneRate[numClones] = cloneRate[parent] * (1.0 + s);
+		if (driverOnGrowth)			/* the net growth rate is multiplied by 1 + s */
+			cloneRate[numClones] = (deathRate + (1.0 + s) * (birthRate * cloneRate[parent] - deathRate)) / birthRate;
+		else						/* the birth rate is multiplied by 1 + s */
+			cloneRate[numClones] = cloneRate[parent] * (1.0 + s);
 		if (birthRate * cloneRate[numClones] > bMax)
 			bMax = birthRate * cloneRate[numClones];
 		}
@@ -380,6 +403,7 @@ static int GrowTumor (double *endTime)
 	GrowAlive ();
 	nodeParent[0] = -1;
 	nodeTime[0] = 0.0;
+	nodeDivs[0] = 0;
 	numNodes = 1;
 	NewClone (-1, 0.0);
 	for (j=0; j<presetN; j++)			/* the clones of the user, with the numbers 1, 2, ... */
@@ -438,6 +462,7 @@ static int GrowTumor (double *endTime)
 			c2 = (int) numNodes++;
 			nodeParent[c1] = nodeParent[c2] = cellNode[i];
 			nodeTime[c1] = nodeTime[c2] = t;
+			nodeDivs[c1] = nodeDivs[c2] = nodeDivs[cellNode[i]] + 1;
 			cloneAlive[k]--;
 			n = numAlive++;
 			cellNode[i] = c1;
@@ -496,7 +521,7 @@ static void WriteNewick (FILE *fp, int node, int parentKept)
 	if (parentKept >= 0)
 		{
 		hp = sDiv[parentKept];
-		fprintf (fp, ":%.10g", (h - hp) * mutationRate);
+		fprintf (fp, ":%.10g", (h - hp) * mutationRate + (double) (nodeDivs[node] - nodeDivs[parentKept]) * divisionMutationRate);
 		}
 	}
 
