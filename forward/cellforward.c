@@ -22,6 +22,7 @@
 #include <sys/stat.h>
 #include <sys/types.h>
 
+#define MAX_CELLS 5.0e7
 #define PROGRAM  "cellforward"
 #define VERSION  "0.1.0"
 
@@ -81,6 +82,9 @@ static int		replicates = 1, sampleSize = 20;
 static double	birthRate = -1.0, deathRate = 0.0, stopSize = 0.0, stopTime = 0.0;
 static double	driverRate = 0.0, driverEffect = -1.0, mutationRate = 1.0;
 static int		driverExponential = 1;
+#define MAX_PRESET 64
+static int		presetN = 0, presetParent[MAX_PRESET];			/* clones that the user starts at a given time (clone 1, 2, ...; the first clone, without drivers, is 0) */
+static double	presetTime[MAX_PRESET], presetFitness[MAX_PRESET];
 static uint64_t	seed = 0;
 static const char *outDir = "cellforward_out";
 
@@ -114,6 +118,12 @@ static void Usage (FILE *fp)
 "  --driver-rate P     probability that a daughter cell of a division gets a new driver (default 0: no drivers)\n"
 "  --driver-effect S   effect of a driver on the birth rate: the rate of the cell is multiplied by 1 + S (needed with --driver-rate)\n"
 "  --driver-dist D     exponential (default: S is the mean of an exponential variable) or fixed (every driver has the effect S)\n\n"
+"clones started by the user (a cell of the parent clone gets a growth advantage at a time; the size and the frequency of the clone are a result)\n"
+"  --clone-time T1:T2:...   generations after the start of the tumor at which each clone starts (increasing; at most %d clones)\n"
+"  --clone-fitness F1:F2:.. growth rate of each clone relative to the first clone, as in CellCoal --clones: the birth rate of the clone\n"
+"                      is death + F (birth - death); 1.5 grows 50%% faster\n"
+"  --clone-parent P1:P2:... clone (0 is the first clone, 1 the first started by the user, ...) from which each clone starts (default 0)\n"
+"                      a clone that has no cell when it has to start, or a tumor that reaches --size before the time of a clone, is simulated again\n\n"
 "sample and output\n"
 "  -s, --sample K      number of cells sampled at random from the tumor (default 20)\n"
 "  -n, --replicates R  number of tumors, each with its own tree (default 1)\n"
@@ -127,7 +137,7 @@ static void Usage (FILE *fp)
 "example, with CellCoal simulating the genotypes on the trees:\n"
 "  %s --birth 0.5 --death 0.1 --size 100000 --driver-rate 1e-5 --driver-effect 0.1 -s 30 -n 100 -o fwd\n"
 "  cellcoal -n100 -s30 -l10000 -Tfwd/trees.nwk\n",
-		PROGRAM, VERSION, PROGRAM, PROGRAM);
+		PROGRAM, VERSION, PROGRAM, MAX_PRESET, PROGRAM);
 	}
 
 static double Number (const char *opt, const char *text)
@@ -140,11 +150,30 @@ static double Number (const char *opt, const char *text)
 	return v;
 	}
 
+/* a list of numbers separated by : */
+static int NumberList (const char *opt, const char *text, double *v, int max)
+	{
+	int		n = 0;
+	char	*copy = strdup (text), *tok, *save = NULL;
+
+	for (tok = strtok_r (copy, ":", &save); tok != NULL; tok = strtok_r (NULL, ":", &save))
+		{
+		if (n >= max)
+			Fail ("%s has too many values", opt);
+		v[n++] = Number (opt, tok);
+		}
+	free (copy);
+	if (n == 0)
+		Fail ("%s needs numbers separated by :", opt);
+	return n;
+	}
+
 static void ReadOptions (int argc, char **argv)
 	{
 	int		i;
 	char	*opt, *val, name[64];
-	int		haveSeed = 0;
+	int		haveSeed = 0, nTime = 0, nFit = 0, nPar = 0, k;
+	double	parents[MAX_PRESET];
 
 	for (i=1; i<argc; i++)
 		{
@@ -188,6 +217,12 @@ static void ReadOptions (int argc, char **argv)
 			else
 				Fail ("--driver-dist is exponential or fixed (not %s)", val);
 			}
+		else if (strcmp (opt, "--clone-time") == 0)
+			nTime = NumberList (opt, val, presetTime, MAX_PRESET);
+		else if (strcmp (opt, "--clone-fitness") == 0)
+			nFit = NumberList (opt, val, presetFitness, MAX_PRESET);
+		else if (strcmp (opt, "--clone-parent") == 0)
+			nPar = NumberList (opt, val, parents, MAX_PRESET);
 		else if (strcmp (opt, "-s") == 0 || strcmp (opt, "--sample") == 0)
 			sampleSize = (int) Number (opt, val);
 		else if (strcmp (opt, "-n") == 0 || strcmp (opt, "--replicates") == 0)
@@ -212,8 +247,8 @@ static void ReadOptions (int argc, char **argv)
 		Fail ("--death cannot be negative%s", "");
 	if ((stopSize > 0.0) == (stopTime > 0.0))
 		Fail ("exactly one of --size (cells) and --time (generations) is needed%s", "");
-	if (stopSize > 0.0 && (stopSize < 2.0 || stopSize > 1.0e9))
-		Fail ("--size is between 2 and 1e9 cells%s", "");
+	if (stopSize > 0.0 && (stopSize < 2.0 || stopSize > MAX_CELLS))
+		Fail ("--size is between 2 and 5e7 cells (every division is kept in memory)%s", "");
 	if (sampleSize < 2)
 		Fail ("-s needs at least 2 cells%s", "");
 	if (stopSize > 0.0 && sampleSize > stopSize)
@@ -228,6 +263,25 @@ static void ReadOptions (int argc, char **argv)
 		Fail ("with --driver-dist exponential the effect --driver-effect (the mean) has to be greater than 0%s", "");
 	if (!(mutationRate > 0.0))
 		Fail ("--mutation-rate has to be greater than 0%s", "");
+	presetN = nTime;
+	if (nTime != nFit || (nPar > 0 && nPar != nTime))
+		Fail ("--clone-time, --clone-fitness and --clone-parent need the same number of values (--clone-parent is optional)%s", "");
+	for (k=0; k<presetN; k++)
+		{
+		presetParent[k] = (nPar > 0) ? (int) parents[k] : 0;
+		if (!(presetTime[k] > 0.0) || (k > 0 && !(presetTime[k] > presetTime[k-1])))
+			Fail ("--clone-time: the times are greater than 0 and increasing%s", "");
+		if (stopTime > 0.0 && presetTime[k] >= stopTime)
+			Fail ("--clone-time: a clone starts after the end of the tumor (--time)%s", "");
+		if (!(presetFitness[k] > 0.0))
+			Fail ("--clone-fitness: the fitness (growth rate relative to the first clone) has to be greater than 0%s", "");
+		if (presetParent[k] < 0 || presetParent[k] > k || (nPar > 0 && parents[k] != (double) presetParent[k]))
+			Fail ("--clone-parent: the parent of a clone is a clone that starts before it (0 is the first clone)%s", "");
+		if (deathRate + presetFitness[k] * (birthRate - deathRate) <= 0.0)
+			Fail ("--clone-fitness: the birth rate of a clone would not be positive%s", "");
+		}
+	if (presetN > 0 && !(birthRate > deathRate))
+		Fail ("clones of different fitness need a tumor that grows (--birth greater than --death)%s", "");
 	}
 
 /* ------------------------------ the tumor ------------------------------ */
@@ -315,8 +369,8 @@ static int Daughter (int clone, double t)
 static int GrowTumor (double *endTime)
 	{
 	double	t = 0.0, rate, r, bk;
-	long	i, n;
-	int		k, c1, c2;
+	long	i, n, tries;
+	int		k, c1, c2, nextPreset = 0, j, p;
 
 	numNodes = 0;
 	numAlive = 0;
@@ -328,6 +382,15 @@ static int GrowTumor (double *endTime)
 	nodeTime[0] = 0.0;
 	numNodes = 1;
 	NewClone (-1, 0.0);
+	for (j=0; j<presetN; j++)			/* the clones of the user, with the numbers 1, 2, ... */
+		{
+		NewClone (-1, presetTime[j]);
+		cloneParent[j+1] = presetParent[j];
+		cloneDepth[j+1] = cloneDepth[presetParent[j]] + 1;
+		cloneRate[j+1] = (deathRate + presetFitness[j] * (birthRate - deathRate)) / birthRate;
+		if (birthRate * cloneRate[j+1] > bMax)
+			bMax = birthRate * cloneRate[j+1];
+		}
 	cellNode[0] = 0;
 	cellClone[0] = 0;
 	cloneAlive[0] = 1;
@@ -336,6 +399,28 @@ static int GrowTumor (double *endTime)
 		{
 		rate = bMax + deathRate;
 		t += Exponential ((double) numAlive * rate);
+		if (nextPreset < presetN && t >= presetTime[nextPreset])	/* a clone of the user starts here: a cell of its parent clone gets the advantage */
+			{
+			t = presetTime[nextPreset];
+			j = nextPreset + 1;
+			p = cloneParent[j];
+			if (cloneAlive[p] <= 0)
+				return 0;
+			for (tries=0, i=0; tries<100000; tries++)
+				{
+				i = (long) (Uniform () * (double) numAlive);
+				if (cellClone[i] == p)
+					break;
+				}
+			if (tries == 100000)			/* the parent is rare: look for one of its cells */
+				for (i=(long) (Uniform () * (double) numAlive), tries=0; tries<numAlive && cellClone[i] != p; tries++)
+					i = (i + 1) % numAlive;
+			cloneAlive[p]--;
+			cellClone[i] = j;
+			cloneAlive[j]++;
+			nextPreset++;
+			continue;
+			}
 		if (stopTime > 0.0 && t >= stopTime)
 			{
 			t = stopTime;
@@ -363,6 +448,8 @@ static int GrowTumor (double *endTime)
 			cloneAlive[cellClone[n]]++;
 			if (stopSize > 0.0 && (double) numAlive >= stopSize)
 				break;
+			if ((double) numAlive > MAX_CELLS)
+				Fail ("the tumor has more than 5e7 cells (every division is kept in memory): lower --time or the growth rate%s", "");
 			}
 		else if (r < bk + deathRate)		/* death: the lineage stays in the tree of divisions, as a branch with no sampled cell */
 			{
@@ -375,6 +462,8 @@ static int GrowTumor (double *endTime)
 			}
 		}
 	*endTime = t;
+	if (nextPreset < presetN)			/* the tumor reached its size before a clone of the user started */
+		return 0;
 	return numAlive >= sampleSize;
 	}
 
