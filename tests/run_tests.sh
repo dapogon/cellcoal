@@ -1663,6 +1663,23 @@ grep -q "cannot be combined" dm3.out && ok "--demes with growth is an error" || 
 rm -rf DT
 cd "$ROOT"
 
+echo "2g67. Clones of different fitness (--clones): growth rate by clone, sample at random from the tumor"
+cd "$TMP"
+python3 "$ROOT/tests/clones_check.py" "$BIN" 3000 > clones_check.out 2>&1 && ok "--clones: the times to coalescence of pairs of cells agree with a forward simulation of the whole tumor, and the clone frequencies are those of the sizes" || { cat clones_check.out; bad "--clones genealogy"; }
+rm -rf CL; "$BIN" -n3 -s12 -l50 -u1e-6 -e10000 -g1e-3 --clones n=3,time=0.5:0.2,parent=1:2,fitness=1.5:2 -oCL > cl1.out 2>&1
+[ "$(head -1 CL/clones.tsv)" = "$(printf 'replicate\tcell\tclone')" ] && [ "$(tail -n +2 CL/clones.tsv | wc -l | tr -d ' ')" = "36" ] && ok "clones.tsv lists replicate, cell and clone (n=3 replicates x 12 cells)" || bad "clones.tsv"
+grep -q "Clone 2: born 0.5 N generations ago from clone 1" CL/log* && grep -q "Clone 3: .*fitness 2 " CL/log* && ok "the log lists the clones with their size and frequency" || bad "clones in the log"
+"$BIN" -n1 -s5 -l50 -u1e-6 -g1e-3 --clones n=3,time=0.5 > cl2.out 2>&1
+grep -q "needs 2 times" cl2.out && ok "--clones: the lists need n-1 values" || bad "short --clone-time accepted"
+"$BIN" -n1 -s5 -l50 -u1e-6 -g1e-3 --clones n=2,time=0.5 > cl3.out 2>&1
+grep -q "clone-fitness is needed" cl3.out && ok "--clones without fitness is an error" || bad "missing --clone-fitness accepted"
+"$BIN" -n1 -s5 -l50 -u1e-6 --clones n=2,time=0.5,fitness=2,founders=100000 > cl4.out 2>&1
+grep -q "fewer than its" cl4.out && ok "--clones: a parent with too few cells to found a clone is an error" || bad "too many founders accepted"
+"$BIN" -n1 -s5 -l50 -u1e-6 -g1e-3 --clones n=2,time=0.5,fitness=2 --deme-n 3:3 --deme-time 1 > cl5.out 2>&1
+grep -q "cannot be combined with --demes" cl5.out && ok "--clones with --demes is an error" || bad "--clones with --demes accepted"
+rm -rf CL
+cd "$ROOT"
+
 echo "2g62. Indels in the reads (--indel-rate): CIGAR with insertions and deletions, truth in indels_truth.vcf"
 cd "$TMP"
 cat > indelchk.py <<'PYEOF'

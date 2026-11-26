@@ -419,7 +419,10 @@ void				FinishReadLevel (void);
 /* chromosome in blocks (blocks.c) */
 extern int			blocksN, blockIndex, blocksOn, *posMap;
 extern char			*demeN, *demeSize, *demeSource, *demeTime, *demeFounders;
-extern int			numDemes, *cellDeme;
+extern int			numDemes, *cellDeme, cloneN;
+extern double		cloneDeath;
+extern char			*cloneTime, *cloneParent, *cloneFitness, *cloneFounders;
+void				PrintCloneInfo (FILE *fp);
 void				DemesSetup (void);
 void				WriteDemes (void);
 extern char			*fastaFile, *regionSpec, *germlineVcf, *germlinePop, *refUserGenome, *germFlag;

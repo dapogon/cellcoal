@@ -1053,7 +1053,9 @@ void	PrintRunInformation (FILE *fp)
     fprintf (fp, "\n Seed                                         =   %-3ld", originalSeed);
     fprintf (fp, "\n Number replicate data sets                   =   %-3d",  numDataSets);
     fprintf (fp, "\n Number of cells                              =   %-3d",  numCells);
-	if (numDemes > 0)
+	if (cloneN > 0)
+		PrintCloneInfo (fp);
+	else if (numDemes > 0)
 		fprintf (fp, "\n Structured coalescent (colonization)       =   %d demes (--demes n=%s)", numDemes, demeN);
 	if (doUserGenome == YES)
 		fprintf (fp, "\n Number of sites in the user genome           =   %-3d",  numSites);

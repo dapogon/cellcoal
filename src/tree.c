@@ -18,6 +18,25 @@ int		numDemes = 0, *cellDeme = NULL;
 static double	*demeSz = NULL, *demeT = NULL;		/* relative sizes and times of colonization (the first deme, the primary, has no time) */
 static int		*demeSrc = NULL, *demeFnd = NULL;	/* source deme (0-based) and number of founders */
 
+/* Clones of different fitness (--clone-n, --clone-time, --clone-parent, --clone-fitness, --clone-founders; group --clones). The tumor is one mixed population
+   of clones; clone 1 (the root) grows at the rate -g and has -e cells, and the clone k is born at a time (N generations before the present) from one
+   cell of its parent clone and grows at the rate fitness_k * g. Without death its size today is founders * exp(growth * time). The clones do not exchange
+   cells and do not compete: they grow on their own, and the fitness only sets how large every clone is today. The -s cells are sampled at random from
+   the tumor, so the number of cells of every clone is random (multinomial with the sizes of the clones) and changes among replicates. The genealogy is
+   the structured coalescent of the demes with a size that grows in every clone: looking back in time, two cells of the clone k coalesce at the rate
+   1/N_k(t), N_k(t) = N_k(0) exp(-g_k t), until the birth of the clone, and then its lineages go through the bottleneck of the founders and continue in
+   the parent clone. The mutation rate is the same in all the clones. The coalescence rate of two cells of the clone k is 2 b_k / N_k(t) per generation
+   (the factor 2 b of the overlapping generations of a population in which the cells divide at the rate b_k = g_k + death, Ohtsuki and Innan 2017; death
+   is 0 by default: a pure birth tumor, with b_k = g_k); with 2 b_k = 1 it is the coalescent with exponential growth of Slatkin and Hudson (1991). */
+int		cloneN = 0;
+double	cloneDeath = 0.0;
+char	*cloneTime = "", *cloneParent = "", *cloneFitness = "", *cloneFounders = "";
+static double	*demeGr = NULL, *demeFac = NULL;		/* growth rate of every deme or clone (per generation); NULL when the sizes are constant */
+static int		demeGrowth = 0, cloneMode = 0;
+static double	*cloneCells = NULL;	/* cells of every clone today (a real number) */
+static long		cloneRep = 0;
+static FILE		*fpClones = NULL;
+
 static int ParseNumbers (const char *s, double *v, int max)
 	{
 	int		n = 0;
@@ -44,11 +63,302 @@ static int ParseNumbers (const char *s, double *v, int max)
 	return n;
 	}
 
+static void ClonesSetup (void)
+	{
+	double	v[256], tot = 0.0, f;
+	int		k, n, K = cloneN;
+
+	if (strlen (demeN) > 0 || strlen (demeSize) > 0 || strlen (demeSource) > 0 || strlen (demeTime) > 0 || strlen (demeFounders) > 0)
+		{
+		fprintf (stderr, "\nERROR: --clones (clones of different fitness) cannot be combined with --demes (tumor regions)\n");
+		exit (-1);
+		}
+	if (doUserTree == YES || doDemographics == YES || doOthsukiInnanCoal == YES)
+		{
+		fprintf (stderr, "\nERROR: --clones cannot be combined with a user tree, demographic periods or the Ohtsuki-Innan growth (-K); the growth of the clone 1 is -g\n");
+		exit (-1);
+		}
+	if (K < 2 || K > 64)
+		{
+		fprintf (stderr, "\nERROR: --clone-n needs from 2 to 64 clones (the root clone 1 and at least one more)\n");
+		exit (-1);
+		}
+	if (!(growthRate > 0.0))
+		{
+		fprintf (stderr, "\nERROR: --clones needs a growth rate -g greater than 0 (the growth of the clone 1; the fitness of the other clones is relative to it)\n");
+		exit (-1);
+		}
+	if (numCells < 2)
+		{
+		fprintf (stderr, "\nERROR: --clones needs at least 2 cells (-s)\n");
+		exit (-1);
+		}
+	cellDeme = (int*) Checked (calloc (numCells, sizeof(int)), "Could not allocate the clones\n");
+	demeSz = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
+	demeT = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
+	demeSrc = (int*) Checked (calloc (K, sizeof(int)), "Could not allocate the clones\n");
+	demeFnd = (int*) Checked (calloc (K, sizeof(int)), "Could not allocate the clones\n");
+	if (cloneDeath < 0.0)
+		{
+		fprintf (stderr, "\nERROR: --clone-death cannot be negative\n");
+		exit (-1);
+		}
+	demeGr = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
+	demeFac = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
+	cloneCells = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
+	for (k=0; k<K; k++)
+		demeFnd[k] = 1;
+	if (strlen (cloneTime) == 0)
+		{
+		fprintf (stderr, "\nERROR: --clone-time is needed: the birth time of the clones 2 to %d, in N generations before the present, separated by : (for example 0.5:0.2)\n", K);
+		exit (-1);
+		}
+	n = ParseNumbers (cloneTime, v, 64);
+	if (n != K - 1)
+		{
+		fprintf (stderr, "\nERROR: --clone-time needs %d times (clones 2 to %d), separated by :\n", K - 1, K);
+		exit (-1);
+		}
+	for (k=1; k<K; k++)
+		{
+		if (!(v[k-1] > 0.0))
+			{
+			fprintf (stderr, "\nERROR: --clone-time: the times have to be greater than 0\n");
+			exit (-1);
+			}
+		demeT[k] = v[k-1];
+		}
+	if (strlen (cloneFitness) == 0)
+		{
+		fprintf (stderr, "\nERROR: --clone-fitness is needed: the growth rate of the clones 2 to %d relative to the growth rate -g of the clone 1 (for example 1.5:2), separated by :\n", K);
+		exit (-1);
+		}
+	n = ParseNumbers (cloneFitness, v, 64);
+	if (n != K - 1)
+		{
+		fprintf (stderr, "\nERROR: --clone-fitness needs %d numbers (clones 2 to %d), separated by :\n", K - 1, K);
+		exit (-1);
+		}
+	demeGr[0] = growthRate;
+	for (k=1; k<K; k++)
+		{
+		if (!(v[k-1] > 0.0))
+			{
+			fprintf (stderr, "\nERROR: --clone-fitness: the fitness (growth rate relative to the clone 1) has to be greater than 0\n");
+			exit (-1);
+			}
+		demeGr[k] = v[k-1] * growthRate;
+		}
+	if (strlen (cloneParent) > 0)
+		{
+		n = ParseNumbers (cloneParent, v, 64);
+		if (n != K - 1)
+			{
+			fprintf (stderr, "\nERROR: --clone-parent needs %d clones (the parent of the clones 2 to %d), separated by :\n", K - 1, K);
+			exit (-1);
+			}
+		for (k=1; k<K; k++)
+			{
+			int pc = (int) v[k-1];
+
+			if (v[k-1] != pc || pc < 1 || pc > K || pc == k + 1)
+				{
+				fprintf (stderr, "\nERROR: --clone-parent: the parent of the clone %d has to be another clone, 1 to %d\n", k + 1, K);
+				exit (-1);
+				}
+			demeSrc[k] = pc - 1;
+			}
+		}
+	if (strlen (cloneFounders) > 0)
+		{
+		n = ParseNumbers (cloneFounders, v, 64);
+		if (n != K - 1)
+			{
+			fprintf (stderr, "\nERROR: --clone-founders needs %d numbers (the founder cells of the clones 2 to %d), separated by :\n", K - 1, K);
+			exit (-1);
+			}
+		for (k=1; k<K; k++)
+			{
+			if (v[k-1] != floor (v[k-1]) || v[k-1] < 1.0)
+				{
+				fprintf (stderr, "\nERROR: --clone-founders: a clone is founded by a whole number of cells, at least 1\n");
+				exit (-1);
+				}
+			demeFnd[k] = (int) v[k-1];
+			}
+		}
+	/* a clone can only be born from a clone that exists then: the parent is older (and the chain of parents reaches the clone 1) */
+	for (k=1; k<K; k++)
+		if (demeSrc[k] != 0 && !(demeT[demeSrc[k]] > demeT[k]))
+			{
+			fprintf (stderr, "\nERROR: the clone %d is born (time %g) from the clone %d, which is born later (time %g): the parent has to be older\n", k + 1, demeT[k], demeSrc[k] + 1, demeT[demeSrc[k]]);
+			exit (-1);
+			}
+	for (k=0; k<K; k++)		/* the coalescence rate of the pairs of cells of a clone is 2 b / N_k(t), with b = growth + death */
+		demeFac[k] = 2.0 * (demeGr[k] + cloneDeath);
+	/* sizes today: the clone 1 has N cells; without death a clone has founders * exp(growth * generations since its birth) */
+	demeSz[0] = 1.0;
+	cloneCells[0] = (double) N;
+	for (k=1; k<K; k++)
+		{
+		double ex = demeGr[k] * demeT[k] * (double) N;
+
+		if (ex > 600.0)
+			{
+			fprintf (stderr, "\nERROR: the clone %d would have exp(%.0f) cells today: lower its fitness or its age (--clone-time), or -g\n", k + 1, ex);
+			exit (-1);
+			}
+		cloneCells[k] = demeFnd[k] * exp (ex);
+		demeSz[k] = cloneCells[k] / (double) N;
+		}
+	for (k=1; k<K; k++)		/* the parent has to have enough cells to found the clone */
+		{
+		int		pc = demeSrc[k];
+		double	cells = cloneCells[pc] * exp (-demeGr[pc] * demeT[k] * (double) N);
+
+		if (cells < demeFnd[k])
+			{
+			fprintf (stderr, "\nERROR: when the clone %d is born the clone %d has only %.2f cells, fewer than its %d founders: lower --clone-founders or make the birth more recent\n", k + 1, pc + 1, cells, demeFnd[k]);
+			exit (-1);
+			}
+		}
+	for (k=0; k<K; k++)
+		tot += cloneCells[k];
+	f = tot;
+	(void) f;
+	demeGrowth = 1;
+	cloneMode = 1;
+	numDemes = K;
+	}
+
+/* the cells are a random sample of the tumor: the clone of every cell is drawn with the probability of its frequency today, and the cells are
+   numbered by clone */
+static void AssignClones (int nCells, long int *seed)
+	{
+	int		K = numDemes, i, k, n = 0, *count;
+	double	tot = 0.0, u, acc;
+
+	count = (int*) Checked (calloc (K, sizeof(int)), "Could not allocate the clones\n");
+	for (k=0; k<K; k++)
+		tot += cloneCells[k];
+	for (i=0; i<nCells; i++)
+		{
+		u = RandomUniform (seed) * tot;
+		for (k=0, acc = cloneCells[0]; k<K-1 && u >= acc; k++)
+			acc += cloneCells[k+1];
+		count[k]++;
+		}
+	for (k=0; k<K; k++)
+		for (i=0; i<count[k]; i++)
+			cellDeme[n++] = k;
+	free (count);
+	/* clones.tsv: replicate, cell and clone */
+	if (fpClones == NULL)
+		{
+		char	file[2*MAX_NAME+16];
+
+		snprintf (file, sizeof(file), "%s/clones.tsv", resultsDir);
+		if ((fpClones = fopen (file, "w")) != NULL)
+			fprintf (fpClones, "replicate\tcell\tclone\n");
+		}
+	cloneRep++;
+	if (fpClones != NULL)
+		for (i=0; i<nCells; i++)
+			fprintf (fpClones, "%ld\t%s%04d\t%d\n", cloneRep, inCellName, i + 1, cellDeme[i] + 1);
+	}
+
+/* the clones in the log: age, growth, size today and frequency */
+void PrintCloneInfo (FILE *fp)
+	{
+	int		k;
+	double	tot = 0.0;
+
+	if (!cloneMode)
+		return;
+	for (k=0; k<numDemes; k++)
+		tot += cloneCells[k];
+	fprintf (fp, "\n Clones (differential growth, --clones)       =   %d clones; the %d cells are a random sample of the tumor; death rate %g", numDemes, numCells, cloneDeath);
+	for (k=0; k<numDemes; k++)
+		{
+		if (k == 0)
+			fprintf (fp, "\n  Clone 1 (root): growth %2.1e, %.0f cells, frequency %.4f", demeGr[0], cloneCells[0], cloneCells[0] / tot);
+		else
+			fprintf (fp, "\n  Clone %d: born %g N generations ago from clone %d, %d founder(s), fitness %.4g (growth %2.1e), %.0f cells, frequency %.4f",
+					 k + 1, demeT[k], demeSrc[k] + 1, demeFnd[k], demeGr[k] / demeGr[0], demeGr[k], cloneCells[k], cloneCells[k] / tot);
+		}
+	}
+
+/* cumulative coalescence hazard of the clones that exist (cnt lineages each) between t0 and t0 + tau, in generations (every clone has its own growth rate) */
+static double CloneHazard (double t0, double tau, const int *cnt, const int *done, int popN)
+	{
+	double	H = 0.0;
+	int		k;
+
+	for (k=0; k<numDemes; k++)
+		{
+		double	pairs, I;
+
+		if (done[k] || cnt[k] < 2)
+			continue;
+		pairs = demeFac[k] * cnt[k] * (cnt[k] - 1) / 2.0 / (demeSz[k] * (double) popN);
+		I = (demeGr[k] == 0.0) ? tau : exp (demeGr[k] * t0) * expm1 (demeGr[k] * tau) / demeGr[k];
+		H += pairs * I;
+		}
+	return H;
+	}
+
+/* time to the next coalescence given the lineages now, or -1 when a colonization (birth of a clone) comes first, at tNext (< 0: none) */
+static double CloneWait (double t0, double tNext, const int *cnt, const int *done, int popN, long int *seed)
+	{
+	double	E = RandomExponential (1.0, seed), lo = 0.0, hi;
+	int		it;
+
+	if (tNext >= 0.0)
+		{
+		hi = tNext - t0;
+		if (CloneHazard (t0, hi, cnt, done, popN) < E)
+			return -1.0;
+		}
+	else
+		{
+		hi = (double) popN;
+		for (it=0; it<2000 && CloneHazard (t0, hi, cnt, done, popN) < E; it++)
+			hi *= 2.0;
+		if (CloneHazard (t0, hi, cnt, done, popN) < E)
+			{
+			fprintf (stderr, "\n\nERROR: the clones' coalescent cannot finish (check --clone-time and --clone-parent)\n");
+			exit (-1);
+			}
+		}
+	for (it=0; it<200; it++)
+		{
+		double mid = 0.5 * (lo + hi);
+
+		if (CloneHazard (t0, mid, cnt, done, popN) < E)
+			lo = mid;
+		else
+			hi = mid;
+		if (hi - lo <= 1e-13 * hi)
+			break;
+		}
+	return 0.5 * (lo + hi);
+	}
+
 void DemesSetup (void)
 	{
 	double	v[256];
 	int		k, n, K, total = 0;
 
+	if (cloneN > 0)
+		{
+		ClonesSetup ();
+		return;
+		}
+	if (strlen (cloneTime) > 0 || strlen (cloneParent) > 0 || strlen (cloneFitness) > 0 || strlen (cloneFounders) > 0)
+		{
+		fprintf (stderr, "\nERROR: --clone-time, --clone-parent, --clone-fitness and --clone-founders need --clone-n (the number of clones)\n");
+		exit (-1);
+		}
 	if (strlen (demeN) == 0)
 		{
 		if (strlen (demeSize) > 0 || strlen (demeSource) > 0 || strlen (demeTime) > 0 || strlen (demeFounders) > 0)
@@ -195,7 +505,12 @@ void WriteDemes (void)
 	FILE	*fp;
 	int		i;
 
-	if (numDemes == 0)
+	if (fpClones != NULL)
+		{
+		fclose (fpClones);
+		fpClones = NULL;
+		}
+	if (numDemes == 0 || cloneMode)
 		return;
 	snprintf (file, sizeof(file), "%s/demes.tsv", resultsDir);
 	if ((fp = fopen (file, "w")) == NULL)
@@ -266,6 +581,8 @@ void MakeCoalescenceTree(int nCells, int popN, long int *seed)
         double	*coal, h, u, tNext, wait;
         int		kNext;
 
+        if (cloneMode)
+            AssignClones (nCells, seed);
         lin = (int**) Checked (calloc (K, sizeof(int*)), "Could not allocate the demes\n");
         cnt = (int*) Checked (calloc (2 * K, sizeof(int)), "Could not allocate the demes\n");
         done = cnt + K;
@@ -290,7 +607,21 @@ void MakeCoalescenceTree(int nCells, int popN, long int *seed)
                     tNext = demeT[k] * popN;
                     }
                 }
-            wait = (h > 0.0) ? RandomExponential (h, seed) * popN : -1.0;
+            if (demeGrowth)
+                {
+                wait = CloneWait (currentTime, (kNext >= 0) ? tNext : -1.0, cnt, done, popN, seed);
+                if (wait >= 0.0)		/* the rates of the clones at the time of the event decide which clone coalesces */
+                    {
+                    h = 0.0;
+                    for (k=0; k<K; k++)
+                        {
+                        coal[k] = (done[k] || cnt[k] < 2) ? 0.0 : demeFac[k] * cnt[k] * (cnt[k] - 1) / 2.0 / (demeSz[k] * (double) popN) * exp (demeGr[k] * (currentTime + wait));
+                        h += coal[k];
+                        }
+                    }
+                }
+            else
+                wait = (h > 0.0) ? RandomExponential (h, seed) * popN : -1.0;
             if (kNext >= 0 && (wait < 0.0 || currentTime + wait >= tNext))
                 {
                 /* colonization of the deme kNext: its lineages go through the bottleneck of the founders and continue in the source deme */

@@ -47,5 +47,11 @@
 	X(mappability,    "--mappability",    '\253', 3, mappabilityFile, 0) \
 	X(map_drop,       "--map-drop",       '\254', 2, mapDrop,    0)       \
 	X(targets,        "--targets",        '\255', 3, targetsFile, 0)    \
-	X(off_target,     "--off-target",     '\256', 2, offTarget,  0.05)
+	X(off_target,     "--off-target",     '\256', 2, offTarget,  0.05) \
+	X(clone_n,        "--clone-n",        '\257', 1, cloneN,     0)      \
+	X(clone_time,     "--clone-time",     '\260', 3, cloneTime,  0)      \
+	X(clone_parent,   "--clone-parent",   '\261', 3, cloneParent, 0)     \
+	X(clone_fitness,  "--clone-fitness",  '\262', 3, cloneFitness, 0)    \
+	X(clone_founders, "--clone-founders", '\263', 3, cloneFounders, 0)  \
+	X(clone_death,    "--clone-death",    '\264', 2, cloneDeath,  0)
 #endif
