@@ -64,6 +64,7 @@ void		ReadUserGenome (void);
 int			CountUserTreeLeaves (const char *fileName);
 void		ReadUserTree (void);
 void		FreeUserTree (void);
+void		NextUserTree (void);
 void		CheckTree (char *treeString);
 void 	RelabelUserTree (TreeNode *p);
 void		PrintTree (TreeNode *treeRoot, FILE *fp);

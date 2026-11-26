@@ -670,6 +670,15 @@ grep -q outgcell A/vcf && ! grep -q outgcell B/vcf && ! grep -q outgcell B/catg 
 cp B/trees B.tre
 "$BIN" -n1 -l3000 -u1e-6 -e10000 -g1e-4 -b1 -C10 -E0.001 -TB.tre --no-outgroup -#3 -oC >/dev/null 2>&1 && [ "$(grep -a -m1 '^#CHROM' C/vcf | tr '\t' '\n' | wc -l)" = "17" ] && ok "the tree written without outgroup is read back with -T" || bad "re-reading the tumor-only tree"
 "$BIN" --no-outgroup -n1 -s8 -l3000 -u1e-6 -e10000 -C10 -E0.001 -#3 -oD >/dev/null 2>&1; grep -q '"no_outgroup": true' D/run.json && ok "run.json records no_outgroup" || bad "run.json no_outgroup"
+printf '((((c1:0.0001,c2:0.0001):0.0001,c3:0.0002):0.0001,(c4:0.0001,c5:0.0001):0.0002):0.0001,c6:0.0004);\n((((c1:0.001,c2:0.001):0.001,c3:0.002):0.001,(c4:0.001,c5:0.001):0.002):0.001,c6:0.004);\n((((c1:0.01,c2:0.01):0.01,c3:0.02):0.01,(c4:0.01,c5:0.01):0.02):0.01,c6:0.04);\n' > three.tre
+rm -rf TT; "$BIN" -n3 -s6 -l20000 -Tthree.tre -1 -#4 -oTT > tt.out 2>&1
+snv=$(awk '/^\[#/{getline; print $2}' TT/snv_gen | tr '\n' ' ')
+set -- $snv; [ "$#" = "3" ] && [ "$1" -lt "$2" ] && [ "$2" -lt "$3" ] && ok "-T with a file of several trees: replicate i uses tree i (SNVs $snv)" || bad "several trees in the user tree file (SNVs $snv)"
+"$BIN" -n5 -s6 -l20000 -Tthree.tre -#4 -oTU > tt2.out 2>&1
+grep -q "has 3 trees and there are 5 replicates" tt2.out && ok "-T: a file with several trees needs one tree per replicate" || bad "too few trees accepted"
+printf '((c1:0.01,c2:0.01):0.01,c3:0.02);\n((c1:0.01,c2:0.01):0.01,(c3:0.01,c4:0.01):0.02);\n' > uneven.tre
+"$BIN" -n2 -s3 -l100 -Tuneven.tre -#4 -oTV > tt3.out 2>&1
+grep -q "all the trees need the same number of cells" tt3.out && ok "-T: the trees of a file have the same number of cells" || bad "trees with different leaves accepted"
 cd "$ROOT"
 
 echo "2g25. --min-alt-reads and the singleton metrics"

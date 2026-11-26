@@ -1084,6 +1084,46 @@ void FreeUserTree (void)
 		}
 	}
 
+/* A tree file can have several trees (one per line): the replicate i uses the tree i. With a single tree, all the replicates use it. */
+static int	userTreeIndex = 0, userTreeTotal = 0, userTreeFirst = 1;
+
+/* number of trees (lines with a tree, ending in ;) of the file */
+static int CountUserTrees (const char *fileName)
+	{
+	FILE	*fp;
+	char	*line;
+	int		n = 0;
+
+	if ((fp = fopen (fileName, "r")) == NULL)
+		return 0;
+	line = (char*) calloc (MAX_LINE, sizeof(char));
+	while (line && fgets (line, MAX_LINE, fp) != NULL)
+		if (strchr (line, ';') != NULL)
+			n++;
+	free (line);
+	fclose (fp);
+	return n;
+	}
+
+/* the next tree of the file for the next replicate (nothing changes when the file has a single tree) */
+void NextUserTree (void)
+	{
+	int		cells = numCells;
+
+	if (userTreeTotal < 2)
+		return;
+	FreeUserTree ();
+	free (cellNames);
+	cellNames = NULL;
+	userTreeIndex++;
+	ReadUserTree ();
+	if (numCells != cells)
+		{
+		fprintf (stderr, "\nERROR: the tree %d of the user tree file has %d leaves, and the first one has %d: all the trees need the same number of cells\n", userTreeIndex + 1, numCells, cells);
+		exit (-1);
+		}
+	}
+
 /********************************** CountUserTreeLeaves ***********************************/
 /* Counts the leaves (cells) of the user tree: number of commas + 1 in its first line.
    It is called before any array is allocated, so that -s does not need to match the tree. */
@@ -1158,6 +1198,7 @@ void ReadUserTree (void)
 	
 	p = q = NULL;
 	
+	free (treeString);
 	treeString = (char*) Checked (calloc(MAX_LINE, sizeof(char)), "Could not allocate the treeString structure\n");
 	tempString = (char*) Checked (calloc(MAX_NAME, sizeof(char)), "Could not allocate the tempString structure\n");
 	treeNodes  = (TreeNode *) Checked (calloc(numNodes, sizeof(TreeNode)), "Could not allocate the tree nodes\n");
@@ -1183,12 +1224,40 @@ void ReadUserTree (void)
 		fprintf (stderr, "\nERROR: Can't open user treefile \"%s\"\n", userTreeFile);
 		PrintUsage(stderr);
 		}
-	if (fgets (treeString, MAX_LINE, fpUserTree) == NULL)
+	if (userTreeFirst)			/* the trees of the file: one per replicate when there are several */
 		{
-		fprintf (stderr, "\nERROR: Can't read tree string");
-		PrintUsage(stderr);
+		userTreeTotal = CountUserTrees (userTreeFile);
+		if (userTreeTotal > 1 && userTreeTotal < numDataSets)
+			{
+			fprintf (stderr, "\nERROR: the user tree file has %d trees and there are %d replicates: a file with several trees needs one tree per replicate (or a single tree for all)\n", userTreeTotal, numDataSets);
+			exit (-1);
+			}
+		}
+	for (i=0; i<=userTreeIndex; i++)	/* skips the trees before the one of this replicate */
+		{
+		do
+			{
+			if (fgets (treeString, MAX_LINE, fpUserTree) == NULL)
+				{
+				fprintf (stderr, "\nERROR: Can't read tree string");
+				PrintUsage(stderr);
+				}
+			} while (strchr (treeString, ';') == NULL);
 		}
 	fclose(fpUserTree);
+	if (!userTreeFirst)			/* the arrays of the first tree are reused: the trees of a file have the same number of cells */
+		{
+		int		leaves = 1;
+
+		for (i=0; treeString[i] != '\0' && treeString[i] != ';'; i++)
+			if (treeString[i] == ',')
+				leaves++;
+		if (leaves != numCells)
+			{
+			fprintf (stderr, "\nERROR: the tree %d of the user tree file has %d leaves, and the first one has %d: all the trees need the same number of cells\n", userTreeIndex + 1, leaves, numCells);
+			exit (-1);
+			}
+		}
 	
 	CheckTree(treeString);
 
@@ -1293,8 +1362,12 @@ void ReadUserTree (void)
 	   points into this array), so a realloc that moved the block would leave all of them
 	   dangling (use-after-free). The unused tail of the array is harmless. */
 
-	fprintf (fpLog, "\n\nUser-defined tree: ");
-	PrintTree (healthyRoot, fpLog);
+	if (userTreeFirst)
+		{
+		fprintf (fpLog, "\n\nUser-defined tree: ");
+		PrintTree (healthyRoot, fpLog);
+		}
+	userTreeFirst = 0;
 
 	free (tempString);
 	}

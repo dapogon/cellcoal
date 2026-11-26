@@ -1419,6 +1419,8 @@ Name of the file with a rooted tree with branch lengths in Newick format to be u
 
 > in the tree file please add a new line after the semicolon.
 
+The file can have several trees, one per line: the replicate *i* uses the tree *i*, and the file needs at least as many trees as replicates (a file with a single tree is used by all the replicates). All the trees need the same number of cells. The branch lengths are the expected number of mutations per site (they are not multiplied by `-u`).
+
 If a user tree is specified, the user should also make sure the number of cells is the same as the number of tips in the tree. If using the command line, one should type, for example:
 
 `./bin/cellcoal-x.y.z -T./examples/usertree.0001 -s4`

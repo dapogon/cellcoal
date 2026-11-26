@@ -237,6 +237,8 @@ static void MakeTreeOfReplicate (int dataSetNum, long int *seed)
 	{
 	int		sameTree = (blocksOn && dataSetNum > 0);
 
+	if (doUserTree == YES && dataSetNum > 0)
+		NextUserTree ();					/* a file with several trees: one per replicate */
 	if (doUserTree == NO && !sameTree)
 		{
 		if (noisy > 2)
