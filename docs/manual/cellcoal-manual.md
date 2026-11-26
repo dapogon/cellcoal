@@ -388,6 +388,7 @@ The two models do not overlap: a tumor of one clone is described with `-e`, `-g`
 - `--clone-parent` (`parent=`) is the clone that gives birth to every clone (default 1; a clone can be born from another one, which has to be older).
 - `--clone-fitness` (`fitness=`, needed) is the growth rate of the clones 2, 3, ... **relative to the growth rate of the clone 1**: 1.5 grows 50% faster, 1 is as fast as the clone 1, less than 1 is slower. The selection coefficient (the difference of growth rates) is `(fitness - 1) g`.
 - `--clone-founders` (`founders=`, default 1) is the number of cells that found each clone (as `--deme-founders`).
+- `--clone-freq` (`freq=`) is the **frequency of the clones 2, 3, ... in the tumor today** (a fraction of `cells=`; the sum is below 1, and the clone 1 is the rest). With it, give **`time=` or `fitness=`, one of them**, and the other is derived from the size of the clone: with `time=` the growth is `ln(size / founders) / time` (and the fitness is that growth over the growth of the clone 1), and with `fitness=` the age is `ln(size / founders) / growth`. In the example `freq=0.2:0.05,fitness=1.5:2` the clone 2 has 2000 cells and is born `ln(2000) / 1.5e-3` = 5067 generations ago. The frequency is the mean one: with `sizes=random` the size changes among replicates around it, and with `sizes=fixed` it is always that one.
 - `--clone-sizes` (`sizes=`, default `random`) is `random` when the size of every clone changes among replicates, or `fixed` when it is always the mean (see below).
 - `-s` is the number of cells sampled **from the whole tumor**.
 
@@ -992,7 +993,7 @@ Effective size of every deme relative to `-e` (greater than 0; default 1 for all
 
 **--clones GROUP: clones of different fitness**
 
-Group of options of the clones model (section 5.1.4): `--clones n=3,cells=10000,birth=1e-3,time=5000:2000,parent=1:2,fitness=1.5:2` is the same as the options `--clone-n`, `--clone-cells`, `--clone-birth`, `--clone-death`, `--clone-time`, `--clone-parent`, `--clone-fitness`, `--clone-founders` and `--clone-sizes` below. With `--clones` the options `-e`, `-g`, `-K` and `-L` are not used.
+Group of options of the clones model (section 5.1.4): `--clones n=3,cells=10000,birth=1e-3,time=5000:2000,parent=1:2,fitness=1.5:2` is the same as the options `--clone-n`, `--clone-cells`, `--clone-birth`, `--clone-death`, `--clone-time`, `--clone-parent`, `--clone-fitness`, `--clone-founders`, `--clone-freq` and `--clone-sizes` below. With `--clones` the options `-e`, `-g`, `-K` and `-L` are not used.
 
 **--clone-cells C: cells of the whole tumor**
 
@@ -1021,6 +1022,10 @@ Clone that gives birth to each of the clones 2, 3, ... (default: all from the cl
 **--clone-fitness F2:F3:...: growth rate relative to the clone 1**
 
 Growth rate of the clones 2, 3, ..., relative to the growth rate of the clone 1 (`birth` minus `death`), which has to be greater than 0 (needed; 1.5 grows 50% faster). Group `--clones fitness=...`.
+
+**--clone-freq P2:P3:...: frequency of the clones**
+
+Frequency of the clones 2, 3, ... in the tumor today, separated by `:`, as a fraction of `--clone-cells` (their sum is below 1). With it, give `--clone-time` or `--clone-fitness`, one of them, and the other is derived. Group `--clones freq=...`.
 
 **--clone-sizes random|fixed: sizes of the clones**
 

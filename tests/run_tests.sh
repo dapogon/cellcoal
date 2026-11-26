@@ -1694,6 +1694,18 @@ grep -q "needs the birth rate" cl6.out && ok "--clones needs the birth rate of t
 grep -q "ERROR: -e is not used with --clones" cl7.out && ok "--clones with -e is an error (cells= is the tumor size)" || bad "--clones with -e accepted"
 "$BIN" -n1 -s5 -l50 -u1e-6 -g1e-3 --clones n=2,cells=10000,birth=1e-3,time=500,fitness=2 > cl8.out 2>&1
 grep -q "not as -g, -K or -L" cl8.out && ok "--clones with -g, -K or -L is an error" || bad "--clones with -g accepted"
+rm -rf CQ; "$BIN" -n300 -s30 -l10 -u1e-7 --clones n=3,cells=10000,birth=1e-3,death=0,freq=0.2:0.05,fitness=1.5:2,parent=1:2,sizes=fixed -oCQ > cq.out 2>&1
+grep -q "Clone 2: born 5067.27 generations ago" CQ/log* && grep -q "Clone 3: .*500 cells.*frequency 0.0500" CQ/log* && ok "--clones freq= with fitness=: the time of birth is derived from the frequency (ln(2000)/1.5e-3 = 5067.27)" || bad "--clone-freq with fitness"
+f2=$(awk -F'\t' 'NR>1 && $3==2{n++} END{print n/300/30}' CQ/clones.tsv)
+awk -v f="$f2" 'BEGIN{exit !(f>0.18 && f<0.22)}' && ok "--clones freq=: the frequency of the clone in the sample is the one asked ($f2 of 0.2)" || bad "--clone-freq sample frequency ($f2)"
+"$BIN" -n1 -s5 -l50 -u1e-6 --clones n=3,cells=10000,birth=1e-3,freq=0.2:0.05,time=5000:2000,parent=1:2 2>&1 | grep -q "Clone 3: born 2000 generations ago from clone 2, 1 founder(s), fitness 3.107" && ok "--clones freq= with time=: the fitness is derived from the frequency" || bad "--clone-freq with time"
+"$BIN" -n1 -s5 -l50 -u1e-6 --clones n=2,cells=10000,birth=1e-3,freq=0.2 > cq2.out 2>&1
+grep -q "give --clone-time or --clone-fitness" cq2.out && ok "--clones freq= needs time= or fitness=" || bad "--clone-freq alone accepted"
+"$BIN" -n1 -s5 -l50 -u1e-6 --clones n=2,cells=10000,birth=1e-3,freq=0.2,time=500,fitness=2 > cq3.out 2>&1
+grep -q "give --clone-time or --clone-fitness" cq3.out && ok "--clones freq= with time= and fitness= is an error (one is derived)" || bad "--clone-freq with both accepted"
+"$BIN" -n1 -s5 -l50 -u1e-6 --clones n=3,cells=10000,birth=1e-3,freq=0.6:0.5,time=500:300 > cq4.out 2>&1
+grep -q "nothing is left for the clone 1" cq4.out && ok "--clones freq=: the frequencies of the clones cannot add up to 1" || bad "--clone-freq sum >= 1 accepted"
+rm -rf CQ
 "$BIN" -n1 -s5 -l50 -u1e-6 --clones n=2,cells=10000,birth=1e-3,time=500,fitness=2,sizes=big > cl9.out 2>&1
 grep -q "sizes= is random" cl9.out && ok "--clones sizes= has to be random or fixed" || bad "--clones bad sizes accepted"
 rm -rf CL; "$BIN" -n200 -s30 -l10 -u1e-7 --clones n=2,cells=10000,birth=1e-3,time=5000,fitness=1.5,sizes=random -oCL > cl10.out 2>&1

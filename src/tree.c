@@ -31,7 +31,7 @@ static int		*demeSrc = NULL, *demeFnd = NULL;	/* source deme (0-based) and numbe
    divide at the rate b_k = g_k + death, the same death in all the clones, and c_k = 2 b_k. */
 int		cloneN = 0;
 double	cloneCells0 = 0.0, cloneBirth = 0.0, cloneDeath = 0.0;
-char	*cloneTime = "", *cloneParent = "", *cloneFitness = "", *cloneFounders = "", *cloneSizes = "";
+char	*cloneTime = "", *cloneParent = "", *cloneFitness = "", *cloneFounders = "", *cloneSizes = "", *cloneFreq = "";
 static double	*demeGr = NULL, *demeFac = NULL;		/* growth rate of every deme or clone (per generation); NULL when the sizes are constant */
 static int		demeGrowth = 0, cloneMode = 0;
 static double	*cloneCells = NULL, *cloneMean = NULL;	/* cells of every clone today in this replicate, and their mean (real numbers) */
@@ -67,7 +67,8 @@ static int ParseNumbers (const char *s, double *v, int max)
 
 static void ClonesSetup (void)
 	{
-	double	v[256], g1, death = 0.0, others = 0.0;
+	double	v[256], freqv[64], g1, death = 0.0, others = 0.0;
+	int		haveFreq = 0;
 	int		k, n, K = cloneN;
 
 	if (strlen (demeN) > 0 || strlen (demeSize) > 0 || strlen (demeSource) > 0 || strlen (demeTime) > 0 || strlen (demeFounders) > 0)
@@ -133,46 +134,83 @@ static void ClonesSetup (void)
 		}
 	for (k=0; k<K; k++)
 		demeFnd[k] = 1;
-	if (strlen (cloneTime) == 0)
+	if (strlen (cloneFreq) > 0)			/* the frequencies of the clones are given: the time or the fitness is derived */
+		{
+		double	sum = 0.0;
+
+		n = ParseNumbers (cloneFreq, freqv, 64);
+		if (n != K - 1)
+			{
+			fprintf (stderr, "\nERROR: --clone-freq needs %d frequencies (clones 2 to %d), separated by :\n", K - 1, K);
+			exit (-1);
+			}
+		for (k=1; k<K; k++)
+			{
+			if (!(freqv[k-1] > 0.0 && freqv[k-1] < 1.0))
+				{
+				fprintf (stderr, "\nERROR: --clone-freq: the frequency of a clone is between 0 and 1\n");
+				exit (-1);
+				}
+			sum += freqv[k-1];
+			}
+		if (sum >= 0.999)
+			{
+			fprintf (stderr, "\nERROR: --clone-freq: the clones 2 to %d have a frequency of %g in total, nothing is left for the clone 1\n", K, sum);
+			exit (-1);
+			}
+		if ((strlen (cloneTime) > 0) == (strlen (cloneFitness) > 0))
+			{
+			fprintf (stderr, "\nERROR: with --clone-freq give --clone-time or --clone-fitness, one of them: the other is derived from the frequencies\n");
+			exit (-1);
+			}
+		haveFreq = 1;
+		}
+	demeGr[0] = g1;
+	if (strlen (cloneTime) == 0 && !haveFreq)
 		{
 		fprintf (stderr, "\nERROR: --clone-time is needed: the birth time of the clones 2 to %d, in generations before the present, separated by : (for example 500:200)\n", K);
 		exit (-1);
 		}
-	n = ParseNumbers (cloneTime, v, 64);
-	if (n != K - 1)
+	if (strlen (cloneTime) > 0)
 		{
-		fprintf (stderr, "\nERROR: --clone-time needs %d times (clones 2 to %d), separated by :\n", K - 1, K);
-		exit (-1);
-		}
-	for (k=1; k<K; k++)
-		{
-		if (!(v[k-1] > 0.0))
+		n = ParseNumbers (cloneTime, v, 64);
+		if (n != K - 1)
 			{
-			fprintf (stderr, "\nERROR: --clone-time: the times have to be greater than 0\n");
+			fprintf (stderr, "\nERROR: --clone-time needs %d times (clones 2 to %d), separated by :\n", K - 1, K);
 			exit (-1);
 			}
-		demeT[k] = v[k-1] / (double) N;		/* the engine counts the time in N generations */
+		for (k=1; k<K; k++)
+			{
+			if (!(v[k-1] > 0.0))
+				{
+				fprintf (stderr, "\nERROR: --clone-time: the times have to be greater than 0\n");
+				exit (-1);
+				}
+			demeT[k] = v[k-1] / (double) N;		/* the engine counts the time in N generations */
+			}
 		}
-	if (strlen (cloneFitness) == 0)
+	if (strlen (cloneFitness) == 0 && !haveFreq)
 		{
 		fprintf (stderr, "\nERROR: --clone-fitness is needed: the growth rate of the clones 2 to %d relative to the growth rate -g of the clone 1 (for example 1.5:2), separated by :\n", K);
 		exit (-1);
 		}
-	n = ParseNumbers (cloneFitness, v, 64);
-	if (n != K - 1)
+	if (strlen (cloneFitness) > 0)
 		{
-		fprintf (stderr, "\nERROR: --clone-fitness needs %d numbers (clones 2 to %d), separated by :\n", K - 1, K);
-		exit (-1);
-		}
-	demeGr[0] = g1;
-	for (k=1; k<K; k++)
-		{
-		if (!(v[k-1] > 0.0))
+		n = ParseNumbers (cloneFitness, v, 64);
+		if (n != K - 1)
 			{
-			fprintf (stderr, "\nERROR: --clone-fitness: the fitness (growth rate relative to the clone 1) has to be greater than 0\n");
+			fprintf (stderr, "\nERROR: --clone-fitness needs %d numbers (clones 2 to %d), separated by :\n", K - 1, K);
 			exit (-1);
 			}
-		demeGr[k] = v[k-1] * g1;
+		for (k=1; k<K; k++)
+			{
+			if (!(v[k-1] > 0.0))
+				{
+				fprintf (stderr, "\nERROR: --clone-fitness: the fitness (growth rate relative to the clone 1) has to be greater than 0\n");
+				exit (-1);
+				}
+			demeGr[k] = v[k-1] * g1;
+			}
 		}
 	if (strlen (cloneParent) > 0)
 		{
@@ -212,6 +250,21 @@ static void ClonesSetup (void)
 			demeFnd[k] = (int) v[k-1];
 			}
 		}
+	if (haveFreq)				/* the size of a clone is freq * cells; with it, the time gives the growth (fitness) or the growth gives the time */
+		for (k=1; k<K; k++)
+			{
+			double size = freqv[k-1] * (double) N;
+
+			if (!(size > (double) demeFnd[k]))
+				{
+				fprintf (stderr, "\nERROR: --clone-freq: the clone %d has %.2f cells today (frequency %g of %d), no more than its %d founders: raise its frequency or cells=\n", k + 1, size, freqv[k-1], N, demeFnd[k]);
+				exit (-1);
+				}
+			if (strlen (cloneTime) > 0)
+				demeGr[k] = log (size / (double) demeFnd[k]) / (demeT[k] * (double) N);
+			else
+				demeT[k] = log (size / (double) demeFnd[k]) / (demeGr[k] * (double) N);
+			}
 	/* a clone can only be born from a clone that exists then: the parent is older (and the chain of parents reaches the clone 1) */
 	for (k=1; k<K; k++)
 		if (demeSrc[k] != 0 && !(demeT[demeSrc[k]] > demeT[k]))
@@ -419,9 +472,9 @@ void DemesSetup (void)
 		ClonesSetup ();
 		return;
 		}
-	if (strlen (cloneTime) > 0 || strlen (cloneParent) > 0 || strlen (cloneFitness) > 0 || strlen (cloneFounders) > 0)
+	if (strlen (cloneTime) > 0 || strlen (cloneParent) > 0 || strlen (cloneFitness) > 0 || strlen (cloneFounders) > 0 || strlen (cloneFreq) > 0)
 		{
-		fprintf (stderr, "\nERROR: --clone-time, --clone-parent, --clone-fitness and --clone-founders need --clone-n (the number of clones)\n");
+		fprintf (stderr, "\nERROR: --clone-time, --clone-parent, --clone-fitness, --clone-founders and --clone-freq need --clone-n (the number of clones)\n");
 		exit (-1);
 		}
 	if (strlen (demeN) == 0)

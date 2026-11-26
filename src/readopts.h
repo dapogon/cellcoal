@@ -56,5 +56,6 @@
 	X(clone_cells,    "--clone-cells",    '\264', 2, cloneCells0, 0)    \
 	X(clone_birth,    "--clone-birth",    '\265', 2, cloneBirth,  0)     \
 	X(clone_death,    "--clone-death",    '\266', 2, cloneDeath,  0)     \
-	X(clone_sizes,    "--clone-sizes",    '\267', 3, cloneSizes,  0)
+	X(clone_sizes,    "--clone-sizes",    '\267', 3, cloneSizes,  0)     \
+	X(clone_freq,     "--clone-freq",     '\270', 3, cloneFreq,   0)
 #endif
