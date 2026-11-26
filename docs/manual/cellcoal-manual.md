@@ -373,25 +373,28 @@ Looking back in time, the cells of a deme coalesce among themselves until the co
 
 This model cannot be combined with growth, demographic periods or a user tree (the sizes of the demes are constant), and all the other options (mutation models, copy number, reads, doublets...) work as usual on the genealogy that it produces. The doublets (`-B`) choose their donor among all the cells, not within the deme.
 
-**Clones of different fitness (`--clones`).** `--demes` describes regions: the cells of every region are chosen by the user. A tumor is also a mixed population in which a clone with a growth advantage expands and is over-represented, and then the number of cells of the clone in a sample is a result, not a choice. `--clones` simulates this. The fitness of a clone is its growth rate (birth rate minus death rate), as in a cell population; the clones do not exchange cells and do not compete, and the clone that grows faster is the larger one today:
+**Clones of different fitness (`--clones`).** `--demes` describes regions: the cells of every region are chosen by the user. The model of one clone is the one of section 4 (`-g`, or `-K` and `-L`; `-e` is an effective size with `-g` and the number of cells of the tumor today with `-K` and `-L`). A tumor is also a mixed population in which a clone with a growth advantage expands and is over-represented, and then the number of cells of the clone in a sample is a result, not a choice. `--clones` simulates this. The fitness of a clone is its growth rate (birth rate minus death rate), as in a cell population; the clones do not exchange cells and do not compete, and the clone that grows faster is the larger one today:
 
 ```
-cellcoal -s30 -l1000 -u1e-7 -e10000 -K1e-3 -L0 --clones n=3,time=0.5:0.2,parent=1:2,fitness=1.5:2
+cellcoal -s30 -l1000 -u1e-7 --clones n=3,cells=10000,birth=1e-3,death=0,time=5000:2000,parent=1:2,fitness=1.5:2
 ```
+
+The two models do not overlap: a tumor of one clone is described with `-e`, `-g`, `-K` and `-L`, and a tumor of several clones with `--clones` only. With `--clones` the options `-e`, `-g`, `-K` and `-L` are errors, and everything of the model, including the growth of the clone 1, is inside the group.
 
 - `--clone-n` (`n=`, needed) is the number of clones, **including the root clone 1**. The lists have `n-1` values, for the clones 2, 3, ...; there is no limit but 64.
-- `--clone-time` (`time=`, needed) is the birth time of the clones 2, 3, ..., in *N* generations before the present (as `--deme-time`): the moment when a cell of the parent clone starts the clone, for example because it acquires a driver mutation (the mutation itself is not simulated).
+- `--clone-cells` (`cells=`, needed) is the **number of cells of the whole tumor today**, all the clones together (it is a number of cells, not an effective size).
+- `--clone-birth` (`birth=`, needed) and `--clone-death` (`death=`, default 0) are the birth rate and the death rate per generation of the clone 1, as in the model of Ohtsuki and Innan: its growth rate is `birth - death`, and has to be greater than 0. With death 0 (the usual assumption) the growth is the birth. The death rate is the same in all the clones. The exponential growth of Slatkin and Hudson is `birth=0.5,death=0.5-g`.
+- `--clone-time` (`time=`, needed) is the birth time of the clones 2, 3, ..., in generations before the present: the moment when a cell of the parent clone starts the clone, for example because it acquires a driver mutation (the mutation itself is not simulated).
 - `--clone-parent` (`parent=`) is the clone that gives birth to every clone (default 1; a clone can be born from another one, which has to be older).
 - `--clone-fitness` (`fitness=`, needed) is the growth rate of the clones 2, 3, ... **relative to the growth rate of the clone 1**: 1.5 grows 50% faster, 1 is as fast as the clone 1, less than 1 is slower. The selection coefficient (the difference of growth rates) is `(fitness - 1) g`.
 - `--clone-founders` (`founders=`, default 1) is the number of cells that found each clone (as `--deme-founders`).
-- The clone 1 is the neutral tumor, with the growth of the global models (section 4): the **birth rate `-K` and the death rate `-L`** of the model of Ohtsuki and Innan (death 0 by default, the usual assumption: growth = birth; growth = birth - death), or the exponential growth `-g` of the model of Slatkin and Hudson. One of them is needed, and the growth has to be greater than 0.
-- `-e` is the number of cells of the clone 1 today and `-s` the number of cells sampled **from the whole tumor**.
+- `-s` is the number of cells sampled **from the whole tumor**.
 
-The size of a clone today is not an input. It is `founders * exp(growth * generations since its birth)`; in the example the clone 2 has exp(1.5e-3 * 5000) = 1808 cells and the clone 3 has exp(2e-3 * 2000) = 55, against 10000 of the clone 1, so the frequencies in the tumor are 0.843, 0.152 and 0.0046. These sizes and frequencies are written in the log. The `-s` cells are a random sample of the tumor: in every replicate the clone of every cell is drawn with the probability of its frequency (so the clone 3 of the example appears in 0.14 cells of 30 on average, and is absent from most replicates), the cells are numbered by clone, and the file `clones.tsv` lists the replicate, the cell and its clone. A clone that has no cells in the sample is not in the tree. It is an error if the parent clone has fewer cells than founders when the clone is born.
+The size of a clone today is not an input. It is `founders * exp(growth * generations since its birth)`; in the example the clone 2 has exp(1.5e-3 * 5000) = 1808 cells and the clone 3 has exp(2e-3 * 2000) = 55, and the clone 1 has what is left of the `cells=` 10000, that is 8137, so the frequencies in the tumor are 0.814, 0.181 and 0.0055. It is an error if the other clones reach the cells of the tumor. These sizes and frequencies are written in the log. The `-s` cells are a random sample of the tumor: in every replicate the clone of every cell is drawn with the probability of its frequency (so the clone 3 of the example appears in 0.17 cells of 30 on average, and is absent from most replicates), the cells are numbered by clone, and the file `clones.tsv` lists the replicate, the cell and its clone. A clone that has no cells in the sample is not in the tree. It is an error if the parent clone has fewer cells than founders when the clone is born.
 
-Genealogy. Looking back in time, the cells of a clone coalesce as in the neutral tumor of the global model that has been chosen, with the size *N*<sub>k</sub>(*t*) = *N*<sub>k</sub>(0) exp(-*g*<sub>k</sub> *t*) of the clone. With the birth rate `-K` and the death rate `-L` (Ohtsuki and Innan 2017), two cells of the clone *k* coalesce at the rate 2 *b*<sub>k</sub> / *N*<sub>k</sub>(*t*) per generation; the death rate is the same in all the clones and the birth rate of a clone is its growth plus the death rate, so a clone that grows faster divides more (with death 0, every division adds a cell and *b*<sub>k</sub> = *g*<sub>k</sub>). With `-g` (Slatkin and Hudson 1991) the rate is 1 / *N*<sub>k</sub>(*t*) in all the clones (it is 2 *b* = 1). At the birth of a clone its cells go through the bottleneck of the founders and continue in the parent clone, as in the colonization of a deme. The mutation rate is the same in all the clones. Time and rates are in generations; the time to the next coalescence is found numerically because every clone has its own growth. The two global models give trees of a different depth for the same growth (a tumor that divides little has a deeper tree), and `--clones` inherits that choice; a neutral tumor is the case in which the clones have the same fitness.
+Genealogy. Looking back in time, the cells of a clone coalesce as in the model of Ohtsuki and Innan, with the size *N*<sub>k</sub>(*t*) = *N*<sub>k</sub>(0) exp(-*g*<sub>k</sub> *t*) of the clone. Two cells of the clone *k* coalesce at the rate 2 *b*<sub>k</sub> / *N*<sub>k</sub>(*t*) per generation (Ohtsuki and Innan 2017); the death rate is the same in all the clones and the birth rate of a clone is its growth plus the death rate, so a clone that grows faster divides more (with death 0, every division adds a cell and *b*<sub>k</sub> = *g*<sub>k</sub>). The rate of Slatkin and Hudson (1991), 1 / *N*<sub>k</sub>(*t*), is the case 2 *b* = 1 (`birth=0.5`). At the birth of a clone its cells go through the bottleneck of the founders and continue in the parent clone, as in the colonization of a deme. The mutation rate is the same in all the clones. Time and rates are in generations; the time to the next coalescence is found numerically because every clone has its own growth. A tumor that divides little has a deeper tree than one that divides a lot for the same growth, as in the global models; a neutral tumor is the case in which the clones have the same fitness.
 
-**What is checked, and what is not.** `python3 tests/clones_check.py BIN` simulates the whole tumor forward in time, with the same clones, and compares the frequencies of the clones in a random sample and the mean time to the coalescence of two cells for every pair of clones. With the rate 1 / *N*<sub>k</sub>(*t*) (`-K0.5 -L0.496`, 2 *b* = 1) the agreement is within 1% for the pairs of clones that have thousands of pairs of cells (the numerical solution of the times, the births and the bottlenecks are right). For a pure birth tumor (`-K` and `-L0`) with random sizes the clones agree within 2% to 9% inside the clone, and are 12% to 19% older between clones; and the frequencies of the clones 2 and 3 are higher in the forward simulation (0.18 and 0.07 against 0.095 and 0.035) because there the size of every clone is random (a pure birth process from one cell has a size with a standard deviation as large as its mean), and what is a mean in the forward simulation is a fixed number here. The model is therefore the deterministic-size limit: it describes well a clone that is already large, and not the first generations after its birth, which are stochastic, nor the variation of the size of the clones among tumors. The clones do not compete (a clone does not displace the others), so it is a model for tumors in expansion and not for tumors of a constant size, where the selection acts on a population with a fixed size and the genealogy needs the ancestral selection graph. It cannot be combined with `--demes`, a user tree or demographic periods.
+**What is checked, and what is not.** `python3 tests/clones_check.py BIN` simulates the whole tumor forward in time, with the same clones, and compares the frequencies of the clones in a random sample and the mean time to the coalescence of two cells for every pair of clones. With the rate 1 / *N*<sub>k</sub>(*t*) (`birth=0.5,death=0.496`, 2 *b* = 1) the agreement is within 1% for the pairs of clones that have thousands of pairs of cells (the numerical solution of the times, the births and the bottlenecks are right). For a pure birth tumor (`death=0`) with random sizes the clones agree within 2% to 9% inside the clone, and are 12% to 19% older between clones; and the frequencies of the clones 2 and 3 are higher in the forward simulation (0.18 and 0.07 against 0.095 and 0.035) because there the size of every clone is random (a pure birth process from one cell has a size with a standard deviation as large as its mean), and what is a mean in the forward simulation is a fixed number here. The model is therefore the deterministic-size limit: it describes well a clone that is already large, and not the first generations after its birth, which are stochastic, nor the variation of the size of the clones among tumors. The clones do not compete (a clone does not displace the others), so it is a model for tumors in expansion and not for tumors of a constant size, where the selection acts on a population with a fixed size and the genealogy needs the ancestral selection graph. It cannot be combined with `--demes`, a user tree or demographic periods.
 
 ## 5.2 Somatic mutation models
 
@@ -957,7 +960,19 @@ Effective size of every deme relative to `-e` (greater than 0; default 1 for all
 
 **--clones GROUP: clones of different fitness**
 
-Group of options of the clones model (section 5.1.4): `--clones n=3,time=0.5:0.2,parent=1:2,fitness=1.5:2` is the same as the options `--clone-n`, `--clone-time`, `--clone-parent` and `--clone-fitness` below.
+Group of options of the clones model (section 5.1.4): `--clones n=3,cells=10000,birth=1e-3,time=5000:2000,parent=1:2,fitness=1.5:2` is the same as the options `--clone-n`, `--clone-cells`, `--clone-birth`, `--clone-death`, `--clone-time`, `--clone-parent`, `--clone-fitness` and `--clone-founders` below. With `--clones` the options `-e`, `-g`, `-K` and `-L` are not used.
+
+**--clone-cells C: cells of the whole tumor**
+
+Number of cells of the whole tumor today, all the clones together (needed; at least 2). Group `--clones cells=...`.
+
+**--clone-birth B: birth rate of the clone 1**
+
+Birth rate per generation of the clone 1, model of Ohtsuki and Innan; its growth rate is `B` minus the death rate, and has to be greater than 0 (needed). Group `--clones birth=...`.
+
+**--clone-death D: death rate**
+
+Death rate per generation, the same in all the clones (default 0). Group `--clones death=...`.
 
 **--clone-n N: number of clones**
 
@@ -965,7 +980,7 @@ Number of clones, including the root clone 1 (2 to 64). The lists of the followi
 
 **--clone-time T2:T3:...: birth time of the clones**
 
-Birth time of the clones 2, 3, ..., in *N* generations before the present (needed). Group `--clones time=...`.
+Birth time of the clones 2, 3, ..., in generations before the present (needed). Group `--clones time=...`.
 
 **--clone-parent P2:P3:...: parent clone**
 
@@ -973,7 +988,7 @@ Clone that gives birth to each of the clones 2, 3, ... (default: all from the cl
 
 **--clone-fitness F2:F3:...: growth rate relative to the clone 1**
 
-Growth rate of the clones 2, 3, ..., relative to the growth rate of the clone 1 (`-K` minus `-L`, or `-g`), which has to be greater than 0 (needed; 1.5 grows 50% faster). Group `--clones fitness=...`.
+Growth rate of the clones 2, 3, ..., relative to the growth rate of the clone 1 (`birth` minus `death`), which has to be greater than 0 (needed; 1.5 grows 50% faster). Group `--clones fitness=...`.
 
 **--clone-founders F2:F3:...: founder cells**
 

@@ -14,22 +14,23 @@
    back in time, two lineages of the same deme coalesce at the rate 1/size (size relative to N), until the time of the colonization of the deme; then
    its lineages go through the bottleneck of the founders (they coalesce until at most F remain) and continue in the source deme. */
 char	*demeN = "", *demeSize = "", *demeSource = "", *demeTime = "", *demeFounders = "";
-int		numDemes = 0, *cellDeme = NULL;
+int		popSizeGiven = 0, numDemes = 0, *cellDeme = NULL;
 static double	*demeSz = NULL, *demeT = NULL;		/* relative sizes and times of colonization (the first deme, the primary, has no time) */
 static int		*demeSrc = NULL, *demeFnd = NULL;	/* source deme (0-based) and number of founders */
 
-/* Clones of different fitness (--clone-n, --clone-time, --clone-parent, --clone-fitness, --clone-founders; group --clones). The tumor is one mixed population
-   of clones; clone 1 (the root) grows at the rate -g and has -e cells, and the clone k is born at a time (N generations before the present) from one
-   cell of its parent clone and grows at the rate fitness_k * g. Without death its size today is founders * exp(growth * time). The clones do not exchange
-   cells and do not compete: they grow on their own, and the fitness only sets how large every clone is today. The -s cells are sampled at random from
-   the tumor, so the number of cells of every clone is random (multinomial with the sizes of the clones) and changes among replicates. The genealogy is
-   the structured coalescent of the demes with a size that grows in every clone: looking back in time, two cells of the clone k coalesce at the rate
-   1/N_k(t), N_k(t) = N_k(0) exp(-g_k t), until the birth of the clone, and then its lineages go through the bottleneck of the founders and continue in
-   the parent clone. The mutation rate is the same in all the clones. The neutral tumor (one clone) is the global model of growth, and the clones inherit
-   it: with the exponential growth of Slatkin and Hudson (1991) (-g) two cells of a clone coalesce at the rate 1 / N_k(t); with the model of Ohtsuki and Innan
-   (2017) (-K birth rate, -L death rate; growth g = b - d) the cells divide at the rate b_k = g_k + death, the same death in all the clones, and they
-   coalesce at the rate 2 b_k / N_k(t). In both cases the growth of the clone k is fitness_k times the growth of the clone 1. */
+/* Clones of different fitness (group --clones: --clone-n, --clone-time, --clone-parent, --clone-fitness, --clone-founders, --clone-growth, --clone-birth,
+   --clone-death). The tumor is one mixed population of clones; -e is the effective size of the whole tumor today. The clone 1 (the root) grows at the rate
+   of the neutral tumor (growth, or birth - death) and has the cells that are left when the other clones are taken out of -e; the clone k is born at a time
+   (N generations before the present) from one cell of its parent clone and grows at the rate fitness_k times the growth of the clone 1. Without extinction
+   its size today is founders * exp(growth * generations since its birth). The clones do not exchange cells and do not compete: they grow on their own, and
+   the fitness only sets how large every clone is today. The -s cells are sampled at random from the tumor, so the number of cells of every clone is random
+   (multinomial with the sizes of the clones) and changes among replicates. The genealogy is the structured coalescent of the demes with a size that grows
+   in every clone: looking back in time, two cells of the clone k coalesce at the rate c_k / N_k(t), N_k(t) = N_k(0) exp(-g_k t), until the birth of the clone,
+   and then its lineages go through the bottleneck of the founders and continue in the parent clone. The mutation rate is the same in all the clones.
+   With the exponential growth of Slatkin and Hudson (1991) (growth) c_k = 1; with the model of Ohtsuki and Innan (2017) (birth, death; g = b - d) the cells
+   divide at the rate b_k = g_k + death, the same death in all the clones, and c_k = 2 b_k. */
 int		cloneN = 0;
+double	cloneCells0 = 0.0, cloneBirth = 0.0, cloneDeath = 0.0;
 char	*cloneTime = "", *cloneParent = "", *cloneFitness = "", *cloneFounders = "";
 static double	*demeGr = NULL, *demeFac = NULL;		/* growth rate of every deme or clone (per generation); NULL when the sizes are constant */
 static int		demeGrowth = 0, cloneMode = 0;
@@ -65,7 +66,7 @@ static int ParseNumbers (const char *s, double *v, int max)
 
 static void ClonesSetup (void)
 	{
-	double	v[256], tot = 0.0, f, g1, death = 0.0;
+	double	v[256], tot = 0.0, g1, death = 0.0, others = 0.0;
 	int		k, n, K = cloneN;
 
 	if (strlen (demeN) > 0 || strlen (demeSize) > 0 || strlen (demeSource) > 0 || strlen (demeTime) > 0 || strlen (demeFounders) > 0)
@@ -78,26 +79,32 @@ static void ClonesSetup (void)
 		fprintf (stderr, "\nERROR: --clones cannot be combined with a user tree or demographic periods\n");
 		exit (-1);
 		}
-	if (doOthsukiInnanCoal == YES)		/* the neutral tumor is the model of Ohtsuki and Innan: growth = birth - death */
+	if (doExponential == YES || doOthsukiInnanCoal == YES)
 		{
-		g1 = birthRate - deathRate;
-		death = deathRate;
-		}
-	else if (doExponential == YES)		/* the neutral tumor is the exponential growth of Slatkin and Hudson */
-		g1 = growthRate;
-	else
-		{
-		fprintf (stderr, "\nERROR: --clones needs the growth of the neutral tumor, the one of the clone 1: exponential growth (-g) or birth and death rates (-K, -L)\n");
+		fprintf (stderr, "\nERROR: with --clones the growth of the tumor goes inside --clones (birth= and death=), not as -g, -K or -L\n");
 		exit (-1);
 		}
-	if (K < 2 || K > 64)
+	if (popSizeGiven)
 		{
-		fprintf (stderr, "\nERROR: --clone-n needs from 2 to 64 clones (the root clone 1 and at least one more)\n");
+		fprintf (stderr, "\nERROR: -e is not used with --clones: the number of cells of the whole tumor is cells= inside --clones\n");
 		exit (-1);
 		}
+	if (!(cloneCells0 >= 2.0) || cloneCells0 > 2.0e9)
+		{
+		fprintf (stderr, "\nERROR: --clones needs the number of cells of the whole tumor today (cells=, at least 2)\n");
+		exit (-1);
+		}
+	N = (int) cloneCells0;			/* number of cells of the whole tumor; the time of the engine is in units of N generations */
+	if (!(cloneBirth > 0.0))
+		{
+		fprintf (stderr, "\nERROR: --clones needs the birth rate of the clone 1 (birth=, per generation; death= is 0 by default)\n");
+		exit (-1);
+		}
+	g1 = cloneBirth - cloneDeath;			/* growth rate of the clone 1 */
+	death = cloneDeath;
 	if (!(g1 > 0.0))
 		{
-		fprintf (stderr, "\nERROR: --clones needs a growth rate greater than 0 in the clone 1 (-g, or birth rate -K greater than death rate -L); the fitness of the other clones is relative to it\n");
+		fprintf (stderr, "\nERROR: --clones needs a growth rate greater than 0 in the clone 1 (birth= greater than death=); the fitness of the other clones is relative to it\n");
 		exit (-1);
 		}
 	if (numCells < 2)
@@ -117,7 +124,7 @@ static void ClonesSetup (void)
 		demeFnd[k] = 1;
 	if (strlen (cloneTime) == 0)
 		{
-		fprintf (stderr, "\nERROR: --clone-time is needed: the birth time of the clones 2 to %d, in N generations before the present, separated by : (for example 0.5:0.2)\n", K);
+		fprintf (stderr, "\nERROR: --clone-time is needed: the birth time of the clones 2 to %d, in generations before the present, separated by : (for example 500:200)\n", K);
 		exit (-1);
 		}
 	n = ParseNumbers (cloneTime, v, 64);
@@ -133,7 +140,7 @@ static void ClonesSetup (void)
 			fprintf (stderr, "\nERROR: --clone-time: the times have to be greater than 0\n");
 			exit (-1);
 			}
-		demeT[k] = v[k-1];
+		demeT[k] = v[k-1] / (double) N;		/* the engine counts the time in N generations */
 		}
 	if (strlen (cloneFitness) == 0)
 		{
@@ -198,26 +205,33 @@ static void ClonesSetup (void)
 	for (k=1; k<K; k++)
 		if (demeSrc[k] != 0 && !(demeT[demeSrc[k]] > demeT[k]))
 			{
-			fprintf (stderr, "\nERROR: the clone %d is born (time %g) from the clone %d, which is born later (time %g): the parent has to be older\n", k + 1, demeT[k], demeSrc[k] + 1, demeT[demeSrc[k]]);
+			fprintf (stderr, "\nERROR: the clone %d is born (time %g) from the clone %d, which is born later (time %g): the parent has to be older\n", k + 1, demeT[k] * N, demeSrc[k] + 1, demeT[demeSrc[k]] * N);
 			exit (-1);
 			}
 	for (k=0; k<K; k++)		/* coalescence rate of two cells of a clone: 1 / N_k(t) (Slatkin and Hudson) or 2 b / N_k(t), b = growth + death (Ohtsuki and Innan) */
-		demeFac[k] = (doOthsukiInnanCoal == YES) ? 2.0 * (demeGr[k] + death) : 1.0;
-	/* sizes today: the clone 1 has N cells; without death a clone has founders * exp(growth * generations since its birth) */
-	demeSz[0] = 1.0;
-	cloneCells[0] = (double) N;
+		demeFac[k] = 2.0 * (demeGr[k] + death);
+	/* sizes today: without death a clone has founders * exp(growth * generations since its birth); the clone 1 has what is left of the tumor (-e) */
 	for (k=1; k<K; k++)
 		{
 		double ex = demeGr[k] * demeT[k] * (double) N;
 
 		if (ex > 600.0)
 			{
-			fprintf (stderr, "\nERROR: the clone %d would have exp(%.0f) cells today: lower its fitness or its age (--clone-time), or -g\n", k + 1, ex);
+			fprintf (stderr, "\nERROR: the clone %d would have exp(%.0f) cells today: lower its fitness or its age (time=), or the growth\n", k + 1, ex);
 			exit (-1);
 			}
 		cloneCells[k] = demeFnd[k] * exp (ex);
-		demeSz[k] = cloneCells[k] / (double) N;
+		others += cloneCells[k];
 		}
+	if (others >= 0.999 * (double) N)
+		{
+		fprintf (stderr, "\nERROR: the clones 2 to %d would have %.0f cells today, as many as the whole tumor (cells=%d): lower their fitness, age or founders, or raise cells=\n", K, others, N);
+		exit (-1);
+		}
+	cloneCells[0] = (double) N - others;
+	demeSz[0] = cloneCells[0] / (double) N;
+	for (k=1; k<K; k++)
+		demeSz[k] = cloneCells[k] / (double) N;
 	for (k=1; k<K; k++)		/* the parent has to have enough cells to found the clone */
 		{
 		int		pc = demeSrc[k];
@@ -231,8 +245,6 @@ static void ClonesSetup (void)
 		}
 	for (k=0; k<K; k++)
 		tot += cloneCells[k];
-	f = tot;
-	(void) f;
 	demeGrowth = 1;
 	cloneMode = 1;
 	numDemes = K;
@@ -285,14 +297,14 @@ void PrintCloneInfo (FILE *fp)
 	for (k=0; k<numDemes; k++)
 		tot += cloneCells[k];
 	fprintf (fp, "\n Clones (differential growth, --clones)       =   %d clones; the %d cells are a random sample of the tumor; %s", numDemes, numCells,
-			 (doOthsukiInnanCoal == YES) ? "Ohtsuki and Innan growth (-K -L)" : "exponential growth of Slatkin and Hudson (-g)");
+			 "model of Ohtsuki and Innan (birth, death)");
 	for (k=0; k<numDemes; k++)
 		{
 		if (k == 0)
 			fprintf (fp, "\n  Clone 1 (root): growth %2.1e, %.0f cells, frequency %.4f", demeGr[0], cloneCells[0], cloneCells[0] / tot);
 		else
-			fprintf (fp, "\n  Clone %d: born %g N generations ago from clone %d, %d founder(s), fitness %.4g (growth %2.1e), %.0f cells, frequency %.4f",
-					 k + 1, demeT[k], demeSrc[k] + 1, demeFnd[k], demeGr[k] / demeGr[0], demeGr[k], cloneCells[k], cloneCells[k] / tot);
+			fprintf (fp, "\n  Clone %d: born %g generations ago from clone %d, %d founder(s), fitness %.4g (growth %2.1e), %.0f cells, frequency %.4f",
+					 k + 1, demeT[k] * N, demeSrc[k] + 1, demeFnd[k], demeGr[k] / demeGr[0], demeGr[k], cloneCells[k], cloneCells[k] / tot);
 		}
 	}
 
@@ -883,7 +895,7 @@ void MakeCoalescenceTree(int nCells, int popN, long int *seed)
             }
     } /* coalescent cell tree finished */
 	
-  	TMRCA = currentTime / popN ;  /* TMRCA is now is back in popN coalescent generations */
+  	TMRCA = (cloneMode) ? r->time : currentTime / popN ;  /* TMRCA is now is back in popN coalescent generations (in generations with --clones) */
 	coalTreeMRCA = r;
 	
     /* Connect the coalescent cell MRCA node with the healthy ancestral cell */

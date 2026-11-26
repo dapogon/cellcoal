@@ -150,6 +150,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
             case 'e':
                 argument = atof(argv[i]);
                 N = (int) argument;
+                popSizeGiven = 1;
                 if (N < 1)
                     {
                     fprintf (stderr, "\n!!! PARAMETER ERROR: Bad effective population size (%d)\n\n", N);

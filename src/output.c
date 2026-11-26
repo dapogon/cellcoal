@@ -1063,7 +1063,10 @@ void	PrintRunInformation (FILE *fp)
 		fprintf (fp, "\n Number of genomic sites                      =   %-3d",  numSites);
 		
     fprintf (fp, "\n\nDemographics");
-    fprintf (fp, "\n Effective population size                    =   %-3d",  N);
+    if (cloneN > 0)
+        fprintf (fp, "\n Cells of the whole tumor today               =   %-3d",  N);
+    else
+        fprintf (fp, "\n Effective population size                    =   %-3d",  N);
     if (doExponential == YES)
         fprintf (fp, "\n Exponential growth rate                      =   %2.1e", growthRate);
     if (doOthsukiInnanCoal == YES)
@@ -1084,13 +1087,16 @@ void	PrintRunInformation (FILE *fp)
 	else
 		{
 		fprintf (fp, "\n\nGenealogy");
-		fprintf (fp, "\n Mean time to the MRCA (Ne generations)       =   %6.4f", runStats.tmrca.mean);
-		if (noisy > 1)
+		if (cloneN > 0)
+			fprintf (fp, "\n Mean time to the MRCA (generations)          =   %6.1f", runStats.tmrca.mean);
+		else
+			fprintf (fp, "\n Mean time to the MRCA (Ne generations)       =   %6.4f", runStats.tmrca.mean);
+		if (noisy > 1 && cloneN == 0)
 			fprintf (fp, "\n Exp time to the MRCA [constant Ne]           =   %6.4f", expTMRCA);
 		if (numDataSets > 1)
 			{
 			fprintf (fp, "\n Variance time MRCA                           =   %6.4f", runStats.tmrca.var);
-			if (noisy > 1)
+			if (noisy > 1 && cloneN == 0)
 				fprintf (fp, "\n Exp variance time MRCA [constant Ne]         =   %6.4f", expVarTMRCA);
 			}
 	 
@@ -1627,7 +1633,8 @@ void PrintCheck (FILE *fp)
 		fprintf (fp, "  mutations:           %d fixed in each replicate\n", numFixedMutations);
 	else
 		fprintf (fp, "  mutations:           about %.0f per replicate expected under the model (the number varies among replicates)\n", expNumMU);
-	fprintf (fp, "  expected tree depth: %.3f (in units of N generations, mean TMRCA of the tumour cells)\n", expTMRCA);
+	if (cloneN == 0)
+		fprintf (fp, "  expected tree depth: %.3f (in units of N generations, mean TMRCA of the tumour cells)\n", expTMRCA);
 	if (doSimulateData == YES && CN_EVENTS)
 		fprintf (fp, "  copy number:         segment losses %g and gains %g per haplotype and generation, mean length %g (losses) and %g (gains) sites, at most %d copies per site; events of all kinds interleaved along the branches (cnv_events, cnv_segments)\n",
 				lossRate, gainRate, segLossLen > 0 ? segLossLen : segLen, segGainLen > 0 ? segGainLen : segLen, maxCopies);

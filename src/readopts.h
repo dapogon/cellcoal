@@ -52,5 +52,8 @@
 	X(clone_time,     "--clone-time",     '\260', 3, cloneTime,  0)      \
 	X(clone_parent,   "--clone-parent",   '\261', 3, cloneParent, 0)     \
 	X(clone_fitness,  "--clone-fitness",  '\262', 3, cloneFitness, 0)    \
-	X(clone_founders, "--clone-founders", '\263', 3, cloneFounders, 0)
+	X(clone_founders, "--clone-founders", '\263', 3, cloneFounders, 0)  \
+	X(clone_cells,    "--clone-cells",    '\264', 2, cloneCells0, 0)    \
+	X(clone_birth,    "--clone-birth",    '\265', 2, cloneBirth,  0)     \
+	X(clone_death,    "--clone-death",    '\266', 2, cloneDeath,  0)
 #endif

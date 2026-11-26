@@ -29,8 +29,8 @@ import numpy as np
 BIN = sys.argv[1]
 REPS = int(sys.argv[2]) if len(sys.argv) > 2 else 800
 MODE = sys.argv[3] if len(sys.argv) > 3 else "wf"
-N, G, S = 500, 4e-3, 8          # cells of the clone 1 today, its growth rate (per generation), cells sampled
-TIMES = [2.0, 1.0]              # birth of the clones 2 and 3 (N generations before the present)
+N, G, S = 500, 4e-3, 8          # cells of the clone 1 today (the whole tumor has these plus the other clones), its growth rate (per generation), cells sampled
+TIMES = [2.0, 1.0]              # birth of the clones 2 and 3 (units of N generations here; CellCoal gets generations)
 PARENT = [0, 1]                 # parent clones (0-based)
 FIT = [1.0, 1.5]                # growth rate relative to the clone 1
 FOUNDERS = [1, 1]
@@ -38,10 +38,11 @@ K = 3
 
 
 def cellcoal(tmp, reps):
-    model = ["-K0.5", "-L%g" % (0.5 - G)] if MODE == "wf" else ["-K%g" % G, "-L0"]
-    cmd = [BIN, "-n%d" % reps, "-#5", "-l10", "-u1e-9", "-e%d" % N, "-s%d" % S, "-7"] + model + [
-           "--clones", "n=3,time=%s,parent=%s,fitness=%s,founders=%s" % (
-               ":".join(map(str, TIMES)), ":".join(str(p + 1) for p in PARENT),
+    model = "birth=0.5,death=%g" % (0.5 - G) if MODE == "wf" else "birth=%g,death=0" % G
+    others = sum(FOUNDERS[k - 1] * math.exp(G * FIT[k - 1] * TIMES[k - 1] * N) for k in (1, 2))
+    cmd = [BIN, "-n%d" % reps, "-#5", "-l10", "-u1e-9", "-s%d" % S, "-7"] + [
+           "--clones", "n=3,cells=%d,%s,time=%s,parent=%s,fitness=%s,founders=%s" % (
+               round(N + others), model, ":".join("%g" % (t * N) for t in TIMES), ":".join(str(p + 1) for p in PARENT),
                ":".join(map(str, FIT)), ":".join(map(str, FOUNDERS))), "-o" + tmp]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     blocks = open(os.path.join(tmp, "times")).read().split('-------------------- Nodes -------------------')[1:]
