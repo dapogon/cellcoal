@@ -1729,7 +1729,14 @@ rm -rf FD; "$FWD" --birth 0.5 --death 0.1 --size 2000 --mutation-rate 0 --divisi
 tr ':,();' '\n\n\n\n\n' < FD/trees.nwk | grep -E '^[0-9.e+-]+$' | awk '$1!=int($1){bad=1} $1<1{bad=1} END{exit (bad || NR<10)}' && ok "cellforward --division-mutation-rate: the branch lengths are whole numbers of divisions" || bad "cellforward branch lengths in divisions"
 for w in growth birth; do rm -rf FG; "$FWD" --birth 0.5 --death 0.1 --size 3000 -s 6 -n 40 --driver-rate 0.02 --driver-dist fixed --driver-effect 0.5 --driver-acts-on $w --seed 2 -o FG > /dev/null 2>&1; eval "r_$w=\$(awk -F'\t' 'NR>1 && \$4==1{print \$6}' FG/drivers.tsv | sort -u | head -1)"; done
 [ "$r_growth" = "1.4" ] && [ "$r_birth" = "1.5" ] && ok "cellforward --driver-acts-on: a driver of effect 0.5 gives the relative birth rate 1.4 (net growth x 1.5) or 1.5 (birth x 1.5)" || bad "cellforward driver action (growth $r_growth, birth $r_birth)"
-rm -rf FW FW2 FC FT FP FD FG
+for f in 1 10; do rm -rf FM$f; "$FWD" --birth 0.5 --death 0.1 --time 25 --clone-time 12 --clone-fitness 1 --clone-mutation-factor $f -s 30 -n 300 --seed 3 -o FM$f > /dev/null 2>&1; done
+len1=$(awk -F'[:,();]' '{t=0; for(i=1;i<=NF;i++) if ($i ~ /^[0-9.]+(e[-+][0-9]+)?$/ && $i ~ /[.e]/) t+=$i; s+=t; n++} END{print s/n}' FM1/trees.nwk)
+len10=$(awk -F'[:,();]' '{t=0; for(i=1;i<=NF;i++) if ($i ~ /^[0-9.]+(e[-+][0-9]+)?$/ && $i ~ /[.e]/) t+=$i; s+=t; n++} END{print s/n}' FM10/trees.nwk)
+awk -v a="$len1" -v b="$len10" 'BEGIN{exit !(b>1.1*a)}' && awk -F'\t' 'NR>1 && $6!=1 && $6!=10{bad=1} NR>1 && $6==10{h=1} END{exit (bad || !h)}' FM10/clones.tsv && ok "cellforward --clone-mutation-factor: a hypermutator clone lengthens the trees (mean total length $len1 -> $len10) and the factor of every cell is in clones.tsv" || bad "cellforward hypermutator clone ($len1, $len10)"
+rm -rf FMR; "$FWD" --birth 0.5 --death 0.1 --size 3000 --mutator-rate 0.005 --mutator-factor 5 -s 30 -n 20 --seed 4 -o FMR > /dev/null 2>&1
+awk -F'\t' 'NR>1{ if ($6!=1 && $6!=5 && $6!=25 && $6!=125) bad=1; if ($6>1) h=1} END{exit (bad || !h)}' FMR/clones.tsv && ok "cellforward --mutator-rate: random hypermutators are inherited (the factor of a cell is 5 to a power)" || bad "cellforward random hypermutators"
+"$FWD" --birth 0.5 --size 100 --mutator-rate 0.1 > fe7.out 2>&1; grep -q "mutator-factor is needed" fe7.out && ok "cellforward: --mutator-rate needs --mutator-factor" || bad "cellforward mutator without factor"
+rm -rf FW FW2 FC FT FP FD FG FM1 FM10 FMR
 cd "$ROOT"
 fi
 

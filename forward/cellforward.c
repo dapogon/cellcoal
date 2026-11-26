@@ -23,6 +23,7 @@
 #include <sys/types.h>
 
 #define MAX_CELLS 5.0e7
+#define MAX_PRESET 64
 #define PROGRAM  "cellforward"
 #define VERSION  "0.1.0"
 
@@ -82,7 +83,8 @@ static int		replicates = 1, sampleSize = 20;
 static double	birthRate = -1.0, deathRate = 0.0, stopSize = 0.0, stopTime = 0.0;
 static double	driverRate = 0.0, driverEffect = -1.0, mutationRate = 1.0, divisionMutationRate = 0.0;
 static int		driverExponential = 1, driverOnGrowth = 1;
-#define MAX_PRESET 64
+static double	mutatorRate = 0.0, mutatorFactor = -1.0, presetMutation[MAX_PRESET];	/* hypermutators */
+static int		mutatorsOn = 0;
 static int		presetN = 0, presetParent[MAX_PRESET];			/* clones that the user starts at a given time (clone 1, 2, ...; the first clone, without drivers, is 0) */
 static double	presetTime[MAX_PRESET], presetFitness[MAX_PRESET];
 static uint64_t	seed = 0;
@@ -126,6 +128,11 @@ static void Usage (FILE *fp)
 "                      is death + F (birth - death); 1.5 grows 50%% faster\n"
 "  --clone-parent P1:P2:... clone (0 is the first clone, 1 the first started by the user, ...) from which each clone starts (default 0)\n"
 "                      a clone that has no cell when it has to start, or a tumor that reaches --size before the time of a clone, is simulated again\n\n"
+"  --clone-mutation-factor M1:M2:...  mutation rate of each clone relative to the normal cells (a hypermutator clone has M > 1); default 1.\n"
+"                      The mutation rate does not need to follow the growth: use --clone-fitness 1 for a clone that grows as the first one\n\n"
+"hypermutators that appear at random (independent of the drivers of growth; the mutation rate is inherited by the descendants)\n"
+"  --mutator-rate P    probability that a daughter cell of a division gets a mutator mutation (default 0)\n"
+"  --mutator-factor M  the mutation rate of the cell (per generation and per division) is multiplied by M (needed with --mutator-rate)\n\n"
 "sample and output\n"
 "  -s, --sample K      number of cells sampled at random from the tumor (default 20)\n"
 "  -n, --replicates R  number of tumors, each with its own tree (default 1)\n"
@@ -177,7 +184,7 @@ static void ReadOptions (int argc, char **argv)
 	{
 	int		i;
 	char	*opt, *val, name[64];
-	int		haveSeed = 0, nTime = 0, nFit = 0, nPar = 0, k;
+	int		haveSeed = 0, nTime = 0, nFit = 0, nPar = 0, nMut = 0, k;
 	double	parents[MAX_PRESET];
 
 	for (i=1; i<argc; i++)
@@ -226,6 +233,12 @@ static void ReadOptions (int argc, char **argv)
 			nTime = NumberList (opt, val, presetTime, MAX_PRESET);
 		else if (strcmp (opt, "--clone-fitness") == 0)
 			nFit = NumberList (opt, val, presetFitness, MAX_PRESET);
+		else if (strcmp (opt, "--clone-mutation-factor") == 0)
+			nMut = NumberList (opt, val, presetMutation, MAX_PRESET);
+		else if (strcmp (opt, "--mutator-rate") == 0)
+			mutatorRate = Number (opt, val);
+		else if (strcmp (opt, "--mutator-factor") == 0)
+			mutatorFactor = Number (opt, val);
 		else if (strcmp (opt, "--clone-parent") == 0)
 			nPar = NumberList (opt, val, parents, MAX_PRESET);
 		else if (strcmp (opt, "-s") == 0 || strcmp (opt, "--sample") == 0)
@@ -282,10 +295,24 @@ static void ReadOptions (int argc, char **argv)
 	if (driverRate > 0.0 && driverOnGrowth && !(birthRate > deathRate))
 		Fail ("--driver-acts-on growth needs a tumor that grows (--birth greater than --death); use --driver-acts-on birth%s", "");
 	presetN = nTime;
+	if (mutatorRate > 0.0)
+		mutatorsOn = 1;
 	if (nTime != nFit || (nPar > 0 && nPar != nTime))
 		Fail ("--clone-time, --clone-fitness and --clone-parent need the same number of values (--clone-parent is optional)%s", "");
+	if (nMut > 0 && nMut != nTime)
+		Fail ("--clone-mutation-factor needs one value for every clone of --clone-time%s", "");
+	if (mutatorRate < 0.0 || mutatorRate > 1.0)
+		Fail ("--mutator-rate is a probability, between 0 and 1%s", "");
+	if (mutatorRate > 0.0 && !(mutatorFactor > 0.0))
+		Fail ("--mutator-factor is needed with --mutator-rate (greater than 0)%s", "");
 	for (k=0; k<presetN; k++)
 		{
+		if (nMut == 0)
+			presetMutation[k] = 1.0;
+		else if (!(presetMutation[k] > 0.0))
+			Fail ("--clone-mutation-factor: the factors have to be greater than 0%s", "");
+		if (presetMutation[k] != 1.0)
+			mutatorsOn = 1;
 		presetParent[k] = (nPar > 0) ? (int) parents[k] : 0;
 		if (!(presetTime[k] > 0.0) || (k > 0 && !(presetTime[k] > presetTime[k-1])))
 			Fail ("--clone-time: the times are greater than 0 and increasing%s", "");
@@ -308,11 +335,20 @@ static void ReadOptions (int argc, char **argv)
 static int32_t	*nodeParent = NULL;
 static double	*nodeTime = NULL;
 static int32_t	*nodeDivs = NULL;			/* divisions of the lineage from the start of the tumor */
+static double	*nodeMutStart = NULL, *nodeMutEnd = NULL;	/* with hypermutators: mutations (per site) of the lineage when the node starts and ends */
 static long		numNodes = 0, capNodes = 0;
 
 /* the cells that are alive */
 static int32_t	*cellNode = NULL, *cellClone = NULL;
 static long		numAlive = 0, capAlive = 0;
+static double	*cellBase = NULL, *cellLast = NULL, *cellMult = NULL;	/* with hypermutators: mutations of the lineage at the last update, time of it, mutation factor */
+
+/* mutations accumulated by the lineage of the cell i up to the time t, at its mutation factor */
+static void SyncMutations (long i, double t)
+	{
+	cellBase[i] += (t - cellLast[i]) * mutationRate * cellMult[i];
+	cellLast[i] = t;
+	}
 
 /* the clones: a clone starts with a driver and has the drivers of its parent plus that one */
 static int32_t	*cloneParent = NULL, *cloneDepth = NULL;
@@ -332,6 +368,11 @@ static void GrowNodes (void)
 		nodeParent = (int32_t*) Checked (realloc (nodeParent, capNodes * sizeof (int32_t)));
 		nodeTime = (double*) Checked (realloc (nodeTime, capNodes * sizeof (double)));
 		nodeDivs = (int32_t*) Checked (realloc (nodeDivs, capNodes * sizeof (int32_t)));
+		if (mutatorsOn)
+			{
+			nodeMutStart = (double*) Checked (realloc (nodeMutStart, capNodes * sizeof (double)));
+			nodeMutEnd = (double*) Checked (realloc (nodeMutEnd, capNodes * sizeof (double)));
+			}
 		}
 	}
 
@@ -342,6 +383,12 @@ static void GrowAlive (void)
 		capAlive = capAlive ? 2 * capAlive : 1024;
 		cellNode = (int32_t*) Checked (realloc (cellNode, capAlive * sizeof (int32_t)));
 		cellClone = (int32_t*) Checked (realloc (cellClone, capAlive * sizeof (int32_t)));
+		if (mutatorsOn)
+			{
+			cellBase = (double*) Checked (realloc (cellBase, capAlive * sizeof (double)));
+			cellLast = (double*) Checked (realloc (cellLast, capAlive * sizeof (double)));
+			cellMult = (double*) Checked (realloc (cellMult, capAlive * sizeof (double)));
+			}
 		}
 	}
 
@@ -404,6 +451,13 @@ static int GrowTumor (double *endTime)
 	nodeParent[0] = -1;
 	nodeTime[0] = 0.0;
 	nodeDivs[0] = 0;
+	if (mutatorsOn)
+		{
+		nodeMutStart[0] = 0.0;
+		cellBase[0] = 0.0;
+		cellLast[0] = 0.0;
+		cellMult[0] = 1.0;
+		}
 	numNodes = 1;
 	NewClone (-1, 0.0);
 	for (j=0; j<presetN; j++)			/* the clones of the user, with the numbers 1, 2, ... */
@@ -439,6 +493,11 @@ static int GrowTumor (double *endTime)
 			if (tries == 100000)			/* the parent is rare: look for one of its cells */
 				for (i=(long) (Uniform () * (double) numAlive), tries=0; tries<numAlive && cellClone[i] != p; tries++)
 					i = (i + 1) % numAlive;
+			if (mutatorsOn)
+				{
+				SyncMutations (i, t);
+				cellMult[i] = presetMutation[j-1];
+				}
 			cloneAlive[p]--;
 			cellClone[i] = j;
 			cloneAlive[j]++;
@@ -463,6 +522,20 @@ static int GrowTumor (double *endTime)
 			nodeParent[c1] = nodeParent[c2] = cellNode[i];
 			nodeTime[c1] = nodeTime[c2] = t;
 			nodeDivs[c1] = nodeDivs[c2] = nodeDivs[cellNode[i]] + 1;
+			if (mutatorsOn)			/* mutations per generation until now, and per division: both at the mutation factor of the dividing cell */
+				{
+				SyncMutations (i, t);
+				nodeMutEnd[cellNode[i]] = cellBase[i];
+				cellBase[i] += divisionMutationRate * cellMult[i];
+				nodeMutStart[c1] = nodeMutStart[c2] = cellBase[i];
+				cellBase[numAlive] = cellBase[i];
+				cellLast[numAlive] = t;
+				cellMult[numAlive] = cellMult[i];
+				if (mutatorRate > 0.0 && Uniform () < mutatorRate)
+					cellMult[i] *= mutatorFactor;
+				if (mutatorRate > 0.0 && Uniform () < mutatorRate)
+					cellMult[numAlive] *= mutatorFactor;
+				}
 			cloneAlive[k]--;
 			n = numAlive++;
 			cellNode[i] = c1;
@@ -482,6 +555,12 @@ static int GrowTumor (double *endTime)
 			numAlive--;
 			cellNode[i] = cellNode[numAlive];
 			cellClone[i] = cellClone[numAlive];
+			if (mutatorsOn)
+				{
+				cellBase[i] = cellBase[numAlive];
+				cellLast[i] = cellLast[numAlive];
+				cellMult[i] = cellMult[numAlive];
+				}
 			if (numAlive == 0)
 				return 0;
 			}
@@ -499,6 +578,8 @@ static double	*sDiv;
 static unsigned char *sLeaf;
 static int32_t	*leafOfNode;		/* number of the sampled cell (1 to K) of a leaf node */
 static double	treeEnd;
+
+static int32_t	*sTop;			/* for a kept node: the first node of its branch (the child of the kept ancestor) */
 
 static void WriteNewick (FILE *fp, int node, int parentKept)
 	{
@@ -521,7 +602,10 @@ static void WriteNewick (FILE *fp, int node, int parentKept)
 	if (parentKept >= 0)
 		{
 		hp = sDiv[parentKept];
-		fprintf (fp, ":%.10g", (h - hp) * mutationRate + (double) (nodeDivs[node] - nodeDivs[parentKept]) * divisionMutationRate);
+		if (mutatorsOn)
+			fprintf (fp, ":%.10g", nodeMutEnd[node] - nodeMutStart[sTop[node]]);
+		else
+			fprintf (fp, ":%.10g", (h - hp) * mutationRate + (double) (nodeDivs[node] - nodeDivs[parentKept]) * divisionMutationRate);
 		}
 	}
 
@@ -540,6 +624,7 @@ static double SampleAndWriteTree (FILE *fpTrees, FILE *fpClones, int rep, int *s
 	leafOfNode = (int32_t*) Checked (calloc (n, sizeof (int32_t)));
 	sDiv = (double*) Checked (calloc (n, sizeof (double)));
 	sLeaf = (unsigned char*) Checked (calloc (n, 1));
+	sTop = (int32_t*) Checked (calloc (n, sizeof (int32_t)));
 	pick = (long*) Checked (malloc (numAlive * sizeof (long)));
 	for (i=0; i<n; i++)
 		sKid0[i] = sKid1[i] = -1;
@@ -554,10 +639,15 @@ static double SampleAndWriteTree (FILE *fpTrees, FILE *fpClones, int rep, int *s
 		sLeaf[cellNode[v]] = 1;
 		sCount[cellNode[v]] = 1;
 		leafOfNode[cellNode[v]] = (int32_t) (i + 1);
+		if (mutatorsOn)
+			{
+			SyncMutations (v, treeEnd);
+			nodeMutEnd[cellNode[v]] = cellBase[v];
+			}
 		if (fpClones != NULL)
 			{
 			k = cellClone[v];
-			fprintf (fpClones, "%d\tcell%04ld\t%d\t%d\t%.6g\n", rep, i + 1, k, cloneDepth[k], cloneRate[k]);
+			fprintf (fpClones, "%d\tcell%04ld\t%d\t%d\t%.6g\t%.6g\n", rep, i + 1, k, cloneDepth[k], cloneRate[k], mutatorsOn ? cellMult[v] : 1.0);
 			sampledClones[k]++;
 			}
 		}
@@ -575,6 +665,8 @@ static double SampleAndWriteTree (FILE *fpTrees, FILE *fpClones, int rep, int *s
 		else
 			sKeptAnc[i] = (sLeaf[nodeParent[i]] || sChildren[nodeParent[i]] >= 2) ? nodeParent[i] : sKeptAnc[nodeParent[i]];
 		}
+	for (i=1; i<n; i++)
+		sTop[i] = (sLeaf[nodeParent[i]] || sChildren[nodeParent[i]] >= 2) ? (int32_t) i : sTop[nodeParent[i]];
 	for (i=0; i<n; i++)
 		if (sCount[i] > 0 && (sLeaf[i] || sChildren[i] >= 2))
 			{
@@ -598,6 +690,7 @@ static double SampleAndWriteTree (FILE *fpTrees, FILE *fpClones, int rep, int *s
 	free (leafOfNode);
 	free (sDiv);
 	free (sLeaf);
+	free (sTop);
 	free (pick);
 	return tmrca;
 	}
@@ -637,7 +730,7 @@ int main (int argc, char **argv)
 		fprintf (fpLog, " %s", argv[i]);
 	fprintf (fpLog, "\nseed: %llu\n", (unsigned long long) seed);
 	fclose (fpLog);
-	fprintf (fpClones, "replicate\tcell\tclone\tdrivers\tbirth_rate_relative\n");
+	fprintf (fpClones, "replicate\tcell\tclone\tdrivers\tbirth_rate_relative\tmutation_factor\n");
 	fprintf (fpDrivers, "replicate\tclone\tparent_clone\tdrivers\ttime\tbirth_rate_relative\tcells_at_end\tcells_sampled\n");
 	fprintf (fpSummary, "replicate\tattempts\ttime\tcells\tclones\tmax_drivers\ttmrca\n");
 	for (rep=1; rep<=replicates; rep++)
