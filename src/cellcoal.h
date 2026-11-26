@@ -422,7 +422,7 @@ extern char			*demeN, *demeSize, *demeSource, *demeTime, *demeFounders;
 extern int			numDemes, *cellDeme, cloneN;
 extern double		cloneCells0, cloneBirth, cloneDeath;
 extern int			popSizeGiven;
-extern char			*cloneTime, *cloneParent, *cloneFitness, *cloneFounders;
+extern char			*cloneTime, *cloneParent, *cloneFitness, *cloneFounders, *cloneSizes;
 void				PrintCloneInfo (FILE *fp);
 void				DemesSetup (void);
 void				WriteDemes (void);

@@ -1683,6 +1683,13 @@ grep -q "needs the birth rate" cl6.out && ok "--clones needs the birth rate of t
 grep -q "ERROR: -e is not used with --clones" cl7.out && ok "--clones with -e is an error (cells= is the tumor size)" || bad "--clones with -e accepted"
 "$BIN" -n1 -s5 -l50 -u1e-6 -g1e-3 --clones n=2,cells=10000,birth=1e-3,time=500,fitness=2 > cl8.out 2>&1
 grep -q "not as -g, -K or -L" cl8.out && ok "--clones with -g, -K or -L is an error" || bad "--clones with -g accepted"
+"$BIN" -n1 -s5 -l50 -u1e-6 --clones n=2,cells=10000,birth=1e-3,time=500,fitness=2,sizes=big > cl9.out 2>&1
+grep -q "sizes= is random" cl9.out && ok "--clones sizes= has to be random or fixed" || bad "--clones bad sizes accepted"
+rm -rf CL; "$BIN" -n200 -s30 -l10 -u1e-7 --clones n=2,cells=10000,birth=1e-3,time=5000,fitness=1.5,sizes=random -oCL > cl10.out 2>&1
+rm -rf CF; "$BIN" -n200 -s30 -l10 -u1e-7 --clones n=2,cells=10000,birth=1e-3,time=5000,fitness=1.5,sizes=fixed -oCF > cl11.out 2>&1
+vr=$(awk 'NR>1 && $3==2{c[$1]++} END{for(r in c){s+=c[r]; q+=c[r]*c[r]} n=200; m=s/n; print (q/n-m*m)}' CL/clones.tsv)
+vf=$(awk 'NR>1 && $3==2{c[$1]++} END{for(r in c){s+=c[r]; q+=c[r]*c[r]} n=200; m=s/n; print (q/n-m*m)}' CF/clones.tsv)
+awk -v a="$vr" -v b="$vf" 'BEGIN{exit !(a>1.3*b)}' && ok "--clones: with random sizes the number of cells of a clone varies more among replicates than with fixed sizes" || bad "random sizes do not add variance (random $vr, fixed $vf)"
 rm -rf CL
 cd "$ROOT"
 

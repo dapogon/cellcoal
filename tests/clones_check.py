@@ -11,8 +11,8 @@ for every pair of clones, over many replicates. Two forward models are used:
 
   wf    non-overlapping generations (a Wright-Fisher population whose size in every clone is N_k(t)): the coalescence rate of two cells is 1/N_k(t),
         which is -K0.5 -L0.496 here (2 b = 1); it checks the genealogy of the clones, the births and the numerical solution of the times;
-  yule  a tumor in which the cells divide and none dies (a pure birth process, -K g -L0): every cell divides with probability g_k per
-        generation, the sizes of the clones are random (as in a real tumor) and the coalescence rate of two cells is 2 g_k / N_k(t).
+  yule  a tumor in which the cells divide and none dies (a pure birth process, birth=g, death=0): every cell divides with probability g_k per
+        generation, the sizes of the clones are random (as in a real tumor; only the tumors of the size given to CellCoal are kept) and the coalescence rate of two cells is 2 g_k / N_k(t).
 
 usage: clones_check.py BIN [replicates] [wf|yule]
 """
@@ -41,8 +41,8 @@ def cellcoal(tmp, reps):
     model = "birth=0.5,death=%g" % (0.5 - G) if MODE == "wf" else "birth=%g,death=0" % G
     others = sum(FOUNDERS[k - 1] * math.exp(G * FIT[k - 1] * TIMES[k - 1] * N) for k in (1, 2))
     cmd = [BIN, "-n%d" % reps, "-#5", "-l10", "-u1e-9", "-s%d" % S, "-7"] + [
-           "--clones", "n=3,cells=%d,%s,time=%s,parent=%s,fitness=%s,founders=%s" % (
-               round(N + others), model, ":".join("%g" % (t * N) for t in TIMES), ":".join(str(p + 1) for p in PARENT),
+           "--clones", "n=3,cells=%d,%s,sizes=%s,time=%s,parent=%s,fitness=%s,founders=%s" % (
+               round(N + others), model, "fixed" if MODE == "wf" else "random", ":".join("%g" % (t * N) for t in TIMES), ":".join(str(p + 1) for p in PARENT),
                ":".join(map(str, FIT)), ":".join(map(str, FOUNDERS))), "-o" + tmp]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     blocks = open(os.path.join(tmp, "times")).read().split('-------------------- Nodes -------------------')[1:]
@@ -155,6 +155,8 @@ def forward_yule(rng, gr, cells):
             new[k] = nk + b
         cur = new
     total = sum(cur)
+    if abs(total - sum(cells)) > 0.1 * sum(cells):      # the tumor of CellCoal has a given size (cells=): keep the forward tumors of that size
+        return None
     pick = rng.choice(total, size=S, replace=False)
     edges = np.cumsum(cur)
     lin = []
@@ -193,8 +195,14 @@ def main():
     rng = np.random.default_rng(11)
     b = {}
     cnt = np.zeros(K)
-    for _ in range(REPS):
-        clones, times = (forward if MODE == "wf" else forward_yule)(rng, gr, cells)
+    done = tries = 0
+    while done < REPS and tries < 60 * REPS:
+        tries += 1
+        res = (forward if MODE == "wf" else forward_yule)(rng, gr, cells)
+        if res is None:
+            continue
+        done += 1
+        clones, times = res
         for k in clones:
             cnt[k] += 1
         for (i, j), t in times.items():
@@ -215,7 +223,7 @@ def main():
         if abs(freqA[k] - cells[k] / tot) > 0.03 or abs(cnt[k] / cnt.sum() - cells[k] / tot) > (0.03 if MODE == "wf" else 0.06):
             ok = False
     if MODE != "wf":
-        print("INFO: the sizes of the clones are random in this tumor (a pure birth process from one cell), but fixed in CellCoal: not a pass/fail test")
+        print("INFO: pure birth tumor, random sizes, forward tumors of the size of cells= only: the model leaves out the stochastic first generations of every clone; not a pass/fail test")
         sys.exit(0)
     print("OK" if ok else "FAILED")
     sys.exit(0 if ok else 1)

@@ -140,6 +140,7 @@ static const GroupKey groupKeys[] =
 	{"clones", "cells",    'S', "--clone-cells", "number of cells of the whole tumor today, all the clones together (needed; -e is not used with --clones)"},
 	{"clones", "birth",    'S', "--clone-birth", "birth rate of the clone 1 per generation, model of Ohtsuki and Innan (the tumor of a single clone is -K); growth = birth - death"},
 	{"clones", "death",    'S', "--clone-death", "death rate per generation, the same in all the clones (default 0; the tumor of a single clone is -L)"},
+	{"clones", "sizes",    'S', "--clone-sizes", "random (default): the size of every clone changes among replicates (a clone grows from its founders as a pure birth process, its size is the mean times a gamma variable); fixed: the size is always the mean"},
 	{"clones", "n",        'S', "--clone-n", "number of clones, including the root clone 1 (the lists below have n-1 values, for the clones 2, 3, ...)"},
 	{"clones", "time",     'S', "--clone-time", "birth time of the clones 2, 3, ... in generations before the present, separated by : (needed)"},
 	{"clones", "parent",   'S', "--clone-parent", "parent clone of the clones 2, 3, ... separated by : (default: all from clone 1)"},

@@ -31,10 +31,11 @@ static int		*demeSrc = NULL, *demeFnd = NULL;	/* source deme (0-based) and numbe
    divide at the rate b_k = g_k + death, the same death in all the clones, and c_k = 2 b_k. */
 int		cloneN = 0;
 double	cloneCells0 = 0.0, cloneBirth = 0.0, cloneDeath = 0.0;
-char	*cloneTime = "", *cloneParent = "", *cloneFitness = "", *cloneFounders = "";
+char	*cloneTime = "", *cloneParent = "", *cloneFitness = "", *cloneFounders = "", *cloneSizes = "";
 static double	*demeGr = NULL, *demeFac = NULL;		/* growth rate of every deme or clone (per generation); NULL when the sizes are constant */
 static int		demeGrowth = 0, cloneMode = 0;
-static double	*cloneCells = NULL;	/* cells of every clone today (a real number) */
+static double	*cloneCells = NULL, *cloneMean = NULL;	/* cells of every clone today in this replicate, and their mean (real numbers) */
+static int		cloneRandom = 1;
 static long		cloneRep = 0;
 static FILE		*fpClones = NULL;
 
@@ -66,7 +67,7 @@ static int ParseNumbers (const char *s, double *v, int max)
 
 static void ClonesSetup (void)
 	{
-	double	v[256], tot = 0.0, g1, death = 0.0, others = 0.0;
+	double	v[256], g1, death = 0.0, others = 0.0;
 	int		k, n, K = cloneN;
 
 	if (strlen (demeN) > 0 || strlen (demeSize) > 0 || strlen (demeSource) > 0 || strlen (demeTime) > 0 || strlen (demeFounders) > 0)
@@ -120,6 +121,16 @@ static void ClonesSetup (void)
 	demeGr = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
 	demeFac = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
 	cloneCells = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
+	cloneMean = (double*) Checked (calloc (K, sizeof(double)), "Could not allocate the clones\n");
+	if (strlen (cloneSizes) == 0 || strcmp (cloneSizes, "random") == 0)
+		cloneRandom = 1;
+	else if (strcmp (cloneSizes, "fixed") == 0)
+		cloneRandom = 0;
+	else
+		{
+		fprintf (stderr, "\nERROR: --clones sizes= is random (the default) or fixed\n");
+		exit (-1);
+		}
 	for (k=0; k<K; k++)
 		demeFnd[k] = 1;
 	if (strlen (cloneTime) == 0)
@@ -244,10 +255,42 @@ static void ClonesSetup (void)
 			}
 		}
 	for (k=0; k<K; k++)
-		tot += cloneCells[k];
+		cloneMean[k] = cloneCells[k];
 	demeGrowth = 1;
 	cloneMode = 1;
 	numDemes = K;
+	}
+
+/* sizes of the clones in one replicate. A clone that grows from F founders at the rate g without dying is a pure birth process: its size at the time t
+   is F exp(g t) W, with W a gamma variable of shape F and mean 1 (the limit of a Yule process), so the size changes among tumors. The clones 2, 3, ...
+   are drawn like this and the clone 1 has what is left of the tumor; a draw in which the clones are as large as the tumor, or in which a parent has fewer
+   cells than founders when the clone is born, is drawn again. With death greater than 0 the same law is used as an approximation (it keeps the mean). */
+static void DrawCloneSizes (long int *seed)
+	{
+	int		k, tries, ok = 0;
+	double	others;
+
+	for (tries=0; tries<10000 && !ok; tries++)
+		{
+		others = 0.0;
+		for (k=1; k<numDemes; k++)
+			{
+			cloneCells[k] = cloneMean[k] * RandomGamma ((double) demeFnd[k], seed) / (double) demeFnd[k];
+			others += cloneCells[k];
+			}
+		cloneCells[0] = (double) N - others;
+		ok = (others < 0.999 * (double) N);
+		for (k=1; k<numDemes && ok; k++)
+			if (cloneCells[demeSrc[k]] * exp (-demeGr[demeSrc[k]] * demeT[k] * (double) N) < demeFnd[k])
+				ok = 0;
+		}
+	if (!ok)
+		{
+		fprintf (stderr, "\nERROR: --clones: the sizes of the clones drawn are always larger than the tumor or leave too few cells in a parent clone; lower the fitness, the age or the founders\n");
+		exit (-1);
+		}
+	for (k=0; k<numDemes; k++)
+		demeSz[k] = cloneCells[k] / (double) N;
 	}
 
 /* the cells are a random sample of the tumor: the clone of every cell is drawn with the probability of its frequency today, and the cells are
@@ -258,6 +301,8 @@ static void AssignClones (int nCells, long int *seed)
 	double	tot = 0.0, u, acc;
 
 	count = (int*) Checked (calloc (K, sizeof(int)), "Could not allocate the clones\n");
+	if (cloneRandom)
+		DrawCloneSizes (seed);
 	for (k=0; k<K; k++)
 		tot += cloneCells[k];
 	for (i=0; i<nCells; i++)
@@ -295,16 +340,16 @@ void PrintCloneInfo (FILE *fp)
 	if (!cloneMode)
 		return;
 	for (k=0; k<numDemes; k++)
-		tot += cloneCells[k];
+		tot += cloneMean[k];
 	fprintf (fp, "\n Clones (differential growth, --clones)       =   %d clones; the %d cells are a random sample of the tumor; %s", numDemes, numCells,
 			 "model of Ohtsuki and Innan (birth, death)");
 	for (k=0; k<numDemes; k++)
 		{
 		if (k == 0)
-			fprintf (fp, "\n  Clone 1 (root): growth %2.1e, %.0f cells, frequency %.4f", demeGr[0], cloneCells[0], cloneCells[0] / tot);
+			fprintf (fp, "\n  Clone 1 (root): growth %2.1e, %.0f cells%s, frequency %.4f", demeGr[0], cloneMean[0], cloneRandom ? " (mean)" : "", cloneMean[0] / tot);
 		else
-			fprintf (fp, "\n  Clone %d: born %g generations ago from clone %d, %d founder(s), fitness %.4g (growth %2.1e), %.0f cells, frequency %.4f",
-					 k + 1, demeT[k] * N, demeSrc[k] + 1, demeFnd[k], demeGr[k] / demeGr[0], demeGr[k], cloneCells[k], cloneCells[k] / tot);
+			fprintf (fp, "\n  Clone %d: born %g generations ago from clone %d, %d founder(s), fitness %.4g (growth %2.1e), %.0f cells%s, frequency %.4f",
+					 k + 1, demeT[k] * N, demeSrc[k] + 1, demeFnd[k], demeGr[k] / demeGr[0], demeGr[k], cloneMean[k], cloneRandom ? " (mean)" : "", cloneMean[k] / tot);
 		}
 	}
 
