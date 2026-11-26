@@ -26,7 +26,7 @@ static const struct { const char *name, *what; } groupInfo[] =
 	{"call-filter",   "which sites are written to the VCF, CATG and PILEUP files (read counts)"},
 	{"reads",         "paired-end read simulator (needs coverage; at least bam or fastq)"},
 	{"demes",         "structured coalescent: tumor regions (demes) founded by colonization from a source deme (no continuous migration)"},
-	{"clones",        "clones of different fitness (growth rate) in one tumor, sampled at random (no continuous migration, no competition)"},
+	{"clones",        "clones of different fitness (growth rate) in one tumor, sampled at random (the neutral tumor is the exponential growth, -g or -K -L)"},
 	{"chromosome",    "a real or long chromosome in blocks"},
 	{"output",        "results folder and files"},
 	{NULL, NULL}
@@ -142,7 +142,6 @@ static const GroupKey groupKeys[] =
 	{"clones", "parent",   'S', "--clone-parent", "parent clone of the clones 2, 3, ... separated by : (default: all from clone 1)"},
 	{"clones", "fitness",  'S', "--clone-fitness", "growth rate of the clones 2, 3, ... relative to the growth rate -g of the clone 1 (1.5 grows 50% faster), separated by : (needed)"},
 	{"clones", "founders", 'S', "--clone-founders", "founder cells of the clones 2, 3, ... separated by : (default 1)"},
-	{"clones", "death",    'S', "--clone-death", "death rate of the cells, per generation and the same in all the clones (default 0: every cell that divides adds a cell); the birth rate of the clone k is its growth rate plus this"},
 	{"chromosome", "germline-vcf", 'S', "--germline-vcf", "germline SNVs to put in the healthy genome"},
 	{"chromosome", "germline-pop", 'S', "--germline-pop", "germline SNVs of a population with INFO AF: the genotype of the individual is sampled"},
 	{"chromosome", "region-rates", 'S', "--region-rates", "relative mutation rate of regions (BED: chrom start end multiplier); needs --blocks or --fasta"},

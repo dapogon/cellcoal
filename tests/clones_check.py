@@ -10,8 +10,8 @@ CellCoal and the forward simulation are compared in the frequency of every clone
 for every pair of clones, over many replicates. Two forward models are used:
 
   wf    non-overlapping generations (a Wright-Fisher population whose size in every clone is N_k(t)): the coalescence rate of two cells is 1/N_k(t),
-        which is --clone-death 0.496 here (2 b = 1); it checks the genealogy of the clones, the births and the numerical solution of the times;
-  yule  a tumor in which the cells divide and none dies (a pure birth process, death 0, the default): every cell divides with probability g_k per
+        which is -K0.5 -L0.496 here (2 b = 1); it checks the genealogy of the clones, the births and the numerical solution of the times;
+  yule  a tumor in which the cells divide and none dies (a pure birth process, -K g -L0): every cell divides with probability g_k per
         generation, the sizes of the clones are random (as in a real tumor) and the coalescence rate of two cells is 2 g_k / N_k(t).
 
 usage: clones_check.py BIN [replicates] [wf|yule]
@@ -38,11 +38,11 @@ K = 3
 
 
 def cellcoal(tmp, reps):
-    death = "%g" % (0.5 - G) if MODE == "wf" else "0"
-    cmd = [BIN, "-n%d" % reps, "-#5", "-l10", "-u1e-9", "-e%d" % N, "-g%g" % G, "-s%d" % S, "-7",
-           "--clones", "n=3,time=%s,parent=%s,fitness=%s,founders=%s,death=%s" % (
+    model = ["-K0.5", "-L%g" % (0.5 - G)] if MODE == "wf" else ["-K%g" % G, "-L0"]
+    cmd = [BIN, "-n%d" % reps, "-#5", "-l10", "-u1e-9", "-e%d" % N, "-s%d" % S, "-7"] + model + [
+           "--clones", "n=3,time=%s,parent=%s,fitness=%s,founders=%s" % (
                ":".join(map(str, TIMES)), ":".join(str(p + 1) for p in PARENT),
-               ":".join(map(str, FIT)), ":".join(map(str, FOUNDERS)), death), "-o" + tmp]
+               ":".join(map(str, FIT)), ":".join(map(str, FOUNDERS))), "-o" + tmp]
     subprocess.run(cmd, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL, check=True)
     blocks = open(os.path.join(tmp, "times")).read().split('-------------------- Nodes -------------------')[1:]
     clone = {}

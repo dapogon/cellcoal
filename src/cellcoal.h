@@ -420,7 +420,6 @@ void				FinishReadLevel (void);
 extern int			blocksN, blockIndex, blocksOn, *posMap;
 extern char			*demeN, *demeSize, *demeSource, *demeTime, *demeFounders;
 extern int			numDemes, *cellDeme, cloneN;
-extern double		cloneDeath;
 extern char			*cloneTime, *cloneParent, *cloneFitness, *cloneFounders;
 void				PrintCloneInfo (FILE *fp);
 void				DemesSetup (void);
