@@ -397,6 +397,25 @@ Genealogy. Looking back in time, the cells of a clone coalesce as in the model o
 
 **What is checked, and what is not.** `python3 tests/clones_check.py BIN` simulates the whole tumor forward in time, with the same clones, and compares the frequencies of the clones in a random sample and the mean time to the coalescence of two cells for every pair of clones. With fixed sizes (`sizes=fixed`) and the rate 1 / *N*<sub>k</sub>(*t*) (`birth=0.5,death=0.496`, 2 *b* = 1), compared with a forward tumor of non-overlapping generations, the agreement is within 1% for the pairs of clones that have thousands of pairs of cells (the numerical solution of the times, the births and the bottlenecks are right). For a pure birth tumor (`death=0`, random sizes), compared with the tumors simulated forward by `cellforward` (pure birth, the same clones, only the tumors of the size of `cells=` are kept; `python3 tests/clones_check.py BIN 6000 yule`, 19 seconds), the frequencies of the clones agree (0.857, 0.108 and 0.035 against 0.868, 0.095 and 0.037) and the mean times to the coalescence are 4% to 7% deeper in CellCoal (12% for the pairs of the smallest clone, which has 422 pairs): the first generations after the birth of a clone, which are stochastic, are not in the model, which grows every clone as the exponential of its mean. The clones do not compete (a clone does not displace the others), so it is a model for tumors in expansion and not for tumors of a constant size, where the selection acts on a population with a fixed size and the genealogy needs the ancestral selection graph. It cannot be combined with `--demes`, a user tree or demographic periods.
 
+### 5.1.5 Two programs: the coalescent (CellCoal) and the tumor simulated forward in time (`cellforward`)
+
+CellCoal simulates the genealogy of a sample of cells **backward in time**, with a coalescent. Next to it there is a second program, **`cellforward`**, that simulates the whole tumor **forward in time**, one cell division at a time, and writes the tree of a random sample of cells; CellCoal then simulates the mutations, copy number changes and reads on that tree (`-T`, `--tree file=`, one tree per line and per replicate). They are separate programs with separate options, and nothing of one is used in the other: a run is done with one or the other.
+
+| | CellCoal (coalescent) | `cellforward` |
+|---|---|---|
+| Direction of time | backward, from the sample | forward, from one cell |
+| Cost | depends on the cells of the sample, not on the size of the tumor | depends on the size of the tumor (about 0.14 s for 10<sup>6</sup> cells) |
+| Tumor size | any | up to 5·10<sup>7</sup> cells |
+| Growth | `-g`, or `-K` and `-L`; or clones of different fitness with `--clones` | `--birth`, `--death`; stop at a size (`--size`) or a time (`--time`) |
+| Selection | the fitness of the clones is an input (`--clones`) | clones of the user, or random driver mutations whose effect makes the fitness |
+| Sizes of the clones | random in every replicate, an approximation that leaves out the first generations of a clone | random, exact |
+| Time | generations of the model (Wright-Fisher, or the birth-death process of Ohtsuki and Innan) | generations as the unit of time of a birth-death process |
+| Mutation rate of the tree | `-u`, per site and generation | `--mutation-rate U` per site and generation plus `--division-mutation-rate V` per site and cell division |
+| Hypermutators | no | clones of the user or random (`--clone-mutation-factor`, `--mutator-rate`) |
+| Space, competition between clones | no | no (not yet) |
+
+In a Wright-Fisher population a generation is one round of reproduction, so the time and the divisions of a lineage are the same and one mutation rate is enough (`-u`). In a birth-death process the cells divide at random, so the time and the number of divisions of a lineage are different, and `cellforward` has a rate per generation and another per division, which are added. The coalescent and the forward program agree for neutral tumors and for clones of different fitness (sections 5.1.4 and `docs/manual/cellforward.md`, with the numbers of the comparison); use the coalescent when the tumor is very large or thousands of replicates are needed, and the forward program when the model needs what the coalescent cannot do. The manual of `cellforward` is `docs/manual/cellforward.md`.
+
 ## 5.2 Somatic mutation models
 
 CellCoal simulates the evolution of the genotypes along the genealogy by adding somatic events to an ancestral genome at the *sample/outgroup MRCA*. There are five kinds of events, which differ in what they do to the genome of a cell:

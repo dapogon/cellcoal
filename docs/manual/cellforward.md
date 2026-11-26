@@ -4,6 +4,8 @@
 
 Use the coalescent when the tumor is very large or you need thousands of replicates in seconds, and `cellforward` when the model has things that the coalescent cannot do: the fitness of a clone that comes from the driver mutations that it really got, random sizes and extinctions without approximations, or a check of the coalescent. The cost is proportional to the number of cells of the tumor: about 0.14 s for a tumor of 10<sup>6</sup> cells (the limit is 5·10<sup>7</sup> cells, because every division is kept in memory).
 
+CellCoal and `cellforward` are two separate programs: nothing of one is used in the other. A table that compares them is in the manual of CellCoal (section 5.1.5). The options of the growth model of CellCoal (`-e`, `-g`, `-K`, `-L`, `--clones`) do not exist here, and the options of `cellforward` do not exist in CellCoal; the only things that cross from one to the other are the trees (`trees.nwk`, read by `cellcoal -T`) and the tables of clones.
+
 ## The model
 
 - The tumor starts from **one cell** at time 0. Every cell **divides** at the birth rate `--birth` and **dies** at the rate `--death`, both per generation. A tumor that dies out is simulated again, so the tumors that are kept are those that survive.
