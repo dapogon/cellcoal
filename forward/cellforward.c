@@ -1073,12 +1073,40 @@ static void WriteNewickFast (FILE *fp, int node, int parent)
 		fprintf (fp, ":%.10g", (fDepth[parent] - fDepth[node]) * mutationRate + (1.0 + fHidden[node]) * divisionMutationRate);
 	}
 
+/* size mode: the divisions of the whole tumor that leave no sampled cell, drawn exactly. In the coalescent point process of the N cells the nodes of the
+   lineage of a sampled cell that hang from a run of L unsampled cells (depths iid, below xtop) are the records of the run, seen from the lineage;
+   a record at depth H is a division on the branch of the sampled tree that covers that depth.  The number of records of L values is
+   about log L, so the cost does not depend on N */
+static int		*fParent;
+
+static void HiddenRecords (int tip, long L, double xtop)
+	{
+	double	u = 0.0, q, f1, H, c = 1.0 - 1.0 / (1.0 + FofT (xtop));
+	long	at = 0;
+	int		node;
+
+	for (;;)
+		{
+		at += (u > 0.0) ? 1 + (long) floor (log (Uniform ()) / log (u)) : 1;
+		if (at > L || at < 0)
+			break;
+		u += (1.0 - u) * Uniform ();
+		q = u * c;
+		f1 = q / (1.0 - q);
+		H = TofF1 (f1);
+		for (node=tip; fParent[node] >= 0 && fDepth[fParent[node]] < H; node=fParent[node])
+			;
+		if (fParent[node] >= 0)
+			fHidden[node] += 1.0;
+		}
+	}
+
 /* one replicate without simulating the tumor */
 static void FastTree (FILE *fpTrees, FILE *fpClones, FILE *fpDrivers, FILE *fpSummary, int rep, int attempts)
 	{
 	int		k = sampleSize, i, j, top, *stack, *left, *right, root, m, tmp;
 	double	T, N = -1.0, g = birthRate - deathRate, b = birthRate, F1T, oneMinusA, a, y, c, w, v, u, *x, A, B, tau1, tau2, mean, rootDepth;
-	long	*pos, count, cell;
+	long	*pos = NULL, count, cell;
 
 	if (stopSize > 0.0)
 		{
@@ -1132,7 +1160,6 @@ static void FastTree (FILE *fpTrees, FILE *fpClones, FILE *fpDrivers, FILE *fpSu
 			/* P(H < t | H < T) = (1 - 1/F(t)) / (1 - 1/F(T)) = u1, so F(t) - 1 = u1 a / (1 - u1 a) */
 			x[i] = TofF1 (u1 * a / ((1.0 - u1) + u1 * oneMinusA));
 			}
-		free (pos);
 		}
 	/* the tree: a Cartesian tree on the depths (leaves 0 ... k-1, internal nodes k ... 2k-2) */
 	stack = (int*) Checked (calloc (k, sizeof (int)));
@@ -1164,17 +1191,53 @@ static void FastTree (FILE *fpTrees, FILE *fpClones, FILE *fpDrivers, FILE *fpSu
 		}
 	rootDepth = x[root];
 	/* the divisions that leave no sampled cell, on every branch */
-	A = b / g;
-	B = 1.0 / y - A;
-	for (i=0; i<k-1; i++)
-		for (j=0; j<2; j++)
+	if (N < 0.0)							/* a fixed time: independent Poisson numbers, with the rate of the birth-death process given the tree */
+		{
+		A = b / g;
+		B = 1.0 / y - A;
+		for (i=0; i<k-1; i++)
+			for (j=0; j<2; j++)
+				{
+				m = (j == 0) ? fKid0[i] : fKid1[i];
+				tau1 = fDepth[m];
+				tau2 = x[i];
+				mean = 2.0 * b * (tau2 - tau1) - 2.0 * ((g * tau2 + log (A + B * exp (-g * tau2))) - (g * tau1 + log (A + B * exp (-g * tau1))));
+				fHidden[m] = (mean > 0.0) ? Poisson (mean) : 0.0;
+				}
+		}
+	else								/* the size is fixed: the hidden divisions are not independent (they add up to the N - k cells that are not sampled) */
+		{
+		A = b / g;							/* divisions whose other daughter has no descendants at all (extinct): Poisson, as when every cell is sampled (y = 1) */
+		B = 1.0 - A;
+		for (i=0; i<k-1; i++)
+			for (j=0; j<2; j++)
+				{
+				m = (j == 0) ? fKid0[i] : fKid1[i];
+				tau1 = fDepth[m];
+				tau2 = x[i];
+				mean = 2.0 * b * (tau2 - tau1) - 2.0 * ((g * tau2 + log (A + B * exp (-g * tau2))) - (g * tau1 + log (A + B * exp (-g * tau1))));
+				fHidden[m] = (mean > 0.0) ? Poisson (mean) : 0.0;
+				}
+		fParent = (int*) Checked (calloc (2 * k, sizeof (int)));
+		for (i=0; i<2*k; i++)
+			fParent[i] = -1;
+		for (i=0; i<k-1; i++)
 			{
-			m = (j == 0) ? fKid0[i] : fKid1[i];
-			tau1 = fDepth[m];
-			tau2 = x[i];
-			mean = 2.0 * b * (tau2 - tau1) - 2.0 * ((g * tau2 + log (A + B * exp (-g * tau2))) - (g * tau1 + log (A + B * exp (-g * tau1))));
-			fHidden[m] = (mean > 0.0) ? Poisson (mean) : 0.0;
+			fParent[fKid0[i]] = k + i;
+			fParent[fKid1[i]] = k + i;
 			}
+		for (i=0; i<k-1; i++)
+			{
+			long	gap = pos[i+1] - pos[i], nl = (long) (Uniform () * (double) gap);	/* the maximum of the run is the node i; nl values before it, gap - 1 - nl after it */
+
+			HiddenRecords (i, nl, x[i]);
+			HiddenRecords (i + 1, gap - 1 - nl, x[i]);
+			}
+		HiddenRecords (0, pos[0], T);				/* the cells to the left of the first sampled cell and to the right of the last one */
+		HiddenRecords (k - 1, (long) N - 1 - pos[k-1], T);
+		free (fParent);
+		free (pos);
+		}
 	for (i=0; i<k; i++)						/* the leaves get the labels in random order */
 		fLeafLabel[i] = i;
 	for (i=k-1; i>0; i--)

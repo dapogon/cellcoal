@@ -35,7 +35,8 @@ for b, d, stop in ((0.5, 0.1, ["--size", "2000"]), (0.5, 0.4, ["--size", "2000"]
     for mode in ("time", "div"):
         f, r = stat(run("forward", stop, b, d, mode, 5)), stat(run("reconstructed", stop, b, d, mode, 6))
         z = (f[0] - r[0]) / math.sqrt(f[1] ** 2 + r[1] ** 2)
-        good = abs(z) < 3.5 and abs(f[0] / r[0] - 1) < 0.05
+        sdr = r[2] / f[2]
+        good = abs(z) < 3.5 and abs(f[0] / r[0] - 1) < 0.05 and 0.8 < sdr < 1.2
         ok &= good
         cols.append("%.2f / %.2f z=%+.1f sd %.2f%s" % (f[0], r[0], z, r[2] / f[2], "" if good else " FAIL"))
     print("%-34s %-30s %-30s" % ("b=%g d=%g %s" % (b, d, " ".join(stop)), cols[0], cols[1]))
