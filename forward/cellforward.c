@@ -673,6 +673,7 @@ static void HeapPop (void)
 	last = heap[--heapN];
 	if (heapN == 0)
 		return;
+	/* bottom-up: the hole goes down to a leaf following the smaller child (one comparison per level), and the last event climbs from there */
 	for (;;)
 		{
 		c = 2 * p + 1;
@@ -680,10 +681,15 @@ static void HeapPop (void)
 			break;
 		if (c + 1 < heapN && heap[c+1].t < heap[c].t)
 			c++;
-		if (heap[c].t >= last.t)
-			break;
 		heap[p] = heap[c];
 		p = c;
+		}
+	for (; p>0; p=c)
+		{
+		c = (p - 1) / 2;
+		if (heap[c].t <= last.t)
+			break;
+		heap[p] = heap[c];
 		}
 	heap[p] = last;
 	}
