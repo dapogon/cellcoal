@@ -15,7 +15,7 @@ sites: 200000
 population_size: 10000
 mutation_rate: 1e-7
 coverage: 0.5                      # about the depth of the low-pass data (0.2-0.8x)
-coverage_dispersion_cells: 0.5
+coverage_dispersion_cells: 2        # gamma shape: the smaller, the more variation between cells
 gain_sd: 0.8
 gain_len: 100000
 ado: 0.2

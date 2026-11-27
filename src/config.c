@@ -665,8 +665,8 @@ static int ExpandWga (char **a, int n)
 	/* option, is it a prefix of the several-letter family (ADO: -D -P -Q), values */
 	static const struct { const char *method; const char *tokens; } preset[] =
 		{
-		{"mda", "-J0.5|--gain-sd|0.8|--gain-len|100000|-D0.2|-A0.05|0.01|0"},
-		{"pta", "-J0.2|--gain-sd|0.2|--gain-len|20000|-D0.05|-A0.01|0.002|0"},
+		{"mda", "-J2|--gain-sd|0.8|--gain-len|100000|--ado-block|20000|-D0.2|-A0.05|0.01|0"},
+		{"pta", "-J5|--gain-sd|0.2|--gain-len|20000|--ado-block|5000|-D0.05|-A0.01|0.002|0"},
 		{NULL, NULL}
 		};
 	static const char *ado[] = {"-D", "-P", "-Q", NULL};

@@ -8,7 +8,7 @@ sites: 200000
 population_size: 10000
 mutation_rate: 1e-7
 coverage: 30
-coverage_dispersion_cells: 0.5     # cells sequenced at different depths
+coverage_dispersion_cells: 2        # cells sequenced at different depths (gamma shape: the smaller, the more variation)
 gain_sd: 0.8                       # strong variation of the depth along the genome ...
 gain_len: 100000                   # ... in segments of 100 kb (autocorrelated coverage and allelic imbalance)
 ado: 0.2                           # allelic dropout of 20% of the alleles (also wherever the gain is low)

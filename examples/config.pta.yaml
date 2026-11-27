@@ -8,7 +8,7 @@ sites: 200000
 population_size: 10000
 mutation_rate: 1e-7
 coverage: 30
-coverage_dispersion_cells: 0.2
+coverage_dispersion_cells: 5   # gamma shape: the smaller, the more variation between cells
 gain_sd: 0.2
 gain_len: 20000
 ado: 0.05
