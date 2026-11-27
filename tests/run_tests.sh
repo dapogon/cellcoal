@@ -1743,6 +1743,8 @@ for w in growth birth; do rm -rf FG; "$FWD" --birth 0.5 --death 0.1 --size 3000 
 [ "$r_growth" = "1.4" ] && [ "$r_birth" = "1.5" ] && ok "cellforward --driver-acts-on: a driver of effect 0.5 gives the relative birth rate 1.4 (net growth x 1.5) or 1.5 (birth x 1.5)" || bad "cellforward driver action (growth $r_growth, birth $r_birth)"
 rm -rf FM; "$FWD" --birth 0.5 --death 0.1 --size 3000 -s 6 -n 30 --driver-rate 0.02 --driver-effect 0.3 --max-clones 3 --seed 4 -o FM > /dev/null 2>&1; mx=$(awk -F'\t' 'NR>1{print $5}' FM/summary.tsv | sort -n | tail -1)
 [ -n "$mx" ] && [ "$mx" -le 4 ] && ok "cellforward --max-clones 3: at most 3 clones with a driver (and the root) in every tumor" || bad "cellforward --max-clones (max clones $mx)"
+rm -rf FA; "$FWD" --birth 0.5 --death 0.1 --size 3000 -s 6 -n 40 --driver-effect 0.3 --seed 4 -o FA > FA.log 2>&1; av=$(awk -F'\t' 'NR>1{s+=$5-1;n++}END{printf "%.1f",s/n}' FA/summary.tsv)
+awk -v a="$av" 'BEGIN{exit !(a>=2.5 && a<=5)}' && grep -q "driver-rate not given" FA.log && ok "cellforward: without --driver-rate (with --driver-effect) a tumor has about 3-4 clones with a driver ($av)" || bad "cellforward automatic driver rate ($av)"
 for f in 1 10; do rm -rf FM$f; "$FWD" --birth 0.5 --death 0.1 --time 25 --clone-time 12 --clone-fitness 1 --clone-mutation-factor $f -s 30 -n 300 --seed 3 -o FM$f > /dev/null 2>&1; done
 len1=$(awk -F'[:,();]' '{t=0; for(i=1;i<=NF;i++) if ($i ~ /^[0-9.]+(e[-+][0-9]+)?$/ && $i ~ /[.e]/) t+=$i; s+=t; n++} END{print s/n}' FM1/trees.nwk)
 len10=$(awk -F'[:,();]' '{t=0; for(i=1;i<=NF;i++) if ($i ~ /^[0-9.]+(e[-+][0-9]+)?$/ && $i ~ /[.e]/) t+=$i; s+=t; n++} END{print s/n}' FM10/trees.nwk)
