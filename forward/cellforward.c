@@ -77,13 +77,43 @@ static double Exponential (double rate)
 	return -log (1.0 - Uniform ()) / rate;
 	}
 
+static double Normal (void)
+	{
+	return sqrt (-2.0 * log (1.0 - Uniform ())) * cos (6.283185307179586 * Uniform ());
+	}
+
+/* gamma with shape k and scale 1 (Marsaglia and Tsang) */
+static double Gamma (double k)
+	{
+	double	d, c, x, v, u;
+
+	if (k < 1.0)
+		return Gamma (k + 1.0) * pow (1.0 - Uniform (), 1.0 / k);
+	d = k - 1.0 / 3.0;
+	c = 1.0 / sqrt (9.0 * d);
+	for (;;)
+		{
+		do
+			{
+			x = Normal ();
+			v = 1.0 + c * x;
+			}
+		while (v <= 0.0);
+		v = v * v * v;
+		u = Uniform ();
+		if (u < 1.0 - 0.0331 * x * x * x * x || log (1.0 - u) < 0.5 * x * x + d * (1.0 - v + log (v)))
+			return d * v;
+		}
+	}
+
 /* ------------------------------ parameters ------------------------------ */
 
 static int		replicates = 1, sampleSize = 20;
 static double	birthRate = -1.0, deathRate = 0.0, stopSize = 0.0, stopTime = 0.0;
 static double	driverRate = 0.0, driverEffect = -1.0, mutationRate = 1.0, divisionMutationRate = 0.0;
 static int		driverExponential = 1, driverOnGrowth = 1;
-static int		driverRateGiven = 0;
+static int		driverRateGiven = 0, driverOnDeath = 0;
+static double	cycleShape = 1.0;						/* shape k of the gamma waiting time between divisions (1: exponential) */
 static double	driverTarget = 3.5;						/* expected number of clones with a driver per tumor when --driver-rate is not given */
 static long		maxClones = 0, driverClones = 0;		/* limit of the clones with a random driver per tumor (0 = no limit) */
 static double	mutatorRate = 0.0, mutatorFactor = -1.0, presetMutation[MAX_PRESET];	/* hypermutators */
@@ -127,7 +157,9 @@ static void Usage (FILE *fp)
 "                      The N clones are the first that appear; to keep the natural probabilities lower --driver-rate instead\n"
 "  --driver-dist D     exponential (default: S is the mean of an exponential variable) or fixed (every driver has the effect S)\n"
 "  --driver-acts-on W  growth (default): the net growth rate (birth - death) is multiplied by 1 + S, as the fitness of --clone-fitness;\n"
-"                      birth: the birth rate is multiplied by 1 + S and the death rate does not change (the gain in growth is then larger than S)\n\n"
+"                      birth: the birth rate is multiplied by 1 + S and the death rate does not change (the gain in growth is then larger than S);\n"
+"                      death: the DEATH rate falls so that the net growth rate is multiplied by 1 + S (the birth rate does not change; the death rate\n"
+"                      cannot go below 0, so the gain is at most birth / (birth - death)); needs --death greater than 0\n\n"
 "clones started by the user (a cell of the parent clone gets a growth advantage at a time; the size and the frequency of the clone are a result)\n"
 "  --clone-time T1:T2:...   generations after the start of the tumor at which each clone starts (increasing; at most %d clones)\n"
 "  --clone-fitness F1:F2:.. growth rate of each clone relative to the first clone, as in CellCoal --clones: the birth rate of the clone\n"
@@ -144,6 +176,9 @@ static void Usage (FILE *fp)
 "  -n, --replicates R  number of tumors, each with its own tree (default 1)\n"
 "  --mutation-rate U   mutations per site and generation: the branch length is the generations times U plus the divisions times V\n"
 "                      (CellCoal reads the branch lengths of a user tree as expected mutations per site); default 1, which gives generations\n"
+"  --cycle-shape K     waiting time between divisions: gamma with shape K and mean 1 / birth rate (default 1: exponential, the cells have no memory of their\n"
+"                      last division; a large K makes the cells divide almost in synchrony, as in a cell cycle). Deaths stay exponential. A clone of\n"
+"                      --clone-time starts its cycle again\n"
 "  --division-mutation-rate V  mutations per site and cell division (those linked to the replication of the DNA; default 0). With V the number of\n"
 "                      mutations of a branch depends on the divisions of the lineage and not only on the time, so a clone that divides more\n"
 "                      accumulates more mutations. Use --mutation-rate 0 for divisions only\n"
@@ -227,6 +262,8 @@ static void ReadOptions (int argc, char **argv)
 			driverRate = Number (opt, val);
 			driverRateGiven = 1;
 			}
+		else if (strcmp (opt, "--cycle-shape") == 0)
+			cycleShape = Number (opt, val);
 		else if (strcmp (opt, "--max-clones") == 0)
 			maxClones = (long) Number (opt, val);
 		else if (strcmp (opt, "--driver-effect") == 0)
@@ -266,8 +303,13 @@ static void ReadOptions (int argc, char **argv)
 				driverOnGrowth = 1;
 			else if (strcmp (val, "birth") == 0)
 				driverOnGrowth = 0;
+			else if (strcmp (val, "death") == 0)
+				{
+				driverOnGrowth = 0;
+				driverOnDeath = 1;
+				}
 			else
-				Fail ("--driver-acts-on is growth or birth (not %s)", val);
+				Fail ("--driver-acts-on is growth, birth or death (not %s)", val);
 			}
 		else if (strcmp (opt, "--seed") == 0)
 			{
@@ -307,6 +349,12 @@ static void ReadOptions (int argc, char **argv)
 			driverRate = 1.0;
 		fprintf (stderr, "--driver-rate not given: %.3g, for about %.1f clones with a driver per tumor\n", driverRate, driverTarget);
 		}
+	if (!(cycleShape > 0.0) || cycleShape > 1e6)
+		Fail ("--cycle-shape is the shape of a gamma distribution, greater than 0 (and not above 1e6)%s", "");
+	if (driverRate > 0.0 && driverOnDeath && !(deathRate > 0.0))
+		Fail ("--driver-acts-on death needs a death rate (--death greater than 0)%s", "");
+	if (driverEffect > -1.0 && driverOnDeath && !(birthRate > deathRate))
+		Fail ("--driver-acts-on death needs a tumor that grows (--birth greater than --death)%s", "");
 	if (maxClones < 0)
 		Fail ("--max-clones is a number of clones, 0 or more%s", "");
 	if (driverRate < 0.0 || driverRate > 1.0)
@@ -362,6 +410,9 @@ static double	*nodeTime = NULL;
 static int32_t	*nodeDivs = NULL;			/* divisions of the lineage from the start of the tumor */
 static double	*nodeMutStart = NULL, *nodeMutEnd = NULL;	/* with hypermutators: mutations (per site) of the lineage when the node starts and ends */
 static long		numNodes = 0, capNodes = 0;
+static double	*nodeNext = NULL;			/* gamma waiting times: time of the next event of the cell of a node */
+static int32_t	*nodeCell = NULL;			/* gamma waiting times: alive cell of a node (-1: the node has divided or died) */
+static unsigned char *nodeDeath = NULL;		/* gamma waiting times: the next event is a death */
 
 /* the cells that are alive */
 static int32_t	*cellNode = NULL, *cellClone = NULL;
@@ -381,7 +432,8 @@ static double	*cloneTime = NULL, *cloneRate = NULL;		/* birth rate relative to t
 static long		*cloneAlive = NULL;
 static long		numClones = 0, capClones = 0;
 
-static double	bMax;
+static double	bMax, dMax;
+static double	*cloneDeath = NULL;						/* death rate of every clone */
 
 static void GrowNodes (void)
 	{
@@ -393,6 +445,12 @@ static void GrowNodes (void)
 		nodeParent = (int32_t*) Checked (realloc (nodeParent, capNodes * sizeof (int32_t)));
 		nodeTime = (double*) Checked (realloc (nodeTime, capNodes * sizeof (double)));
 		nodeDivs = (int32_t*) Checked (realloc (nodeDivs, capNodes * sizeof (int32_t)));
+		if (cycleShape != 1.0)
+			{
+			nodeNext = (double*) Checked (realloc (nodeNext, capNodes * sizeof (double)));
+			nodeCell = (int32_t*) Checked (realloc (nodeCell, capNodes * sizeof (int32_t)));
+			nodeDeath = (unsigned char*) Checked (realloc (nodeDeath, capNodes * sizeof (unsigned char)));
+			}
 		if (mutatorsOn)
 			{
 			nodeMutStart = (double*) Checked (realloc (nodeMutStart, capNodes * sizeof (double)));
@@ -428,6 +486,7 @@ static int NewClone (int parent, double t)
 		cloneDepth = (int32_t*) Checked (realloc (cloneDepth, capClones * sizeof (int32_t)));
 		cloneTime = (double*) Checked (realloc (cloneTime, capClones * sizeof (double)));
 		cloneRate = (double*) Checked (realloc (cloneRate, capClones * sizeof (double)));
+		cloneDeath = (double*) Checked (realloc (cloneDeath, capClones * sizeof (double)));
 		cloneAlive = (long*) Checked (realloc (cloneAlive, capClones * sizeof (long)));
 		}
 	cloneParent[numClones] = parent;
@@ -437,17 +496,28 @@ static int NewClone (int parent, double t)
 		{
 		cloneDepth[numClones] = 0;
 		cloneRate[numClones] = 1.0;
+		cloneDeath[numClones] = deathRate;
 		}
 	else
 		{
 		s = driverExponential ? driverEffect * Exponential (1.0) : driverEffect;
 		cloneDepth[numClones] = cloneDepth[parent] + 1;
-		if (driverOnGrowth)			/* the net growth rate is multiplied by 1 + s */
+		cloneDeath[numClones] = cloneDeath[parent];
+		if (driverOnDeath)			/* the death rate falls so that the net growth rate is multiplied by 1 + s */
+			{
+			cloneRate[numClones] = cloneRate[parent];
+			cloneDeath[numClones] = birthRate * cloneRate[parent] - (1.0 + s) * (birthRate * cloneRate[parent] - cloneDeath[parent]);
+			if (cloneDeath[numClones] < 0.0)
+				cloneDeath[numClones] = 0.0;
+			}
+		else if (driverOnGrowth)			/* the net growth rate is multiplied by 1 + s */
 			cloneRate[numClones] = (deathRate + (1.0 + s) * (birthRate * cloneRate[parent] - deathRate)) / birthRate;
 		else						/* the birth rate is multiplied by 1 + s */
 			cloneRate[numClones] = cloneRate[parent] * (1.0 + s);
 		if (birthRate * cloneRate[numClones] > bMax)
 			bMax = birthRate * cloneRate[numClones];
+		if (cloneDeath[numClones] > dMax)
+			dMax = cloneDeath[numClones];
 		}
 	return (int) numClones++;
 	}
@@ -463,18 +533,170 @@ static int Daughter (int clone, double t)
 	return clone;
 	}
 
+/* a division of the alive cell i at the time t: both daughters are new lineages, and can get a driver */
+static void Division (long i, double t)
+	{
+	long	n;
+	int		k = cellClone[i], c1, c2;
+
+	GrowNodes ();
+	GrowAlive ();
+	c1 = (int) numNodes++;
+	c2 = (int) numNodes++;
+	nodeParent[c1] = nodeParent[c2] = cellNode[i];
+	nodeTime[c1] = nodeTime[c2] = t;
+	nodeDivs[c1] = nodeDivs[c2] = nodeDivs[cellNode[i]] + 1;
+	if (cycleShape != 1.0)
+		nodeCell[cellNode[i]] = -1;
+	if (mutatorsOn)			/* mutations per generation until now, and per division: both at the mutation factor of the dividing cell */
+		{
+		SyncMutations (i, t);
+		nodeMutEnd[cellNode[i]] = cellBase[i];
+		cellBase[i] += divisionMutationRate * cellMult[i];
+		nodeMutStart[c1] = nodeMutStart[c2] = cellBase[i];
+		cellBase[numAlive] = cellBase[i];
+		cellLast[numAlive] = t;
+		cellMult[numAlive] = cellMult[i];
+		if (mutatorRate > 0.0 && Uniform () < mutatorRate)
+			cellMult[i] *= mutatorFactor;
+		if (mutatorRate > 0.0 && Uniform () < mutatorRate)
+			cellMult[numAlive] *= mutatorFactor;
+		}
+	cloneAlive[k]--;
+	n = numAlive++;
+	cellNode[i] = c1;
+	cellNode[n] = c2;
+	cellClone[i] = Daughter (k, t);
+	cellClone[n] = Daughter (k, t);
+	cloneAlive[cellClone[i]]++;
+	cloneAlive[cellClone[n]]++;
+	}
+
+/* a death of the alive cell i: the lineage stays in the tree of divisions, as a branch with no sampled cell */
+static void Death (long i)
+	{
+	cloneAlive[cellClone[i]]--;
+	if (cycleShape != 1.0)
+		nodeCell[cellNode[i]] = -1;
+	numAlive--;
+	cellNode[i] = cellNode[numAlive];
+	cellClone[i] = cellClone[numAlive];
+	if (cycleShape != 1.0 && i < numAlive)
+		nodeCell[cellNode[i]] = (int32_t) i;
+	if (mutatorsOn)
+		{
+		cellBase[i] = cellBase[numAlive];
+		cellLast[i] = cellLast[numAlive];
+		cellMult[i] = cellMult[numAlive];
+		}
+	}
+
+/* a clone of the user starts: a cell of its parent clone gets the advantage; returns the cell, or -1 if the parent clone has no cell */
+static long StartPresetClone (int nextPreset, double t)
+	{
+	long	i, tries;
+	int		j = nextPreset + 1, p = cloneParent[j];
+
+	if (cloneAlive[p] <= 0)
+		return -1;
+	for (tries=0, i=0; tries<100000; tries++)
+		{
+		i = (long) (Uniform () * (double) numAlive);
+		if (cellClone[i] == p)
+			break;
+		}
+	if (tries == 100000)			/* the parent is rare: look for one of its cells */
+		for (i=(long) (Uniform () * (double) numAlive), tries=0; tries<numAlive && cellClone[i] != p; tries++)
+			i = (i + 1) % numAlive;
+	if (mutatorsOn)
+		{
+		SyncMutations (i, t);
+		cellMult[i] = presetMutation[j-1];
+		}
+	cloneAlive[p]--;
+	cellClone[i] = j;
+	cloneAlive[j]++;
+	return i;
+	}
+
+/* gamma waiting times: the events of the cells in a heap ordered by time (an event is valid if its node still has the same time) */
+typedef struct { double t; int32_t node; } Event;
+static Event	*heap = NULL;
+static long		heapN = 0, heapCap = 0;
+
+static void HeapPush (double t, int32_t node)
+	{
+	long	c, p;
+
+	if (heapN + 1 > heapCap)
+		{
+		heapCap = heapCap ? 2 * heapCap : 1024;
+		heap = (Event*) Checked (realloc (heap, heapCap * sizeof (Event)));
+		}
+	for (c=heapN++; c>0; c=p)
+		{
+		p = (c - 1) / 2;
+		if (heap[p].t <= t)
+			break;
+		heap[c] = heap[p];
+		}
+	heap[c].t = t;
+	heap[c].node = node;
+	}
+
+static void HeapPop (void)
+	{
+	Event	last;
+	long	c, p = 0;
+
+	last = heap[--heapN];
+	if (heapN == 0)
+		return;
+	for (;;)
+		{
+		c = 2 * p + 1;
+		if (c >= heapN)
+			break;
+		if (c + 1 < heapN && heap[c+1].t < heap[c].t)
+			c++;
+		if (heap[c].t >= last.t)
+			break;
+		heap[p] = heap[c];
+		p = c;
+		}
+	heap[p] = last;
+	}
+
+/* the next event of the cell i, which is new or has changed clone at the time t: its division (gamma) or its death (exponential), whichever comes first */
+static void Schedule (long i, double t)
+	{
+	int32_t	node = cellNode[i];
+	int		k = cellClone[i];
+	double	bk = birthRate * cloneRate[k], td, tx = 1e300;
+
+	td = t + Gamma (cycleShape) / (cycleShape * bk);
+	if (cloneDeath[k] > 0.0)
+		tx = t + Exponential (cloneDeath[k]);
+	nodeCell[node] = (int32_t) i;
+	nodeDeath[node] = (tx < td);
+	nodeNext[node] = (tx < td) ? tx : td;
+	HeapPush (nodeNext[node], node);
+	}
+
 /* one tumor, from one cell until the size or the time; returns 1 if the tumor survives to the end with enough cells, 0 if it has to be simulated again */
 static int GrowTumor (double *endTime)
 	{
 	double	t = 0.0, rate, r, bk;
-	long	i, n, tries;
-	int		k, c1, c2, nextPreset = 0, j, p;
+	long	i, n;
+	int		k, nextPreset = 0, j;
 
 	numNodes = 0;
 	numAlive = 0;
 	numClones = 0;
 	driverClones = 0;
+	heapN = 0;
 	bMax = birthRate;
+	dMax = deathRate;
 	GrowNodes ();
 	GrowAlive ();
 	nodeParent[0] = -1;
@@ -502,34 +724,63 @@ static int GrowTumor (double *endTime)
 	cellClone[0] = 0;
 	cloneAlive[0] = 1;
 	numAlive = 1;
+	if (cycleShape != 1.0)
+		{
+		Schedule (0, 0.0);
+		for (;;)
+			{
+			while (heapN > 0 && !(nodeCell[heap[0].node] >= 0 && nodeNext[heap[0].node] == heap[0].t))	/* events of cells that have changed */
+				HeapPop ();
+			if (heapN == 0)
+				return 0;
+			t = heap[0].t;
+			if (nextPreset < presetN && t >= presetTime[nextPreset])
+				{
+				t = presetTime[nextPreset];
+				i = StartPresetClone (nextPreset, t);
+				if (i < 0)
+					return 0;
+				nextPreset++;
+				Schedule (i, t);				/* the cell starts its cycle again with the rates of the clone */
+				continue;
+				}
+			if (stopTime > 0.0 && t >= stopTime)
+				{
+				t = stopTime;
+				break;
+				}
+			i = nodeCell[heap[0].node];
+			k = nodeDeath[heap[0].node];
+			HeapPop ();
+			if (k)
+				{
+				Death (i);
+				if (numAlive == 0)
+					return 0;
+				}
+			else
+				{
+				Division (i, t);
+				n = numAlive - 1;
+				if (stopSize > 0.0 && (double) numAlive >= stopSize)
+					break;
+				if ((double) numAlive > MAX_CELLS)
+					Fail ("the tumor has more than 5e7 cells (every division is kept in memory): lower --time or the growth rate%s", "");
+				Schedule (i, t);
+				Schedule (n, t);
+				}
+			}
+		}
+	else
 	for (;;)
 		{
-		rate = bMax + deathRate;
+		rate = bMax + dMax;
 		t += Exponential ((double) numAlive * rate);
-		if (nextPreset < presetN && t >= presetTime[nextPreset])	/* a clone of the user starts here: a cell of its parent clone gets the advantage */
+		if (nextPreset < presetN && t >= presetTime[nextPreset])	/* a clone of the user starts here */
 			{
 			t = presetTime[nextPreset];
-			j = nextPreset + 1;
-			p = cloneParent[j];
-			if (cloneAlive[p] <= 0)
+			if (StartPresetClone (nextPreset, t) < 0)
 				return 0;
-			for (tries=0, i=0; tries<100000; tries++)
-				{
-				i = (long) (Uniform () * (double) numAlive);
-				if (cellClone[i] == p)
-					break;
-				}
-			if (tries == 100000)			/* the parent is rare: look for one of its cells */
-				for (i=(long) (Uniform () * (double) numAlive), tries=0; tries<numAlive && cellClone[i] != p; tries++)
-					i = (i + 1) % numAlive;
-			if (mutatorsOn)
-				{
-				SyncMutations (i, t);
-				cellMult[i] = presetMutation[j-1];
-				}
-			cloneAlive[p]--;
-			cellClone[i] = j;
-			cloneAlive[j]++;
 			nextPreset++;
 			continue;
 			}
@@ -542,54 +793,17 @@ static int GrowTumor (double *endTime)
 		k = cellClone[i];
 		bk = birthRate * cloneRate[k];
 		r = Uniform () * rate;
-		if (r < bk)					/* division: both daughters are new lineages, and can get a driver */
+		if (r < bk)					/* division */
 			{
-			GrowNodes ();
-			GrowAlive ();
-			c1 = (int) numNodes++;
-			c2 = (int) numNodes++;
-			nodeParent[c1] = nodeParent[c2] = cellNode[i];
-			nodeTime[c1] = nodeTime[c2] = t;
-			nodeDivs[c1] = nodeDivs[c2] = nodeDivs[cellNode[i]] + 1;
-			if (mutatorsOn)			/* mutations per generation until now, and per division: both at the mutation factor of the dividing cell */
-				{
-				SyncMutations (i, t);
-				nodeMutEnd[cellNode[i]] = cellBase[i];
-				cellBase[i] += divisionMutationRate * cellMult[i];
-				nodeMutStart[c1] = nodeMutStart[c2] = cellBase[i];
-				cellBase[numAlive] = cellBase[i];
-				cellLast[numAlive] = t;
-				cellMult[numAlive] = cellMult[i];
-				if (mutatorRate > 0.0 && Uniform () < mutatorRate)
-					cellMult[i] *= mutatorFactor;
-				if (mutatorRate > 0.0 && Uniform () < mutatorRate)
-					cellMult[numAlive] *= mutatorFactor;
-				}
-			cloneAlive[k]--;
-			n = numAlive++;
-			cellNode[i] = c1;
-			cellNode[n] = c2;
-			cellClone[i] = Daughter (k, t);
-			cellClone[n] = Daughter (k, t);
-			cloneAlive[cellClone[i]]++;
-			cloneAlive[cellClone[n]]++;
+			Division (i, t);
 			if (stopSize > 0.0 && (double) numAlive >= stopSize)
 				break;
 			if ((double) numAlive > MAX_CELLS)
 				Fail ("the tumor has more than 5e7 cells (every division is kept in memory): lower --time or the growth rate%s", "");
 			}
-		else if (r < bk + deathRate)		/* death: the lineage stays in the tree of divisions, as a branch with no sampled cell */
+		else if (r < bk + cloneDeath[k])		/* death */
 			{
-			cloneAlive[k]--;
-			numAlive--;
-			cellNode[i] = cellNode[numAlive];
-			cellClone[i] = cellClone[numAlive];
-			if (mutatorsOn)
-				{
-				cellBase[i] = cellBase[numAlive];
-				cellLast[i] = cellLast[numAlive];
-				cellMult[i] = cellMult[numAlive];
-				}
+			Death (i);
 			if (numAlive == 0)
 				return 0;
 			}
@@ -760,7 +974,7 @@ int main (int argc, char **argv)
 	fprintf (fpLog, "\nseed: %llu\n", (unsigned long long) seed);
 	fclose (fpLog);
 	fprintf (fpClones, "replicate\tcell\tclone\tdrivers\tbirth_rate_relative\tmutation_factor\n");
-	fprintf (fpDrivers, "replicate\tclone\tparent_clone\tdrivers\ttime\tbirth_rate_relative\tcells_at_end\tcells_sampled\n");
+	fprintf (fpDrivers, "replicate\tclone\tparent_clone\tdrivers\ttime\tbirth_rate_relative\tcells_at_end\tcells_sampled\tdeath_rate\n");
 	fprintf (fpSummary, "replicate\tattempts\ttime\tcells\tclones\tmax_drivers\ttmrca\n");
 	for (rep=1; rep<=replicates; rep++)
 		{
@@ -779,7 +993,7 @@ int main (int argc, char **argv)
 			if (cloneDepth[i] > drivers)
 				drivers = cloneDepth[i];
 			if (cloneAlive[i] > 0 || sampledClones[i] > 0)
-				fprintf (fpDrivers, "%d\t%d\t%d\t%d\t%.6g\t%.6g\t%ld\t%d\n", rep, i, cloneParent[i], cloneDepth[i], cloneTime[i], cloneRate[i], cloneAlive[i], sampledClones[i]);
+				fprintf (fpDrivers, "%d\t%d\t%d\t%d\t%.6g\t%.6g\t%ld\t%d\t%.6g\n", rep, i, cloneParent[i], cloneDepth[i], cloneTime[i], cloneRate[i], cloneAlive[i], sampledClones[i], cloneDeath[i]);
 			}
 		mean = t - tmrca;
 		fprintf (fpSummary, "%d\t%d\t%.6g\t%ld\t%ld\t%d\t%.6g\n", rep, attempts + 1, t, numAlive, numClones, drivers, mean);

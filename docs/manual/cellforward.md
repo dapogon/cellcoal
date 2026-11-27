@@ -33,7 +33,7 @@ cellcoal -n100 -s30 -l10000 -Tfwd/trees.nwk
 | `--driver-effect S` | the birth rate is multiplied by `1 + S` | needed with drivers |
 | `--max-clones N` | at most N clones with a random driver per tumor (the clones of `--clone-time` do not count). **It biases the clones towards the early ones**: the N that remain are the first that appear, and later drivers are never assigned, so the natural probabilities change; to keep them, lower `--driver-rate` instead | 0 (no limit) |
 | `--driver-dist exponential\|fixed` | S is a mean or a fixed value | exponential |
-| `--driver-acts-on growth\|birth` | the net growth rate or the birth rate is multiplied by `1 + S` | growth |
+| `--driver-acts-on growth\|birth\|death` | `growth`: the net growth rate is multiplied by `1 + S` (through the birth rate); `birth`: the birth rate is multiplied by `1 + S`; `death`: the **death rate falls** so that the net growth rate is multiplied by `1 + S` (the birth rate does not change; the death rate cannot go below 0, so the gain is at most birth / (birth - death)); needs `--death` greater than 0. The death rate of every clone is the last column of `drivers.tsv` | growth |
 | `--clone-time T1:T2:...` | start of each clone, generations after the start (increasing; up to 64 clones) | none |
 | `--clone-fitness F1:F2:...` | growth rate of each clone relative to the first clone | needed with `--clone-time` |
 | `--clone-parent P1:P2:...` | parent clone of each clone (0 is the first clone, 1 the first of the list) | 0 |
@@ -42,6 +42,7 @@ cellcoal -n100 -s30 -l10000 -Tfwd/trees.nwk
 | `-s`, `--sample K` | cells sampled | 20 |
 | `-n`, `--replicates R` | number of tumors, each with its tree | 1 |
 | `--mutation-rate U` | mutations per site and generation: branch length = generations x U + divisions x V | 1 |
+| `--cycle-shape K` | waiting time between divisions: gamma with shape `K` and mean `1 / birth`. `K = 1` is exponential (the cells have no memory of their last division, the default); a large `K` makes the cells divide almost in synchrony, as in a cell cycle, and `K` changes the variance of the number of divisions of a lineage (and so of the mutations linked to the divisions). Deaths stay exponential. A clone of `--clone-time` starts its cycle again | 1 |
 | `--division-mutation-rate V` | mutations per site and cell division | 0 |
 | `--seed X` | seed (written in `log.txt`) | from the clock |
 | `-o`, `--output DIR` | folder of the results | `cellforward_out` |
