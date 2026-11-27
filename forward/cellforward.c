@@ -83,6 +83,7 @@ static int		replicates = 1, sampleSize = 20;
 static double	birthRate = -1.0, deathRate = 0.0, stopSize = 0.0, stopTime = 0.0;
 static double	driverRate = 0.0, driverEffect = -1.0, mutationRate = 1.0, divisionMutationRate = 0.0;
 static int		driverExponential = 1, driverOnGrowth = 1;
+static long		maxClones = 0, driverClones = 0;		/* limit of the clones with a random driver per tumor (0 = no limit) */
 static double	mutatorRate = 0.0, mutatorFactor = -1.0, presetMutation[MAX_PRESET];	/* hypermutators */
 static int		mutatorsOn = 0;
 static int		presetN = 0, presetParent[MAX_PRESET];			/* clones that the user starts at a given time (clone 1, 2, ...; the first clone, without drivers, is 0) */
@@ -119,6 +120,8 @@ static void Usage (FILE *fp)
 "driver mutations (they raise the birth rate; the fitness of a clone is not an input but the result of its drivers)\n"
 "  --driver-rate P     probability that a daughter cell of a division gets a new driver (default 0: no drivers)\n"
 "  --driver-effect S   effect of a driver on the birth rate: the rate of the cell is multiplied by 1 + S (needed with --driver-rate)\n"
+"  --max-clones N      at most N clones with a random driver per tumor (default 0: no limit; the clones of --clone-time do not count).\n"
+"                      The N clones are the first that appear; to keep the natural probabilities lower --driver-rate instead\n"
 "  --driver-dist D     exponential (default: S is the mean of an exponential variable) or fixed (every driver has the effect S)\n"
 "  --driver-acts-on W  growth (default): the net growth rate (birth - death) is multiplied by 1 + S, as the fitness of --clone-fitness;\n"
 "                      birth: the birth rate is multiplied by 1 + S and the death rate does not change (the gain in growth is then larger than S)\n\n"
@@ -218,6 +221,8 @@ static void ReadOptions (int argc, char **argv)
 			stopTime = Number (opt, val);
 		else if (strcmp (opt, "--driver-rate") == 0)
 			driverRate = Number (opt, val);
+		else if (strcmp (opt, "--max-clones") == 0)
+			maxClones = (long) Number (opt, val);
 		else if (strcmp (opt, "--driver-effect") == 0)
 			driverEffect = Number (opt, val);
 		else if (strcmp (opt, "--driver-dist") == 0)
@@ -284,6 +289,8 @@ static void ReadOptions (int argc, char **argv)
 		Fail ("the sample (-s) is larger than the tumor (--size)%s", "");
 	if (replicates < 1)
 		Fail ("-n needs at least 1 replicate%s", "");
+	if (maxClones < 0)
+		Fail ("--max-clones is a number of clones, 0 or more%s", "");
 	if (driverRate < 0.0 || driverRate > 1.0)
 		Fail ("--driver-rate is a probability, between 0 and 1%s", "");
 	if (driverRate > 0.0 && !(driverEffect > -1.0) )
@@ -430,8 +437,11 @@ static int NewClone (int parent, double t)
 /* a daughter cell of a division: it can get a driver, which makes a new clone */
 static int Daughter (int clone, double t)
 	{
-	if (driverRate > 0.0 && Uniform () < driverRate)
+	if (driverRate > 0.0 && (maxClones == 0 || driverClones < maxClones) && Uniform () < driverRate)
+		{
+		driverClones++;
 		return NewClone (clone, t);
+		}
 	return clone;
 	}
 
@@ -445,6 +455,7 @@ static int GrowTumor (double *endTime)
 	numNodes = 0;
 	numAlive = 0;
 	numClones = 0;
+	driverClones = 0;
 	bMax = birthRate;
 	GrowNodes ();
 	GrowAlive ();

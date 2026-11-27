@@ -31,6 +31,7 @@ cellcoal -n100 -s30 -l10000 -Tfwd/trees.nwk
 | `--size N` / `--time T` | stop at N cells / at T generations (one of them) | needed |
 | `--driver-rate P` | probability that a daughter cell gets a driver | 0 (no drivers) |
 | `--driver-effect S` | the birth rate is multiplied by `1 + S` | needed with drivers |
+| `--max-clones N` | at most N clones with a random driver per tumor (the first N that appear; the clones of `--clone-time` do not count) | 0 (no limit) |
 | `--driver-dist exponential\|fixed` | S is a mean or a fixed value | exponential |
 | `--driver-acts-on growth\|birth` | the net growth rate or the birth rate is multiplied by `1 + S` | growth |
 | `--clone-time T1:T2:...` | start of each clone, generations after the start (increasing; up to 64 clones) | none |
