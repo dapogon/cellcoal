@@ -567,7 +567,7 @@ void ReadParametersFromCommandLine (int argc,char **argv)
 				break;
 			case 'C':
 				coverage = atof(argv[i]);
-				if (coverage < 1)
+				if (!(coverage > 0))
 					{
 					fprintf (stderr, "\n!!! PARAMETER ERROR: Bad coverage (%f)\n\n", coverage);
 					PrintUsage(stderr);

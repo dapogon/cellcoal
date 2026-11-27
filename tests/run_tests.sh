@@ -1721,6 +1721,9 @@ FWD=$(ls "$(dirname "$BIN")"/cellforward-* 2>/dev/null | head -1)
 if [ -z "$FWD" ]; then bad "cellforward is not built (make)"; else
 cd "$TMP"
 python3 "$ROOT/tests/forward_check.py" "$FWD" "$BIN" 2000 > fwd_check.out 2>&1 && ok "cellforward: neutral birth-death tumors agree with the coalescent of CellCoal (time to the MRCA), and the drivers have the expected number" || { cat fwd_check.out; bad "cellforward check"; }
+python3 "$ROOT/tests/forward_theory.py" "$FWD" > fwd_theory.out 2>&1 && ok "cellforward agrees with exact results of the birth-death process (depth of a Yule tree, growth of a clone of fitness F)" || { cat fwd_theory.out; bad "cellforward theory check"; }
+mkdir -p lowc && cd lowc && "$BIN" -n1 -s4 -l20000 -e1000 -u1e-7 -C0.5 -#1 -olc > LC.txt 2>&1; rc=$?; "$BIN" -n1 -s4 -l2000 -e1000 -u1e-7 -C0 -#1 -olc0 > LC0.txt 2>&1; rc0=$?; cd ..
+[ $rc -eq 0 ] && [ $rc0 -ne 0 ] && ok "-C below 1 (low-pass) is accepted, and -C0 is still an error" || bad "-C below 1 (rc $rc, rc0 $rc0)"
 rm -rf FW; "$FWD" --birth 0.5 --death 0.1 --size 5000 --driver-rate 1e-4 --driver-effect 0.1 -s 12 -n 7 --mutation-rate 1e-5 --seed 3 -o FW > fw.out 2>&1
 [ "$(wc -l < FW/trees.nwk | tr -d ' ')" = "7" ] && [ "$(head -1 FW/trees.nwk | tr -cd 'c' | wc -c | tr -d ' ')" -ge "12" ] && [ "$(tail -n +2 FW/clones.tsv | wc -l | tr -d ' ')" = "84" ] && ok "cellforward writes one tree per replicate, and the clone of every sampled cell (7 replicates x 12 cells)" || bad "cellforward outputs"
 rm -rf FW2; "$FWD" --birth 0.5 --death 0.1 --size 5000 --driver-rate 1e-4 --driver-effect 0.1 -s 12 -n 7 --mutation-rate 1e-5 --seed 3 -o FW2 > /dev/null 2>&1
