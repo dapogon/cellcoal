@@ -21,6 +21,8 @@
 #include <stdint.h>
 #include <sys/stat.h>
 #include <sys/types.h>
+#include <sys/wait.h>
+#include <unistd.h>
 
 #define MAX_CELLS 5.0e7
 #define MAX_PRESET 64
@@ -112,7 +114,8 @@ static int		replicates = 1, sampleSize = 20;
 static double	birthRate = -1.0, deathRate = 0.0, stopSize = 0.0, stopTime = 0.0;
 static double	driverRate = 0.0, driverEffect = -1.0, mutationRate = 1.0, divisionMutationRate = 0.0;
 static int		driverExponential = 1, driverOnGrowth = 1;
-static int		driverRateGiven = 0, driverOnDeath = 0;
+static int		driverRateGiven = 0, driverOnDeath = 0, jobs = 1;
+static int		treeMethod = 0;				/* 0 auto, 1 forward, 2 reconstructed */
 static double	cycleShape = 1.0;						/* shape k of the gamma waiting time between divisions (1: exponential) */
 static double	driverTarget = 3.5;						/* expected number of clones with a driver per tumor when --driver-rate is not given */
 static long		maxClones = 0, driverClones = 0;		/* limit of the clones with a random driver per tumor (0 = no limit) */
@@ -174,6 +177,11 @@ static void Usage (FILE *fp)
 "sample and output\n"
 "  -s, --sample K      number of cells sampled at random from the tumor (default 20)\n"
 "  -n, --replicates R  number of tumors, each with its own tree (default 1)\n"
+"  -j, --jobs J       replicates run at the same time in J processes (default 1; 0: all the cores). The results do not depend on J: every replicate has\n"
+"                      its own random numbers, from --seed and the number of the replicate\n"
+"  --tree-method M    auto (default), forward or reconstructed. A neutral tumor (no drivers, clones or hypermutators, --cycle-shape 1) is a birth-death\n"
+"                      process: with auto its tree is drawn directly (coalescent point process), in a time that does not depend on the size of the tumor;\n"
+"                      forward simulates all the cells. The two give the same distribution (see the manual)\n"
 "  --mutation-rate U   mutations per site and generation: the branch length is the generations times U plus the divisions times V\n"
 "                      (CellCoal reads the branch lengths of a user tree as expected mutations per site); default 1, which gives generations\n"
 "  --cycle-shape K     waiting time between divisions: gamma with shape K and mean 1 / birth rate (default 1: exponential, the cells have no memory of their\n"
@@ -291,6 +299,19 @@ static void ReadOptions (int argc, char **argv)
 			nPar = NumberList (opt, val, parents, MAX_PRESET);
 		else if (strcmp (opt, "-s") == 0 || strcmp (opt, "--sample") == 0)
 			sampleSize = (int) Number (opt, val);
+		else if (strcmp (opt, "--tree-method") == 0)
+			{
+			if (strcmp (val, "auto") == 0)
+				treeMethod = 0;
+			else if (strcmp (val, "forward") == 0)
+				treeMethod = 1;
+			else if (strcmp (val, "reconstructed") == 0)
+				treeMethod = 2;
+			else
+				Fail ("--tree-method is auto, forward or reconstructed (not %s)", val);
+			}
+		else if (strcmp (opt, "-j") == 0 || strcmp (opt, "--jobs") == 0)
+			jobs = (int) Number (opt, val);
 		else if (strcmp (opt, "-n") == 0 || strcmp (opt, "--replicates") == 0)
 			replicates = (int) Number (opt, val);
 		else if (strcmp (opt, "--mutation-rate") == 0)
@@ -329,8 +350,8 @@ static void ReadOptions (int argc, char **argv)
 		Fail ("--death cannot be negative%s", "");
 	if ((stopSize > 0.0) == (stopTime > 0.0))
 		Fail ("exactly one of --size (cells) and --time (generations) is needed%s", "");
-	if (stopSize > 0.0 && (stopSize < 2.0 || stopSize > MAX_CELLS))
-		Fail ("--size is between 2 and 5e7 cells (every division is kept in memory)%s", "");
+	if (stopSize > 0.0 && (stopSize < 2.0 || stopSize > 1e15))
+		Fail ("--size is between 2 and 1e15 cells%s", "");
 	if (sampleSize < 2)
 		Fail ("-s needs at least 2 cells%s", "");
 	if (stopSize > 0.0 && sampleSize > stopSize)
@@ -940,13 +961,295 @@ static double SampleAndWriteTree (FILE *fpTrees, FILE *fpClones, int rep, int *s
 
 /* ------------------------------ main ------------------------------ */
 
+/* ------------------------------ the tree of the sample, without the tumor ------------------------------ */
+
+/* A neutral tumor (birth b, death d, exponential waiting times, no drivers) is a birth-death process, and the tree of the cells that are
+   sampled can be drawn directly, with a cost that does not depend on the size of the tumor:
+   - the reconstructed tree of the cells alive at the time T is a coalescent point process (Lambert and Stadler 2013): the depths of the
+     nodes are independent, with P(H > t) = 1 / F(t), F(t) = 1 + (b / g) (e^{g t} - 1), g = b - d;
+   - at a fixed time T (--time), the tree of s cells chosen at random is exact (Lambert 2018): Y is drawn from a density s (1 - a) y^(s-1) /
+     (1 - a (1 - y))^(s+1), with a = 1 - 1 / F(T), and then s - 1 independent depths with density f_y / c on (0, T), where F_y = 1 - y + y F;
+   - when the tumor stops at N cells (--size): the time T is that of a chain of the number of cells (exact up to 2e4 cells, and then the
+     exponential growth), and the s cells are chosen among the N tips of the coalescent point process: the depth between two chosen tips is
+     the maximum of the depths of the tips between them;
+   - the divisions of the lineages that do not leave a sampled cell (the other daughter has no sampled cells, or dies out) happen along the
+     branches at the rate 2 b (1 - p(t)), p(t) = 1 / (b / g + (1 / y - b / g) e^{-g t}) being the probability that a cell at the time t before the
+     end has a sampled descendant, when every cell is sampled with probability y (s / N for --size). Every branch has these divisions and the
+     one of its first node. */
+/* can the tree of the sample be drawn without simulating the tumor? */
+static int FastOK (void)
+	{
+	int		ok = (driverRate == 0.0 && presetN == 0 && !mutatorsOn && cycleShape == 1.0 && birthRate > deathRate && sampleSize >= 2);
+
+	if (treeMethod == 2 && !ok)
+		Fail ("--tree-method reconstructed needs a neutral tumor that grows: no drivers, no clones, no hypermutators, --cycle-shape 1 and --birth greater than --death%s", "");
+	return treeMethod != 1 && ok;
+	}
+
+static double Poisson (double mean)
+	{
+	double	l, p;
+	long	k, total = 0;
+
+	while (mean > 20.0)
+		{
+		l = exp (-20.0);
+		for (k=0, p=1.0; ; k++)
+			{
+			p *= Uniform ();
+			if (p <= l)
+				break;
+			}
+		total += k;
+		mean -= 20.0;
+		}
+	l = exp (-mean);
+	for (k=0, p=1.0; ; k++)
+		{
+		p *= Uniform ();
+		if (p <= l)
+			break;
+		}
+	return (double) (total + k);
+	}
+
+/* time of the first passage of the number of cells to N (chain of the births and deaths of the cells) */
+static double TimeToSize (double N)
+	{
+	double	t, M = (N < 2e4) ? N : 2e4, g = birthRate - deathRate, tot = birthRate + deathRate;
+	long	n;
+
+	for (;;)
+		{
+		n = 1;
+		t = 0.0;
+		while (n > 0 && (double) n < M)
+			{
+			t += Exponential ((double) n * tot);
+			n += (Uniform () * tot < birthRate) ? 1 : -1;
+			}
+		if (n > 0)
+			break;
+		}
+	if (N > M)
+		t += log (N / M) / g;
+	return t;
+	}
+
+static double FofT (double t)			/* F(t) - 1 */
+	{
+	return birthRate / (birthRate - deathRate) * expm1 ((birthRate - deathRate) * t);
+	}
+
+static double TofF1 (double f1)			/* t such that F(t) - 1 = f1 */
+	{
+	double	g = birthRate - deathRate;
+
+	return log1p (g / birthRate * f1) / g;
+	}
+
+static int		*fKid0, *fKid1, *fLeafLabel;
+static double	*fDepth, *fHidden;
+
+static void WriteNewickFast (FILE *fp, int node, int parent)
+	{
+	if (node < sampleSize)
+		fprintf (fp, "cell%04d", fLeafLabel[node] + 1);
+	else
+		{
+		fputc ('(', fp);
+		WriteNewickFast (fp, fKid0[node - sampleSize], node);
+		fputc (',', fp);
+		WriteNewickFast (fp, fKid1[node - sampleSize], node);
+		fputc (')', fp);
+		}
+	if (parent >= 0)
+		fprintf (fp, ":%.10g", (fDepth[parent] - fDepth[node]) * mutationRate + (1.0 + fHidden[node]) * divisionMutationRate);
+	}
+
+/* one replicate without simulating the tumor */
+static void FastTree (FILE *fpTrees, FILE *fpClones, FILE *fpDrivers, FILE *fpSummary, int rep, int attempts)
+	{
+	int		k = sampleSize, i, j, top, *stack, *left, *right, root, m, tmp;
+	double	T, N = -1.0, g = birthRate - deathRate, b = birthRate, F1T, oneMinusA, a, y, c, w, v, u, *x, A, B, tau1, tau2, mean, rootDepth;
+	long	*pos, count, cell;
+
+	if (stopSize > 0.0)
+		{
+		N = stopSize;
+		T = TimeToSize (N);
+		}
+	else
+		T = stopTime;
+	F1T = FofT (T);
+	oneMinusA = 1.0 / (1.0 + F1T);					/* 1 - a, with a = 1 - 1 / F(T) */
+	a = F1T / (1.0 + F1T);
+	x = (double*) Checked (calloc (k, sizeof (double)));
+	if (N < 0.0)							/* a fixed time: the sample is exact (Lambert 2018) */
+		{
+		v = pow (Uniform (), 1.0 / (double) k);
+		y = v * oneMinusA / ((1.0 - v) + v * oneMinusA);
+		w = oneMinusA + a * y;
+		c = a * y / w;
+		for (i=0; i<k-1; i++)
+			{
+			u = Uniform ();
+			x[i] = TofF1 (u * c / (y * (1.0 - u * c)));
+			}
+		}
+	else								/* the number of cells at the end is N: k tips chosen among the N tips of the coalescent point process */
+		{
+		y = (double) k / N;
+		pos = (long*) Checked (calloc (k, sizeof (long)));
+		for (count=0, cell=(long) N - k; cell<(long) N; cell++)		/* Floyd's sample of k of the N positions, kept in order */
+			{
+			long	r = (long) (Uniform () * (double) (cell + 1)), lo = 0, hi = count, mid;
+
+			while (lo < hi)
+				{
+				mid = (lo + hi) / 2;
+				if (pos[mid] < r)
+					lo = mid + 1;
+				else
+					hi = mid;
+				}
+			if (lo < count && pos[lo] == r)			/* taken: the largest position is added */
+				lo = count, r = cell;
+			memmove (pos + lo + 1, pos + lo, (size_t) (count - lo) * sizeof (long));
+			pos[lo] = r;
+			count++;
+			}
+		for (i=0; i<k-1; i++)
+			{
+			double	gap = (double) (pos[i+1] - pos[i]), u1 = pow (Uniform (), 1.0 / gap);	/* maximum of gap depths: the distribution function to the power gap */
+
+			/* P(H < t | H < T) = (1 - 1/F(t)) / (1 - 1/F(T)) = u1, so F(t) - 1 = u1 a / (1 - u1 a) */
+			x[i] = TofF1 (u1 * a / ((1.0 - u1) + u1 * oneMinusA));
+			}
+		free (pos);
+		}
+	/* the tree: a Cartesian tree on the depths (leaves 0 ... k-1, internal nodes k ... 2k-2) */
+	stack = (int*) Checked (calloc (k, sizeof (int)));
+	left = (int*) Checked (calloc (k, sizeof (int)));
+	right = (int*) Checked (calloc (k, sizeof (int)));
+	fKid0 = (int*) Checked (calloc (k, sizeof (int)));
+	fKid1 = (int*) Checked (calloc (k, sizeof (int)));
+	fDepth = (double*) Checked (calloc (2 * k, sizeof (double)));
+	fHidden = (double*) Checked (calloc (2 * k, sizeof (double)));
+	fLeafLabel = (int*) Checked (calloc (k, sizeof (int)));
+	for (i=0; i<k-1; i++)
+		left[i] = right[i] = -1;
+	for (i=0, top=0; i<k-1; i++)
+		{
+		j = -1;
+		while (top > 0 && x[stack[top-1]] < x[i])
+			j = stack[--top];
+		left[i] = j;
+		if (top > 0)
+			right[stack[top-1]] = i;
+		stack[top++] = i;
+		}
+	root = stack[0];
+	for (i=0; i<k-1; i++)
+		{
+		fKid0[i] = (left[i] >= 0) ? k + left[i] : i;
+		fKid1[i] = (right[i] >= 0) ? k + right[i] : i + 1;
+		fDepth[k + i] = x[i];
+		}
+	rootDepth = x[root];
+	/* the divisions that leave no sampled cell, on every branch */
+	A = b / g;
+	B = 1.0 / y - A;
+	for (i=0; i<k-1; i++)
+		for (j=0; j<2; j++)
+			{
+			m = (j == 0) ? fKid0[i] : fKid1[i];
+			tau1 = fDepth[m];
+			tau2 = x[i];
+			mean = 2.0 * b * (tau2 - tau1) - 2.0 * ((g * tau2 + log (A + B * exp (-g * tau2))) - (g * tau1 + log (A + B * exp (-g * tau1))));
+			fHidden[m] = (mean > 0.0) ? Poisson (mean) : 0.0;
+			}
+	for (i=0; i<k; i++)						/* the leaves get the labels in random order */
+		fLeafLabel[i] = i;
+	for (i=k-1; i>0; i--)
+		{
+		j = (int) (Uniform () * (double) (i + 1));
+		tmp = fLeafLabel[i];
+		fLeafLabel[i] = fLeafLabel[j];
+		fLeafLabel[j] = tmp;
+		}
+	WriteNewickFast (fpTrees, k + root, -1);
+	fputs (";\n", fpTrees);
+	for (i=0; i<k; i++)
+		fprintf (fpClones, "%d\tcell%04d\t0\t0\t1\t1\n", rep, i + 1);
+	if (N >= 0.0)
+		fprintf (fpDrivers, "%d\t0\t-1\t0\t0\t1\t%.0f\t%d\t%.6g\n", rep, N, k, deathRate);
+	else
+		fprintf (fpDrivers, "%d\t0\t-1\t0\t0\t1\tNA\t%d\t%.6g\n", rep, k, deathRate);
+	if (N >= 0.0)
+		fprintf (fpSummary, "%d\t%d\t%.6g\t%.0f\t1\t0\t%.6g\n", rep, attempts, T, N, rootDepth);
+	else
+		fprintf (fpSummary, "%d\t%d\t%.6g\tNA\t1\t0\t%.6g\n", rep, attempts, T, rootDepth);
+	free (stack); free (left); free (right); free (fKid0); free (fKid1); free (fDepth); free (fHidden); free (fLeafLabel); free (x);
+	}
+
+
+/* one replicate: simulates the tumor and writes its tree and tables; returns the number of tumors that were simulated (more than one if they die out) */
+static long RunReplicate (int rep, FILE *fpTrees, FILE *fpClones, FILE *fpDrivers, FILE *fpSummary)
+	{
+	int		attempts = 0, i, usedClones, *sampledClones, drivers;
+	double	t, tmrca, mean;
+
+	SeedRandom (seed + (uint64_t) rep * 0x9E3779B97F4A7C15ULL);		/* the replicate does not depend on the others, nor on the number of jobs */
+	if (FastOK ())
+		{
+		FastTree (fpTrees, fpClones, fpDrivers, fpSummary, rep, 1);
+		return 1;
+		}
+	if (stopSize > MAX_CELLS)
+		Fail ("--size above 5e7 cells (every division is kept in memory) is only possible for a neutral tumor that grows, with --tree-method auto or reconstructed%s", "");
+	while (!GrowTumor (&t))
+		if (++attempts >= 100000)
+			Fail ("the tumor dies out, or has fewer cells than the sample, in 100000 attempts: raise --birth, or lower --death or -s%s", "");
+	treeEnd = t;
+	usedClones = (int) numClones;
+	sampledClones = (int*) Checked (calloc (usedClones, sizeof (int)));
+	tmrca = SampleAndWriteTree (fpTrees, fpClones, rep, sampledClones);
+	drivers = 0;
+	for (i=0; i<usedClones; i++)
+		{
+		if (cloneDepth[i] > drivers)
+			drivers = cloneDepth[i];
+		if (cloneAlive[i] > 0 || sampledClones[i] > 0)
+			fprintf (fpDrivers, "%d\t%d\t%d\t%d\t%.6g\t%.6g\t%ld\t%d\t%.6g\n", rep, i, cloneParent[i], cloneDepth[i], cloneTime[i], cloneRate[i], cloneAlive[i], sampledClones[i], cloneDeath[i]);
+		}
+	mean = t - tmrca;
+	fprintf (fpSummary, "%d\t%d\t%.6g\t%ld\t%ld\t%d\t%.6g\n", rep, attempts + 1, t, numAlive, numClones, drivers, mean);
+	free (sampledClones);
+	return attempts + 1;
+	}
+
+static const char *kinds[4] = {"trees.nwk", "clones.tsv", "drivers.tsv", "summary.tsv"};
+
+static FILE *Open (const char *name, const char *mode)
+	{
+	char	path[4096];
+	FILE	*fp;
+
+	snprintf (path, sizeof (path), "%s/%s", outDir, name);
+	fp = fopen (path, mode);
+	if (fp == NULL)
+		Fail ("cannot write in the folder %s", outDir);
+	return fp;
+	}
+
 int main (int argc, char **argv)
 	{
-	FILE	*fpTrees, *fpClones, *fpDrivers, *fpSummary, *fpLog;
-	char	path[4096];
-	int		rep, attempts, i, usedClones, *sampledClones, drivers;
-	double	t, tmrca, mean;
-	long	totalAttempts = 0;
+	FILE	*fp[4], *fpLog, *part[4], *in;
+	char	name[4096], buf[65536];
+	int		rep, i, w, status, failed = 0;
+	long	totalAttempts = 0, got;
+	pid_t	*pid;
 
 	if (argc < 2)
 		{
@@ -954,55 +1257,92 @@ int main (int argc, char **argv)
 		return 1;
 		}
 	ReadOptions (argc, argv);
-	SeedRandom (seed);
+	if (jobs < 0)
+		Fail ("-j is a number of jobs, 0 or more%s", "");
+	if (jobs == 0)
+		jobs = (int) sysconf (_SC_NPROCESSORS_ONLN);
+	if (jobs < 1)
+		jobs = 1;
+	if (jobs > replicates)
+		jobs = replicates;
 	mkdir (outDir, 0777);
-	snprintf (path, sizeof (path), "%s/trees.nwk", outDir);
-	fpTrees = fopen (path, "w");
-	snprintf (path, sizeof (path), "%s/clones.tsv", outDir);
-	fpClones = fopen (path, "w");
-	snprintf (path, sizeof (path), "%s/drivers.tsv", outDir);
-	fpDrivers = fopen (path, "w");
-	snprintf (path, sizeof (path), "%s/summary.tsv", outDir);
-	fpSummary = fopen (path, "w");
-	snprintf (path, sizeof (path), "%s/log.txt", outDir);
-	fpLog = fopen (path, "w");
-	if (!fpTrees || !fpClones || !fpDrivers || !fpSummary || !fpLog)
-		Fail ("cannot write in the folder %s", outDir);
+	for (i=0; i<4; i++)
+		fp[i] = Open (kinds[i], "w");
+	fpLog = Open ("log.txt", "w");
 	fprintf (fpLog, "%s %s\ncommand:", PROGRAM, VERSION);
 	for (i=1; i<argc; i++)
 		fprintf (fpLog, " %s", argv[i]);
 	fprintf (fpLog, "\nseed: %llu\n", (unsigned long long) seed);
 	fclose (fpLog);
-	fprintf (fpClones, "replicate\tcell\tclone\tdrivers\tbirth_rate_relative\tmutation_factor\n");
-	fprintf (fpDrivers, "replicate\tclone\tparent_clone\tdrivers\ttime\tbirth_rate_relative\tcells_at_end\tcells_sampled\tdeath_rate\n");
-	fprintf (fpSummary, "replicate\tattempts\ttime\tcells\tclones\tmax_drivers\ttmrca\n");
-	for (rep=1; rep<=replicates; rep++)
+	fprintf (fp[1], "replicate\tcell\tclone\tdrivers\tbirth_rate_relative\tmutation_factor\n");
+	fprintf (fp[2], "replicate\tclone\tparent_clone\tdrivers\ttime\tbirth_rate_relative\tcells_at_end\tcells_sampled\tdeath_rate\n");
+	fprintf (fp[3], "replicate\tattempts\ttime\tcells\tclones\tmax_drivers\ttmrca\n");
+	if (jobs == 1)
 		{
-		attempts = 0;
-		while (!GrowTumor (&t))
-			if (++attempts >= 100000)
-				Fail ("the tumor dies out, or has fewer cells than the sample, in 100000 attempts: raise --birth, or lower --death or -s%s", "");
-		totalAttempts += attempts + 1;
-		treeEnd = t;
-		usedClones = (int) numClones;
-		sampledClones = (int*) Checked (calloc (usedClones, sizeof (int)));
-		tmrca = SampleAndWriteTree (fpTrees, fpClones, rep, sampledClones);
-		drivers = 0;
-		for (i=0; i<usedClones; i++)
-			{
-			if (cloneDepth[i] > drivers)
-				drivers = cloneDepth[i];
-			if (cloneAlive[i] > 0 || sampledClones[i] > 0)
-				fprintf (fpDrivers, "%d\t%d\t%d\t%d\t%.6g\t%.6g\t%ld\t%d\t%.6g\n", rep, i, cloneParent[i], cloneDepth[i], cloneTime[i], cloneRate[i], cloneAlive[i], sampledClones[i], cloneDeath[i]);
-			}
-		mean = t - tmrca;
-		fprintf (fpSummary, "%d\t%d\t%.6g\t%ld\t%ld\t%d\t%.6g\n", rep, attempts + 1, t, numAlive, numClones, drivers, mean);
-		free (sampledClones);
+		for (rep=1; rep<=replicates; rep++)
+			totalAttempts += RunReplicate (rep, fp[0], fp[1], fp[2], fp[3]);
 		}
-	fclose (fpTrees);
-	fclose (fpClones);
-	fclose (fpDrivers);
-	fclose (fpSummary);
+	else
+		{
+		/* every process takes the replicates w+1, w+1+jobs, ... and writes each one in its own small files, which are joined in order */
+		fflush (NULL);
+		pid = (pid_t*) Checked (calloc (jobs, sizeof (pid_t)));
+		for (w=0; w<jobs; w++)
+			{
+			pid[w] = fork ();
+			if (pid[w] < 0)
+				Fail ("cannot start the processes of -j%s", "");
+			if (pid[w] == 0)
+				{
+				for (i=0; i<4; i++)
+					fclose (fp[i]);
+				for (rep=w+1; rep<=replicates; rep+=jobs)
+					{
+					for (i=0; i<4; i++)
+						{
+						snprintf (name, sizeof (name), ".part%d.%s", rep, kinds[i]);
+						part[i] = Open (name, "w");
+						}
+					RunReplicate (rep, part[0], part[1], part[2], part[3]);
+					for (i=0; i<4; i++)
+						fclose (part[i]);
+					}
+				_exit (0);
+				}
+			}
+		for (w=0; w<jobs; w++)
+			{
+			waitpid (pid[w], &status, 0);
+			if (!WIFEXITED (status) || WEXITSTATUS (status) != 0)
+				failed = 1;
+			}
+		if (failed)
+			Fail ("a process of -j failed (see the message above)%s", "");
+		for (rep=1; rep<=replicates; rep++)
+			for (i=0; i<4; i++)
+				{
+				snprintf (name, sizeof (name), "%s/.part%d.%s", outDir, rep, kinds[i]);
+				in = fopen (name, "r");
+				if (in == NULL)
+					Fail ("a replicate is missing (a process of -j failed)%s", "");
+				while ((got = (long) fread (buf, 1, sizeof (buf), in)) > 0)
+					fwrite (buf, 1, got, fp[i]);
+				fclose (in);
+				if (i == 3)
+					{
+					int		r, a;
+					in = fopen (name, "r");
+					if (in && fscanf (in, "%d %d", &r, &a) == 2)
+						totalAttempts += a;
+					if (in)
+						fclose (in);
+					}
+				remove (name);
+				}
+		free (pid);
+		}
+	for (i=0; i<4; i++)
+		fclose (fp[i]);
 	fprintf (stderr, "%s: %d replicates (%ld tumors simulated), results in %s/\n", PROGRAM, replicates, totalAttempts, outDir);
 	return 0;
 	}
